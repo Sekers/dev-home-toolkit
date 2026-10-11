@@ -13,8 +13,8 @@ All three are Python. Run them with the Python install manager's `py`, such as
 The skills also run two Python scripts of their own, which only agents run, from
 `templates/shared-skill-scripts/`: `prepare.py` starts each skill command that syncs, by running
 the sync inside its own process and then reporting what the skill needs, such as where the
-project's handoff is; and `facts.py` reports that alone, which is how the handoff skill starts in
-Codex.
+project's handoff is; and `facts.py` reports that alone, without syncing, which is how the
+handoff skill starts in Codex, and how `/dev-home skills` lists the skills.
 
 ## When they run
 
@@ -22,9 +22,27 @@ Nothing runs on a schedule. Each script runs only when you or an agent starts it
 
 | Script | When it runs |
 | --- | --- |
-| `sync.py` | In Claude Code, agents run it at the start of every `/handoff` command, for a plain `/knowledge`, and before adding to the knowledge base, through the skills' `prepare.py`; that sync also checks for updates and runs setup. Then they run it again to commit and push each change they make. That second sync pushes without fetching first, and fetches and merges only if GitHub rejects the push because it has commits this PC lacks. It skips the update check, and runs setup only if it brought in commits from GitHub, because the sync just before it did both. A lookup, `/knowledge <question>`, never syncs, and Codex never runs it. You can run it any time. |
+| `sync.py` | In Claude Code, agents run it at the start of every `/handoff` command, for a plain `/knowledge`, before adding to the knowledge base, and for `/dev-home sync`, through the skills' `prepare.py`; that sync also checks for updates and runs setup, and checks GitHub for dev-home's changes as often as the command needs (see [How often a sync checks GitHub](#how-often-a-sync-checks-github)). Then they run it again to commit and push each change they make. That second sync pushes without fetching first, and fetches and merges only if GitHub rejects the push because it has commits this PC lacks. It skips the update check, and runs setup only if it brought in commits from GitHub, because the sync just before it did both. A lookup, `/knowledge <question>`, never syncs, and Codex never runs it. You can run it any time. |
 | `update.py` | Each sync that isn't committing runs its check, quietly, and that check asks GitHub only once `updateCheckHours` have passed (see [Updates](#updates)). You run it yourself to look at an update and install it, when `autoUpdate` is off. |
 | `setup.py` | You run it once per PC, and again to change a setting, to answer a question it hasn't asked yet, or to say yes to a settings change. After that, syncs run it quietly, as above, and so does `update.py` after you install an update. That quiet run never asks anything, and never changes Claude Code's or Codex's settings. |
+
+### How often a sync checks GitHub
+
+A sync that isn't committing checks GitHub for dev-home's changes as its `--fetch` says, and each
+command passes the one it needs:
+
+| Command | `--fetch` | Checks GitHub for dev-home's changes |
+| --- | --- | --- |
+| Every `/handoff` command, and adding to the knowledge base | `auto` | With dev-home in active use on several copies, such as two PCs, every time. With one, only once `contentCheckHours` have passed since the last check, since nothing else changes it. |
+| Plain `/knowledge` | `when-due` | Only once `contentCheckHours` have passed, however many copies are in use, so its list of subjects is never far behind. |
+| `/dev-home sync`, and `sync.py` run by hand | `always` | Every time. |
+
+`contentCheckHours` is 12 unless you set it in `local-settings.json`, where 0 means every time.
+Whether dev-home has one active copy or several is `multiMachine` in your dev-home's
+`dev-home.json`, which every copy shares, and `/dev-home configure` changes it; a missing or
+unreadable file, or one with no answer, counts as several. A sync that skips the check still
+merges what an earlier check brought in, pushes commits waiting on this PC, and lists the files
+left uncommitted.
 
 ## What they report
 
