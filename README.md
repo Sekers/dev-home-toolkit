@@ -1,17 +1,18 @@
 # dev-home-tools
 
 **dev-home** is a home base for working with AI coding agents (Claude Code and Codex): a private
-GitHub repo of your own, with a copy on each of your PCs, holding what your agents should have
-in every session. That's your own rules, your own skills, and anything those skills keep for
-you.
+GitHub repo of your own, holding what your agents should have in every session. That's your own
+rules, your own skills, and anything those skills keep for you. Use it on one PC, as a private
+backup with full history, or on several, each with its own copy, so all of it travels with you
+from PC to PC.
 
 **dev-home-tools**, this repo, is the public tooling that makes dev-home work:
 
 - **Setup.** Its `setup.py` creates your dev-home the first time you run it, and clones it on
   your other PCs. On each PC, it connects dev-home to Claude Code and Codex, so every session
   loads your rules and skills.
-- **Sync.** It keeps dev-home in sync with its online copy, so a change made on one PC reaches
-  the others.
+- **Sync.** It keeps dev-home in sync with its online copy, so your work is backed up with its
+  full history, and, if you use more than one PC, a change made on one reaches the others.
   - Setup puts dev-home on GitHub for now (just dev-home: your project repos can be hosted
     anywhere). Automated setup for GitLab, Bitbucket, and Azure DevOps is coming.
 - **Privacy.** It tells every session never to copy dev-home into your project repos, or even
@@ -127,8 +128,8 @@ Then it links everything and checks Claude Code's and Codex's settings (see
 [What setup changes](docs/reference/setup-changes.md) for what and why). When a setting is
 missing, it shows the exact lines it would change and asks first. On a `y`, it saves a dated
 backup of the file, such as `settings.json.bak-20260926-101500`, before writing. It never edits a
-file it can't fully read, such as a `settings.json` with comments, or a read-only one; it prints
-what to add by hand instead.
+file it can't fully read, such as a `settings.json` that isn't valid JSON (Claude Code can't use
+one either), or a read-only one; it prints what to add by hand instead.
 
 ### 4. Restart, and check
 
@@ -140,8 +141,14 @@ this one. The one exception is a skill you've just created on this PC: it's link
 `/handoff`, or right away when you run setup with `--quiet` (see
 [Your own rules and skills](#your-own-rules-and-skills)).
 
-Your answers are saved in `local-settings.json` in your dev-home-tools folder, next to
-`setup.py`. To change one later, run setup with `--configure`:
+Setup keeps your answers in two places. Most belong to this PC alone, in `local-settings.json` in
+your dev-home-tools folder, next to `setup.py`. Whether dev-home is in active use anywhere besides
+this PC is shared by every copy, so it goes in your dev-home's `dev-home.json`, and setup commits
+and pushes any change to it.
+
+To change a setting later, ask your agent with [`/dev-home configure`](docs/skills/dev-home.md):
+it shows you the exact change, and makes it after your yes. Or run setup with `--configure` in a
+terminal:
 
 ```powershell
 py C:\Programming\dev-home-tools\setup.py --configure
@@ -149,9 +156,9 @@ py C:\Programming\dev-home-tools\setup.py --configure
 
 It shows every setting with its value. Type a setting's number to change it, `a` to go through
 them all, or press Enter to finish; each question has your current answer as its default. Setup
-keeps a dated backup of the file before it saves a change.
+keeps a dated backup of `local-settings.json` before it saves a change.
 
-You can also edit the file and run setup again: `autoUpdate` is `true` or `false`;
+You can also edit `local-settings.json` and run setup again: `autoUpdate` is `true` or `false`;
 `claudeConfigDirs` lists the extra Claude Code folders to set up, such as `"~/.claude-second"`;
 `declinedClaudeConfigDirs` lists the ones you said no to, and taking a folder out of it makes
 setup ask again; and `updateCheckHours` and `contentCheckHours` say how often a sync checks
