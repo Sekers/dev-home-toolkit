@@ -51,7 +51,7 @@ def box(request: pytest.FixtureRequest) -> Iterator[Sandbox]:
     for sandbox in sandbox_for(request, "sync", tools_repo=True):
         # Most tests here push an update and expect the next sync to find it, so the update check
         # fetches every time. The tests of its interval set their own.
-        set_setting(sandbox, "updateCheckHours", 0)
+        set_setting(sandbox, "updates.checkEveryHours", 0)
         yield sandbox
 
 
@@ -87,19 +87,24 @@ def make_setup_require_fresh_output(shared: Path) -> None:
     write_text(setup, text)
 
 
-def set_setting(box: Sandbox, key: str, value: object) -> None:
-    """Sets one key in the sandbox's local-settings.json, or removes it when value is None."""
-    path = box.tools / "local-settings.json"
-    settings = json.loads(path.read_text(encoding="utf-8"))
+def set_setting(box: Sandbox, path: str, value: object) -> None:
+    """Sets one setting in the sandbox's local-settings.json, by its path, such as
+    updates.checkEveryHours, or removes it when value is None."""
+    file = box.tools / "local-settings.json"
+    settings = json.loads(file.read_text(encoding="utf-8"))
+    *groups, name = path.split(".")
+    group = settings
+    for part in groups:
+        group = group.setdefault(part, {})
     if value is None:
-        settings.pop(key, None)
+        group.pop(name, None)
     else:
-        settings[key] = value
-    write_text(path, json.dumps(settings, indent=2) + "\n")
+        group[name] = value
+    write_text(file, json.dumps(settings, indent=2) + "\n")
 
 
 def set_auto_update(box: Sandbox, on: bool) -> None:
-    set_setting(box, "autoUpdate", on)
+    set_setting(box, "updates.installAutomatically", on)
 
 
 def count(result: Run, pattern: str) -> int:
@@ -594,6 +599,36 @@ def test_without_local_settings_says_to_run_setup(box: Sandbox) -> None:
     assert result.has_line(r"^PROBLEM\s+dev-home-tools is not set up on this PC"), str(result)
 
 
+@pytest.mark.parametrize(
+    ("version", "said"),
+    [
+        (
+            None,
+            r"is in an older layout, from before its settings were grouped, so the sync can't find "
+            r"dev-home\. The user runs .*setup\.py in a terminal: it offers to set the file aside",
+        ),
+        (2, r"has a schemaVersion this dev-home-tools doesn't know, perhaps written by a newer"),
+    ],
+    ids=["older layout", "newer layout"],
+)
+def test_settings_in_another_layout_stop_the_sync_and_say_what_to_do(
+    box: Sandbox, version: int | None, said: str
+) -> None:
+    settings = box.tools / "local-settings.json"
+    before = settings.read_bytes()
+    data = json.loads(before)
+    if version is None:
+        del data["schemaVersion"]
+    else:
+        data["schemaVersion"] = version
+    write_text(settings, json.dumps(data) + "\n")
+    try:
+        result = sync(box)
+    finally:
+        settings.write_bytes(before)
+    assert result.code == 1 and result.has_line(rf"^PROBLEM\s+.*{said}"), str(result)
+
+
 def test_update_in_a_copy_that_is_not_a_git_clone_stops_before_running_git(box: Sandbox) -> None:
     # Git would otherwise use the repo around the copy. The tests' ceiling is a second guard.
     dot_git = box.tools / ".git"
@@ -865,7 +900,7 @@ def copies(box: Sandbox) -> Iterator[Callable[[bool | None], None]]:
     def set_copies(several: bool | None) -> None:
         path.unlink(missing_ok=True)
         if several is not None:
-            write_text(path, json.dumps({"multiMachine": several}) + "\n")
+            write_text(path, json.dumps({"schemaVersion": 1, "multiMachine": several}) + "\n")
 
     yield set_copies
     path.write_bytes(before)
@@ -929,6 +964,23 @@ def test_with_several_copies_or_no_answer_it_fetches_every_time(
     assert not result.has_line(r"^SETTING\s"), str(result)
 
 
+@pytest.mark.parametrize(
+    "text",
+    ['{"multiMachine": false}', '{"schemaVersion": 2, "multiMachine": false}'],
+    ids=["older layout", "newer layout"],
+)
+def test_one_copy_in_a_layout_it_cant_use_counts_as_no_answer(
+    box: Sandbox, copies: Callable[[bool | None], None], text: str
+) -> None:
+    copies(None)
+    write_text(box.content / "dev-home.json", text + "\n")
+    sync(box)
+    push_from_another_copy(box, f"Pushed for {text}.")
+    result = sync(box, "--fetch", "auto")
+    assert result.has_line(r"^PULLED\s+1 commit from GitHub\."), str(result)
+    assert not result.has_line(r"^SETTING\s"), str(result)
+
+
 def test_when_due_waits_for_the_check_even_with_several_copies(
     box: Sandbox, copies: Callable[[bool | None], None]
 ) -> None:
@@ -940,11 +992,11 @@ def test_when_due_waits_for_the_check_even_with_several_copies(
         r"ago, and checks every 12 hours\.$"
     )
     assert result.has_line(pattern), str(result)
-    set_setting(box, "contentCheckHours", 0)
+    set_setting(box, "devHome.checkEveryHours", 0)
     try:
         result = sync(box, "--fetch", "when-due")
     finally:
-        set_setting(box, "contentCheckHours", None)
+        set_setting(box, "devHome.checkEveryHours", None)
     assert result.has_line(r"^OK\s+dev-home is up to date with GitHub\.$"), str(result)
 
 
@@ -1027,7 +1079,7 @@ def test_setups_commit_brings_in_commits_without_running_setup_or_the_update_che
 
 def test_the_update_check_waits_its_interval_and_uses_what_it_knows(box: Sandbox) -> None:
     # An update fetched earlier is still waiting: the maintainer's change four.
-    set_setting(box, "updateCheckHours", 24)
+    set_setting(box, "updates.checkEveryHours", 24)
     try:
         sync(box)
         push_update(box, "Upstream change five.")
@@ -1037,7 +1089,7 @@ def test_the_update_check_waits_its_interval_and_uses_what_it_knows(box: Sandbox
         push_update(box, "Upstream change six.")
         by_hand = run_python(box, "update.py", answer="n")
     finally:
-        set_setting(box, "updateCheckHours", 0)
+        set_setting(box, "updates.checkEveryHours", 0)
     assert between.has_line(r"^UPDATE\s+1 commit waiting"), str(between)
     assert due.has_line(r"^UPDATE\s+2 commits waiting"), str(due)
     # update.py run by hand always checks GitHub.

@@ -718,10 +718,10 @@ root, says which, as `{ "multiMachine": false }` or `true`, and the commands act
 
 | Command | One active copy | Several active copies |
 | --- | --- | --- |
-| `/handoff`, `/handoff <question>` | The local copy. GitHub only to push commits still waiting, and to check once `contentCheckHours` has passed | Fetch first, every time |
+| `/handoff`, `/handoff <question>` | The local copy. GitHub only to push commits still waiting, and to check once `devHome.checkEveryHours` has passed | Fetch first, every time |
 | `/handoff update`, `next`, `issue`, `audit` | Edit, commit, push | Fetch first, edit, commit, push |
 | `/knowledge <question>` | The local copy | The local copy |
-| Plain `/knowledge` | The local copy, unless `contentCheckHours` has passed: then sync first | The same |
+| Plain `/knowledge` | The local copy, unless `devHome.checkEveryHours` has passed: then sync first | The same |
 | `/knowledge add` | Add, commit, push | Fetch first, add, commit, push |
 | `/dev-home sync` | Fetch, merge, push | The same |
 
@@ -755,7 +755,7 @@ root, says which, as `{ "multiMachine": false }` or `true`, and the commands act
   twice. On that PC, over ten days, about half the syncs came within 5 minutes of the one before,
   so a window would have saved fetches, but none a person would notice.
 - The clone question has no default because both wrong answers cost something. A wrong "one
-  copy" leaves each copy up to `contentCheckHours` behind the other; the line above catches it
+  copy" leaves each copy up to `devHome.checkEveryHours` behind the other; the line above catches it
   at the first fetch that brings in the other copy's commits. A wrong "several" costs a fetch per
   command for good, and nothing points it out.
 - Setup commits through a function of the sync's, in its own process, because a sync that
@@ -775,7 +775,8 @@ root, says which, as `{ "multiMachine": false }` or `true`, and the commands act
 - Other names: `config.json` (too general), `shared-settings.json` (names how it's stored, not
   what it's for), `multipleCopies` or `multipleClones` (exact, but less familiar), `syncMode`
   (hides the fact that decides the mode), and `syncAcrossMachines` (sounds as if false might stop
-  pushes). And a schema version, which nothing needs until the format changes.
+  pushes). And a schema version, which nothing needs until the format changes: it came with
+  "local-settings.json groups its settings, and both settings files carry a version".
 - Changing the setting by itself when another copy's commits arrive: a shared commit needs a
   yes.
 - A window of 5 or 15 minutes in which several copies skip the fetch.
@@ -813,11 +814,12 @@ first.
 **Decision:** two settings on each PC, in `local-settings.json`, each a whole number of hours,
 where 0 means every time:
 
-- `contentCheckHours`, 12 by default: how long a sync with one active copy goes without
+- `devHome.checkEveryHours`, 12 by default: how long a sync with one active copy goes without
   fetching dev-home, and, in both modes, how long plain `/knowledge` reads the local copy before
   syncing first.
-- `updateCheckHours`, 24 by default: how long the update check goes without fetching
-  dev-home-tools. Between checks, it still reports, or installs when `autoUpdate` is on, the
+- `updates.checkEveryHours`, 24 by default: how long the update check goes without fetching
+  dev-home-tools. Between checks, it still reports, or installs when
+  `updates.installAutomatically` is on, the
   commits an earlier fetch found. `update.py` run by hand always fetches, and a sync someone asks
   for, `/dev-home sync` included, keeps to this interval.
 
@@ -829,9 +831,10 @@ value that isn't a whole number of 0 or more means the default, and setup says s
 
 - On each PC, because how often a PC reaches GitHub is that PC's choice, such as a laptop on a
   metered connection. Nothing needs the copies to agree, and a change commits nothing.
-- With one copy, `contentCheckHours` limits how long a wrong setting, or an edit made on
+- With one copy, `devHome.checkEveryHours` limits how long a wrong setting, or an edit made on
   GitHub's website, goes unseen. Its default is 12 hours, chosen over the 24 first planned.
-- `updateCheckHours` is apart from `autoUpdate`: one says when to check GitHub, the other
+- `updates.checkEveryHours` is apart from `updates.installAutomatically`: one says when to check
+  GitHub, the other
   whether to install what a check found. A check on every command found nothing almost every
   time, and fewer checks bring updates in fewer batches, so a session is stopped to reload a
   changed skill less often.
@@ -840,7 +843,8 @@ value that isn't a whole number of 0 or more means the default, and setup says s
 **Options set aside:**
 
 - Fixed intervals in the code: nobody could change them.
-- `contentCheckHours` in `dev-home.json`, shared by every copy: each change would be a commit to
+- `devHome.checkEveryHours` in `dev-home.json`, shared by every copy: each change would be a
+  commit to
   all of them, with no reason for them to agree.
 - A yes or no for the update check: one number covers the default, every time, and anything
   between.
@@ -853,10 +857,11 @@ value that isn't a whole number of 0 or more means the default, and setup says s
 PC's first run, and only when a person can answer (see "Setup never waits for input nobody can
 give" above).
 
-- Whether to pull updates automatically: asked until answered. A quiet run leaves `autoUpdate`
-  out of `local-settings.json`, and a sync treats a missing answer as no.
-- Each `~/.claude-*` folder: asked once. A yes adds it to `claudeConfigDirs`, as before, and a no
-  adds it to `declinedClaudeConfigDirs`, so it isn't asked again.
+- Whether to pull updates automatically: asked until answered. A quiet run leaves
+  `updates.installAutomatically` out of `local-settings.json`, and a sync treats a missing answer
+  as no.
+- Each `~/.claude-*` folder: asked once. A yes or a no is saved in `claudeCode.folders`, so it
+  isn't asked again.
 - A quiet run never asks, so it names each `~/.claude-*` folder with no answer, in a line the
   agent passes on. A folder with no answer that the session runs in (`CLAUDE_CONFIG_DIR`) is
   still set up, so that account keeps working, and its settings line says that setup without
@@ -873,20 +878,22 @@ at worst, in 50 runs on one PC, against about 500 ms for a quiet setup.
 
 - For Claude folders: offering every unlisted folder on every run (a no would be asked again
   each time), and asking only on the first run.
-- For `autoUpdate`: asking on every run, with the current answer as the default (changing an
-  answer later is `--configure`'s job, below), and asking only on the first run.
+- For automatic updates: asking on every run, with the current answer as the default (changing
+  an answer later is `--configure`'s job, below), and asking only on the first run.
 - For quiet runs: naming only the session's own folder (a new account has no skills linked yet,
   so it would almost never come up), and naming none.
 - One map of every folder to its answer, in place of a second list: it would change a format
-  already in use, by hand on each PC.
+  already in use, by hand on each PC. That cost was later waived, and the map came with
+  "local-settings.json groups its settings, and both settings files carry a version".
 
 **Look again if:** setup gains a question that shouldn't wait for an answer.
 
 ## setup.py --configure changes every setting
 
 **Decision:** `setup.py --configure` is how people and agents change a setting after the first
-run: `contentDir`, `autoUpdate`, `updateCheckHours`, `contentCheckHours`, the answer for each
-`~/.claude-*` folder, and the shared `multiMachine`.
+run: `devHome.folder`, `updates.installAutomatically`, `updates.checkEveryHours`,
+`devHome.checkEveryHours`, the answer for each `~/.claude-*` folder, and the shared
+`multiMachine`.
 
 - At a console, it shows a menu: every setting with its current value, under "This PC" and
   "Shared by every copy of dev-home", in aligned columns, with headings and setup's colors, in
@@ -896,11 +903,11 @@ run: `contentDir`, `autoUpdate`, `updateCheckHours`, `contentCheckHours`, the an
   one answered no included, so a no can be taken back.
 - An agent can't answer at a console, so it names one setting per run:
   `--configure '<name>=<value>'`, with a plain value, always in single quotes: `true` or `false`,
-  a whole number of hours, a path, or `claudeConfigDirs+=<folder>` to set up a folder and
-  `claudeConfigDirs-=<folder>` to stop. `--what-if` shows the change first. With neither a
+  a whole number of hours, a path, or `claudeCode.folders+=<folder>` to set up a folder and
+  `claudeCode.folders-=<folder>` to stop. `--what-if` shows the change first. With neither a
   console nor a setting, it prints the current settings and how to change them.
 - A change to `local-settings.json` keeps a dated backup first, as setup's changes to Claude
-  Code's and Codex's settings do, and keeps any key it doesn't know. A new `contentDir` never
+  Code's and Codex's settings do, and keeps any key it doesn't know. A new `devHome.folder` never
   moves a folder. The backup goes beside the file, in dev-home-tools' root, and git ignores it,
   as it does the file.
 - The `dev-home` skill pre-approves `setup.py --configure *`, as the skills pre-approve
@@ -925,7 +932,7 @@ run: `contentDir`, `autoUpdate`, `updateCheckHours`, `contentCheckHours`, the an
 - A pre-approval with a wildcard, because the value changes with each call. Without one, a
   change would ask three times: the preview, the change, and the question in chat.
 - The dev-home check, because setup turns commit signing off in that repo, and an agent can now
-  change `contentDir`, so a mistake must not reach a project's repo.
+  change `devHome.folder`, so a mistake must not reach a project's repo.
 - The backup beside the file, because every other backup setup makes is beside its file, where
   the README teaches people to look. Git ignores it because it holds the PC's paths, and the
   repo is public.
@@ -938,7 +945,7 @@ run: `contentDir`, `autoUpdate`, `updateCheckHours`, `contentCheckHours`, the an
   backup that isn't beside its file, unlike every other, and a `.gitignore` line still needed
   for the new copy a save swaps in, which has to sit beside the file.
 - No backup of `local-settings.json`: the change is shown and waits for a yes, and every value
-  can be set again, but a wrong `contentDir` would leave no file to copy back.
+  can be set again, but a wrong `devHome.folder` would leave no file to copy back.
 - JSON values (see above); one switch per setting, such as `--content-dir` (the list grows with
   every setting, and a person has to know each one exists); and editing the file by hand only
   (a JSON typo stops setup).
@@ -1020,14 +1027,14 @@ for a file Claude Code rejects anyway).
 
 **Decision:** a general `dev-home` skill. `/dev-home` alone lists its commands. `/dev-home sync`
 fetches, merges, and pushes in either mode, lists the files left uncommitted, and keeps to
-`updateCheckHours`. `/dev-home configure` runs `setup.py --configure`: it shows the current
+`updates.checkEveryHours`. `/dev-home configure` runs `setup.py --configure`: it shows the current
 values, previews the exact change, and makes it after the person's yes. Typing `/dev-home sync`
 allows a sync, never a commit: it offers to commit a `STALE` file, and leaves a `LEFT` one alone
 unless the person says it's theirs. In Codex, both say which command to run in a terminal, and
 change nothing, while Codex can't use git's and gh's sign-ins.
 
 Plain `/knowledge` stops being the sync someone asks for. It reads the local copy, unless
-`contentCheckHours` has passed, when it syncs first, in both modes. `/knowledge <question>` still
+`devHome.checkEveryHours` has passed, when it syncs first, in both modes. `/knowledge <question>` still
 never syncs.
 
 **Why:** one place to sync and configure that's easy to find, with room for more dev-home
@@ -1117,8 +1124,10 @@ session's transcript.
   2.1.296, tested 2026-10-10). The offer shows every copy, and accepting leaves one, with the
   recommended value. When setup changes a file in which some other key is written more than
   once, its diff keeps the last copy of that key, the one Claude Code uses, and says so.
-- Answers are saved per PC and per Claude folder, in `local-settings.json` under
-  `recommendedSettings`, such as `{"~/.claude": {"attribution-off": true}}`. A no is never asked
+- Answers are saved per PC and per Claude folder, in that folder's entry in
+  `local-settings.json`, under `recommendedSettings`, such as
+  `"~/.claude": {"setUp": true, "recommendedSettings": {"attribution-off": true}}` in
+  `claudeCode.folders`. A no is never asked
   again. If the value changes after a yes, setup asks again rather than changing it back. An
   answer is saved only once its change is written, so a run that stops partway records nothing.
 - A settings file gets one diff for everything setup changes in it, the required lines and the
@@ -1228,7 +1237,8 @@ several" is asked on every PC's first setup.
 folder's `skills/` and into `~/.agents/skills` for Codex. Claude Code's and Codex's own menus
 decide whether an installed skill is shown in an account or a project.
 
-- Each PC saves a yes or no for each skill in `local-settings.json` under `skills`. A no removes
+- Each PC saves a yes or no for each skill in `local-settings.json`, as
+  `skills.<name>.installed`. A no removes
   setup's links for it, and its lines leave the generated always-on rules. Nothing is deleted.
 - `dev-home` is always installed. `handoff` and `knowledge` are recommended because the starter
   dev-home makes their folders, so a change to the starter means looking at this set again.
@@ -1318,8 +1328,7 @@ across several PCs.
 
 **Decision:** setup finds each `~/.codex-*` folder that holds a Codex `config.toml` or
 `auth.json`, and the folder `CODEX_HOME` names when setup runs from a Codex session. It asks once
-about each, and saves the answers in `codexHomes` and `declinedCodexHomes` in
-`local-settings.json`. A yes gets that home what `~/.codex` gets: the always-on rules in its
+about each, and saves the answers in `codex.homes` in `local-settings.json`. A yes gets that home what `~/.codex` gets: the always-on rules in its
 `AGENTS.md`, and dev-home in its `config.toml`. A home elsewhere can be added by its path.
 
 **Why:** Codex reads its folder from `CODEX_HOME`, which can point anywhere, and each home has its
@@ -1533,3 +1542,88 @@ xhigh. There is no setting for either.
 
 **Look again if:** people type the same options on most audits, Codex runs second agents in the
 background, or new models or prices change which model and effort suit an audit.
+
+## local-settings.json groups its settings, and both settings files carry a version
+
+**Decision:** this PC's settings are grouped by what they're about, and each one's name is its
+path, as in git config and Codex's `-c`:
+
+```json
+{
+  "schemaVersion": 1,
+  "devHome": { "folder": "C:/Programming/dev-home", "checkEveryHours": 12 },
+  "updates": { "installAutomatically": false, "checkEveryHours": 24 },
+  "claudeCode": { "folders": { "~/.claude-second": { "setUp": true } } },
+  "codex": { "homes": { "~/.codex": { "setUp": true } } },
+  "skills": { "handoff": { "includeSecurityBugsInIssueOffers": true } }
+}
+```
+
+- `--configure` takes the path, such as `--configure 'updates.checkEveryHours=6'`. A folder has
+  a dot in its name, so folders keep `claudeCode.folders+=<folder>` and `-=<folder>`.
+- A setting is written only once it's answered, and then it stays, so a later change of default
+  never changes a PC that answered. `testHomeDir` stays at the top, as before.
+- `schemaVersion` says which layout the file has, and goes up only when a setting is renamed or
+  moved. A file without one, such as one from before this change, is set aside: a run by hand
+  offers to rename it to a dated backup and ask its questions again, keeping only `testHomeDir`,
+  and a quiet run says so and stops. A version higher than the code knows is a `PROBLEM`, and
+  setup never saves over that file.
+- Every value is checked on every run, against one list of the settings plus the preferences
+  each skill declares. A value of the wrong kind is a `PROBLEM` that names it and says what it
+  counts as instead, and a key setup doesn't know is kept, with a `PROBLEM` naming it. Setup stops
+  only when the file can't be read at all.
+- `dev-home.json` gets `schemaVersion` too, and the same checks. Its setting keeps its name,
+  `multiMachine`. Without a version, a run by hand asks its question again, with the old answer as
+  the default, and rewrites the file in place: git keeps its history, and a backup file would show
+  up in every sync as an uncommitted file. Until then, and while its version is higher than the
+  code knows, the copies setting counts as unanswered, so each sync checks GitHub.
+- `setUp` may go on any folder, the default ones (`~/.claude`, `~/.codex`) included. Missing
+  means not answered yet: the default folders are set up, as the recommended pick, and extra
+  folders aren't, except the one the session runs in. A `false` is kept wherever it's written.
+  A folder answered yes that no longer exists is skipped without a word and keeps its answer, and
+  the settings menu shows it as not found.
+- A skill declares its preferences in a `dev-home-skill.json` in its folder:
+  `{"preferences": {"<name>": {"default": true, "label": "...", "help": "..."}}}`. Setup reads
+  these from dev-home-tools' skills and from the person's own, and a preference is set with
+  `--configure 'skills.<skill>.<name>=true'` or `false`. Only yes-or-no preferences for now.
+
+**Why:**
+
+- The groups match the settings menu, and a name says where the setting is. Settings planned for
+  later, such as recommended settings per Claude folder and skills per PC, have an obvious place:
+  a folder's answer and its recommended settings share one entry, in place of two lists and a
+  map. "Setup asks each question whose answer isn't saved yet" set aside one map only because it
+  changed a format already in use, a cost the person waived.
+- A file newer than the code happens when a branch is checked out in the live folder and then
+  `main` again, and with `dev-home.json` when the PCs update at different times. An older file
+  happens when a backup is restored. Without a version, the code would read either as broken
+  settings. "schemaVersion" follows Docker's image manifests: "version" alone would read as
+  dev-home-tools' own version.
+- Setting an old file aside, rather than moving it forward, follows "No backwards compatibility in
+  the scripts, for now": each PC answers setup's questions again, once.
+- A `PROBLEM` on every sync for a folder that's gone nags someone who removed an account on
+  purpose, and a folder that's only gone for a while, such as one on a drive that's unplugged,
+  gets set up again as soon as it's back.
+- Reading skills' preferences from the start means the first skill that declares one only adds
+  its file.
+
+**Options set aside:**
+
+- Flat keys with the skill's name in front of each (every name repeats it), and flat keys with
+  dots in them, as VS Code's settings have (grouped by name only).
+- Moving an old file to the new layout automatically: code that would stay in the scripts long
+  after every PC had moved.
+- For a folder that's gone: keeping the `PROBLEM` (it nags on every sync), and dropping its answer
+  (a quiet run would have to write the file, and a folder missing only for a while would lose its
+  answer).
+- A dated backup of `dev-home.json` when it's rewritten: git already has every version.
+
+This changes "Setup asks each question whose answer isn't saved yet", whose two lists become
+`claudeCode.folders`; the names used in "How often the sync checks GitHub", "setup.py
+--configure changes every setting", and "Setup finds extra Codex homes as it finds extra Claude
+folders"; where "Setup offers recommended settings for Claude Code and Codex" and "Setup installs
+skills per PC, and the tools show or hide them" save their answers; and the schema version that
+"A dev-home has one active copy, or several" set aside until the format changed.
+
+**Look again if:** a setting needs more than two levels of grouping, or backwards compatibility
+returns, when a file without a version could be moved forward instead of set aside.

@@ -4,7 +4,7 @@
 | --- | --- |
 | `setup.py` | Sets up this PC. Safe to run any number of times. `--what-if` previews; `--quiet` prints only changes and problems, and never asks (agents run it this way); `--content-dir <folder>` points it at a different dev-home; `--configure` shows a menu of every setting to change. An agent changes one with `--configure '<name>=<value>'` after you approve it, and `--configure` alone, run where nobody can answer, lists the names and values. |
 | `sync.py` | Syncs your dev-home with GitHub, and commits only the files it's given. Agents run all their git in dev-home through it. Then it checks for updates as `update.py` does, and runs setup quietly (see [When they run](#when-they-run)). You can run it too; `--help` says how to commit with it, and how `--fetch` chooses when to check GitHub for dev-home's changes. |
-| `update.py` | Shows the dev-home-tools commits waiting on GitHub, and installs them after a yes. With `--quiet`, as a sync runs it, it never asks: it reports what's waiting, and installs it only when `autoUpdate` is on. |
+| `update.py` | Shows the dev-home-tools commits waiting on GitHub, and installs them after a yes. With `--quiet`, as a sync runs it, it never asks: it reports what's waiting, and installs it only when `updates.installAutomatically` is on. |
 
 All three are Python. Run them with the Python install manager's `py`, such as
 `py C:\Programming\dev-home-tools\setup.py`. Each is a short entry point that loads its code from
@@ -23,7 +23,7 @@ Nothing runs on a schedule. Each script runs only when you or an agent starts it
 | Script | When it runs |
 | --- | --- |
 | `sync.py` | In Claude Code, agents run it at the start of every `/handoff` command, for a plain `/knowledge`, before adding to the knowledge base, and for `/dev-home sync`, through the skills' `prepare.py`; that sync also checks for updates and runs setup, and checks GitHub for dev-home's changes as often as the command needs (see [How often a sync checks GitHub](#how-often-a-sync-checks-github)). Then they run it again to commit and push each change they make. That second sync pushes without fetching first, and fetches and merges only if GitHub rejects the push because it has commits this PC lacks. It skips the update check, and runs setup only if it brought in commits from GitHub, because the sync just before it did both. A lookup, `/knowledge <question>`, never syncs, and Codex never runs it. You can run it any time. |
-| `update.py` | Each sync that isn't committing runs its check, quietly, and that check asks GitHub only once `updateCheckHours` have passed (see [Updates](#updates)). You run it yourself to look at an update and install it, when `autoUpdate` is off. |
+| `update.py` | Each sync that isn't committing runs its check, quietly, and that check asks GitHub only once `updates.checkEveryHours` have passed (see [Updates](#updates)). You run it yourself to look at an update and install it, when `updates.installAutomatically` is off. |
 | `setup.py` | You run it once per PC, and again to change a setting, to answer a question it hasn't asked yet, or to say yes to a settings change. After that, syncs run it quietly, as above, and so does `update.py` after you install an update. That quiet run never asks anything, and never changes Claude Code's or Codex's settings. |
 
 ### How often a sync checks GitHub
@@ -33,14 +33,15 @@ command passes the one it needs:
 
 | Command | `--fetch` | Checks GitHub for dev-home's changes |
 | --- | --- | --- |
-| Every `/handoff` command, and adding to the knowledge base | `auto` | With dev-home in active use on several copies, such as two PCs, every time. With one, only once `contentCheckHours` have passed since the last check, since nothing else changes it. |
-| Plain `/knowledge` | `when-due` | Only once `contentCheckHours` have passed, however many copies are in use, so its list of subjects is never far behind. |
+| Every `/handoff` command, and adding to the knowledge base | `auto` | With dev-home in active use on several copies, such as two PCs, every time. With one, only once `devHome.checkEveryHours` have passed since the last check, since nothing else changes it. |
+| Plain `/knowledge` | `when-due` | Only once `devHome.checkEveryHours` have passed, however many copies are in use, so its list of subjects is never far behind. |
 | `/dev-home sync`, and `sync.py` run by hand | `always` | Every time. |
 
-`contentCheckHours` is 12 unless you set it in `local-settings.json`, where 0 means every time.
-Whether dev-home has one active copy or several is `multiMachine` in your dev-home's
+`devHome.checkEveryHours` is 12 unless you set it in `local-settings.json`, where 0 means every
+time. Whether dev-home has one active copy or several is `multiMachine` in your dev-home's
 `dev-home.json`, which every copy shares, and `/dev-home configure` changes it; a missing or
-unreadable file, or one with no answer, counts as several. A sync that skips the check still
+unreadable file, one in a layout this dev-home-tools doesn't know, or one with no answer, counts
+as several. A sync that skips the check still
 merges what an earlier check brought in, pushes commits waiting on this PC, and lists the files
 left uncommitted.
 
@@ -69,12 +70,12 @@ Setup's lines, such as `LINKED` or `WROTE`, say what it changed on this PC.
 
 Your copy of dev-home-tools never changes by itself. Instead, each sync that isn't committing a
 change, such as the one every `/handoff` starts with, checks for new commits to dev-home-tools.
-It asks GitHub once `updateCheckHours` have passed since it last did, 24 by default, and in
-between uses what it found then; set it in `local-settings.json`, where 0 means every sync.
+It asks GitHub once `updates.checkEveryHours` have passed since it last did, 24 by default, and
+in between uses what it found then; set it in `local-settings.json`, where 0 means every sync.
 `update.py` run by hand always asks GitHub. What happens when commits are waiting depends on your
-answer to setup's question about `autoUpdate`:
+answer to setup's question about installing them automatically, `updates.installAutomatically`:
 
-| `autoUpdate` | When new commits are waiting | What you do |
+| `updates.installAutomatically` | When new commits are waiting | What you do |
 | --- | --- | --- |
 | Off (the default, and until you answer) | Nothing is installed, and the agent tells you an update is waiting. | When you're ready, run `update.py` (below). It lists the commits and the files they change, and installs them only if you answer `y`. |
 | On | The sync installs them, and the agent tells you it did. | Nothing. |
@@ -94,8 +95,8 @@ to look first. So an update is always installed the same way:
 - **It changes only your dev-home-tools folder.** Your dev-home and everything in it stay as
   they are.
 
-To switch `autoUpdate`, set it to `true` or `false` in `local-settings.json`, in your
-dev-home-tools folder.
+To switch it, run `/dev-home configure`, or set `updates.installAutomatically` to `true` or
+`false` in `local-settings.json`, in your dev-home-tools folder.
 
 ### Where updates come from
 

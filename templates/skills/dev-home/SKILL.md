@@ -100,8 +100,8 @@ backup of this PC's settings, and commits and pushes the shared one.
    copy still in use would go hours without seeing this one's changes.
 3. Run `{{PYTHON}} -I {{TOOLS_DIR}}/setup.py --configure '<name>=<value>' --what-if`, with the
    setting in single quotes, as step 1's output writes it, such as
-   `--configure 'contentCheckHours=6' --what-if` or
-   `--configure 'claudeConfigDirs+=~/.claude-second' --what-if`. It shows the exact change and
+   `--configure 'devHome.checkEveryHours=6' --what-if` or
+   `--configure 'claudeCode.folders+=~/.claude-second' --what-if`. It shows the exact change and
    makes none. If it prints a `PROBLEM`, show it, then agree on another
    value or stop. If it says the setting is already that way, tell the user, and stop.
 4. Show the change, and ask one question: "Make this change?". For `multiMachine`, which every

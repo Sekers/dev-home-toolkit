@@ -19,7 +19,7 @@ conflicts is undone at once, so nothing is lost either way. --fetch says when to
     always     Every time. Without --fetch, this is what it does.
     auto       As dev-home.json in dev-home says: with several active copies, or no answer,
                every time; with one, only when dev-home's last check of GitHub is
-               contentCheckHours old (local-settings.json; 12 by default).
+               devHome.checkEveryHours old (local-settings.json; 12 by default).
     when-due   Only when that check is due, however many copies there are.
 
 A sync that skips the fetch still merges what an earlier fetch brought in, pushes commits waiting
@@ -32,8 +32,8 @@ and push again. A push that fails for any other reason, such as offline, waits f
 
 Then it runs update's quiet check (internal/shared/update.py, the same as its --quiet), which
 checks dev-home-tools for new commits and makes every decision about them: it pulls them when
-autoUpdate is on in local-settings.json, and otherwise says they're waiting. It checks GitHub
-only once updateCheckHours (24 by default) have passed since it last did.
+updates.installAutomatically is on in local-settings.json, and otherwise says they're waiting. It
+checks GitHub only once updates.checkEveryHours (24 by default) have passed since it last did.
 
 Last, it runs setup's code with --quiet, inside this process, so updated skills, and skills
 added on another PC, are set up on this one. Setup runs as a process of its own instead when
@@ -76,7 +76,6 @@ prepare.py runs main([]) inside its own process, so keep main's name and argumen
 import contextlib
 import errno
 import importlib
-import json
 import os
 import re
 import sys
@@ -90,9 +89,12 @@ from .output import commit_count, describe, first_line, status_line
 from .programs import by_hand, find_program, run_setup
 from .settings import (
     DEFAULT_HOURS,
-    DEV_HOME_SETTINGS,
+    SCHEMA_VERSION,
     SETTINGS_PATH,
+    get,
     hours_setting,
+    layout,
+    read_dev_home_settings,
     read_settings,
 )
 
@@ -126,13 +128,10 @@ FETCH_WHEN = ("always", "auto", "when-due")
 
 
 def one_active_copy(root: Path) -> bool:
-    """Whether dev-home.json says dev-home has one active copy. A missing or unreadable file, or
-    no answer in it, counts as several, so a sync fetches rather than risk being behind."""
-    try:
-        data = json.loads((root / DEV_HOME_SETTINGS).read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError):
-        return False
-    return isinstance(data, dict) and data.get("multiMachine") is False
+    """Whether dev-home.json says dev-home has one active copy. A missing or unreadable file, one
+    in a layout the code doesn't know, or no answer in it, counts as several, so a sync fetches
+    rather than risk being behind."""
+    return read_dev_home_settings(root).several is False
 
 
 def hours_text(hours: int) -> str:
@@ -200,7 +199,7 @@ def one_run_at_a_time(git_dir: Path) -> Iterator[bool]:
 
 class Sync:
     """One run, on the dev-home at root. fetch_when is one of FETCH_WHEN, and check_hours is
-    contentCheckHours, how long dev-home goes without checking GitHub when it can (0: never).
+    devHome.checkEveryHours, how long dev-home goes without checking GitHub when it can (0: never).
     Without then, it skips the update check and setup that otherwise follow, for a run setup
     itself starts."""
 
@@ -209,7 +208,7 @@ class Sync:
         root: Path,
         git_dir: Path,
         fetch_when: str = FETCH_WHEN[0],
-        check_hours: int = DEFAULT_HOURS["contentCheckHours"],
+        check_hours: int = DEFAULT_HOURS["devHome.checkEveryHours"],
         *,
         then: bool = True,
     ) -> None:
@@ -630,7 +629,25 @@ def sync(argv: Sequence[str]) -> int:
             "terminal."
         )
     settings = read_settings()
-    content_dir = settings.get("contentDir") if settings else None
+    if settings is None:
+        return problem(
+            f"{SETTINGS_PATH} could not be read as a JSON object of settings. The user fixes it, "
+            f"or deletes it and runs {setup} in a terminal to answer its questions again."
+        )
+    found = layout(settings, SCHEMA_VERSION)
+    if found == "older":
+        return problem(
+            f"{SETTINGS_PATH} is in an older layout, from before its settings were grouped, so "
+            f"the sync can't find dev-home. The user runs {setup} in a terminal: it offers to set "
+            "the file aside and ask its questions again."
+        )
+    if found == "unknown":
+        return problem(
+            f"{SETTINGS_PATH} has a schemaVersion this dev-home-tools doesn't know, perhaps "
+            f"written by a newer one, so the sync left dev-home alone. The user runs "
+            f"{by_hand('update.py')}, or sets the file aside and runs {setup} in a terminal."
+        )
+    content_dir = get(settings, "devHome.folder")
     if not isinstance(content_dir, str) or not content_dir:
         return problem(
             f"{SETTINGS_PATH} has no dev-home folder. The user runs {setup} once in a terminal."
@@ -669,7 +686,7 @@ def sync(argv: Sequence[str]) -> int:
     if problems:
         return 1
 
-    check_hours = hours_setting(settings or {}, "contentCheckHours")[0]
+    check_hours = hours_setting(settings, "devHome.checkEveryHours")[0]
     return sync_root(root, paths, message, fetch_when, check_hours)
 
 

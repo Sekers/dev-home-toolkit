@@ -11,12 +11,12 @@ from the same code.
 Options:
 
     --quiet   What a sync runs, as quiet_check() inside its own process. Never asks. Checks
-              GitHub once updateCheckHours (in local-settings.json; 24 by default, and 0 for
-              every time) have passed since the last fetch, and otherwise uses what that fetch
-              found. Then prints at most one line, in the sync's format: OFFLINE when GitHub
-              can't be reached, UPDATE while commits are waiting, or PULLED once it has pulled
-              them, which it does only when autoUpdate is on in local-settings.json. Leaves setup
-              to the sync, which runs it next.
+              GitHub once updates.checkEveryHours (in local-settings.json; 24 by default, and 0
+              for every time) have passed since the last fetch, and otherwise uses what that
+              fetch found. Then prints at most one line, in the sync's format: OFFLINE when
+              GitHub can't be reached, UPDATE while commits are waiting, or PULLED once it has
+              pulled them, which it does only when updates.installAutomatically is on in
+              local-settings.json. Leaves setup to the sync, which runs it next.
 
 Run without --quiet, it always checks GitHub.
 
@@ -33,7 +33,7 @@ from collections.abc import Sequence
 from .git import GIT_MISSING, last_fetch_age, run_git
 from .output import CYAN, GREEN, RED, color, commit_count, first_line, status_line
 from .programs import by_hand, find_program, run_setup
-from .settings import TOOLS_ROOT, hours_setting, read_settings
+from .settings import TOOLS_ROOT, get, hours_setting, read_settings
 
 
 def stop(quiet: bool, text: str) -> int:
@@ -60,8 +60,8 @@ def main(argv: Sequence[str]) -> int:
 
 def quiet_check() -> tuple[int, bool]:
     """What a sync runs: checks GitHub, never asks, and installs waiting commits only when
-    autoUpdate is on. Returns the exit code, and whether it installed commits, since the sync's
-    setup then needs the new code."""
+    updates.installAutomatically is on. Returns the exit code, and whether it installed commits,
+    since the sync's setup then needs the new code."""
     return check(quiet=True)
 
 
@@ -71,9 +71,9 @@ def ask_and_install() -> int:
 
 
 def check_is_due() -> bool:
-    """Whether a quiet check fetches: once updateCheckHours have passed since the last successful
-    fetch. A clone whose .git isn't a folder, such as a worktree, fetches every time."""
-    hours = hours_setting(read_settings() or {}, "updateCheckHours")[0]
+    """Whether a quiet check fetches: once updates.checkEveryHours have passed since the last
+    successful fetch. A clone whose .git isn't a folder, such as a worktree, fetches every time."""
+    hours = hours_setting(read_settings() or {}, "updates.checkEveryHours")[0]
     git_dir = TOOLS_ROOT / ".git"
     if hours == 0 or not git_dir.is_dir():
         return True
@@ -155,9 +155,8 @@ def check(*, quiet: bool) -> tuple[int, bool]:
 
     if quiet:
         # Only the user's own setting installs anything unasked. A file that can't be read counts
-        # as autoUpdate off.
-        settings = read_settings() or {}
-        if settings.get("autoUpdate") is not True:
+        # as the setting off.
+        if get(read_settings() or {}, "updates.installAutomatically") is not True:
             status_line(
                 "UPDATE",
                 f"{waiting} waiting in dev-home-tools. To see them and install them, the user "

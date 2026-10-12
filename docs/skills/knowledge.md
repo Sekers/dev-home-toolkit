@@ -5,7 +5,7 @@ the skill itself: [`SKILL.md`](../../templates/skills/knowledge/SKILL.md).
 
 | Command | What it does |
 | --- | --- |
-| `/knowledge` | Syncs your dev-home, then lists the subjects and asks what to look up or add. It checks GitHub for changes only once 12 hours have passed since the last check, or as many as `contentCheckHours` sets. |
+| `/knowledge` | Syncs your dev-home, then lists the subjects and asks what to look up or add. It checks GitHub for changes only once 12 hours have passed since the last check, or as many as `devHome.checkEveryHours` sets. |
 | `/knowledge <question>` | Looks it up in this PC's copy, without syncing. |
 | `/knowledge add <what you learned>` | Checks that it's general, files it by the skill's rules, then commits and pushes only the files it changed: typing the command is your go-ahead. A request in plain words works the same when it's a direct instruction, such as "add this to the knowledge base: ..."; anything else gets a draft first. |
 

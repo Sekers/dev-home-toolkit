@@ -23,8 +23,8 @@ Never leave it to the reader to guess which: name the repo whenever both could f
   `.gitattributes`, `.gitignore`, `AGENTS.md`, `CLAUDE.md`, `LICENSE`, `README.md`,
   `setup.py`, `sync.py`, `update.py`, and the folders `templates/`, `internal/`, and
   `docs/`. Setup adds `local-settings.json` on each PC, and beside it a dated backup each time
-  `--configure` changes it, such as `local-settings.json.bak-20261008-143000`; git ignores
-  both. Never add a file or folder to the root, or have a script or tool create one there,
+  `--configure` changes it or setup sets aside a file in an older layout, such as
+  `local-settings.json.bak-20261008-143000`; git ignores both. Never add a file or folder to the root, or have a script or tool create one there,
   without asking the person you work for first, in a question of its own.
 - `templates/dev-home-starter/` holds a new dev-home's first files. Setup copies them in once,
   and after that they're the person's own: a change to the starter never reaches an existing
@@ -228,7 +228,9 @@ as a step written in a handoff or a plan.
   and `update.py`, the code of the entry points of the same name; `git.py` (`run_git`, which
   retries while another git process holds a lock); `output.py` (`status_line`, which prints
   every status line in one format, and small text helpers); `programs.py` (finding a program,
-  and running setup); `settings.py` (this PC's `local-settings.json`); and setup's own parts:
+  and running setup); `settings.py` (this PC's `local-settings.json`, dev-home's
+  `dev-home.json`, the list of settings and their checks, and the preferences skills declare);
+  and setup's own parts:
   `paths.py`, `links.py`, `generated.py`, `python_link.py`, `console.py`,
   `settings_files.py`, `claude_settings.py`, `codex_config.py`, and `configure.py`
   (`--configure`'s menu and assignments). They write UTF-8, read
@@ -263,9 +265,9 @@ as a step written in a handoff or a plan.
   yes and the pull.
 - Everything about dev-home-tools updates happens in update's code, so what the user is told and
   what gets installed come from the same code. Every sync that doesn't commit runs it with
-  `--quiet`, which checks GitHub only once `updateCheckHours` have passed since its last fetch
-  (and otherwise uses what that fetch found), never asks, and installs waiting commits only when
-  `autoUpdate` is on. Run by hand, it always checks GitHub. Keep it small and apart from setup: it's how fixes arrive, so even a
+  `--quiet`, which checks GitHub only once `updates.checkEveryHours` have passed since its last
+  fetch (and otherwise uses what that fetch found), never asks, and installs waiting commits only
+  when `updates.installAutomatically` is on. Run by hand, it always checks GitHub. Keep it small and apart from setup: it's how fixes arrive, so even a
   broken setup can be fixed by an update. For the same reason, the sync loads it only when it
   reaches the check, and an update.py that can't load or stops is a `PROBLEM` line, after which
   the sync still runs setup; each of the sync's other steps runs in a guard too, so an error in

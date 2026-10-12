@@ -158,13 +158,22 @@ It shows every setting with its value. Type a setting's number to change it, `a`
 them all, or press Enter to finish; each question has your current answer as its default. Setup
 keeps a dated backup of `local-settings.json` before it saves a change.
 
-You can also edit `local-settings.json` and run setup again: `autoUpdate` is `true` or `false`;
-`claudeConfigDirs` lists the extra Claude Code folders to set up, such as `"~/.claude-second"`;
-`declinedClaudeConfigDirs` lists the ones you said no to, and taking a folder out of it makes
-setup ask again; and `updateCheckHours` and `contentCheckHours` say how often a sync checks
-GitHub for dev-home-tools updates (24 hours unless set) and for dev-home's changes (12 hours
-unless set, when one copy is in active use, and for a plain `/knowledge`), where 0 means every
-time. To use a different dev-home folder, run setup with `--content-dir <folder>`.
+You can also edit `local-settings.json` and run setup again. Its settings are grouped, and each
+one's name is its path, which `--configure` takes too:
+
+- `devHome.folder` is your dev-home folder. To use a different one, run setup with
+  `--content-dir <folder>`.
+- `updates.installAutomatically` is `true` or `false`.
+- `updates.checkEveryHours` and `devHome.checkEveryHours` say how often a sync checks GitHub for
+  dev-home-tools updates (24 hours unless set) and for dev-home's changes (12 hours unless set,
+  when one copy is in active use, and for a plain `/knowledge`), where 0 means every time.
+- `claudeCode.folders` holds each Claude Code folder with its answer, such as
+  `"~/.claude-second": {"setUp": true}`. Taking a folder out makes setup ask about it again.
+- `schemaVersion` says which layout the file has. Leave it as it is: setup sets aside a file in
+  an older layout and asks its questions again.
+
+Setup checks every value on each run, and reports one of the wrong kind, or a name it doesn't
+know, without changing it.
 
 ## Day to day
 
@@ -256,8 +265,8 @@ Everything beyond getting started is in the `docs/` folder:
 - **`setup.py` replaces only its own work:** its generated files, links whose target is gone,
   and links it made to skills that no longer exist. Anything else in its way is reported, not
   changed. Settings changes are shown first, need your yes, and keep a backup.
-- **Tooling updates wait for you** unless you turn on `autoUpdate`, because whoever controls this
-  repo on GitHub controls code that runs on your PC.
+- **Tooling updates wait for you** unless you turn on `updates.installAutomatically`, because
+  whoever controls this repo on GitHub controls code that runs on your PC.
 - **Never run `Remove-Item -Recurse`** on `~\.claude`, `~\.claude-*`, or `~\.agents`. It follows
   the links into your dev-home and deletes what's there. Remove a single link with
   `cmd /c rmdir <link>`.

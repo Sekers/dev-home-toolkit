@@ -230,9 +230,9 @@ def new_sandbox(name: str, *, tools_repo: bool = False) -> Sandbox:
 
     shutil.copytree(REPO_ROOT, box.tools, ignore=leave_out)
     settings = {
-        "contentDir": box.content.as_posix(),
-        "autoUpdate": False,
-        "claudeConfigDirs": [],
+        "schemaVersion": 1,
+        "devHome": {"folder": box.content.as_posix()},
+        "updates": {"installAutomatically": False},
         "testHomeDir": box.profile.as_posix(),
     }
     write_text(box.tools / "local-settings.json", json.dumps(settings, indent=2) + "\n")
@@ -253,7 +253,7 @@ def new_sandbox(name: str, *, tools_repo: bool = False) -> Sandbox:
     git("clone", "--quiet", str(box.remote), str(box.content))
     # Several active copies, so a sync fetches every time unless a test says otherwise.
     files = {
-        "dev-home.json": '{\n  "multiMachine": true\n}\n',
+        "dev-home.json": '{\n  "schemaVersion": 1,\n  "multiMachine": true\n}\n',
         "global-rules/global-rules.md": "# My rules\n\n- Personal rule one.\n",
         "knowledge/README.md": "# Knowledge base\n",
         "handoffs/demo/HANDOFF.md": "# demo handoff\n",
