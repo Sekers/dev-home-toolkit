@@ -56,6 +56,9 @@ Never leave it to the reader to guess which: name the repo whenever both could f
   versions read and document, and add no workaround or fallback for an older version. Check a
   setting or behavior in the tool's current documentation, or in its source when the
   documentation doesn't say.
+- Never build on a feature its documentation calls deprecated, in Claude Code, Codex, Python,
+  git, or anything else dev-home-tools uses: a deprecated feature is likely to stop working. Use
+  what replaces it, or ask the person you work for when nothing does.
 - Every question that offers something a person can take or turn down uses the answers in
   `docs/development/decisions.md`'s "Offers use the same answers". To depart from them, ask the
   person you work for first, then add the departure and its reason to that entry.
