@@ -1,9 +1,12 @@
 """This PC's settings, from local-settings.json in dev-home-tools' folder, and dev-home's own, from
 dev-home.json in dev-home, which every copy of it shares. setup.py writes both.
 
-Each setting's name is its path in the file, such as devHome.folder. SETTINGS lists the ones with
-a single value, and check_settings checks every value against them, the folders each tool sets
-up, and the preferences the skills declare."""
+Each setting's name is its path in the file, such as devHome.folder. setting-definitions.json,
+beside this file, declares the ones with a single value, as SETTINGS, and each skill declares its
+preferences in its dev-home-skill.json. A saved value is missing, a state such as
+{"$state": "default"}, or a plain value, the person's own answer; read_value says what each counts
+as. check_settings checks every value against the declarations and the folders each tool sets up.
+docs/development/settings.md has the rules."""
 
 import copy
 import json
@@ -22,40 +25,82 @@ SCHEMA_VERSION = 1
 DEV_HOME_SCHEMA_VERSION = 1
 # The file in a skill's folder that declares its preferences.
 SKILL_SETTINGS = "dev-home-skill.json"
-
-
-@dataclass(frozen=True)
-class Setting:
-    """A setting with a single value. kind is "folder", "yes-no", or "hours" (a whole number of
-    hours, 0 or more, where 0 means every time). default is None for one with no default, which
-    counts as unanswered until it's set."""
-
-    path: str
-    kind: str
-    default: int | None
-
-
-SETTINGS = (
-    Setting("devHome.folder", "folder", None),
-    Setting("devHome.checkEveryHours", "hours", 12),
-    Setting("updates.installAutomatically", "yes-no", None),
-    Setting("updates.checkEveryHours", "hours", 24),
-)
-BY_PATH = {setting.path: setting for setting in SETTINGS}
-# How long, in whole hours, a sync goes without checking GitHub, when this PC's settings don't
-# say: for dev-home itself, and for dev-home-tools' updates.
-DEFAULT_HOURS = {s.path: s.default for s in SETTINGS if s.default is not None}
-# The folders each tool is set up in, each with its own answer, setUp, and the one setup sets up
-# whenever it exists, unless it's answered no.
-CLAUDE_FOLDERS = "claudeCode.folders"
-CODEX_HOMES = "codex.homes"
-DEFAULT_FOLDERS = {CLAUDE_FOLDERS: "~/.claude", CODEX_HOMES: "~/.codex"}
-KIND_TEXT = {
+# The file that declares dev-home-tools' own settings with a single value.
+DEFINITIONS_PATH = Path(__file__).parent / "setting-definitions.json"
+# The key of a saved state, such as {"$state": "default"}. No setting's own value uses it.
+STATE = "$state"
+TYPE_TEXT = {
     "folder": "a folder",
     "yes-no": "true or false",
     "hours": "a whole number of hours, 0 or more",
 }
 MISSING = object()
+
+
+@dataclass(frozen=True)
+class Setting:
+    """A setting with a single value: one of dev-home-tools' own, or a skill's preference. type
+    is "folder", "yes-no", or "hours" (a whole number of hours, 0 or more, where 0 means every
+    time). has_default says whether default means anything; asked, whether setup asks about it.
+    former_names are the names it was saved under before."""
+
+    path: str
+    type: str
+    default: Any = None
+    has_default: bool = False
+    asked: bool = False
+    label: str = ""
+    help: str = ""
+    former_names: tuple[str, ...] = ()
+
+
+def is_valid(kind: str, value: object) -> bool:
+    if kind == "folder":
+        return isinstance(value, str)
+    if kind == "yes-no":
+        return isinstance(value, bool)
+    # In Python, true and false are numbers too.
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def load_definitions() -> tuple[Setting, ...]:
+    """dev-home-tools' own settings, as setting-definitions.json declares them. It comes with the
+    code, so one it can't use is a bug, which stops the run; a test reads it."""
+    data = json.loads(DEFINITIONS_PATH.read_text(encoding="utf-8"))
+    found: list[Setting] = []
+    for path, entry in data["settings"].items():
+        if entry["type"] not in TYPE_TEXT or (
+            "default" in entry and not is_valid(entry["type"], entry["default"])
+        ):
+            raise ValueError(
+                f"{DEFINITIONS_PATH.name}: {path} has a type or default setup can't use."
+            )
+        found.append(
+            Setting(
+                path,
+                entry["type"],
+                entry.get("default"),
+                "default" in entry,
+                bool(entry.get("asked", False)),
+                entry["label"],
+                entry["help"],
+                tuple(entry.get("formerNames", ())),
+            )
+        )
+    return tuple(found)
+
+
+SETTINGS = load_definitions()
+BY_PATH = {setting.path: setting for setting in SETTINGS}
+# How long, in whole hours, a sync goes without checking GitHub, when this PC's settings don't
+# say: for dev-home itself, and for dev-home-tools' updates.
+DEFAULT_HOURS = {s.path: s.default for s in SETTINGS if s.type == "hours" and s.has_default}
+AUTO_UPDATE = "updates.installAutomatically"
+# The folders each tool is set up in, each with its own answer, setUp, and the one setup sets up
+# whenever it exists, unless it's answered no.
+CLAUDE_FOLDERS = "claudeCode.folders"
+CODEX_HOMES = "codex.homes"
+DEFAULT_FOLDERS = {CLAUDE_FOLDERS: "~/.claude", CODEX_HOMES: "~/.codex"}
 
 
 def get(data: object, path: str, default: object = None) -> Any:
@@ -77,17 +122,55 @@ def put(data: dict[str, Any], path: str, value: object) -> None:
     data[name] = value
 
 
-def is_valid(kind: str, value: object) -> bool:
-    if kind == "folder":
-        return isinstance(value, str)
-    if kind == "yes-no":
-        return isinstance(value, bool)
-    # In Python, true and false are numbers too.
-    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
-
-
 def hours_text(hours: int) -> str:
     return "every time" if hours == 0 else "every hour" if hours == 1 else f"every {hours} hours"
+
+
+def accepted_states(setting: Setting) -> list[str]:
+    """The states a setting can be saved in, besides missing and a plain value: default for one
+    with a default, and unanswered too when setup asks about it."""
+    if not setting.has_default:
+        return []
+    return ["default", "unanswered"] if setting.asked else ["default"]
+
+
+def read_value(value: object, setting: Setting) -> tuple[Any, bool, bool]:
+    """What a saved value counts as, whether it's an answer, and whether it could be used. Missing,
+    unanswered, and default count as the setting's default, or None with none; so does a value the
+    setting can't use, such as a state it doesn't accept."""
+    fallback = setting.default if setting.has_default else None
+    if value is MISSING:
+        return fallback, False, True
+    if isinstance(value, dict) and STATE in value:
+        if value[STATE] in accepted_states(setting):
+            return fallback, value[STATE] == "default", True
+        return fallback, False, False
+    if is_valid(setting.type, value):
+        return value, True, True
+    return fallback, False, False
+
+
+def setting_value(data: dict[str, Any], path: str) -> tuple[Any, bool, bool]:
+    """read_value for one of dev-home-tools' own settings, from the file's data."""
+    return read_value(get(data, path, MISSING), BY_PATH[path])
+
+
+def value_text(setting: Setting, value: Any) -> str:
+    """A setting's value in words, such as "every 12 hours" or "yes"."""
+    if setting.type == "hours":
+        return hours_text(int(value))
+    if setting.type == "yes-no":
+        return "yes" if value else "no"
+    return str(value)
+
+
+def counts_as_text(setting: Setting) -> str:
+    """What a value a setting can't use counts as, for a PROBLEM line."""
+    if not setting.has_default:
+        return "not answered yet" if setting.asked else "not set"
+    if setting.type == "hours":
+        return hours_text(int(setting.default))
+    return f"{json.dumps(setting.default)}, its default"
 
 
 def read_settings() -> dict[str, Any] | None:
@@ -113,15 +196,10 @@ def layout(data: dict[str, Any], known: int) -> str:
 
 
 def hours_setting(data: dict[str, Any], path: str) -> tuple[int, bool]:
-    """A check interval from the settings, and whether the file's value could be used. A missing
-    value, or one that isn't a whole number of 0 or more, means the default."""
-    default = DEFAULT_HOURS[path]
-    value = get(data, path, MISSING)
-    if value is MISSING:
-        return default, True
-    if is_valid("hours", value):
-        return int(value), True
-    return default, False
+    """A check interval from the settings, and whether the file's value could be used. Missing,
+    the default state, and a value it can't use all mean the default."""
+    hours, _, usable = setting_value(data, path)
+    return int(hours), usable
 
 
 def folder_answers(value: object) -> dict[str, bool]:
@@ -137,13 +215,29 @@ def folder_answers(value: object) -> dict[str, bool]:
 
 @dataclass(frozen=True)
 class Preference:
-    """A yes-or-no preference a skill declares in its dev-home-skill.json."""
+    """A yes-or-no preference a skill declares in its dev-home-skill.json, saved at
+    skills.<skill>.preferences.<name>."""
 
     skill: str
     name: str
     default: bool
     label: str
     help: str
+    former_names: tuple[str, ...] = ()
+
+    @property
+    def setting(self) -> Setting:
+        """The preference as a setting with a default, which setup asks about."""
+        return Setting(
+            f"skills.{self.skill}.preferences.{self.name}",
+            "yes-no",
+            self.default,
+            True,
+            True,
+            self.label,
+            self.help,
+            self.former_names,
+        )
 
 
 def skill_preferences(content_dir: str) -> tuple[dict[str, dict[str, Preference]], list[str]]:
@@ -177,21 +271,30 @@ def skill_preferences(content_dir: str) -> tuple[dict[str, dict[str, Preference]
                 continue
             found[skill.name] = {}
             for key, entry in declared.items():
+                former = entry.get("formerNames", []) if isinstance(entry, dict) else None
                 usable = (
                     isinstance(entry, dict)
                     and isinstance(entry.get("default"), bool)
                     and isinstance(entry.get("label"), str)
                     and entry["label"].strip() != ""
                     and isinstance(entry.get("help", ""), str)
+                    and isinstance(former, list)
+                    and all(isinstance(name, str) and name.strip() for name in former)
                 )
                 if not usable or "." in key or not key.strip():
                     problems.append(
                         f"{path}: the preference {key} needs a name with no dots, a default of "
-                        "true or false, and a label, so it was skipped."
+                        "true or false, a label, and formerNames, if any, as a list of names, so "
+                        "it was skipped."
                     )
                     continue
                 found[skill.name][key] = Preference(
-                    skill.name, key, entry["default"], entry["label"], entry.get("help", "")
+                    skill.name,
+                    key,
+                    entry["default"],
+                    entry["label"],
+                    entry.get("help", ""),
+                    tuple(former or ()),
                 )
     return found, problems
 
@@ -222,18 +325,18 @@ def check_settings(
             f"{counts_as}. Fix it there."
         )
 
+    def check_value(path: str, value: object, setting: Setting) -> None:
+        if not read_value(value, setting)[2]:
+            wrong(path, value, TYPE_TEXT[setting.type], counts_as_text(setting))
+
     def check_group(key: str, value: dict[str, Any]) -> None:
         for name, inner in value.items():
             path = f"{key}.{name}"
             setting = BY_PATH.get(path)
             if setting is None:
                 unknown(path)
-            elif not is_valid(setting.kind, inner):
-                if setting.default is not None:
-                    counts_as = hours_text(setting.default)
-                else:
-                    counts_as = "not answered yet" if setting.kind == "yes-no" else "not set"
-                wrong(path, inner, KIND_TEXT[setting.kind], counts_as)
+            else:
+                check_value(path, inner, setting)
 
     def check_folders(key: str, value: dict[str, Any]) -> None:
         for name, inner in value.items():
@@ -267,17 +370,21 @@ def check_settings(
                 unknown(f"skills.{skill}, a skill that declares no preferences,")
                 continue
             if not isinstance(inner, dict):
-                wrong(f"skills.{skill}", inner, "a JSON object of preferences", "the defaults")
+                wrong(f"skills.{skill}", inner, "a JSON object", "the defaults")
                 continue
-            for key, answer in inner.items():
-                preference = preferences[name].get(key)
-                if preference is None:
-                    unknown(f"skills.{skill}.{key}")
-                elif not isinstance(answer, bool):
-                    default = json.dumps(preference.default)
-                    wrong(
-                        f"skills.{skill}.{key}", answer, "true or false", f"{default}, its default"
-                    )
+            for group, saved in inner.items():
+                where = f"skills.{skill}.{group}"
+                if group != "preferences":
+                    unknown(where)
+                elif not isinstance(saved, dict):
+                    wrong(where, saved, "a JSON object of preferences", "the defaults")
+                else:
+                    for key, answer in saved.items():
+                        preference = preferences[name].get(key)
+                        if preference is None:
+                            unknown(f"{where}.{key}")
+                        else:
+                            check_value(f"{where}.{key}", answer, preference.setting)
 
     groups = {path.split(".")[0] for path in BY_PATH}
     for key, value in data.items():
@@ -302,15 +409,14 @@ def check_settings(
 
 @dataclass
 class LocalSettings:
-    """The settings setup asks for, with defaults for anything missing. auto_update is None until
-    a person answers its question, and a sync treats that as off. claude_folders and codex_homes
-    hold each folder with an answer, as written, so setup asks about it only once. data holds
-    everything the file had, so a save keeps the keys setup doesn't know. found says the file
-    had settings in it. test_home_dir is only ever in a test sandbox's file, which the tests
-    write; setup never adds it."""
+    """The settings setup asks for, with defaults for anything missing. claude_folders and
+    codex_homes hold each folder with an answer, as written, so setup asks about it only once.
+    data holds everything the file had, so a save keeps the keys setup doesn't know, and each
+    setting in the form it was saved in: setting_value reads one, such as whether automatic
+    updates are answered yet. found says the file had settings in it. test_home_dir is only ever
+    in a test sandbox's file, which the tests write; setup never adds it."""
 
     content_dir: str = ""
-    auto_update: bool | None = None
     claude_folders: dict[str, bool] = field(default_factory=dict)
     codex_homes: dict[str, bool] = field(default_factory=dict)
     test_home_dir: str = ""
@@ -344,9 +450,6 @@ def load_local_settings() -> LocalSettings | None:
     folder = get(data, "devHome.folder")
     if isinstance(folder, str):
         settings.content_dir = folder
-    auto_update = get(data, "updates.installAutomatically")
-    if isinstance(auto_update, bool):
-        settings.auto_update = auto_update
     settings.claude_folders = folder_answers(get(data, CLAUDE_FOLDERS))
     settings.codex_homes = folder_answers(get(data, CODEX_HOMES))
     if isinstance(data.get("testHomeDir"), str):
@@ -392,8 +495,6 @@ def local_settings_text(settings: LocalSettings) -> str:
     data.pop("schemaVersion", None)
     if settings.content_dir:
         put(data, "devHome.folder", settings.content_dir)
-    if settings.auto_update is not None:
-        put(data, "updates.installAutomatically", settings.auto_update)
     merge_answers(data, CLAUDE_FOLDERS, settings.claude_folders)
     merge_answers(data, CODEX_HOMES, settings.codex_homes)
     if settings.test_home_dir:

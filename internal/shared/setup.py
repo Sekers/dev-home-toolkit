@@ -103,6 +103,7 @@ from .output import GREEN, RED, YELLOW, color, describe, first_line, status_line
 from .paths import comparable, forward, is_inside, resolve_home, same_path, unsafe_reason
 from .programs import by_hand, find_program
 from .settings import (
+    AUTO_UPDATE,
     CLAUDE_FOLDERS,
     CODEX_HOMES,
     DEFAULT_FOLDERS,
@@ -117,7 +118,9 @@ from .settings import (
     layout,
     load_local_settings,
     local_settings_text,
+    put,
     read_dev_home_settings,
+    setting_value,
     skill_preferences,
 )
 from .settings_files import (
@@ -963,8 +966,8 @@ class Setup:
             settings.content_dir = forward(answer)
             save = True
 
-        if self.can_ask and settings.auto_update is None:
-            settings.auto_update = self.ask_auto_update(None)
+        if self.can_ask and not setting_value(settings.data, AUTO_UPDATE)[1]:
+            put(settings.data, AUTO_UPDATE, self.ask_auto_update(None))
             save = True
         # Each ~/.claude-<name> folder is another Claude account, run with CLAUDE_CONFIG_DIR.
         # Setup asks about each one once, and keeps the answer, a no included.

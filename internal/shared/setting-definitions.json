@@ -1,0 +1,29 @@
+{
+  "settings": {
+    "devHome.folder": {
+      "type": "folder",
+      "asked": true,
+      "label": "dev-home folder",
+      "help": "Your dev-home folder: one that is already a dev-home. Until it's set, setup stops to ask for it."
+    },
+    "updates.installAutomatically": {
+      "type": "yes-no",
+      "default": false,
+      "asked": true,
+      "label": "Install dev-home-tools updates automatically",
+      "help": "Whether a sync installs dev-home-tools updates as soon as it finds them."
+    },
+    "updates.checkEveryHours": {
+      "type": "hours",
+      "default": 24,
+      "label": "Check GitHub for dev-home-tools updates",
+      "help": "How often a sync checks GitHub for dev-home-tools updates. 0 checks every time."
+    },
+    "devHome.checkEveryHours": {
+      "type": "hours",
+      "default": 12,
+      "label": "Check GitHub for dev-home's changes",
+      "help": "How often a sync checks GitHub for dev-home's changes, with one active copy, and for a plain /knowledge. 0 checks every time."
+    }
+  }
+}

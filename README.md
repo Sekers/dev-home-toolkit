@@ -163,10 +163,15 @@ one's name is its path, which `--configure` takes too:
 
 - `devHome.folder` is your dev-home folder. To use a different one, run setup with
   `--content-dir <folder>`.
-- `updates.installAutomatically` is `true` or `false`.
+- `updates.installAutomatically` is `true` or `false` (`false` unless set).
 - `updates.checkEveryHours` and `devHome.checkEveryHours` say how often a sync checks GitHub for
   dev-home-tools updates (24 hours unless set) and for dev-home's changes (12 hours unless set,
   when one copy is in active use, and for a plain `/knowledge`), where 0 means every time.
+- A skill's preferences go under `skills`, such as
+  `"skills": {"handoff": {"preferences": {"<name>": false}}}`.
+- A setting with a default can also be `{"$state": "default"}`, which follows the default even if
+  a later version of dev-home-tools changes it, where a value you write stays as you wrote it.
+  `--configure '<name>=default'` writes it for you.
 - `claudeCode.folders` holds each Claude Code folder with its answer, such as
   `"~/.claude-second": {"setUp": true}`. Taking a folder out makes setup ask about it again.
 - `schemaVersion` says which layout the file has. Leave it as it is: setup sets aside a file in

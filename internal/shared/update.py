@@ -33,7 +33,7 @@ from collections.abc import Sequence
 from .git import GIT_MISSING, last_fetch_age, run_git
 from .output import CYAN, GREEN, RED, color, commit_count, first_line, status_line
 from .programs import by_hand, find_program, run_setup
-from .settings import TOOLS_ROOT, get, hours_setting, read_settings
+from .settings import AUTO_UPDATE, TOOLS_ROOT, hours_setting, read_settings, setting_value
 
 
 def stop(quiet: bool, text: str) -> int:
@@ -154,9 +154,9 @@ def check(*, quiet: bool) -> tuple[int, bool]:
         ), False
 
     if quiet:
-        # Only the user's own setting installs anything unasked. A file that can't be read counts
-        # as the setting off.
-        if get(read_settings() or {}, "updates.installAutomatically") is not True:
+        # Only the setting turned on installs anything unasked. A file that can't be read counts as
+        # missing, so the setting is its default.
+        if setting_value(read_settings() or {}, AUTO_UPDATE)[0] is not True:
             status_line(
                 "UPDATE",
                 f"{waiting} waiting in dev-home-tools. To see them and install them, the user "

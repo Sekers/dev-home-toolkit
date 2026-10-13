@@ -757,7 +757,8 @@ def test_reports_a_value_of_the_wrong_kind_and_what_it_counts_as(box: Sandbox) -
     before = read(settings)
     edited = json.loads(before)
     edited["updates"].update({"checkEveryHours": "6", "installAutomatically": "yes"})
-    edited["devHome"]["checkEveryHours"] = -1
+    # A state the setting doesn't take: nobody is asked about a check interval.
+    edited["devHome"]["checkEveryHours"] = {"$state": "unanswered"}
     edited["claudeCode"] = {"folders": {"~/.claude-x": {"setUp": 1}}}
     write_text(settings, json.dumps(edited, indent=2) + "\n")
     try:
@@ -768,8 +769,8 @@ def test_reports_a_value_of_the_wrong_kind_and_what_it_counts_as(box: Sandbox) -
     hours = "a whole number of hours, 0 or more"
     for path, value, wanted, counts_as in (
         (r"updates\.checkEveryHours", '"6"', hours, "every 24 hours"),
-        (r"devHome\.checkEveryHours", "-1", hours, "every 12 hours"),
-        (r"updates\.installAutomatically", '"yes"', "true or false", "not answered yet"),
+        (r"devHome\.checkEveryHours", r'\{"\$state": "unanswered"\}', hours, "every 12 hours"),
+        (r"updates\.installAutomatically", '"yes"', "true or false", "false, its default"),
         (r"claudeCode\.folders ~/\.claude-x: setUp", "1", "true or false", "not answered yet"),
     ):
         pattern = (
@@ -815,7 +816,17 @@ def test_a_quiet_run_stops_at_settings_in_another_layout_and_saves_nothing(
 
 @pytest.mark.parametrize(
     ("value", "hours", "usable"),
-    [(None, 12, True), (0, 0, True), (6, 6, True), (True, 12, False), (1.5, 12, False)],
+    [
+        (None, 12, True),
+        (0, 0, True),
+        (6, 6, True),
+        (True, 12, False),
+        (1.5, 12, False),
+        ({"$state": "default"}, 12, True),
+        # Nobody is asked about a check interval, so it's never unanswered.
+        ({"$state": "unanswered"}, 12, False),
+        ({"$state": "nonsense"}, 12, False),
+    ],
 )
 def test_reads_a_check_interval(box: Sandbox, value: object, hours: int, usable: bool) -> None:
     data = {} if value is None else {"devHome": {"checkEveryHours": value}}
@@ -926,6 +937,38 @@ def test_configure_changes_one_setting_with_a_backup(box: Sandbox, settings_kept
     assert again.code == 0 and again.has_line(pattern), str(again)
 
 
+def test_configure_sets_a_setting_back_to_following_its_default(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    pinned = setup_configure(box, "updates.checkEveryHours=24")
+    following = setup_configure(box, "updates.checkEveryHours=default")
+    saved = json.loads(read(settings_kept))
+    shown = run_python(box, "setup.py", "--configure")
+    assert pinned.code == 0 and following.code == 0, str(following)
+    assert saved["updates"]["checkEveryHours"] == {"$state": "default"}, saved
+    pattern = r"^\s+\d+\s+Check GitHub for dev-home-tools updates\s+every 24 hours \(the default\)$"
+    assert shown.has_line(pattern), str(shown)
+    # The help says so too.
+    assert shown.has_line(r"^A setting with a default also takes default, such as "), str(shown)
+
+
+def test_the_settings_definitions_declare_what_setup_needs(box: Sandbox) -> None:
+    settings = shared_module(box, "settings")
+    declared = {setting.path: setting for setting in settings.SETTINGS}
+    assert list(declared) == [
+        "devHome.folder",
+        "updates.installAutomatically",
+        "updates.checkEveryHours",
+        "devHome.checkEveryHours",
+    ]
+    for setting in declared.values():
+        assert setting.label and setting.help, setting
+        assert not setting.has_default or settings.is_valid(setting.type, setting.default), setting
+    # Today's behavior: no automatic updates until the user says so.
+    assert declared["updates.installAutomatically"].default is False
+    assert settings.DEFAULT_HOURS == {"updates.checkEveryHours": 24, "devHome.checkEveryHours": 12}
+
+
 def test_git_ignores_this_pcs_settings_and_what_saving_them_leaves_beside_them(
     box: Sandbox,
 ) -> None:
@@ -999,8 +1042,13 @@ def test_the_dev_home_skills_configure_commands_work_as_written(
         ),
         ("claudeCode.folders+=~/.claude-missing", r"There is no Claude Code folder at "),
         ("nothing", r"--configure takes one setting as <name>=<value>, not nothing\."),
-        ("skills.handoff=true", r"A skill's preference is named skills\.<skill>\.<name>"),
-        ("skills.nobody.tidy=true", r"No skill named nobody declares preferences\."),
+        (
+            "skills.handoff=true",
+            r"A skill's preference is named skills\.<skill>\.preferences\.<name>",
+        ),
+        ("skills.nobody.preferences.tidy=true", r"No skill named nobody declares preferences\."),
+        ("devHome.folder=default", r"devHome\.folder has no default, so it can't be set to"),
+        ("multiMachine=default", r"multiMachine has no default, so it can't be set to default\."),
     ],
 )
 def test_configure_refuses_a_setting_it_cant_make(
@@ -1023,27 +1071,35 @@ def test_skill_preferences_are_read_checked_and_set(box: Sandbox, settings_kept:
     }
     write_text(declared, json.dumps({"preferences": preferences}, indent=2) + "\n")
     try:
-        changed = setup_configure(box, "skills.mine.tidyOutput=false")
+        changed = setup_configure(box, "skills.mine.preferences.tidyOutput=false")
         saved = json.loads(read(settings_kept))
+        defaulted = setup_configure(box, "skills.mine.preferences.tidyOutput=default")
+        saved_default = json.loads(read(settings_kept))
         edited = json.loads(read(settings_kept))
-        edited["skills"]["mine"].update({"tidyOutput": "no", "other": True})
+        edited["skills"]["mine"]["preferences"].update({"tidyOutput": "no", "other": True})
+        edited["skills"]["mine"]["stray"] = 1
         edited["skills"]["nobody"] = {}
         write_text(settings_kept, json.dumps(edited, indent=2) + "\n")
         checked = setup(box)
-        refused = setup_configure(box, "skills.mine.broken=true")
+        refused = setup_configure(box, "skills.mine.preferences.broken=true")
     finally:
         declared.unlink()
     # The broken preference is reported on every run, so the change exits 1 too.
     assert changed.has_line(r'^\s+\+\s+"tidyOutput": false$'), str(changed)
     assert changed.has_line(r"^SET\s+This PC's settings: "), str(changed)
-    assert saved["skills"] == {"mine": {"tidyOutput": False}}, saved
+    assert saved["skills"] == {"mine": {"preferences": {"tidyOutput": False}}}, saved
+    assert defaulted.has_line(r'^\s+\+\s+"\$state": "default"$'), str(defaulted)
+    tidy = saved_default["skills"]["mine"]["preferences"]["tidyOutput"]
+    assert tidy == {"$state": "default"}, saved_default
     for pattern in (
-        r'skills\.mine\.tidyOutput in local-settings\.json is "no", which isn\'t true or false, '
-        r"so it counts as true, its default\.",
-        r"local-settings\.json has skills\.mine\.other, which setup doesn't know",
+        r'skills\.mine\.preferences\.tidyOutput in local-settings\.json is "no", which isn\'t '
+        r"true or false, so it counts as true, its default\.",
+        r"local-settings\.json has skills\.mine\.preferences\.other, which setup doesn't know",
+        r"local-settings\.json has skills\.mine\.stray, which setup doesn't know",
         r"local-settings\.json has skills\.nobody, a skill that declares no preferences,",
         r"dev-home-skill\.json: the preference broken needs a name with no dots, a default of "
-        r"true or false, and a label, so it was skipped\.",
+        r"true or false, a label, and formerNames, if any, as a list of names, so it was "
+        r"skipped\.",
     ):
         assert checked.code == 1 and checked.has_line(rf"^PROBLEM\s+.*{pattern}"), str(checked)
     pattern = r"The mine skill declares no preference named broken\. It declares: tidyOutput\."
@@ -1253,7 +1309,7 @@ def test_an_empty_local_settings_file_holds_no_answers(
     loaded = settings.load_local_settings()
     # It counts as no file, so the questions still come.
     assert loaded is not None and loaded.data == {} and loaded.content_dir == ""
-    assert loaded.auto_update is None
+    assert not settings.setting_value(loaded.data, "updates.installAutomatically")[1]
 
 
 # Settings changes, planned without writing anything.

@@ -17,6 +17,7 @@ its run, then commits and pushes, once dev-home's git config is in place.
 import copy
 import json
 import re
+import textwrap
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -24,60 +25,92 @@ from typing import TYPE_CHECKING
 from .output import CYAN, GREEN, color, status_line
 from .paths import comparable, forward, is_inside, resolve_home, same_path, unsafe_reason
 from .settings import (
+    AUTO_UPDATE,
+    BY_PATH,
     CLAUDE_FOLDERS,
     DEFAULT_HOURS,
     DEV_HOME_SETTINGS,
     MISSING,
+    SETTINGS,
     SETTINGS_PATH,
+    STATE,
     TOOLS_ROOT,
     LocalSettings,
+    Setting,
     find_skill,
     get,
-    hours_setting,
-    hours_text,
     local_settings_text,
     put,
     read_dev_home_settings,
+    read_value,
+    setting_value,
     skill_preferences,
+    value_text,
 )
 
 if TYPE_CHECKING:
     from .setup import Setup
 
-NAMES = (
-    "devHome.folder",
-    "updates.installAutomatically",
-    "updates.checkEveryHours",
-    "devHome.checkEveryHours",
-    CLAUDE_FOLDERS,
-    "multiMachine",
-)
+NAMES = (*(setting.path for setting in SETTINGS), CLAUDE_FOLDERS, "multiMachine")
 # A name is a path, which may hold dots and, in a skill's name, hyphens. The shortest name that
 # leaves an operator after it, so claudeCode.folders-=<folder> reads as -=.
 ASSIGNMENT = re.compile(r"([A-Za-z][\w.-]*?)(\+=|-=|=)(.*)", re.DOTALL)
-USAGE = """\
-To change one setting, as an agent does, run setup.py --configure '<name>=<value>', in single
-quotes, which every shell passes on as they are. A name is the setting's path in
-local-settings.json:
+# What each type of setting takes, as USAGE shows it.
+PLACEHOLDERS = {"folder": "<folder>", "hours": "<hours>", "yes-no": "true|false"}
+USAGE_COLUMN = 36
+USAGE_WIDTH = 100
 
-  devHome.folder=<folder>           Your dev-home folder: one that is already a dev-home.
-  devHome.checkEveryHours=<hours>   How often a sync checks GitHub for dev-home's changes, with
-                                    one active copy, and for a plain /knowledge. 0 checks every
-                                    time.
-  updates.installAutomatically=true|false
-                                    Whether a sync installs dev-home-tools updates as soon as it
-                                    finds them.
-  updates.checkEveryHours=<hours>   How often a sync checks GitHub for dev-home-tools updates.
-                                    0 checks every time.
-  claudeCode.folders+=<folder>      Set up another Claude Code folder, such as
-                                    ~/.claude-second.
-  claudeCode.folders-=<folder>      Stop setting one up.
-  skills.<skill>.<name>=true|false  A preference a skill declares.
-  multiMachine=true|false           Whether dev-home is in active use anywhere besides this PC.
-                                    Every copy shares it, so setup commits and pushes the change.
 
-Add --what-if to see the change without making it. In a terminal, --configure alone shows a menu
-of every setting instead."""
+def usage_entry(name: str, text: str) -> list[str]:
+    """One entry of USAGE: the assignment, then what it does beside it, or below it when the
+    assignment is too long."""
+    wrapped = textwrap.wrap(text, USAGE_WIDTH - USAGE_COLUMN)
+    first = f"  {name}"
+    if len(first) <= USAGE_COLUMN - 2:
+        lines = [first.ljust(USAGE_COLUMN) + wrapped[0]]
+        wrapped = wrapped[1:]
+    else:
+        lines = [first]
+    return lines + [" " * USAGE_COLUMN + line for line in wrapped]
+
+
+def usage() -> str:
+    """How to change one setting, with every setting's name; the help of dev-home-tools' own comes
+    from setting-definitions.json."""
+    entries = [
+        (f"{setting.path}={PLACEHOLDERS[setting.type]}", setting.help) for setting in SETTINGS
+    ]
+    entries += [
+        (
+            f"{CLAUDE_FOLDERS}+=<folder>",
+            "Set up another Claude Code folder, such as ~/.claude-second.",
+        ),
+        (f"{CLAUDE_FOLDERS}-=<folder>", "Stop setting one up."),
+        ("skills.<skill>.preferences.<name>=true|false", "A preference a skill declares."),
+        (
+            "multiMachine=true|false",
+            "Whether dev-home is in active use anywhere besides this PC. Every copy shares it, so "
+            "setup commits and pushes the change.",
+        ),
+    ]
+    lines = [
+        "To change one setting, as an agent does, run setup.py --configure '<name>=<value>', in",
+        "single quotes, which every shell passes on as they are. A name is the setting's path in",
+        "local-settings.json:",
+        "",
+    ]
+    for name, text in entries:
+        lines += usage_entry(name, text)
+    lines += [
+        "",
+        "A setting with a default also takes default, such as updates.checkEveryHours=default, to",
+        "follow its default again. Add --what-if to see the change without making it. In a",
+        "terminal, --configure alone shows a menu of every setting instead.",
+    ]
+    return "\n".join(lines)
+
+
+USAGE = usage()
 # What follows dev-home.json's name when its answer can't be used, by its layout.
 LAYOUT_NOTES = {
     "unreadable": "can't be read",
@@ -120,14 +153,23 @@ def copies_answer(settings: LocalSettings) -> tuple[bool | None, str]:
     return found.answer, found.layout
 
 
-def hours_value(settings: LocalSettings, path: str) -> str:
-    hours, usable = hours_setting(settings.data, path)
-    value = get(settings.data, path, MISSING)
-    if value is MISSING:
-        return hours_text(hours) + " (the default)"
+def setting_text(settings: LocalSettings, path: str) -> str:
+    """One of dev-home-tools' own settings as the menu shows it: its value, and whether that's the
+    default, isn't answered yet, or is a value the file has that setup can't use."""
+    setting = BY_PATH[path]
+    saved = get(settings.data, path, MISSING)
+    value, answered, usable = read_value(saved, setting)
+    if not setting.has_default:
+        shown = "not set yet" if value is None else value_text(setting, value)
+    elif setting.asked and not answered:
+        shown = f"not answered yet, so {value_text(setting, value)}"
+    elif saved is MISSING or isinstance(saved, dict):
+        shown = f"{value_text(setting, value)} (the default)"
+    else:
+        shown = value_text(setting, value)
     if not usable:
-        return f"{hours_text(hours)} (the file says {json.dumps(value)}, which isn't whole hours)"
-    return hours_text(hours)
+        shown += f" (the file says {json.dumps(saved)}, which setup can't use)"
+    return shown
 
 
 def entry_for(run: "Setup", folders: dict[str, bool], folder: str | Path) -> str | None:
@@ -160,10 +202,6 @@ def folder_answers(run: "Setup", settings: LocalSettings) -> list[tuple[str, boo
 
 def overview(run: "Setup", settings: LocalSettings) -> list[str]:
     """Every setting and its value, numbered as the menu numbers them."""
-    if settings.auto_update is None:
-        auto_update = "not answered yet, so no"
-    else:
-        auto_update = "yes" if settings.auto_update else "no"
     words = {True: "yes", False: "no", None: "not asked yet"}
     folders = ", ".join(
         f"{name}: {words[answer]}"
@@ -179,16 +217,13 @@ def overview(run: "Setup", settings: LocalSettings) -> list[str]:
         copies = "not answered yet, so each sync checks GitHub"
     else:
         copies = "several" if answer else "one"
+    # The dev-home folder shows what this run will use, which --content-dir can change.
+    values = {"devHome.folder": settings.content_dir or "not set yet"}
     this_pc = [
-        ("dev-home folder", settings.content_dir or "not set yet"),
-        ("Install dev-home-tools updates automatically", auto_update),
-        (
-            "Check GitHub for dev-home-tools updates",
-            hours_value(settings, "updates.checkEveryHours"),
-        ),
-        ("Check GitHub for dev-home's changes", hours_value(settings, "devHome.checkEveryHours")),
-        ("Claude Code folders to set up", folders or "none found"),
+        (setting.label, values.get(setting.path) or setting_text(settings, setting.path))
+        for setting in SETTINGS
     ]
+    this_pc.append(("Claude Code folders to set up", folders or "none found"))
     shared = [("Copies of dev-home in active use", copies)]
     width = max(len(label) for label, _ in this_pc + shared) + 2
 
@@ -207,14 +242,17 @@ def overview(run: "Setup", settings: LocalSettings) -> list[str]:
 
 def menu(run: "Setup", settings: LocalSettings) -> bool:
     """Shows every setting, and changes the ones the person picks, until Enter."""
-    steps: dict[str, Callable[[Setup, LocalSettings], bool]] = {
-        "1": change_content_dir,
-        "2": change_auto_update,
-        "3": change_update_hours,
-        "4": change_content_hours,
-        "5": change_claude_folders,
-        "6": change_copies,
+    changers: dict[str, Callable[[Setup, LocalSettings], bool]] = {
+        "devHome.folder": change_content_dir,
+        AUTO_UPDATE: change_auto_update,
+        "updates.checkEveryHours": change_update_hours,
+        "devHome.checkEveryHours": change_content_hours,
     }
+    # Numbered as overview numbers the rows: dev-home-tools' own settings in the order
+    # setting-definitions.json has them, then the folders, then the shared setting.
+    order = [changers[setting.path] for setting in SETTINGS]
+    order += [change_claude_folders, change_copies]
+    steps = {str(number): step for number, step in enumerate(order, 1)}
     changed = False
     while True:
         run.line()
@@ -241,16 +279,29 @@ def change_content_dir(run: "Setup", settings: LocalSettings) -> bool:
     return True
 
 
+def keeps(settings: LocalSettings, path: str, answer: object) -> bool:
+    """Whether an answer leaves a setting as it's saved: the same plain value, or, for a setting
+    that follows its default, its current value, so Enter never pins a default. A setting with no
+    answer yet gets one."""
+    current, answered, usable = setting_value(settings.data, path)
+    saved = get(settings.data, path, MISSING)
+    if saved == answer and not isinstance(saved, dict):
+        return True
+    follows = usable and answered and isinstance(saved, dict)
+    no_answer_needed = usable and saved is MISSING and not BY_PATH[path].asked
+    return (follows or no_answer_needed) and answer == current
+
+
 def change_auto_update(run: "Setup", settings: LocalSettings) -> bool:
-    answer = run.ask_auto_update(settings.auto_update)
-    if answer == settings.auto_update:
+    answer = run.ask_auto_update(setting_value(settings.data, AUTO_UPDATE)[0])
+    if keeps(settings, AUTO_UPDATE, answer):
         return False
-    settings.auto_update = answer
+    put(settings.data, AUTO_UPDATE, answer)
     return True
 
 
 def change_hours(run: "Setup", settings: LocalSettings, path: str, question: str) -> bool:
-    current = hours_setting(settings.data, path)[0]
+    current = setting_value(settings.data, path)[0]
     while True:
         answer = run.ask(question, str(current))
         if answer is None:
@@ -259,9 +310,7 @@ def change_hours(run: "Setup", settings: LocalSettings, path: str, question: str
             break
         run.line("Type a whole number of hours: 0 or more.")
     hours = int(answer)
-    # A default left unwritten moves with the default.
-    written = get(settings.data, path, MISSING)
-    if written == hours or (written is MISSING and hours == current):
+    if keeps(settings, path, hours):
         return False
     put(settings.data, path, hours)
     return True
@@ -362,14 +411,19 @@ def assign(run: "Setup", settings: LocalSettings, text: str) -> bool:
     if name != CLAUDE_FOLDERS and operator != "=":
         raise SettingError(f"{name} is set with =, as in {name}=<value>.")
     before = copy.deepcopy(settings)
-    if name in ("updates.installAutomatically", "multiMachine") or name.startswith("skills."):
+    if value == "default" and name != CLAUDE_FOLDERS:
+        setting = None if name == "multiMachine" else declared_setting(settings, name)
+        if setting is None or not setting.has_default:
+            raise SettingError(f"{name} has no default, so it can't be set to default.")
+        put(settings.data, setting.path, {STATE: "default"})
+    elif name in (AUTO_UPDATE, "multiMachine") or name.startswith("skills."):
         if value.lower() not in ("true", "false"):
             raise SettingError(f"{name} is true or false, not {value}.")
         yes = value.lower() == "true"
-        if name == "updates.installAutomatically":
-            settings.auto_update = yes
+        if name == AUTO_UPDATE:
+            put(settings.data, AUTO_UPDATE, yes)
         elif name.startswith("skills."):
-            put(settings.data, preference_path(settings, name), yes)
+            put(settings.data, declared_setting(settings, name).path, yes)
         else:
             answer, found = copies_answer(settings)
             if found in ("unreadable", "unknown"):
@@ -404,22 +458,27 @@ def assign(run: "Setup", settings: LocalSettings, text: str) -> bool:
     return True
 
 
-def preference_path(settings: LocalSettings, name: str) -> str:
-    """The path of a preference a skill declares, named as skills.<skill>.<name>, spelled as
-    the skill declares it. Raises SettingError for one no skill declares."""
+def declared_setting(settings: LocalSettings, name: str) -> Setting:
+    """One of dev-home-tools' own settings, or a skill's preference, named as
+    skills.<skill>.preferences.<name>, with its path spelled as the skill declares it. Raises
+    SettingError for a preference no skill declares."""
+    if not name.startswith("skills."):
+        return BY_PATH[name]
     parts = name.split(".")
-    if len(parts) != 3 or not all(parts):
-        raise SettingError(f"A skill's preference is named skills.<skill>.<name>, not {name}.")
+    if len(parts) != 4 or parts[2] != "preferences" or not all(parts):
+        raise SettingError(
+            f"A skill's preference is named skills.<skill>.preferences.<name>, not {name}."
+        )
     preferences = skill_preferences(settings.content_dir)[0]
     skill = find_skill(preferences, parts[1])
     if skill is None:
         raise SettingError(f"No skill named {parts[1]} declares preferences.")
-    if parts[2] not in preferences[skill]:
+    if parts[3] not in preferences[skill]:
         declared = ", ".join(preferences[skill]) or "none"
         raise SettingError(
-            f"The {skill} skill declares no preference named {parts[2]}. It declares: {declared}."
+            f"The {skill} skill declares no preference named {parts[3]}. It declares: {declared}."
         )
-    return f"skills.{skill}.{parts[2]}"
+    return preferences[skill][parts[3]].setting
 
 
 def checked_dev_home(value: str) -> str:

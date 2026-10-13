@@ -25,7 +25,8 @@ points here; its rules apply too.
   retries while another git process holds a lock); `output.py` (`status_line`, which prints
   every status line in one format, and small text helpers); `programs.py` (finding a program,
   and running setup); `settings.py` (this PC's `local-settings.json`, dev-home's
-  `dev-home.json`, the list of settings and their checks, and the preferences skills declare);
+  `dev-home.json`, the settings `setting-definitions.json` beside it declares, the preferences
+  skills declare, and the checks of both);
   and setup's own parts: `paths.py`, `links.py`, `generated.py`, `python_link.py`, `console.py`,
   `settings_files.py`, `claude_settings.py`, `codex_config.py`, and `configure.py`
   (`--configure`'s menu and assignments). They write UTF-8, read git's output as UTF-8, and find

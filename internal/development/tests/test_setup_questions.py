@@ -584,6 +584,32 @@ def test_the_menu_goes_through_every_setting_with_its_answer_as_the_default(
     assert "There are no ~/.claude-* folders to set up." in out, out
 
 
+def test_enter_in_the_menu_keeps_a_setting_that_follows_its_default(
+    box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Pinning the default's value would stop it following a later change of default.
+    following = {"$state": "default"}
+    saved = json.loads(backups_removed.read_text(encoding="utf-8"))
+    saved["updates"] = {"installAutomatically": following, "checkEveryHours": following}
+    write_text(backups_removed, json.dumps(saved, indent=2) + "\n")
+    person.answers.update(
+        {
+            MENU: ["a", ""],
+            r"^Your dev-home folder \[.*\]: $": "",
+            r"^Pull updates automatically\? \[y/N\]: $": "",
+            UPDATE_HOURS: "",
+            CONTENT_HOURS: "",
+            ELSEWHERE.replace(r"\[y/n\]", r"\[Y/n\]"): "",
+        }
+    )
+    returned = setup_here(box, "--configure")
+    out = capsys.readouterr().out
+    kept = json.loads(backups_removed.read_text(encoding="utf-8"))
+    assert returned == 0, out
+    assert kept["updates"] == {"installAutomatically": following, "checkEveryHours": following}
+    assert "checkEveryHours" not in kept["devHome"], kept
+
+
 def test_the_menu_keeps_several_copies_unless_the_others_are_retired(
     box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:

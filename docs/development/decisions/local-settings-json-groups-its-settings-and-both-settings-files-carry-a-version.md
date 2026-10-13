@@ -39,8 +39,10 @@ path, as in git config and Codex's `-c`:
   the settings menu shows it as not found.
 - A skill declares its preferences in a `dev-home-skill.json` in its folder:
   `{"preferences": {"<name>": {"default": true, "label": "...", "help": "..."}}}`. Setup reads
-  these from dev-home-tools' skills and from the person's own, and a preference is set with
-  `--configure 'skills.<skill>.<name>=true'` or `false`. Only yes-or-no preferences for now.
+  these from dev-home-tools' skills and from the person's own, and a preference is saved, and
+  set with `--configure`, as `skills.<skill>.preferences.<name>`
+  ([Settings record answers, not just values](settings-record-answers-not-just-values.md)).
+  Only yes-or-no preferences for now.
 
 **Why:**
 
