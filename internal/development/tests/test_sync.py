@@ -81,7 +81,7 @@ def make_setup_require_fresh_output(shared: Path) -> None:
     setup = shared / "setup.py"
     text = setup.read_text(encoding="utf-8")
     text = text.replace("from .output import GREEN,", "from .output import FRESH, GREEN,", 1)
-    main = "def main(argv: Sequence[str]) -> int:\n"
+    main = "def main(argv: Sequence[str], *, sync_holds_lock: bool = False) -> int:\n"
     text = text.replace(main, main + "    print(FRESH)\n", 1)
     assert text.count("FRESH") == 2
     write_text(setup, text)

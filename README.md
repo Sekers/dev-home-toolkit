@@ -177,8 +177,9 @@ one's name is its path, which `--configure` takes too:
 - `schemaVersion` says which layout the file has. Leave it as it is: setup sets aside a file in
   an older layout and asks its questions again.
 
-Setup checks every value on each run, and reports one of the wrong kind, or a name it doesn't
-know, without changing it.
+Setup checks every value on each run. It reports one of the wrong kind without changing it, and
+removes a setting nothing declares any more, such as a name misspelled in a hand edit, saying
+which, after a backup of the file.
 
 ## Day to day
 

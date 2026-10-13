@@ -14,10 +14,11 @@ AGENTS.md's rules apply too.
   read the declaration, so never write a setting's default or label anywhere else.
 - Pick its kind from the four in the decision. The help of a setting with no default says what
   happens until it's answered.
-- Decide what Enter does at its question, apart from its default. For a setting with a default,
-  Enter means default. A folder's question takes Enter as yes, though a folder nobody has
-  answered for isn't set up. `multiMachine`'s question has no Enter answer, since either wrong
-  answer costs something.
+- Decide what Enter does at its question when nothing is answered yet, apart from its default:
+  for a setting with a default, Enter means default; a folder's question takes Enter as yes,
+  though a folder nobody has answered for isn't set up; and `multiMachine`'s question has no
+  Enter answer, since either wrong answer costs something. Once a question is answered, Enter
+  always keeps the saved answer.
 - A setting is per PC, in `local-settings.json`, unless it describes dev-home itself, which every
   copy shares in `dev-home.json`. A skill's preferences are always per PC.
 - Test each form it accepts, one it doesn't, and a plain value of the wrong type.
@@ -39,7 +40,9 @@ AGENTS.md's rules apply too.
 
 - To rename one, add its old name to its `formerNames`. Setup moves each PC's answer, and
   `schemaVersion` stays as it is.
-- To remove one, delete its declaration. Setup deletes each PC's answer on its next run.
+- To remove one, delete its declaration. Setup deletes each PC's answer on its next run. For
+  now, a skill whose preferences setup can't read, such as one whose folder is gone, keeps its
+  answers, until setup can tell such a skill from one an update is replacing at that moment.
 - Never give a new setting a removed one's name: a PC that gets both changes in one update would
   apply the old answer to the new setting.
 - To change its default, change the declaration. Each PC that follows the default gets the new

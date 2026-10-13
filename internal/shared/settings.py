@@ -305,19 +305,58 @@ def find_skill(preferences: dict[str, dict[str, Preference]], skill: str) -> str
     return next((name for name in preferences if name.lower() == skill.lower()), None)
 
 
-def check_settings(
-    data: dict[str, Any], preferences: dict[str, dict[str, Preference]]
-) -> list[str]:
-    """A problem for each value in this PC's settings that's of the wrong kind, saying what it
-    counts as instead, and for each key setup doesn't know, which is kept as it is."""
-    problems: list[str] = []
+def remove_path(data: dict[str, Any], path: str) -> None:
+    """Removes the value at a dotted path, and each group it leaves empty."""
+    *groups, name = path.split(".")
+    chain = [data]
+    for group in groups:
+        inner = chain[-1].get(group)
+        if not isinstance(inner, dict):
+            return
+        chain.append(inner)
+    chain[-1].pop(name, None)
+    for container, group in zip(reversed(chain[:-1]), reversed(groups), strict=True):
+        if container[group]:
+            break
+        del container[group]
+
+
+@dataclass
+class Checked:
+    """What check_settings found: the settings with each answer under a former name moved to the
+    setting's name, and each setting nothing declares removed; a problem for each value of the
+    wrong kind; and what was moved and removed, for the line that says so."""
+
+    data: dict[str, Any]
+    problems: list[str] = field(default_factory=list)
+    moved: list[str] = field(default_factory=list)
+    removed: list[str] = field(default_factory=list)
+
+
+def check_settings(data: dict[str, Any], preferences: dict[str, dict[str, Preference]]) -> Checked:
+    """Checks this PC's settings against the declarations: an answer saved under a setting's
+    former name moves to its name, a setting nothing declares is removed, and a value of the wrong
+    kind is a problem, saying what it counts as instead. A skill whose preferences can't be read,
+    such as one whose folder is gone, keeps its answers. The settings passed in aren't changed."""
+    checked = Checked(copy.deepcopy(data))
+    data = checked.data
+    problems = checked.problems
     file = SETTINGS_PATH.name
 
-    def unknown(path: str) -> None:
-        problems.append(
-            f"{file} has {path}, which setup doesn't know, so it's ignored and kept as it is. "
-            "Remove it, or fix its name."
-        )
+    def remove(container: dict[str, Any], key: str, path: str) -> None:
+        del container[key]
+        checked.removed.append(path)
+
+    for setting in SETTINGS:
+        if get(data, setting.path, MISSING) is not MISSING:
+            continue
+        for old in setting.former_names:
+            value = get(data, old, MISSING)
+            if value is not MISSING:
+                remove_path(data, old)
+                put(data, setting.path, value)
+                checked.moved.append(f"{old} to {setting.path}")
+                break
 
     def wrong(path: str, value: object, wanted: str, counts_as: str) -> None:
         problems.append(
@@ -330,19 +369,19 @@ def check_settings(
             wrong(path, value, TYPE_TEXT[setting.type], counts_as_text(setting))
 
     def check_group(key: str, value: dict[str, Any]) -> None:
-        for name, inner in value.items():
+        for name, inner in list(value.items()):
             path = f"{key}.{name}"
             setting = BY_PATH.get(path)
             if setting is None:
-                unknown(path)
+                remove(value, name, path)
             else:
                 check_value(path, inner, setting)
 
     def check_folders(key: str, value: dict[str, Any]) -> None:
-        for name, inner in value.items():
+        for name, inner in list(value.items()):
             path = f"{key}.{name}"
             if path not in (CLAUDE_FOLDERS, CODEX_HOMES):
-                unknown(path)
+                remove(value, name, path)
                 continue
             if not isinstance(inner, dict):
                 wrong(path, inner, "a JSON object of folders", "none answered")
@@ -352,9 +391,9 @@ def check_settings(
                 if not isinstance(entry, dict):
                     wrong(where, entry, "a JSON object", "not answered yet")
                     continue
-                for entry_key, answer in entry.items():
+                for entry_key, answer in list(entry.items()):
                     if entry_key != "setUp":
-                        unknown(f"{where}: {entry_key}")
+                        remove(entry, entry_key, f"{where}: {entry_key}")
                     elif not isinstance(answer, bool):
                         wrong(f"{where}: setUp", answer, "true or false", "not answered yet")
                 if path == CODEX_HOMES and folder != DEFAULT_FOLDERS[CODEX_HOMES]:
@@ -366,28 +405,35 @@ def check_settings(
     def check_skills(value: dict[str, Any]) -> None:
         for skill, inner in value.items():
             name = find_skill(preferences, skill)
+            # Kept until setup can tell a skill that's gone from one an update is replacing.
             if name is None:
-                unknown(f"skills.{skill}, a skill that declares no preferences,")
                 continue
             if not isinstance(inner, dict):
                 wrong(f"skills.{skill}", inner, "a JSON object", "the defaults")
                 continue
-            for group, saved in inner.items():
+            for group, saved in list(inner.items()):
                 where = f"skills.{skill}.{group}"
                 if group != "preferences":
-                    unknown(where)
+                    remove(inner, group, where)
                 elif not isinstance(saved, dict):
                     wrong(where, saved, "a JSON object of preferences", "the defaults")
                 else:
-                    for key, answer in saved.items():
-                        preference = preferences[name].get(key)
-                        if preference is None:
-                            unknown(f"{where}.{key}")
+                    for preference in preferences[name].values():
+                        if preference.name in saved:
+                            continue
+                        old = next((n for n in preference.former_names if n in saved), None)
+                        if old is not None:
+                            saved[preference.name] = saved.pop(old)
+                            checked.moved.append(f"{where}.{old} to {where}.{preference.name}")
+                    for key, answer in list(saved.items()):
+                        declared = preferences[name].get(key)
+                        if declared is None:
+                            remove(saved, key, f"{where}.{key}")
                         else:
-                            check_value(f"{where}.{key}", answer, preference.setting)
+                            check_value(f"{where}.{key}", answer, declared.setting)
 
     groups = {path.split(".")[0] for path in BY_PATH}
-    for key, value in data.items():
+    for key, value in list(data.items()):
         if key == "schemaVersion":
             continue
         if key == "testHomeDir":
@@ -403,8 +449,8 @@ def check_settings(
             else:
                 check_folders(key, value)
         else:
-            unknown(key)
-    return problems
+            remove(data, key, key)
+    return checked
 
 
 @dataclass
@@ -487,10 +533,9 @@ def merge_answers(data: dict[str, Any], path: str, answers: dict[str, bool]) -> 
             del data[group]
 
 
-def local_settings_text(settings: LocalSettings) -> str:
-    """The file's text for the settings, with schemaVersion first, keeping every other key the
-    file had where it was. A setting is written only once it's answered. testHomeDir is kept when
-    the file has it, and never added."""
+def local_settings_data(settings: LocalSettings) -> dict[str, Any]:
+    """What the file holds for the settings, with schemaVersion first, keeping every other key the
+    file had where it was. testHomeDir is kept when the file has it, and never added."""
     data = copy.deepcopy(settings.data)
     data.pop("schemaVersion", None)
     if settings.content_dir:
@@ -499,8 +544,66 @@ def local_settings_text(settings: LocalSettings) -> str:
     merge_answers(data, CODEX_HOMES, settings.codex_homes)
     if settings.test_home_dir:
         data["testHomeDir"] = settings.test_home_dir
-    text = json.dumps({"schemaVersion": SCHEMA_VERSION, **data}, indent=2, ensure_ascii=False)
-    return text + "\n"
+    return {"schemaVersion": SCHEMA_VERSION, **data}
+
+
+def settings_text(data: dict[str, Any]) -> str:
+    return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+
+
+def local_settings_text(settings: LocalSettings) -> str:
+    """The file's text for the settings (see local_settings_data)."""
+    return settings_text(local_settings_data(settings))
+
+
+KeyPath = tuple[str, ...]
+
+
+def leaves(data: dict[str, Any], prefix: KeyPath = ()) -> dict[KeyPath, Any]:
+    """Each value in the settings by its path of keys. A state, such as {"$state": "default"}, and
+    an empty group are values of their own. Keys go in a tuple, since a folder's name can hold a
+    dot."""
+    found: dict[KeyPath, Any] = {}
+    for key, value in data.items():
+        path = (*prefix, key)
+        if isinstance(value, dict) and value and STATE not in value:
+            found.update(leaves(value, path))
+        else:
+            found[path] = value
+    return found
+
+
+def apply_changes(data: dict[str, Any], before: dict[str, Any], after: dict[str, Any]) -> None:
+    """Makes in data the changes that turned before into after, value by value, and nothing else,
+    so whatever else data has, such as another run's answer saved in the meantime, stays."""
+    old, new = leaves(before), leaves(after)
+    for path in old:
+        # A group this run filled, such as an empty one it added answers to, isn't removed: its
+        # new values go in below, beside whatever else the group holds by now.
+        filled = any(len(other) > len(path) and other[: len(path)] == path for other in new)
+        if path not in new and not filled:
+            chain = [data]
+            for key in path[:-1]:
+                inner = chain[-1].get(key)
+                if not isinstance(inner, dict):
+                    break
+                chain.append(inner)
+            else:
+                chain[-1].pop(path[-1], None)
+                # A group left empty goes, as merge_answers drops one.
+                for container, key in zip(reversed(chain[:-1]), reversed(path[:-1]), strict=True):
+                    if container[key]:
+                        break
+                    del container[key]
+    for path, value in new.items():
+        if path in old and old[path] == value:
+            continue
+        target = data
+        for key in path[:-1]:
+            if not isinstance(target.get(key), dict):
+                target[key] = {}
+            target = target[key]
+        target[path[-1]] = copy.deepcopy(value)
 
 
 @dataclass

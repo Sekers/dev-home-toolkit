@@ -14,7 +14,9 @@ give" in
   agent passes on. A folder with no answer that the session runs in (`CLAUDE_CONFIG_DIR`) is
   still set up, so that account keeps working, and its settings line says that setup without
   `--quiet` asks about it. A folder with a no is left alone, even from a session there.
-- A save keeps every key in `local-settings.json` that setup doesn't know.
+- A save keeps every key in `local-settings.json` that setup doesn't know. (Later changed by
+  [Settings record answers, not just values](settings-record-answers-not-just-values.md): one
+  nothing declares is removed.)
 
 **Why:** questions asked only on a first run missed what came later. A Claude folder made after a
 PC's first run was never offered, and a first run with `--quiet --content-dir` saved the file

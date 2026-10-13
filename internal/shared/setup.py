@@ -88,6 +88,7 @@ The sync runs main(["--quiet"]) inside its own process, so keep main's name and 
 """
 
 import contextlib
+import copy
 import importlib
 import os
 import re
@@ -95,13 +96,14 @@ import stat
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from . import claude_settings, codex_config, configure, console, generated, python_link
 from .git import run_git
 from .links import is_link, link_info, make_folder_link, remove_folder_link
 from .output import GREEN, RED, YELLOW, color, describe, first_line, status_line
 from .paths import comparable, forward, is_inside, resolve_home, same_path, unsafe_reason
-from .programs import by_hand, find_program
+from .programs import SYNC_HOLDS_LOCK, by_hand, find_program
 from .settings import (
     AUTO_UPDATE,
     CLAUDE_FOLDERS,
@@ -111,16 +113,22 @@ from .settings import (
     SCHEMA_VERSION,
     SETTINGS_PATH,
     TOOLS_ROOT,
+    Checked,
     LocalSettings,
     answered,
+    apply_changes,
     check_settings,
     dev_home_text,
+    folder_answers,
+    get,
     layout,
     load_local_settings,
+    local_settings_data,
     local_settings_text,
     put,
     read_dev_home_settings,
     setting_value,
+    settings_text,
     skill_preferences,
 )
 from .settings_files import (
@@ -155,14 +163,35 @@ class CannotGoOnError(Exception):
     """Ends the run early, after a problem that the rest of setup can't get past."""
 
 
+def cleanup(checked: Checked) -> list[str]:
+    """What check_settings removed and moved, a sentence for each, for the line that says so."""
+    sentences = []
+    if checked.removed:
+        them = "it" if len(checked.removed) == 1 else "them"
+        sentences.append(f"Removed {', '.join(checked.removed)}: nothing declares {them} any more")
+    if checked.moved:
+        names = "its new name" if len(checked.moved) == 1 else "their new names"
+        sentences.append(f"Moved {', '.join(checked.moved)}, {names}")
+    return sentences
+
+
 class Setup:
     """One run of setup."""
 
-    def __init__(self, *, quiet: bool, what_if: bool, configure: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        quiet: bool,
+        what_if: bool,
+        configure: str | None = None,
+        sync_holds_lock: bool = False,
+    ) -> None:
         # --configure: None without it, "" alone (the menu, or the settings shown), or one
         # assignment, such as updates.installAutomatically=true, which an agent gives instead of
         # answering.
         self.configure = configure
+        # Set when a sync runs this setup, holding the lock that its save would otherwise take.
+        self.sync_holds_lock = sync_holds_lock
         self.assigned = bool(configure)
         # An agent reads only what changed and what's wrong, as with --quiet.
         self.quiet = quiet or self.assigned
@@ -304,6 +333,77 @@ class Setup:
                 raise CannotGoOnError from error
             self.status("SET", f"The old settings, set aside: {backup}")
         return fresh
+
+    def save_settings(
+        self, settings: LocalSettings, read: dict[str, Any] | None, checked: Checked
+    ) -> None:
+        """Saves this PC's settings, and says so in one line, which names any setting this run
+        moved or removed. The file is backed up first when a person changed a setting, through
+        --configure, or a setting was removed. A sync that runs setup holds its lock already;
+        otherwise setup takes it, only while it saves, so a sync's own save can't come in between.
+        A dev-home whose .git isn't a folder has no lock to take."""
+        backup = self.configure is not None or bool(checked.removed)
+        git_dir = Path(comparable(settings.content_dir)) / ".git" if settings.content_dir else None
+        try:
+            if self.sync_holds_lock or git_dir is None or not git_dir.is_dir():
+                kept = self.write_settings(settings, read, backup=backup)
+            else:
+                # Loaded only now, as for committing dev-home.json.
+                sync = importlib.import_module(f"{__package__}.sync")
+                try:
+                    lock = sync.one_run_at_a_time(git_dir)
+                    with lock as owned:
+                        if not owned:
+                            self.status(
+                                "PROBLEM",
+                                f"This PC's settings weren't saved: a sync in dev-home has been "
+                                f"running for {sync.LOCK_WAIT_SECONDS // 60} minutes. Run "
+                                f"{by_hand('setup.py')} again shortly.",
+                            )
+                            return
+                        kept = self.write_settings(settings, read, backup=backup)
+                except sync.LockError:
+                    # The lock file can't be opened, so nothing else can hold it either.
+                    kept = self.write_settings(settings, read, backup=backup)
+        except OSError as error:
+            self.status("PROBLEM", f"Could not save this PC's settings in {SETTINGS_PATH}. {error}")
+            return
+        if kept is None:
+            return
+        notes = "".join(f". {sentence}" for sentence in cleanup(checked))
+        if backup:
+            notes += f". Backup of the old file: {kept}" if kept else " (new file)"
+        self.status("SET", f"This PC's settings: {SETTINGS_PATH}{notes}")
+
+    def write_settings(
+        self, settings: LocalSettings, read: dict[str, Any] | None, *, backup: bool
+    ) -> str | None:
+        """Writes this PC's settings, and returns the backup's path, "" when it made none, or None
+        when it wrote nothing, having said why. When the file changed since this run read it, such
+        as by a sync while a question waited, only this run's changes go into the newer file."""
+        wanted = local_settings_data(settings)
+        now = load_local_settings()
+        if now is None:
+            self.status(
+                "PROBLEM",
+                f"This PC's settings weren't saved: {SETTINGS_PATH} changed while setup ran, and "
+                "can't be read now. Fix it, then run setup.py again.",
+            )
+            return None
+        if now.found and now.data != read:
+            if layout(now.data, SCHEMA_VERSION):
+                self.status(
+                    "PROBLEM",
+                    f"This PC's settings weren't saved: {SETTINGS_PATH} changed while setup ran, "
+                    "to a layout this setup doesn't know. Run setup.py again.",
+                )
+                return None
+            merged = copy.deepcopy(now.data)
+            apply_changes(merged, read or {}, wanted)
+            text = settings_text(merged)
+        else:
+            text = settings_text(wanted)
+        return write_settings_file(SETTINGS_PATH, text, bom=False, backup=backup)
 
     # Claude folders
 
@@ -877,9 +977,13 @@ class Setup:
                 f"Using the test profile {self.home} instead of {Path.home()}, because "
                 "local-settings.json sets testHomeDir.",
             )
+        # The file as this run read it: its save makes only this run's changes, to whatever the
+        # file holds by then.
+        read: dict[str, Any] | None = copy.deepcopy(settings.data) if settings.found else None
         file_layout = layout(settings.data, SCHEMA_VERSION) if settings.found else ""
         if file_layout == "older":
             settings = self.set_aside_settings(settings)
+            read = local_settings_data(settings)
         elif file_layout == "unknown":
             self.status(
                 "PROBLEM",
@@ -889,12 +993,21 @@ class Setup:
             )
             raise CannotGoOnError
         preferences, unusable = skill_preferences(settings.content_dir)
-        for problem in unusable + check_settings(settings.data, preferences):
+        checked = check_settings(settings.data, preferences)
+        for problem in unusable + checked.problems:
             self.status("PROBLEM", problem)
         save = False
+        if checked.moved or checked.removed:
+            settings.data = checked.data
+            folder = get(settings.data, "devHome.folder")
+            settings.content_dir = folder if isinstance(folder, str) else ""
+            settings.claude_folders = folder_answers(get(settings.data, CLAUDE_FOLDERS))
+            settings.codex_homes = folder_answers(get(settings.data, CODEX_HOMES))
+            save = True
         if self.configure is not None:
             try:
-                save = configure.change_settings(self, settings)
+                # A setting removed or moved above is saved too, whether this changes one or not.
+                save = configure.change_settings(self, settings) or save
             except configure.SettingError as error:
                 self.status("PROBLEM", f"{error} Nothing was changed.")
                 self.line(configure.USAGE)
@@ -990,25 +1103,12 @@ class Setup:
                 "a terminal, and it asks.",
             )
 
-        if save and self.should(SETTINGS_PATH, "Save this PC's settings"):
-            try:
-                if self.configure is None:
-                    write_settings_file(
-                        SETTINGS_PATH, local_settings_text(settings), bom=False, backup=False
-                    )
-                    saved = ""
-                else:
-                    # A change to answers already given keeps the old file, as other settings
-                    # changes do.
-                    backup = write_settings_file(
-                        SETTINGS_PATH, local_settings_text(settings), bom=False, backup=True
-                    )
-                    saved = f" Backup of the old file: {backup}" if backup else " (new file)"
-                self.status("SET", f"This PC's settings: {SETTINGS_PATH}{saved}")
-            except OSError as error:
-                self.status(
-                    "PROBLEM", f"Could not save this PC's settings in {SETTINGS_PATH}. {error}"
-                )
+        if save:
+            if self.should(SETTINGS_PATH, "Save this PC's settings"):
+                self.save_settings(settings, read, checked)
+            else:
+                for sentence in cleanup(checked):
+                    self.line(f"What if: {sentence}")
 
         content_root = Path(comparable(settings.content_dir))
         values = {
@@ -1515,7 +1615,9 @@ def parse_arguments(argv: Sequence[str]) -> tuple[bool, bool, str, str | None] |
     return quiet, what_if, content_dir, configure_with
 
 
-def main(argv: Sequence[str]) -> int:
+def main(argv: Sequence[str], *, sync_holds_lock: bool = False) -> int:
+    """Runs setup. A sync that runs it says it holds its lock: inside its own process with
+    sync_holds_lock, and in a process of setup's own with SYNC_HOLDS_LOCK in its environment."""
     if any(word in ("--help", "-h") for word in argv):
         print(__doc__)
         return 0
@@ -1524,9 +1626,12 @@ def main(argv: Sequence[str]) -> int:
         status_line("PROBLEM", parsed)
         return 1
     quiet, what_if, content_dir, configure_with = parsed
+    holds_lock = sync_holds_lock or os.environ.get(SYNC_HOLDS_LOCK) == "1"
     # The sync runs this inside its own process, so nothing here may raise.
     try:
-        run = Setup(quiet=quiet, what_if=what_if, configure=configure_with)
+        run = Setup(
+            quiet=quiet, what_if=what_if, configure=configure_with, sync_holds_lock=holds_lock
+        )
     except Exception as error:
         with contextlib.suppress(Exception):
             status_line("PROBLEM", f"setup.py stopped: {describe(error)}")

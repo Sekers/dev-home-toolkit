@@ -28,6 +28,8 @@ setting counts as missing.
 
 - A question about a setting with a default takes yes, no, or default. Yes and no save plain
   values, and default saves `{"$state": "default"}`. `--configure '<name>=default'` does the same.
+  At any question, Enter keeps the saved answer, a plain value or the default alike, and means
+  default only when nothing is answered yet.
 - A skill's preferences are saved as `skills.<name>.preferences.<preference>`, beside
   dev-home-tools' own settings for that skill, such as `skills.<name>.addedToAgents`.
 - dev-home-tools' own settings are declared in `internal/shared/setting-definitions.json`, the way
@@ -59,7 +61,9 @@ setting counts as missing.
 - Only settings setup asks about need `unanswered`, and only offers need `remind`. Accepting only
   the forms that fit catches a mistake in a hand edit.
 - Default is an answer of its own because, if Enter saved `default` while a typed yes saved a
-  plain yes, two answers that look the same at the console would behave differently later.
+  plain yes, two answers that look the same at the console would behave differently later. Enter
+  keeps a saved answer because a question asked again, as the settings menu does, would otherwise
+  turn a yes the end user chose into following the default without their noticing.
 - Nesting preferences means dev-home-tools' own settings for a skill can never collide with that
   skill's preferences, whatever either is named later. No PC had a preference saved yet, so it
   cost nothing.

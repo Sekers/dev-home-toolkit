@@ -513,7 +513,8 @@ class Sync:
             self.status("PROBLEM", f"update.py stopped: {describe(error)}")
 
     def setup(self) -> None:
-        if not run_setup(fresh=self.updated):
+        # Setup runs while this sync holds its lock, which setup's save would otherwise take.
+        if not run_setup(fresh=self.updated, sync_holds_lock=True):
             self.problems += 1
 
     def step(self, what: str, action: Callable[[], None]) -> None:

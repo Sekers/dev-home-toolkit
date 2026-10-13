@@ -13,6 +13,7 @@ import subprocess
 import sys
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -257,6 +258,69 @@ def test_asks_each_question_whose_answer_isnt_saved_yet_then_never_again(
     assert person.asked == asked, person.asked
     assert written["updates"]["installAutomatically"] is False
     assert written["claudeCode"]["folders"] == {"~/.claude-later": {"setUp": False}}
+
+
+def unanswered_updates(settings: Path) -> None:
+    saved = json.loads(settings.read_text(encoding="utf-8"))
+    saved.get("updates", {}).pop("installAutomatically", None)
+    write_text(settings, json.dumps(saved, indent=2) + "\n")
+
+
+def test_a_save_keeps_what_a_sync_wrote_while_a_question_waited(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    unanswered_updates(settings)
+    code = shared_module(box, "setup")
+    asking = code.Setup.ask_auto_update
+
+    def ask_while_a_sync_writes(run: Any, current: bool | None) -> bool:
+        meanwhile = json.loads(settings.read_text(encoding="utf-8"))
+        meanwhile["devHome"]["checkEveryHours"] = 6
+        write_text(settings, json.dumps(meanwhile, indent=2) + "\n")
+        answer: bool = asking(run, current)
+        return answer
+
+    monkeypatch.setattr(code.Setup, "ask_auto_update", ask_while_a_sync_writes)
+    person.answers[r"^Pull updates automatically\? \[y/N\]: $"] = "y"
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    written = json.loads(settings.read_text(encoding="utf-8"))
+    assert returned == 0, out
+    assert written["updates"]["installAutomatically"] is True, written
+    assert written["devHome"]["checkEveryHours"] == 6, written
+
+
+def test_setup_by_hand_saves_only_once_a_sync_lets_go_of_its_lock(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    unanswered_updates(settings)
+    person.answers[r"^Pull updates automatically\? \[y/N\]: $"] = "y"
+    sync = shared_module(box, "sync")
+    monkeypatch.setattr(sync, "LOCK_WAIT_SECONDS", 0)
+    git_dir = box.content / ".git"
+    assert git_dir.is_dir()
+    with sync.one_run_at_a_time(git_dir) as owned:
+        assert owned
+        waited = setup_here(box)
+        unsaved = json.loads(settings.read_text(encoding="utf-8"))
+        # A sync runs setup while it holds the lock, so that setup saves without it.
+        held = shared_module(box, "setup").main([], sync_holds_lock=True)
+    out = capsys.readouterr().out
+    saved = json.loads(settings.read_text(encoding="utf-8"))
+    assert waited == 1, out
+    pattern = r"^PROBLEM\s+This PC's settings weren't saved: a sync in dev-home has been running"
+    assert re.search(pattern, out, re.M), out
+    assert "installAutomatically" not in unsaved.get("updates", {}), unsaved
+    assert held == 0, out
+    assert saved["updates"]["installAutomatically"] is True, saved
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="only Windows refuses to replace an open file")

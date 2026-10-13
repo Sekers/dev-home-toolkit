@@ -726,30 +726,130 @@ def test_stops_at_a_folder_that_doesnt_look_like_a_dev_home(box: Sandbox) -> Non
     assert "gpgsign" not in read(project / ".git" / "config")
 
 
-def test_keeps_settings_it_doesnt_know_and_leaves_auto_update_out_until_answered(
-    box: Sandbox,
+def test_removes_settings_nothing_declares_and_leaves_auto_update_out_until_answered(
+    box: Sandbox, settings_kept: Path
 ) -> None:
     # A quiet run asks nothing, so a save must not look like an answer.
-    settings = box.tools / "local-settings.json"
-    before = read(settings)
+    before = read(settings_kept)
     edited = json.loads(before)
     del edited["updates"]
     edited["somethingNewer"] = {"kept": True}
     edited["devHome"]["typo"] = 1
-    write_text(settings, json.dumps(edited, indent=2) + "\n")
-    try:
-        result = setup(box, "--content-dir", str(box.root / "yet-another-dev-home"))
-        saved = json.loads(read(settings))
-    finally:
-        write_text(settings, before)
+    edited["claudeCode"] = {"folders": {"~/.claude-x": {"setUp": False, "later": 1}}}
+    write_text(settings_kept, json.dumps(edited, indent=2) + "\n")
+    edited_text = read(settings_kept)
+    previewed = setup(box, "--what-if")
+    assert read(settings_kept) == edited_text
+    assert previewed.has_line(r"^What if: Removed devHome\.typo, somethingNewer, "), str(previewed)
+    result = setup(box, "--content-dir", str(box.root / "yet-another-dev-home"))
+    saved = json.loads(read(settings_kept))
     assert saved["devHome"]["folder"].endswith("yet-another-dev-home")
-    assert saved["somethingNewer"] == {"kept": True}
-    assert saved["devHome"]["typo"] == 1
-    assert "updates" not in saved and "claudeCode" not in saved, saved
-    # Each key setup doesn't know is named, so typos and leftovers show.
-    for name in ("somethingNewer", r"devHome\.typo"):
-        pattern = rf"^PROBLEM\s+local-settings\.json has {name}, which setup doesn't know"
-        assert result.has_line(pattern), str(result)
+    assert "somethingNewer" not in saved and "typo" not in saved["devHome"], saved
+    assert saved["claudeCode"] == {"folders": {"~/.claude-x": {"setUp": False}}}, saved
+    assert "updates" not in saved, saved
+    # One line names what went, and a backup keeps it.
+    pattern = (
+        r"^SET\s+This PC's settings: .*\. Removed devHome\.typo, somethingNewer, "
+        r"claudeCode\.folders ~/\.claude-x: later: nothing declares them any more\. Backup of "
+        r"the old file: "
+    )
+    assert result.has_line(pattern), str(result)
+    backups = list(settings_kept.parent.glob("local-settings.json.bak-*"))
+    assert len(backups) == 1 and read(backups[0]) == edited_text
+    assert not result.has_line(r"^PROBLEM\s+.*doesn't know"), str(result)
+    # Nothing is left to remove, so the next run makes no backup.
+    setup(box)
+    assert len(list(settings_kept.parent.glob("local-settings.json.bak-*"))) == 1
+
+
+def test_a_configure_that_changes_nothing_still_removes_what_nothing_declares(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    edited = json.loads(read(settings_kept))
+    edited["leftover"] = 1
+    write_text(settings_kept, json.dumps(edited, indent=2) + "\n")
+    result = setup_configure(box, "updates.installAutomatically=false")
+    saved = json.loads(read(settings_kept))
+    assert result.has_line(r"^OK\s+updates\.installAutomatically is already set that way"), str(
+        result
+    )
+    assert "leftover" not in saved, saved
+    assert result.has_line(r"^SET\s+This PC's settings: .*\. Removed leftover: "), str(result)
+
+
+def test_moves_an_answer_saved_under_a_former_name(box: Sandbox, settings_kept: Path) -> None:
+    # The definitions come with the code, so the sandbox's copy is changed, then put back.
+    definitions = box.tools / "internal" / "shared" / "setting-definitions.json"
+    declared_before = read(definitions)
+    declared = json.loads(declared_before)
+    declared["settings"]["updates.checkEveryHours"]["formerNames"] = ["updates.checkHours"]
+    write_text(definitions, json.dumps(declared, indent=2) + "\n")
+    skill = box.content / "skills" / "mine" / "dev-home-skill.json"
+    preference = {"default": True, "label": "Tidy", "formerNames": ["tidy"]}
+    write_text(skill, json.dumps({"preferences": {"tidyOutput": preference}}) + "\n")
+    edited = json.loads(read(settings_kept))
+    edited["updates"]["checkHours"] = 6
+    edited["skills"] = {"mine": {"preferences": {"tidy": False}}}
+    write_text(settings_kept, json.dumps(edited, indent=2) + "\n")
+    try:
+        result = setup(box)
+        saved = json.loads(read(settings_kept))
+    finally:
+        write_text(definitions, declared_before)
+        skill.unlink()
+    assert saved["updates"]["checkEveryHours"] == 6 and "checkHours" not in saved["updates"]
+    assert saved["skills"] == {"mine": {"preferences": {"tidyOutput": False}}}, saved
+    pattern = (
+        r"^SET\s+This PC's settings: .*\. Moved updates\.checkHours to updates\.checkEveryHours, "
+        r"skills\.mine\.preferences\.tidy to skills\.mine\.preferences\.tidyOutput, their new "
+        r"names$"
+    )
+    assert result.has_line(pattern), str(result)
+    # Nothing was removed, so no backup.
+    assert not list(settings_kept.parent.glob("local-settings.json.bak-*"))
+
+
+def test_a_save_makes_only_its_own_changes_to_a_newer_file(box: Sandbox) -> None:
+    settings = shared_module(box, "settings")
+    # As this run read the file, and as it would save it.
+    before = {
+        "updates": {"checkEveryHours": 6, "old": 1},
+        "skills": {"mine": {}},
+        "claudeCode": {"folders": {"~/.claude-x": {"setUp": True}}},
+    }
+    after = {
+        "updates": {"checkEveryHours": 6, "installAutomatically": True},
+        "skills": {"mine": {"preferences": {"tidy": False}}},
+    }
+    # What another run saved meanwhile.
+    newer = {
+        "updates": {"checkEveryHours": 12, "old": 1},
+        "skills": {"mine": {"preferences": {"other": True}}},
+        "claudeCode": {
+            "folders": {"~/.claude-x": {"setUp": True}, "~/.claude-y": {"setUp": False}}
+        },
+    }
+    settings.apply_changes(newer, before, after)
+    assert newer == {
+        # The other run's interval stays: this run didn't change it.
+        "updates": {"checkEveryHours": 12, "installAutomatically": True},
+        # The group this run filled keeps the other run's answer beside its own.
+        "skills": {"mine": {"preferences": {"other": True, "tidy": False}}},
+        "claudeCode": {"folders": {"~/.claude-y": {"setUp": False}}},
+    }, newer
+
+
+def test_keeps_the_answers_of_a_skill_whose_preferences_cant_be_read(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    # Such as one whose folder an update is replacing at that moment.
+    edited = json.loads(read(settings_kept))
+    edited["skills"] = {"gone": {"preferences": {"anything": True}, "other": 1}}
+    write_text(settings_kept, json.dumps(edited, indent=2) + "\n")
+    result = setup(box)
+    saved = json.loads(read(settings_kept))
+    assert saved["skills"] == edited["skills"], saved
+    assert not result.has_line(r"^SET\s+This PC's settings"), str(result)
 
 
 def test_reports_a_value_of_the_wrong_kind_and_what_it_counts_as(box: Sandbox) -> None:
@@ -1081,6 +1181,7 @@ def test_skill_preferences_are_read_checked_and_set(box: Sandbox, settings_kept:
         edited["skills"]["nobody"] = {}
         write_text(settings_kept, json.dumps(edited, indent=2) + "\n")
         checked = setup(box)
+        tidied = json.loads(read(settings_kept))
         refused = setup_configure(box, "skills.mine.preferences.broken=true")
     finally:
         declared.unlink()
@@ -1094,14 +1195,15 @@ def test_skill_preferences_are_read_checked_and_set(box: Sandbox, settings_kept:
     for pattern in (
         r'skills\.mine\.preferences\.tidyOutput in local-settings\.json is "no", which isn\'t '
         r"true or false, so it counts as true, its default\.",
-        r"local-settings\.json has skills\.mine\.preferences\.other, which setup doesn't know",
-        r"local-settings\.json has skills\.mine\.stray, which setup doesn't know",
-        r"local-settings\.json has skills\.nobody, a skill that declares no preferences,",
         r"dev-home-skill\.json: the preference broken needs a name with no dots, a default of "
         r"true or false, a label, and formerNames, if any, as a list of names, so it was "
         r"skipped\.",
     ):
         assert checked.code == 1 and checked.has_line(rf"^PROBLEM\s+.*{pattern}"), str(checked)
+    # What the skill doesn't declare goes; a skill that declares none keeps its entry for now.
+    removed = r"Removed skills\.mine\.preferences\.other, skills\.mine\.stray: nothing declares"
+    assert checked.has_line(rf"^SET\s+This PC's settings: .*\. {removed}"), str(checked)
+    assert tidied["skills"] == {"mine": {"preferences": {"tidyOutput": "no"}}, "nobody": {}}
     pattern = r"The mine skill declares no preference named broken\. It declares: tidyOutput\."
     assert refused.code == 1 and refused.has_line(pattern), str(refused)
 

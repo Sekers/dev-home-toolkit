@@ -25,7 +25,9 @@ path, as in git config and Codex's `-c`:
   setup never saves over that file.
 - Every value is checked on every run, against one list of the settings plus the preferences
   each skill declares. A value of the wrong kind is a `PROBLEM` that names it and says what it
-  counts as instead, and a key setup doesn't know is kept, with a `PROBLEM` naming it. Setup stops
+  counts as instead. A key setup doesn't know was kept, with a `PROBLEM` naming it, until
+  [Settings record answers, not just values](settings-record-answers-not-just-values.md) had it
+  removed, with one line naming it and a backup. Setup stops
   only when the file can't be read at all.
 - `dev-home.json` gets `schemaVersion` too, and the same checks. Its setting keeps its name,
   `multiMachine`. Without a version, a run by hand asks its question again, with the old answer as

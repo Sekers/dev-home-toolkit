@@ -17,7 +17,9 @@ run: `devHome.folder`, `updates.installAutomatically`, `updates.checkEveryHours`
   `claudeCode.folders-=<folder>` to stop. `--what-if` shows the change first. With neither a
   console nor a setting, it prints the current settings and how to change them.
 - A change to `local-settings.json` keeps a dated backup first, as setup's changes to Claude
-  Code's and Codex's settings do, and keeps any key it doesn't know. A new `devHome.folder` never
+  Code's and Codex's settings do. (It kept any key it didn't know until
+  [Settings record answers, not just values](settings-record-answers-not-just-values.md) had one
+  nothing declares removed.) A new `devHome.folder` never
   moves a folder. The backup goes beside the file, in dev-home-tools' root, and git ignores it,
   as it does the file.
 - The `dev-home` skill pre-approves `setup.py --configure *`, as the skills pre-approve
