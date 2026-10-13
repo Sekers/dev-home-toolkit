@@ -8,7 +8,16 @@ apply too.
   - `docs/skills/`: one page per skill in `templates/skills/`, with the same name.
   - `docs/reference/`: facts to look up, such as what the scripts report and what setup changes.
   - `docs/guide/` (not made yet): how-to pages read start to finish, when one leaves the README.
-  - `docs/development/`: for people and agents changing dev-home-tools (see AGENTS.md's "Docs").
+  - `docs/development/`: for people and agents changing dev-home-tools (see AGENTS.md's "Docs"):
+    - one page for each area's rules, such as `skills.md`, which AGENTS.md points to
+    - `decisions.md`: each design decision, with its reasons, the options set aside, and when to
+      look again
+    - `research/`: one page per investigation, saying what was tested, how, when, the results,
+      the limits, and when to redo it. Data a page cites sits beside it with the same name, such
+      as `pylance-comparison.json`. Research can come before any decision, and a decision cites
+      the research it rests on.
+- `docs/` is for reading, and `internal/` for running: a script that produces research data goes
+  in `internal/development/`, never in `docs/`.
 - The README links to a skill's page in `docs/skills/`, never to its `SKILL.md`: the page is
   written for people, and the `SKILL.md` for agents. Each skill's page links to its `SKILL.md`,
   in its opening paragraph. Tests check both.

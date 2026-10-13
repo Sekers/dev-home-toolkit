@@ -162,8 +162,8 @@ Each area's rules are on a page of their own. Read the page before changing that
 ## Docs (README.md and docs/)
 
 - The README is the front door, and the rest goes in `docs/` (see writing-docs.md, above).
-  `docs/development/` is for people and agents changing dev-home-tools. Findings from research
-  on this project go in `decisions.md`, with the decision they led to.
+  `docs/development/` is for people and agents changing dev-home-tools. Research on this project
+  goes in `docs/development/research/`, one page per investigation.
 - AGENTS.md holds only what every agent working here needs in every session: the rules, each
   with a short reason, and pointers to where more is explained. Keep it under 200 lines, the size
   Claude Code recommends for an instruction file. Everything else for developers goes in

@@ -255,6 +255,7 @@ Everything beyond getting started is in the `docs/` folder:
 | Development | [Testing](docs/development/testing.md) | How the tests work, and the rules for writing them. |
 | Development | [Writing the docs](docs/development/writing-docs.md) | Where each page goes, and the rules for the README and `docs/`. |
 | Development | [A fresh agent's read](docs/development/fresh-agent-reads.md) | How to have a second agent, with no context, check a change. |
+| Development | [Pylance comparison](docs/development/research/pylance-comparison.md) | Pylance's standard and strict type checking compared on this repo's code, with the data, so it needn't be run again. |
 
 ## Safety and privacy
 
