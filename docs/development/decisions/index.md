@@ -49,3 +49,4 @@ Research a decision rests on has its own page in `../research/`.
 - [/handoff audit has a fresh agent check the handoff](handoff-audit-has-a-fresh-agent-check-the-handoff.md)
 - [local-settings.json groups its settings, and both settings files carry a version](local-settings-json-groups-its-settings-and-both-settings-files-carry-a-version.md)
 - [AGENTS.md holds only what every session needs](agents-md-holds-only-what-every-session-needs.md)
+- [The sync's status words stay, and the reference explains them](the-syncs-status-words-stay-and-the-reference-explains-them.md)
