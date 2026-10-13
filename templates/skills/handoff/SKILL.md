@@ -1,7 +1,7 @@
 ---
 name: handoff
 description: Read, update, or audit this project's private session handoff (where the work stands, what's next up, what's waiting on the user or on others, to-dos, and bugs), kept in the private dev-home repo, and file handoff items as GitHub issues when asked. Use when the user runs /handoff or $handoff, asks where things stand or where we left off, asks to update or audit the handoff or change what's next up, or asks to file a handoff item as a GitHub issue.
-allowed-tools: "Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill handoff --stamp {{SKILL_STAMP}} --fetch auto handoff environment newer-commits settings) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill handoff --stamp {{SKILL_STAMP}} --fetch auto handoff environment newer-commits settings) Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py --skill handoff --stamp {{SKILL_STAMP}} handoff environment newer-commits settings) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py --skill handoff --stamp {{SKILL_STAMP}} handoff environment newer-commits settings) Bash({{PYTHON}} -I {{SKILL_DIR}}/issue_status.py) PowerShell({{PYTHON}} -I {{SKILL_DIR}}/issue_status.py) Bash(gh label list *) Bash(gh issue list *) Bash({{PYTHON}} -I {{TOOLS_DIR}}/sync.py) Bash({{PYTHON}} -I {{TOOLS_DIR}}/sync.py *) PowerShell(gh label list *) PowerShell(gh issue list *) PowerShell({{PYTHON}} -I {{TOOLS_DIR}}/sync.py) PowerShell({{PYTHON}} -I {{TOOLS_DIR}}/sync.py *)"
+allowed-tools: "Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill handoff --stamp {{SKILL_STAMP}} --fetch auto handoff environment newer-commits preferences) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill handoff --stamp {{SKILL_STAMP}} --fetch auto handoff environment newer-commits preferences) Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py --skill handoff --stamp {{SKILL_STAMP}} handoff environment newer-commits preferences) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py --skill handoff --stamp {{SKILL_STAMP}} handoff environment newer-commits preferences) Bash({{PYTHON}} -I {{SKILL_DIR}}/issue_status.py) PowerShell({{PYTHON}} -I {{SKILL_DIR}}/issue_status.py) Bash(gh label list *) Bash(gh issue list *) Bash({{PYTHON}} -I {{TOOLS_DIR}}/sync.py) Bash({{PYTHON}} -I {{TOOLS_DIR}}/sync.py *) PowerShell(gh label list *) PowerShell(gh issue list *) PowerShell({{PYTHON}} -I {{TOOLS_DIR}}/sync.py) PowerShell({{PYTHON}} -I {{TOOLS_DIR}}/sync.py *)"
 ---
 
 # Handoff
@@ -143,8 +143,8 @@ about this project doesn't belong here either.
 
 1. Read step 2's command ends by printing the facts (in Codex, the command in "In Codex" prints
    only them): the lines of four `facts.py` topics, worked out from the project's git repo,
-   dev-home's copy of its handoff, and this PC's settings, without the network. The steps below
-   use them by name:
+   dev-home's copy of its handoff, and this skill's preferences on this PC, without the network.
+   The steps below use them by name:
    - `service`: where the project is hosted: `github`, `gitlab`, `bitbucket`, `azure-devops`,
      `other` for anywhere else, or `local` for a project with no remote.
    - `name`: the project's name, such as `you/tool`. For `other` and `local`, it's the folder
@@ -161,8 +161,8 @@ about this project doesn't belong here either.
    - `behind`: how many commits `checked` has that this checkout doesn't, or `unknown`.
    - `newer-commit`: one line for each newer commit, newest first and at most ten, with its short
      hash and subject.
-   - `offerSecurityBugs`: `true` or `false`, this PC's setting for whether issue candidates
-     include security bugs (see "Issue candidates").
+   - `includeSecurityBugsInIssueOffers`: `true` or `false`, this PC's preference for whether
+     issue candidates include security bugs (see "Issue candidates").
 
    `link` and `project` are already encoded as link targets, such as `%20` for a space, and
    already in the form that opens where you're running (see "Commands").
@@ -184,7 +184,7 @@ about this project doesn't belong here either.
 1. If your instructions don't include the heading "Private repo: dev-home (rules loaded)", tell
    the user that the always-on operating rules aren't loaded, then continue.
 2. In the project, run
-   `{{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill handoff --stamp {{SKILL_STAMP}} --fetch auto handoff environment newer-commits settings`.
+   `{{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill handoff --stamp {{SKILL_STAMP}} --fetch auto handoff environment newer-commits preferences`.
    It syncs dev-home with GitHub and runs setup, checks that this skill hasn't changed since you
    loaded it, then prints the facts that "Find this project's handoff" uses. When dev-home is in
    active use on several copies, such as two PCs, the sync checks GitHub every time; with one,
@@ -427,8 +427,9 @@ It follows "Changing the handoff", with these steps before the edit:
    - If the project has issue templates in `.github/ISSUE_TEMPLATE/`, follow the one that fits.
    - Keep double quotes, backticks, and dollar signs out of the title.
 4. Show the draft, and file it only after the user says yes to that exact text. If you change
-   it, show it again. For a security bug (see "Issue candidates"), whatever `offerSecurityBugs`
-   says, put the warning that "Issue candidates" gives above the draft.
+   it, show it again. For a security bug (see "Issue candidates"), whatever
+   `includeSecurityBugsInIssueOffers` says, put the warning that "Issue candidates" gives above
+   the draft.
 5. Write the body to `{{CONTENT_DIR}}/<draft>`, which git ignores, then run
    `gh issue create --repo <owner>/<repo> --title "<title>" --body-file "{{CONTENT_DIR}}/<draft>" --label "<label>"`,
    with one `--label` for each label. If it fails, show the error and change nothing.
@@ -458,9 +459,12 @@ test:
 - It can be written without anything private.
 - It's likely to stay open beyond the next session or two.
 - It doesn't link to an issue yet, and it isn't marked "Not for a GitHub issue".
-- It isn't a security bug while `offerSecurityBugs` from the facts is `false`. A security bug is
-  one that could let someone read, change, or do what they shouldn't, such as a leak of private
-  data, an injection, or a way around a sign-in or a permission check.
+- It isn't a security bug while `includeSecurityBugsInIssueOffers` from the facts is `false`. A
+  security bug is one that could let someone else read, change, or do what they shouldn't, or
+  stop it working with crafted input: such as a leak of private data or secrets, an injection
+  (including text that steers an AI agent), or a way around a sign-in or a permission check.
+  When you're unsure whether an item is one, offer it anyway, with the warning below, and say it
+  may be a security bug, even while security bugs are left out of offers.
 
 Suggest only items from To do or Bugs, and at most one per update: a bug when one qualifies, and
 of those that are left to choose from, the one likely to stay open longest. Most updates have
@@ -470,7 +474,9 @@ none. Put each of these lines in your message in this order, so the question com
    /handoff issue lists them.`
 2. For a security bug: `This is a security bug: a public issue tells everyone about the hole
    before it's fixed. GitHub's draft security advisories keep it private until a fix is out.`
-   Then: `To stop these offers, set offerSecurityBugs to false in dev-home-tools' settings.`
+   (When you're unsure, start it `This may be a security bug:` instead.) Then: `Don't want
+   security bugs offered? Turn off "Include security bugs in GitHub issue offers" with
+   /dev-home configure. Other offers continue.`
 3. The question, as the last line: `Issue candidate: <section>: <item>. The item stays in the
    handoff either way, as a link to the issue if you create one, and I'll commit and push any
    change your answer makes. Create a GitHub issue for it, skip (no reminder), remind me next
@@ -493,17 +499,17 @@ change the answer calls for, if any, then commit as in "Changing the handoff".
 
 `/handoff issue` with nothing after it lists every item that qualifies by the tests and sections
 above, ignoring the first two tests, with the warning above before each security bug. After the
-list, say that decisions still to make aren't listed, and when `offerSecurityBugs` left a
-security bug out, say that too: `/handoff issue <item>` still files any item the user names.
-When the list has a security bug, add the line about stopping these offers once. Then ask which
-to file, as the last line.
+list, say that decisions still to make aren't listed, and when `includeSecurityBugsInIssueOffers`
+left a security bug out, say that too: `/handoff issue <item>` still files any item the user
+names. When the list has a security bug, add the line about stopping these offers once. Then ask
+which to file, as the last line.
 
 ## In Codex
 
 Read, `update`, `next`, and `audit` work, but edit only, so leave "commit, and push" out of your
 questions: a draft ends with "Save this?". Skip every sync, git, and `gh` step, including the
 issue link checks. In place of Read step 2's command, run
-`{{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py --skill handoff --stamp {{SKILL_STAMP}} handoff environment newer-commits settings`,
+`{{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py --skill handoff --stamp {{SKILL_STAMP}} handoff environment newer-commits preferences`,
 which prints the same facts and only reads files. If it prints an error instead, show it and
 stop, as for a `PROBLEM` line about `facts.py`. Tell the user that Claude will commit and push
 the change: the next /handoff in Claude lists the file, and offers to commit and push it once it

@@ -8,7 +8,7 @@ Name the topics you want. It prints each topic's lines, as key: value, in the or
     environment     the name of the computer the session is on (one line)
     newer-commits   the project's commits since the one its handoff says was checked
     skills          the skills setup sets up: dev-home-tools' own, then the user's
-    settings        this PC's settings that skills act on (one line each)
+    preferences     the running skill's preferences on this PC (one line each)
 
 It only reports, and only from this PC: it changes nothing and never uses the network, which is
 what lets a skill run it without asking first. Anything a skill needs done, rather than told,
@@ -32,8 +32,10 @@ why, and no facts, and exits 1. Both options are for dev-home-tools' own skills.
 
 prepare.py runs this file's code inside its own process, after a sync that may have brought in a
 newer copy of this file than the prepare.py already running. So keep the names and arguments of
-what prepare.py calls: parse_request, skill_changed, collect, and FactsError. The handoff skill's
-issue_status.py loads it too, for find_handoff_place, find_program, CONTENT_DIR, and FactsError.
+what prepare.py calls: parse_request, skill_changed, collect, and FactsError. An argument added
+later, such as collect's skill, is optional, so an older prepare.py still calls it as it did.
+The handoff skill's issue_status.py loads it too, for find_handoff_place, find_program,
+CONTENT_DIR, and FactsError.
 And nothing here may change what the whole process shares, such as environment variables or the
 current folder, except in the block that runs only when this file is run as a script.
 
@@ -137,17 +139,17 @@ says so, as setup does:
 It reads only this PC's copy of dev-home, so a skill added on another PC shows up after the next
 sync. It runs anywhere: no project folder is needed.
 
-THE SETTINGS TOPIC
+THE PREFERENCES TOPIC
 
-Prints each of this PC's settings that a skill acts on, from local-settings.json in
-dev-home-tools' folder, one line each, by the setting's own name:
+Prints each preference the skill named by --skill declares in its dev-home-skill.json, one line
+each, by its name, with this PC's value from local-settings.json in dev-home-tools' folder:
 
-    offerSecurityBugs: true
+    includeSecurityBugsInIssueOffers: true
 
-offerSecurityBugs is whether the handoff skill offers a security bug as a GitHub issue
-candidate, with a warning. A setting that's missing, or whose value can't be used, prints its
-default, as setup's code reads it; setup says when a value can't be used. It runs anywhere: no
-project folder is needed.
+A preference saved as true or false prints that. Anything else, such as one that's missing,
+saved to follow its default, or saved as a value that can't be used, prints the default, as
+setup's code reads it (a test checks the two agree); setup says when a value can't be used. A
+skill that declares no preferences gets no lines. It runs anywhere: no project folder is needed.
 
 ALL TOPICS
 
@@ -175,7 +177,7 @@ from urllib.parse import quote, unquote
 
 # Every topic. To add one, add it here, to the description above, and to the topic functions in
 # collect, with a test for its lines.
-TOPICS = ("handoff", "environment", "newer-commits", "skills", "settings")
+TOPICS = ("handoff", "environment", "newer-commits", "skills", "preferences")
 
 # The most newer-commit lines the newer-commits topic prints. Its newer line has the full count.
 MAX_NEWER_COMMITS = 10
@@ -196,8 +198,8 @@ CONTENT_DIR = "{{CONTENT_DIR}}"
 # This PC's settings, in dev-home-tools' folder, filled in by setup.
 LOCAL_SETTINGS = "{{TOOLS_DIR}}/local-settings.json"
 
-# The settings topic's settings, each with its default.
-SETTING_DEFAULTS = {"offerSecurityBugs": True}
+# The file in a skill's folder that declares its preferences.
+SKILL_SETTINGS = "dev-home-skill.json"
 
 # The generated skills, beside the folder setup writes this script to, so that setup alone
 # decides where the generated files go.
@@ -728,26 +730,80 @@ def skills_lines() -> list[str]:
     return lines
 
 
-def settings_lines() -> list[str]:
-    """The settings topic's lines. A missing or unreadable file, or a value that isn't true or
-    false, gives the default, as setup's code reads it."""
+def read_json(path: Path) -> object:
+    """A JSON file's contents, or None when it's missing or can't be read as JSON."""
     try:
-        data = json.loads(Path(LOCAL_SETTINGS).read_text(encoding="utf-8-sig"))
+        return json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, ValueError):
-        data = {}
-    if not isinstance(data, dict):
-        data = {}
-    lines: list[str] = []
-    for key, default in SETTING_DEFAULTS.items():
-        value = data.get(key)
-        lines.append(f"{key}: {json.dumps(value if isinstance(value, bool) else default)}")
-    return lines
+        return None
 
 
-def collect(topics: Sequence[str]) -> list[str]:
-    """Every line of the topics asked for, in the order asked. Checks the topics first, then
-    works every one out before returning any, so a skill never gets only part of what it asked
-    for. Raises FactsError instead."""
+def preference_value(saved: object, default: bool) -> bool:
+    """What a saved preference counts as: true or false as saved, and anything else, such as
+    nothing or a state like {"$state": "default"}, its default, as setup's read_value has it."""
+    return saved if isinstance(saved, bool) else default
+
+
+def usable_preference(name: str, entry: object) -> bool:
+    """Whether setup uses a declared preference, by the same rules as its skill_preferences (a
+    test checks the two agree): a name with no dots, a default of true or false, a label, help if
+    any as text, and formerNames if any as a list of names."""
+    if not isinstance(entry, dict) or not name.strip() or "." in name:
+        return False
+    label = entry.get("label")
+    former = entry.get("formerNames", [])
+    return (
+        isinstance(entry.get("default"), bool)
+        and isinstance(label, str)
+        and label.strip() != ""
+        and isinstance(entry.get("help", ""), str)
+        and isinstance(former, list)
+        and all(isinstance(old, str) and old.strip() for old in former)
+    )
+
+
+def declared_preferences(skill: str) -> dict[str, bool]:
+    """The preferences a skill declares, each with its default: from dev-home-tools' own copy of
+    the skill, or else the user's own in dev-home, as setup reads them. A file that can't be read,
+    or an entry setup would skip, declares nothing."""
+    for folder in (GENERATED_SKILLS / skill, Path(CONTENT_DIR) / "skills" / skill):
+        if not (folder / "SKILL.md").is_file():
+            continue
+        data = read_json(folder / SKILL_SETTINGS)
+        declared = data.get("preferences") if isinstance(data, dict) else None
+        if not isinstance(declared, dict):
+            return {}
+        return {
+            name: entry["default"]
+            for name, entry in declared.items()
+            if usable_preference(name, entry)
+        }
+    return {}
+
+
+def preferences_lines(skill: str | None) -> list[str]:
+    """The preferences topic's lines: each preference the skill declares, with this PC's value."""
+    if skill is None:
+        raise FactsError("The preferences topic needs --skill, to know whose preferences to print.")
+    data = read_json(Path(LOCAL_SETTINGS))
+    skills = data.get("skills") if isinstance(data, dict) else None
+    entry = None
+    if isinstance(skills, dict):
+        # Matched without case, as Windows matches the skill's folder.
+        entry = next((v for k, v in skills.items() if k.lower() == skill.lower()), None)
+    saved = entry.get("preferences") if isinstance(entry, dict) else None
+    if not isinstance(saved, dict):
+        saved = {}
+    return [
+        f"{name}: {json.dumps(preference_value(saved.get(name), default))}"
+        for name, default in declared_preferences(skill).items()
+    ]
+
+
+def collect(topics: Sequence[str], skill: str | None = None) -> list[str]:
+    """Every line of the topics asked for, in the order asked, for the skill named, if any.
+    Checks the topics first, then works every one out before returning any, so a skill never gets
+    only part of what it asked for. Raises FactsError instead."""
     asked = list(dict.fromkeys(topic.lower() for topic in topics if topic))
     if not asked:
         raise FactsError(f"Name at least one topic: {', '.join(TOPICS)}.")
@@ -770,7 +826,7 @@ def collect(topics: Sequence[str]) -> list[str]:
         "environment": environment_lines,
         "newer-commits": lambda: newer_commit_lines(handoff_place()),
         "skills": skills_lines,
-        "settings": settings_lines,
+        "preferences": lambda: preferences_lines(skill),
     }
     lines: list[str] = []
     for topic in asked:
@@ -786,7 +842,7 @@ def main(argv: Sequence[str]) -> int:
         if changed is not None:
             print(changed, file=sys.stderr)
             return 1
-        lines = collect(request.topics)
+        lines = collect(request.topics, request.skill)
     except FactsError as error:
         print(error, file=sys.stderr)
         return 1

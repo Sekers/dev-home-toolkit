@@ -1,0 +1,9 @@
+{
+  "preferences": {
+    "includeSecurityBugsInIssueOffers": {
+      "default": true,
+      "label": "Include security bugs in GitHub issue offers",
+      "help": "Whether the handoff skill includes security bugs in its GitHub issue offers, with a warning first. Other items are offered either way, and nothing is filed without your yes."
+    }
+  }
+}

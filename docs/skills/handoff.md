@@ -64,9 +64,13 @@ is your go-ahead. Some examples:
   your yes. Issues work in Claude Code only, for projects on GitHub, with `gh` signed in.
 - **Security bugs come with a warning,** when they're suggested and when you file one: a public
   issue tells everyone about the hole before it's fixed, and GitHub's draft security advisories
-  keep it private instead. To never have them suggested on a PC, set `offerSecurityBugs` to
-  `false` there, such as with [`/dev-home configure`](dev-home.md); `/handoff issue <item>`
-  still files one you name.
+  keep it private instead. A security bug is one that could let someone else read, change, or do
+  what they shouldn't, or stop it working with crafted input, such as a leak of private data, an
+  injection (text that steers an AI agent included), or a way around a sign-in. An item that
+  only may be one gets the warning too. To never have them suggested on a PC, turn off "Include
+  security bugs in GitHub issue offers" with [`/dev-home configure`](dev-home.md) (it's
+  `skills.handoff.preferences.includeSecurityBugsInIssueOffers`); the suggestion itself says so
+  too. `/handoff issue <item>` still files one you name.
 - **Closed issues.** Each update checks the issues the handoff links to. An item filed as an
   issue that closed as completed is removed. One closed as a duplicate moves to the original
   issue, which GitHub links back to the duplicate. For one closed as not planned, the agent

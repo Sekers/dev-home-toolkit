@@ -1,5 +1,6 @@
 """facts.py, run as the handoff skill runs it in Codex, from a sandbox's generated copy."""
 
+import importlib.util
 import json
 import os
 import re
@@ -17,6 +18,7 @@ from helpers import (
     new_repo,
     run_command,
     sandbox_for,
+    shared_module,
     skill_command,
     write_text,
 )
@@ -191,42 +193,99 @@ def test_the_skills_topic_without_skills_of_the_users_own(box: Sandbox) -> None:
     assert result.lines and all("(dev-home-tools)" in line for line in result.lines), str(result)
 
 
-# The settings topic, which reads the sandbox's local-settings.json. It needs no project.
+# The preferences topic, which reads the sandbox's local-settings.json and the handoff skill's
+# dev-home-skill.json. It needs no project.
+
+SECURITY_BUGS = "includeSecurityBugsInIssueOffers"
 
 
-def settings_facts(box: Sandbox, text: str) -> Run:
-    """The settings topic, with local-settings.json holding the text given, then put back."""
+def preference_facts(box: Sandbox, text: str) -> Run:
+    """The preferences topic, with local-settings.json holding the text given, then put back."""
     settings = box.tools / "local-settings.json"
     before = settings.read_bytes()
     write_text(settings, text)
     try:
-        return facts(box, box.root, "settings")
+        return facts(box, box.root, "preferences")
     finally:
         settings.write_bytes(before)
 
 
 @pytest.mark.parametrize(
     ("value", "printed"),
-    [(None, "true"), (False, "false"), (True, "true"), ("no", "true")],
-    ids=["unset", "false", "true", "not true or false"],
+    [
+        (None, "true"),
+        (False, "false"),
+        (True, "true"),
+        ({"$state": "default"}, "true"),
+        ("no", "true"),
+    ],
+    ids=["unset", "false", "true", "following the default", "not true or false"],
 )
-def test_the_settings_topic_prints_each_setting_or_its_default(
+def test_the_preferences_topic_prints_each_preference_or_its_default(
     box: Sandbox, value: object, printed: str
 ) -> None:
     data = json.loads((box.tools / "local-settings.json").read_text(encoding="utf-8"))
-    data.pop("offerSecurityBugs", None)
+    data.pop("skills", None)
     if value is not None:
-        data["offerSecurityBugs"] = value
-    result = settings_facts(box, json.dumps(data, indent=2) + "\n")
+        # A skill's name matches without case, as its folder's does.
+        data["skills"] = {"Handoff": {"preferences": {SECURITY_BUGS: value}}}
+    result = preference_facts(box, json.dumps(data, indent=2) + "\n")
     assert result.code == 0, str(result)
-    assert result.lines == [f"offerSecurityBugs: {printed}"], str(result)
+    assert result.lines == [f"{SECURITY_BUGS}: {printed}"], str(result)
 
 
-def test_the_settings_topic_with_settings_it_cant_read_prints_the_defaults(box: Sandbox) -> None:
+def test_the_preferences_topic_with_settings_it_cant_read_prints_the_defaults(
+    box: Sandbox,
+) -> None:
     for text in ("{ not json", "[]"):
-        result = settings_facts(box, text)
+        result = preference_facts(box, text)
         assert result.code == 0, str(result)
-        assert result.lines == ["offerSecurityBugs: true"], str(result)
+        assert result.lines == [f"{SECURITY_BUGS}: true"], str(result)
+
+
+def test_the_preferences_topic_needs_a_skill(box: Sandbox) -> None:
+    words = skill_command(box, "handoff", "facts.py").split(" ")
+    command = " ".join([*words[: words.index("--skill")], "preferences"])
+    result = run_command(box, command, cwd=box.root)
+    assert result.code == 1, str(result)
+    assert result.has_line(r"The preferences topic needs --skill"), str(result)
+
+
+def test_the_preferences_topic_reads_saved_values_as_setup_does(box: Sandbox) -> None:
+    # facts.py can't load setup's code, so each reads a saved preference its own way.
+    path = box.generated / "shared-skill-scripts" / "facts.py"
+    spec = importlib.util.spec_from_file_location("facts_values_" + box.root.name[-8:], path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    settings = shared_module(box, "settings")
+    for default in (True, False):
+        setting = settings.Preference("handoff", "x", default, "X", "").setting
+        for saved in (None, True, False, {"$state": "default"}, {"$state": "unanswered"}, "no", 1):
+            setup_reads = settings.read_value(settings.MISSING if saved is None else saved, setting)
+            assert module.preference_value(saved, default) == setup_reads[0], (saved, default)
+    # And the two use the same declarations: here, a personal skill's, one of each kind.
+    good = {"default": True, "label": "Good"}
+    entries = {
+        "good": good,
+        "withHelp": {**good, "help": "Why."},
+        "renamed": {**good, "formerNames": ["old"]},
+        "noLabel": {"default": True},
+        "blankLabel": {"default": True, "label": " "},
+        "textDefault": {"default": "yes", "label": "X"},
+        "numberHelp": {**good, "help": 1},
+        "badFormer": {**good, "formerNames": "old"},
+        "with.dot": good,
+        "notAnObject": True,
+    }
+    skill = box.content / "skills" / "mine" / "dev-home-skill.json"
+    write_text(skill, json.dumps({"preferences": entries}) + "\n")
+    try:
+        setup_takes = set(settings.skill_preferences(str(box.content))[0]["mine"])
+    finally:
+        skill.unlink()
+    facts_takes = {name for name, entry in entries.items() if module.usable_preference(name, entry)}
+    assert facts_takes == setup_takes == {"good", "withHelp", "renamed"}, (facts_takes, setup_takes)
 
 
 def test_two_topics_print_in_the_order_asked(box: Sandbox, sample: Path) -> None:

@@ -109,7 +109,7 @@ def main(argv: list[str]) -> int:
             if changed is not None:
                 write_status("RELOAD", changed)
             elif request.topics:
-                lines = facts.collect(request.topics)
+                lines = facts.collect(request.topics, request.skill)
                 print("\n".join(lines))
         except facts.FactsError as error:
             write_status("PROBLEM", f"facts.py stopped, so there are no facts: {error}")

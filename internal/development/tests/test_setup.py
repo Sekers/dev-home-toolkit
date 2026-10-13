@@ -113,7 +113,8 @@ def test_writes_this_copys_paths_into_the_commands_and_pre_approvals(box: Sandbo
         "shared-skill-scripts/prepare.py --skill handoff --stamp "
     )
     assert re.search(
-        prepare + r"[0-9a-f]{12} --fetch auto handoff environment newer-commits settings\)", skill
+        prepare + r"[0-9a-f]{12} --fetch auto handoff environment newer-commits preferences\)",
+        skill,
     )
 
 
@@ -1017,6 +1018,12 @@ def test_configure_alone_shows_the_settings_and_how_to_change_them(
     )
     assert result.has_line(r"^\s+6\s+Copies of dev-home in active use\s+several$"), str(result)
     assert result.has_line(r"^\s+multiMachine=true\|false\s"), str(result)
+    # A skill names a preference by its label, so the agent finds it here, with its name.
+    pattern = (
+        r"^\s+Include security bugs in GitHub issue offers \(handoff skill\): not answered yet, so "
+        r"yes\. To change it: skills\.handoff\.preferences\.includeSecurityBugsInIssueOffers="
+    )
+    assert result.has_line(pattern), str(result)
     assert not result.has_line("All checks passed"), str(result)
     assert read(settings_kept) == before
 

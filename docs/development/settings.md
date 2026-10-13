@@ -21,6 +21,10 @@ AGENTS.md's rules apply too.
   always keeps the saved answer.
 - A setting is per PC, in `local-settings.json`, unless it describes dev-home itself, which every
   copy shares in `dev-home.json`. A skill's preferences are always per PC.
+- A skill's preference reaches end users who never run setup by hand through the feature it
+  shapes: each time the skill acts on it, it says what the preference does there, by its label,
+  and that `/dev-home configure` changes it. A new preference gets no `NEW` line, which would
+  come on every sync for something that's fine at its default.
 - Test each form it accepts, one it doesn't, and a plain value of the wrong type.
 
 ## Reading and writing

@@ -132,7 +132,7 @@ def change_settings(run: "Setup", settings: LocalSettings) -> bool:
         return assign(run, settings, run.configure or "")
     if run.can_ask:
         return menu(run, settings)
-    for line in overview(run, settings):
+    for line in overview(run, settings) + preferences_overview(settings):
         run.line(line)
     run.line()
     run.line(USAGE)
@@ -154,10 +154,13 @@ def copies_answer(settings: LocalSettings) -> tuple[bool | None, str]:
 
 
 def setting_text(settings: LocalSettings, path: str) -> str:
-    """One of dev-home-tools' own settings as the menu shows it: its value, and whether that's the
-    default, isn't answered yet, or is a value the file has that setup can't use."""
-    setting = BY_PATH[path]
-    saved = get(settings.data, path, MISSING)
+    """One of dev-home-tools' own settings as the menu shows it (see value_shown)."""
+    return value_shown(BY_PATH[path], get(settings.data, path, MISSING))
+
+
+def value_shown(setting: Setting, saved: object) -> str:
+    """A setting's value as the menu shows it: its value, and whether that's the default, isn't
+    answered yet, or is a value the file has that setup can't use."""
     value, answered, usable = read_value(saved, setting)
     if not setting.has_default:
         shown = "not set yet" if value is None else value_text(setting, value)
@@ -235,6 +238,21 @@ def overview(run: "Setup", settings: LocalSettings) -> list[str]:
     lines += ["", color("Shared by every copy of dev-home", CYAN)]
     lines += [row(len(this_pc) + 1, label, value) for label, value in shared]
     return lines
+
+
+def preferences_overview(settings: LocalSettings) -> list[str]:
+    """Each preference the skills declare, for an agent: its label and skill, its value, and the
+    name --configure changes it by, so a skill can name a preference by its label alone."""
+    lines: list[str] = []
+    for skill, declared in skill_preferences(settings.content_dir)[0].items():
+        for preference in declared.values():
+            setting = preference.setting
+            shown = value_shown(setting, get(settings.data, setting.path, MISSING))
+            lines.append(
+                f"  {preference.label} ({skill} skill): {shown}. To change it: "
+                f"{setting.path}=true|false|default"
+            )
+    return ["", color("Skill preferences", CYAN), *lines] if lines else []
 
 
 # The menu
