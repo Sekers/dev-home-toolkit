@@ -171,7 +171,7 @@ def test_says_whether_each_link_is_open_or_closed_and_why_once_each(
         "CLOSED    https://github.com/other/lib/issues/3 (not planned, by octocat on 2026-10-01)",
         "COMMENT   https://github.com/other/lib/issues/3 you on 2026-09-20: Still seeing this.",
         "COMMENT   https://github.com/other/lib/issues/3 an account that's gone on 2026-09-21: "
-        + "x" * 500
+        + "x" * 300
         + "... (cut)",
         "UNCHECKED https://github.com/gone/repo/issues/4 (GitHub didn't return it: Could not "
         "resolve to a Repository with the name 'gone/repo'.)",
@@ -275,11 +275,32 @@ def test_leaves_out_links_after_see_also_in_their_item(box: Sandbox) -> None:
         f"- The next item: {url}2\n"
         "\n"
         f"A new paragraph: {url}3\n"
-        f"SEE ALSO: {url}6\n"
+        f"SEE ALSO: {url}6, and see also: {url}8, which only that exact text would leave out\n"
         f"## A heading, which ends the item: {url}7\n"
     )
     found = [issue.url for issue in module.issue_links(text)]
-    assert found == [url + n for n in ("1", "4", "5", "2", "3", "7")], found
+    assert found == [url + n for n in ("1", "4", "5", "2", "3", "6", "8", "7")], found
+
+
+@pytest.mark.parametrize(
+    ("body", "printed"),
+    [
+        ("x" * 300, "x" * 300),
+        ("x" * 296 + " #1234 and the rest", "x" * 296 + "... (cut; also names #1234)"),
+        (
+            "Moved to #20. "
+            + "x" * 290
+            + " Also https://github.com/other/lib/issues/7, other/lib#7, #20, and you/tool#5.",
+            "Moved to #20. " + "x" * 286 + "... (cut; also names other/lib#7, you/tool#5)",
+        ),
+        ("x" * 310 + " no issue named", "x" * 300 + "... (cut)"),
+    ],
+    ids=["exactly the limit", "a reference across the cut", "names after the cut", "none named"],
+)
+def test_a_long_comment_is_cut_and_names_the_issues_it_cut(
+    box: Sandbox, body: str, printed: str
+) -> None:
+    assert load(box).cut_comment(body) == printed
 
 
 @pytest.mark.parametrize("text", ["# tool handoff\n\nNo issues here.\n", None])

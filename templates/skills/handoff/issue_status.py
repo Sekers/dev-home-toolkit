@@ -3,10 +3,10 @@
 The handoff skill's update runs it in the project's folder, in the same turn as its read of the
 handoff just before editing it. It finds the handoff as facts.py's handoff topic does, takes each
 link of the form https://github.com/<owner>/<repo>/issues/<number> once, in the order the links
-come, and asks GitHub about all of them in one gh request. It leaves out a link after "See also:"
-in its item, which the handoff keeps only for what that issue holds, so its state never matters.
-An item ends at the next line that starts an item, a heading, or a new paragraph. It prints one
-line for each issue it checks:
+come, and asks GitHub about all of them in one gh request. It leaves out a link after "See also:",
+written exactly so, in its item, which the handoff keeps only for what that issue holds, so its
+state never matters. An item ends at the next line that starts an item, a heading, or a new
+paragraph. It prints one line for each issue it checks:
 
     OPEN      https://github.com/you/tool/issues/12
     CLOSED    https://github.com/you/tool/issues/7 (completed)
@@ -21,10 +21,12 @@ completed, not planned, or duplicate, and none when GitHub gives none. A duplica
 the issue it duplicates, that issue's state, and its title, so the handoff can link to it
 instead. When any issue closed as not planned, a second gh request asks who closed each one and
 when, and its last three comments: its line says who and when, "you" when it was the account gh
-is signed in to, and a COMMENT line follows for each comment, oldest first, on one line and cut
-after 500 characters, or one saying "(no comments)". UNCHECKED says why: gh missing or signed
-out, gh failing, such as offline, or GitHub not returning that issue, such as one in a repo
-that's gone. With no issue links, it prints one line:
+is signed in to, and a COMMENT line follows for each comment, oldest first, on one line, or one
+saying "(no comments)". A comment longer than 300 characters is cut, never inside a reference to
+an issue, and ends with the issues the rest of it names, such as "... (cut; also names #20,
+other/lib#7)". UNCHECKED says why: gh missing or signed out, gh failing, such as offline, or
+GitHub not returning that issue, such as one in a repo that's gone. With no issue links, it
+prints one line:
 
     OK        The handoff links no GitHub issues.
 
@@ -63,15 +65,23 @@ ISSUE_LINK = re.compile(
     r"https://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/issues/([1-9][0-9]{0,8})(?![0-9])"
 )
 # Links after "See also:" are kept for what those issues hold, until the end of the item: the
-# next line that starts an item, a heading, or a new paragraph.
-SEE_ALSO = re.compile(r"see also:", re.IGNORECASE)
+# next line that starts an item, a heading, or a new paragraph. Only that exact text counts: a
+# missed match only means a link is checked as usual, while a match in ordinary wording would
+# leave a tracked link unchecked without a word.
+SEE_ALSO = re.compile(r"See also:")
 ITEM_START = re.compile(r"^\s*(?:[-*+]\s|\d+[.)]\s|#|$)")
 # What gh exits with when it isn't signed in.
 GH_SIGNED_OUT = 4
 GH_TIMEOUT_SECONDS = 60
-# How many of an issue's last comments a not-planned close prints, and how much of each.
+# How many of an issue's last comments a not-planned close prints, and how much of each. A cut
+# comment ends with the issues the rest of it names, since those often say where the work went.
 COMMENTS = 3
-COMMENT_CHARACTERS = 500
+COMMENT_CHARACTERS = 300
+# An issue or pull request a comment names: #12, owner/repo#12, or a link to one on GitHub.
+REFERENCE = re.compile(
+    r"https://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/(?:issues|pull)/([0-9]+)"
+    r"|(?<![\w#/])(?:([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+))?#([0-9]+)(?![\w])"
+)
 
 
 @dataclass(frozen=True)
@@ -244,6 +254,35 @@ def one_line(text: str) -> str:
     return " ".join(text.split())
 
 
+def reference_name(match: re.Match[str]) -> str:
+    """A reference as #12, or owner/repo#12 when it names the repo."""
+    owner = match.group(1) or match.group(4)
+    repo = match.group(2) or match.group(5)
+    number = match.group(3) or match.group(6)
+    return f"{owner}/{repo}#{number}" if owner else f"#{number}"
+
+
+def cut_comment(body: str) -> str:
+    """A comment cut after COMMENT_CHARACTERS, never inside a reference, followed by each issue
+    the cut part names that the part shown doesn't."""
+    if len(body) <= COMMENT_CHARACTERS:
+        return body
+    references = list(REFERENCE.finditer(body))
+    end = COMMENT_CHARACTERS
+    for match in references:
+        if match.start() < end < match.end():
+            end = match.start()
+    shown = {reference_name(match).lower() for match in references if match.end() <= end}
+    names: list[str] = []
+    for match in references:
+        name = reference_name(match)
+        if match.start() >= end and name.lower() not in shown:
+            shown.add(name.lower())
+            names.append(name)
+    also = f"; also names {', '.join(names)}" if names else ""
+    return f"{body[:end].rstrip()}... (cut{also})"
+
+
 def duplicate_words(original: object) -> str:
     """What a duplicate's line says about the issue it duplicates: its link, its state, and its
     title. Just "duplicate" when GitHub doesn't say which."""
@@ -294,9 +333,7 @@ def not_planned_lines(issue: Issue, closes: Answer, alias: str) -> list[str]:
     if not comments:
         lines.append(status_line("COMMENT", f"{issue.url} (no comments)"))
     for comment in comments:
-        body = one_line(str(comment.get("body") or ""))
-        if len(body) > COMMENT_CHARACTERS:
-            body = body[:COMMENT_CHARACTERS] + "... (cut)"
+        body = cut_comment(one_line(str(comment.get("body") or "")))
         author = who(comment.get("author"), viewer)
         lines.append(status_line("COMMENT", f"{issue.url} {author} on {day(comment)}: {body}"))
     return lines

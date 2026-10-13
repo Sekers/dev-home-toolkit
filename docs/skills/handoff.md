@@ -72,8 +72,8 @@ is your go-ahead. Some examples:
   issue, which GitHub links back to the duplicate. For one closed as not planned, the agent
   shows who closed it and their last comments, and asks whether to remove the item, link it to
   where the work moved, or keep it. An item can also link related issues that hold part of
-  what's known, under "See also:", when its own issue doesn't link to them; those links stay
-  until the item is done, and closing changes nothing for them.
+  what's known, after "See also:" at the end of the item, when its own issue doesn't link to
+  them; those links stay until the item is done, and closing changes nothing for them.
 - **How often it checks GitHub depends on how many copies of dev-home you use.** Every handoff
   command syncs first. With dev-home in active use on several copies, such as two PCs, that sync
   checks GitHub every time, so you see your other copies' latest changes; with one, only once 12
