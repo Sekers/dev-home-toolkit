@@ -114,7 +114,7 @@ def test_without_a_console_it_asks_nothing_even_without_quiet(box: Sandbox, sett
     # With no dev-home folder saved, setup would ask for one, but input comes from NUL, as an
     # agent's command's does.
     saved = json.loads(settings.read_text(encoding="utf-8"))
-    saved["contentDir"] = ""
+    saved["devHome"]["folder"] = ""
     write_text(settings, json.dumps(saved, indent=2) + "\n")
     result = run_python(box, "setup.py")
     assert result.code == 1, str(result)
@@ -123,7 +123,7 @@ def test_without_a_console_it_asks_nothing_even_without_quiet(box: Sandbox, sett
 
 def test_with_input_from_a_silent_pipe_it_never_waits(box: Sandbox, settings: Path) -> None:
     saved = json.loads(settings.read_text(encoding="utf-8"))
-    saved["contentDir"] = ""
+    saved["devHome"]["folder"] = ""
     write_text(settings, json.dumps(saved, indent=2) + "\n")
     argv = [sys.executable, "-I", str(box.tools / "setup.py")]
     check_in_sandbox(argv)
@@ -161,14 +161,14 @@ def test_asks_for_the_dev_home_folder_when_none_is_saved(
     box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
     saved = json.loads(settings.read_text(encoding="utf-8"))
-    content = saved["contentDir"]
-    saved["contentDir"] = ""
+    content = saved["devHome"]["folder"]
+    saved["devHome"]["folder"] = ""
     write_text(settings, json.dumps(saved, indent=2) + "\n")
     person.answers[r"^Your dev-home folder \[.*\]: $"] = content
     returned = setup_here(box)
     out = capsys.readouterr().out
     assert returned == 0, out
-    assert json.loads(settings.read_text(encoding="utf-8"))["contentDir"] == content
+    assert json.loads(settings.read_text(encoding="utf-8"))["devHome"]["folder"] == content
     assert re.search(r"^SET\s+This PC's settings", out, re.MULTILINE), out
 
 
@@ -184,7 +184,7 @@ def test_a_first_run_asks_about_updates_and_each_claude_folder(
     code = shared_module(box, "setup")
     saved = json.loads(settings.read_text(encoding="utf-8"))
     first_run = shared_module(box, "settings").LocalSettings(
-        content_dir=saved["contentDir"], test_home_dir=saved["testHomeDir"]
+        content_dir=saved["devHome"]["folder"], test_home_dir=saved["testHomeDir"]
     )
     monkeypatch.setattr(code, "load_local_settings", lambda: first_run)
     second = box.profile / ".claude-second"
@@ -214,10 +214,12 @@ def test_a_first_run_asks_about_updates_and_each_claude_folder(
         shutil.rmtree(third)
     assert returned == 0, out
     assert any(".claude-third, for another Claude account?" in asked for asked in person.asked)
-    assert written["autoUpdate"] is True
-    assert written["claudeConfigDirs"] == ["~/.claude-second"]
+    assert written["updates"]["installAutomatically"] is True
     # The no is kept, so the folder isn't asked about again.
-    assert written["declinedClaudeConfigDirs"] == ["~/.claude-third"]
+    assert written["claudeCode"]["folders"] == {
+        "~/.claude-second": {"setUp": True},
+        "~/.claude-third": {"setUp": False},
+    }
     assert written["testHomeDir"] == saved["testHomeDir"]
     assert linked == box.generated / "skills" / "handoff"
     assert len(allowed["permissions"]["additionalDirectories"]) == 2
@@ -229,10 +231,10 @@ def test_a_first_run_asks_about_updates_and_each_claude_folder(
 def test_asks_each_question_whose_answer_isnt_saved_yet_then_never_again(
     box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # Not a first run: the file is there, but autoUpdate has no answer yet, and a Claude folder
-    # was made after the first run.
+    # Not a first run: the file is there, but automatic updates have no answer yet, and a Claude
+    # folder was made after the first run.
     saved = json.loads(settings.read_text(encoding="utf-8"))
-    del saved["autoUpdate"]
+    del saved["updates"]["installAutomatically"]
     write_text(settings, json.dumps(saved, indent=2) + "\n")
     later = box.profile / ".claude-later"
     later.mkdir()
@@ -253,8 +255,8 @@ def test_asks_each_question_whose_answer_isnt_saved_yet_then_never_again(
     assert returned == 0 and again == 0, out
     assert len(asked) == 2, asked
     assert person.asked == asked, person.asked
-    assert written["autoUpdate"] is False
-    assert written["declinedClaudeConfigDirs"] == ["~/.claude-later"]
+    assert written["updates"]["installAutomatically"] is False
+    assert written["claudeCode"]["folders"] == {"~/.claude-later": {"setUp": False}}
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="only Windows refuses to replace an open file")
@@ -269,7 +271,7 @@ def test_an_answer_that_cant_be_saved_leaves_the_old_settings_whole(
     # holds the file open, leaves the old file as it was rather than half written.
     monkeypatch.setattr(shared_module(box, "settings_files"), "REPLACE_WAIT_SECONDS", 0.2)
     saved = json.loads(settings.read_text(encoding="utf-8"))
-    saved.pop("autoUpdate", None)
+    saved.get("updates", {}).pop("installAutomatically", None)
     write_text(settings, json.dumps(saved, indent=2) + "\n")
     before = settings.read_bytes()
     person.answers[r"^Pull updates automatically\? \[y/N\]: $"] = "n"
@@ -283,6 +285,60 @@ def test_an_answer_that_cant_be_saved_leaves_the_old_settings_whole(
     assert left == ["local-settings.json"], "no backup and no new file left beside it"
 
 
+SET_ASIDE = r"^Set it aside and answer the questions again\? \[Y/n\]: $"
+
+
+def test_at_a_console_settings_in_the_older_layout_are_set_aside_and_asked_again(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Only testHomeDir comes along, so the run still uses the test profile.
+    saved = json.loads(settings.read_text(encoding="utf-8"))
+    content = saved["devHome"]["folder"]
+    old = {"contentDir": content, "autoUpdate": True, "testHomeDir": saved["testHomeDir"]}
+    old_text = json.dumps(old, indent=2) + "\n"
+    write_text(settings, old_text)
+    person.answers.update(
+        {
+            SET_ASIDE: "",
+            r"^Your dev-home folder \[.*\]: $": content,
+            r"^Pull updates automatically\? \[y/N\]: $": "n",
+        }
+    )
+    try:
+        returned = setup_here(box)
+        out = capsys.readouterr().out
+        written = json.loads(settings.read_text(encoding="utf-8"))
+        backups = list(settings.parent.glob("local-settings.json.bak-*"))
+        kept = [backup.read_text(encoding="utf-8") for backup in backups]
+    finally:
+        for backup in settings.parent.glob("local-settings.json.bak-*"):
+            backup.unlink()
+    assert returned == 0, out
+    assert re.search(r"^SET\s+The old settings, set aside: .*local-settings\.json\.bak-", out, re.M)
+    assert kept == [old_text], kept
+    assert written == {
+        "schemaVersion": 1,
+        "testHomeDir": saved["testHomeDir"],
+        "devHome": {"folder": content},
+        "updates": {"installAutomatically": False},
+    }, written
+
+
+def test_at_a_console_a_no_to_setting_the_older_settings_aside_stops(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    saved = json.loads(settings.read_text(encoding="utf-8"))
+    old_text = json.dumps({"contentDir": "x", "testHomeDir": saved["testHomeDir"]}) + "\n"
+    write_text(settings, old_text)
+    person.answers[SET_ASIDE] = "n"
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    assert re.search(r"^PROBLEM\s+Stopped: .*local-settings\.json is in an older layout", out, re.M)
+    assert settings.read_text(encoding="utf-8") == old_text
+    assert not list(settings.parent.glob("local-settings.json.bak-*"))
+
+
 NOT_A_DEV_HOME = r"^Your dev-home folder, or Enter to stop: $"
 
 
@@ -291,13 +347,13 @@ def test_at_a_console_asks_again_for_a_folder_that_isnt_a_dev_home(
 ) -> None:
     project = box.root / "console-project"
     write_text(project / "README.md", "# a project\n")
-    content = json.loads(settings.read_text(encoding="utf-8"))["contentDir"]
+    content = json.loads(settings.read_text(encoding="utf-8"))["devHome"]["folder"]
     person.answers[NOT_A_DEV_HOME] = content
     returned = setup_here(box, "--content-dir", str(project))
     out = capsys.readouterr().out
     assert returned == 0, out
     assert re.search(r"console-project doesn't look like a dev-home: it has no ", out), out
-    assert json.loads(settings.read_text(encoding="utf-8"))["contentDir"] == content
+    assert json.loads(settings.read_text(encoding="utf-8"))["devHome"]["folder"] == content
 
 
 def test_at_a_console_enter_stops_at_a_folder_that_isnt_a_dev_home(
@@ -360,7 +416,8 @@ def test_asks_how_many_copies_with_no_default_then_commits_and_pushes_the_answer
     assert sum(1 for asked in person.asked if re.search(ELSEWHERE, asked)) == 2, person.asked
     assert re.search(r"^Type y or n\.$", out, re.M), out
     assert json.loads((home / "dev-home.json").read_text(encoding="utf-8")) == {
-        "multiMachine": True
+        "schemaVersion": 1,
+        "multiMachine": True,
     }
     assert re.search(r'^\s+\+\s+"multiMachine": true', out, re.M), out
     assert git("-C", str(remote), "log", "-1", "--format=%s") == ["dev-home: several active copies"]
@@ -384,14 +441,15 @@ def test_a_no_to_saving_the_copies_answer_leaves_dev_home_as_it_is(
 def test_after_a_clone_set_to_one_copy_asks_whether_another_stays(
     box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str], answer: str, several: bool
 ) -> None:
-    home, remote = own_dev_home(box, f"copies-cloned-{answer}", '{"multiMachine": false, "x": 1}\n')
+    text = '{"schemaVersion": 1, "multiMachine": false, "x": 1}\n'
+    home, remote = own_dev_home(box, f"copies-cloned-{answer}", text)
     person.answers.update({ALONGSIDE: answer, SAVE_COPIES: "y"})
     returned = check_copies(box, home, cloned=True)
     out = capsys.readouterr().out
     assert returned == 0, out
     saved = json.loads((home / "dev-home.json").read_text(encoding="utf-8"))
     # A key setup doesn't know is kept.
-    assert saved == {"multiMachine": several, "x": 1}, saved
+    assert saved == {"schemaVersion": 1, "multiMachine": several, "x": 1}, saved
     subjects = git("-C", str(remote), "log", "--format=%s")
     assert (subjects[0] == "dev-home: several active copies") == several, subjects
     # Without a change, nothing is shown or asked about saving.
@@ -399,9 +457,53 @@ def test_after_a_clone_set_to_one_copy_asks_whether_another_stays(
 
 
 def test_an_answered_dev_home_is_asked_nothing(box: Sandbox, person: Person) -> None:
-    home, _ = own_dev_home(box, "copies-answered", '{"multiMachine": false}\n')
+    home, _ = own_dev_home(box, "copies-answered", '{"schemaVersion": 1, "multiMachine": false}\n')
     assert check_copies(box, home) == 0
     assert person.asked == []
+
+
+def test_an_older_dev_home_json_is_asked_again_and_rewritten_in_place(
+    box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Its old answer is the default, so Enter keeps it, and git has the old file.
+    home, remote = own_dev_home(box, "copies-older", '{"multiMachine": false, "x": 1}\n')
+    person.answers.update({ELSEWHERE.replace(r"\[y/n\]", r"\[y/N\]"): "", SAVE_COPIES: "y"})
+    returned = check_copies(box, home)
+    out = capsys.readouterr().out
+    assert returned == 0, out
+    saved = json.loads((home / "dev-home.json").read_text(encoding="utf-8"))
+    assert saved == {"schemaVersion": 1, "multiMachine": False, "x": 1}, saved
+    assert sorted(entry.name for entry in home.glob("dev-home.json*")) == ["dev-home.json"]
+    assert git("-C", str(remote), "log", "-1", "--format=%s") == ["dev-home: one active copy"]
+
+
+@pytest.mark.parametrize(
+    ("text", "said"),
+    [
+        (
+            '{"multiMachine": false}\n',
+            r"is in an older layout, without a schemaVersion, so each sync checks GitHub every "
+            r"time\. Run .*setup\.py in a terminal: it asks its question again",
+        ),
+        (
+            '{"schemaVersion": 2, "multiMachine": false}\n',
+            r"has a schemaVersion this dev-home-tools doesn't know, perhaps written by a newer "
+            r"one on another copy, so setup left it alone",
+        ),
+    ],
+    ids=["older layout", "newer layout"],
+)
+def test_a_quiet_run_leaves_a_dev_home_json_in_another_layout_alone(
+    box: Sandbox, capsys: pytest.CaptureFixture[str], text: str, said: str
+) -> None:
+    name = "copies-quiet-" + ("older" if "schemaVersion" not in text else "newer")
+    home, _ = own_dev_home(box, name, text)
+    run = shared_module(box, "setup").Setup(quiet=True, what_if=False)
+    run.check_copies(home)
+    out = capsys.readouterr().out
+    assert run.finish() == 1, out
+    assert re.search(rf"^PROBLEM\s+.*{said}", out, re.M), out
+    assert (home / "dev-home.json").read_text(encoding="utf-8") == text
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="only Windows refuses to replace an open file")
@@ -412,7 +514,8 @@ def test_a_copies_answer_that_cant_be_saved_leaves_dev_home_as_it_is(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(shared_module(box, "settings_files"), "REPLACE_WAIT_SECONDS", 0.2)
-    home, remote = own_dev_home(box, "copies-held-open", '{"multiMachine": false}\n')
+    text = '{"schemaVersion": 1, "multiMachine": false}\n'
+    home, remote = own_dev_home(box, "copies-held-open", text)
     path = home / "dev-home.json"
     before = path.read_bytes()
     person.answers.update({ALONGSIDE: "y", SAVE_COPIES: "y"})
@@ -431,7 +534,6 @@ def test_a_copies_answer_that_cant_be_saved_leaves_dev_home_as_it_is(
 MENU = r"^Number to change, a to go through them all, or Enter to finish: $"
 UPDATE_HOURS = r"^Check GitHub for dev-home-tools updates every how many hours .*\[24\]: $"
 CONTENT_HOURS = r"^Check GitHub for dev-home's changes every how many hours .*\[12\]: $"
-SECURITY_BUGS = r"^Offer security bugs as GitHub issues, with that warning\? \[Y/n\]: $"
 
 
 @pytest.fixture
@@ -449,8 +551,9 @@ def test_the_menu_changes_the_setting_picked_and_keeps_a_backup(
     out = capsys.readouterr().out
     assert returned == 0, out
     assert "dev-home-tools settings" in out and "Shared by every copy of dev-home" in out, out
-    assert "Type a number from 1 to 7, or a, or press Enter to finish." in out, out
-    assert json.loads(backups_removed.read_text(encoding="utf-8"))["autoUpdate"] is True
+    assert "Type a number from 1 to 6, or a, or press Enter to finish." in out, out
+    saved = json.loads(backups_removed.read_text(encoding="utf-8"))
+    assert saved["updates"]["installAutomatically"] is True, saved
     assert re.search(r"^SET\s+This PC's settings: .* Backup of the old file: ", out, re.M), out
 
 
@@ -458,7 +561,7 @@ def test_the_menu_goes_through_every_setting_with_its_answer_as_the_default(
     box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # Enter keeps each answer, except the update check's hours, set to 6.
-    content = json.loads(backups_removed.read_text(encoding="utf-8"))["contentDir"]
+    content = json.loads(backups_removed.read_text(encoding="utf-8"))["devHome"]["folder"]
     person.answers.update(
         {
             MENU: ["a", ""],
@@ -466,7 +569,6 @@ def test_the_menu_goes_through_every_setting_with_its_answer_as_the_default(
             r"^Pull updates automatically\? \[y/N\]: $": "",
             UPDATE_HOURS: ["six", "6"],
             CONTENT_HOURS: "",
-            SECURITY_BUGS: "",
             ELSEWHERE.replace(r"\[y/n\]", r"\[Y/n\]"): "",
         }
     )
@@ -475,21 +577,11 @@ def test_the_menu_goes_through_every_setting_with_its_answer_as_the_default(
     saved = json.loads(backups_removed.read_text(encoding="utf-8"))
     assert returned == 0, out
     assert "Type a whole number of hours: 0 or more." in out, out
-    assert saved["updateCheckHours"] == 6 and "contentCheckHours" not in saved, saved
-    assert "offerSecurityBugs" not in saved, saved
-    assert saved["contentDir"] == content and saved["autoUpdate"] is False, saved
+    assert saved["updates"]["checkEveryHours"] == 6, saved
+    assert "checkEveryHours" not in saved["devHome"], saved
+    assert saved["devHome"]["folder"] == content, saved
+    assert saved["updates"]["installAutomatically"] is False, saved
     assert "There are no ~/.claude-* folders to set up." in out, out
-
-
-def test_the_menu_turns_off_offering_security_bugs(
-    box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
-) -> None:
-    person.answers.update({MENU: ["6", ""], SECURITY_BUGS: "n"})
-    returned = setup_here(box, "--configure")
-    out = capsys.readouterr().out
-    assert returned == 0, out
-    assert "For a security bug, it warns" in out, out
-    assert json.loads(backups_removed.read_text(encoding="utf-8"))["offerSecurityBugs"] is False
 
 
 def test_the_menu_keeps_several_copies_unless_the_others_are_retired(
@@ -497,7 +589,7 @@ def test_the_menu_keeps_several_copies_unless_the_others_are_retired(
 ) -> None:
     person.answers.update(
         {
-            MENU: ["7", ""],
+            MENU: ["6", ""],
             ELSEWHERE.replace(r"\[y/n\]", r"\[Y/n\]"): "n",
             r"^Have all the other copies been retired, .*\? \[y/N\]: $": "n",
         }
@@ -812,7 +904,8 @@ def test_creates_a_new_dev_home_from_the_starter(
     assert signing == ["false"]
     # A new dev-home starts with one active copy, without a question.
     assert json.loads((new_home / "dev-home.json").read_text(encoding="utf-8")) == {
-        "multiMachine": False
+        "schemaVersion": 1,
+        "multiMachine": False,
     }
     copies = (ELSEWHERE, ALONGSIDE)
     assert not any(re.search(p, asked) for p in copies for asked in person.asked), person.asked

@@ -1,17 +1,18 @@
 # dev-home-tools
 
 **dev-home** is a home base for working with AI coding agents (Claude Code and Codex): a private
-GitHub repo of your own, with a copy on each of your PCs, holding what your agents should have
-in every session. That's your own rules, your own skills, and anything those skills keep for
-you.
+GitHub repo of your own, holding what your agents should have in every session. That's your own
+rules, your own skills, and anything those skills keep for you. Use it on one PC, as a private
+backup with full history, or on several, each with its own copy, so all of it travels with you
+from PC to PC.
 
 **dev-home-tools**, this repo, is the public tooling that makes dev-home work:
 
 - **Setup.** Its `setup.py` creates your dev-home the first time you run it, and clones it on
   your other PCs. On each PC, it connects dev-home to Claude Code and Codex, so every session
   loads your rules and skills.
-- **Sync.** It keeps dev-home in sync with its online copy, so a change made on one PC reaches
-  the others.
+- **Sync.** It keeps dev-home in sync with its online copy, so your work is backed up with its
+  full history, and, if you use more than one PC, a change made on one reaches the others.
   - Setup puts dev-home on GitHub for now (just dev-home: your project repos can be hosted
     anywhere). Automated setup for GitLab, Bitbucket, and Azure DevOps is coming.
 - **Privacy.** It tells every session never to copy dev-home into your project repos, or even
@@ -126,9 +127,9 @@ handoff item as an issue, which needs the project on GitHub.
 Then it links everything and checks Claude Code's and Codex's settings (see
 [What setup changes](docs/reference/setup-changes.md) for what and why). When a setting is
 missing, it shows the exact lines it would change and asks first. On a `y`, it saves a dated
-backup of the file, such as `settings.json.bak-20260926-101500`, before writing. It never edits a
-file it can't fully read, such as a `settings.json` with comments, or a read-only one; it prints
-what to add by hand instead.
+backup of the file, named `settings.json.bak-YYYYMMDD-HHMMSS`, before writing. It never edits a
+file it can't fully read, such as a `settings.json` that isn't valid JSON (Claude Code can't use
+one either), or a read-only one; it prints what to add by hand instead.
 
 ### 4. Restart, and check
 
@@ -140,8 +141,14 @@ this one. The one exception is a skill you've just created on this PC: it's link
 `/handoff`, or right away when you run setup with `--quiet` (see
 [Your own rules and skills](#your-own-rules-and-skills)).
 
-Your answers are saved in `local-settings.json` in your dev-home-tools folder, next to
-`setup.py`. To change one later, run setup with `--configure`:
+Setup keeps your answers in two places. Most belong to this PC alone, in `local-settings.json` in
+your dev-home-tools folder, next to `setup.py`. Whether dev-home is in active use anywhere besides
+this PC is shared by every copy, so it goes in your dev-home's `dev-home.json`, and setup commits
+and pushes any change to it.
+
+To change a setting later, ask your agent with [`/dev-home configure`](docs/skills/dev-home.md):
+it shows you the exact change, and makes it after your yes. Or run setup with `--configure` in a
+terminal:
 
 ```powershell
 py C:\Programming\dev-home-tools\setup.py --configure
@@ -149,17 +156,24 @@ py C:\Programming\dev-home-tools\setup.py --configure
 
 It shows every setting with its value. Type a setting's number to change it, `a` to go through
 them all, or press Enter to finish; each question has your current answer as its default. Setup
-keeps a dated backup of the file before it saves a change.
+keeps a dated backup of `local-settings.json` before it saves a change.
 
-You can also edit the file and run setup again: `autoUpdate` is `true` or `false`;
-`claudeConfigDirs` lists the extra Claude Code folders to set up, such as `"~/.claude-second"`;
-`declinedClaudeConfigDirs` lists the ones you said no to, and taking a folder out of it makes
-setup ask again; and `updateCheckHours` and `contentCheckHours` say how often a sync checks
-GitHub for dev-home-tools updates (24 hours unless set) and for dev-home's changes (12 hours
-unless set, when one copy is in active use, and for a plain `/knowledge`), where 0 means every
-time; and `offerSecurityBugs` is `false` to stop the handoff skill suggesting security bugs as
-GitHub issues (it suggests them, with a warning, unless set). To use a different dev-home
-folder, run setup with `--content-dir <folder>`.
+You can also edit `local-settings.json` and run setup again. Its settings are grouped, and each
+one's name is its path, which `--configure` takes too:
+
+- `devHome.folder` is your dev-home folder. To use a different one, run setup with
+  `--content-dir <folder>`.
+- `updates.installAutomatically` is `true` or `false`.
+- `updates.checkEveryHours` and `devHome.checkEveryHours` say how often a sync checks GitHub for
+  dev-home-tools updates (24 hours unless set) and for dev-home's changes (12 hours unless set,
+  when one copy is in active use, and for a plain `/knowledge`), where 0 means every time.
+- `claudeCode.folders` holds each Claude Code folder with its answer, such as
+  `"~/.claude-second": {"setUp": true}`. Taking a folder out makes setup ask about it again.
+- `schemaVersion` says which layout the file has. Leave it as it is: setup sets aside a file in
+  an older layout and asks its questions again.
+
+Setup checks every value on each run, and reports one of the wrong kind, or a name it doesn't
+know, without changing it.
 
 ## Day to day
 
@@ -235,7 +249,13 @@ Everything beyond getting started is in the `docs/` folder:
 | Skills | [dev-home](docs/skills/dev-home.md) | `/dev-home sync`, `configure`, and `skills`: syncing when you ask, changing a setting, and listing your skills. |
 | Reference | [The scripts](docs/reference/scripts.md) | `setup.py`, `sync.py`, and `update.py`: when each one runs, what their status words mean, how updates are installed, and where they come from. |
 | Reference | [What setup changes on your PC](docs/reference/setup-changes.md) | Every link, file, and setting that setup adds, why, and how to remove it all. |
-| Development | [Design decisions](docs/development/decisions.md) | For people changing dev-home-tools: decisions made and options set aside, with the reasons. |
+| Development | [Design decisions](docs/development/decisions/index.md) | For people changing dev-home-tools: decisions made and options set aside, with the reasons. |
+| Development | [Skills and everything else under templates/](docs/development/skills.md) | The rules for changing the skills, the scripts they share, the operating rules, and the starter. |
+| Development | [setup.py, sync.py, and update.py](docs/development/scripts.md) | The rules for changing the scripts and their code in `internal/shared/`. |
+| Development | [Testing](docs/development/testing.md) | How the tests work, and the rules for writing them. |
+| Development | [Writing the docs](docs/development/writing-docs.md) | Where each page goes, and the rules for the README and `docs/`. |
+| Development | [A fresh agent's read](docs/development/fresh-agent-reads.md) | How to have a second agent, with no context, check a change. |
+| Development | [Pylance comparison](docs/development/research/pylance-comparison.md) | Pylance's standard and strict type checking compared on this repo's code, with the data, so it needn't be run again. |
 
 ## Safety and privacy
 
@@ -251,8 +271,8 @@ Everything beyond getting started is in the `docs/` folder:
 - **`setup.py` replaces only its own work:** its generated files, links whose target is gone,
   and links it made to skills that no longer exist. Anything else in its way is reported, not
   changed. Settings changes are shown first, need your yes, and keep a backup.
-- **Tooling updates wait for you** unless you turn on `autoUpdate`, because whoever controls this
-  repo on GitHub controls code that runs on your PC.
+- **Tooling updates wait for you** unless you turn on `updates.installAutomatically`, because
+  whoever controls this repo on GitHub controls code that runs on your PC.
 - **Never run `Remove-Item -Recurse`** on `~\.claude`, `~\.claude-*`, or `~\.agents`. It follows
   the links into your dev-home and deletes what's there. Remove a single link with
   `cmd /c rmdir <link>`.
@@ -294,8 +314,9 @@ Everything beyond getting started is in the `docs/` folder:
 | `internal/development/` | Only for changing dev-home-tools: the development tools' settings (`pyproject.toml`, `uv.lock`) and the tests (`tests/`, run with pytest). People who only use dev-home-tools never need it. |
 | `docs/` | Everything this README leaves out (see [Documentation](#documentation)). |
 
-[AGENTS.md](AGENTS.md) has the rules for changing this repo, for people and agents alike, and
-[Design decisions](docs/development/decisions.md) says why it works the way it does.
+[AGENTS.md](AGENTS.md) has the rules for changing this repo, for developers and agents alike, and
+points to a page in `docs/development/` for each area's own rules.
+[Design decisions](docs/development/decisions/index.md) says why it works the way it does.
 
 Changing dev-home-tools takes [uv](https://docs.astral.sh/uv/), which installs the pinned
 development tools (pytest, ruff, and mypy) the first time you run them. Before committing, run

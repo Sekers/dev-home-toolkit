@@ -1,0 +1,844 @@
+{
+  "tested_on": "2026-10-12",
+  "diagnostic_locations": "Line and column numbers are one-based.",
+  "environment": {
+    "operating_system": "Windows",
+    "vscode": "1.141.0",
+    "pylance": "2026.4.1",
+    "embedded_pyright": "1.1.414",
+    "python": "3.14.7"
+  },
+  "source_state": {
+    "commit": "40be650",
+    "uncommitted_changes": true,
+    "limitation": "Source content hashes and a source snapshot were not captured. These results describe the tested working tree and may not match current source files."
+  },
+  "scope": {
+    "source_file_count": 33,
+    "source_files": [
+      "internal/development/tests/conftest.py",
+      "internal/development/tests/helpers.py",
+      "internal/development/tests/test_docs.py",
+      "internal/development/tests/test_facts.py",
+      "internal/development/tests/test_issue_status.py",
+      "internal/development/tests/test_prepare.py",
+      "internal/development/tests/test_setup.py",
+      "internal/development/tests/test_setup_questions.py",
+      "internal/development/tests/test_skill_scripts.py",
+      "internal/development/tests/test_sync.py",
+      "internal/shared/__init__.py",
+      "internal/shared/claude_settings.py",
+      "internal/shared/codex_config.py",
+      "internal/shared/configure.py",
+      "internal/shared/console.py",
+      "internal/shared/generated.py",
+      "internal/shared/git.py",
+      "internal/shared/links.py",
+      "internal/shared/output.py",
+      "internal/shared/paths.py",
+      "internal/shared/programs.py",
+      "internal/shared/python_link.py",
+      "internal/shared/settings.py",
+      "internal/shared/settings_files.py",
+      "internal/shared/setup.py",
+      "internal/shared/sync.py",
+      "internal/shared/update.py",
+      "setup.py",
+      "sync.py",
+      "templates/shared-skill-scripts/facts.py",
+      "templates/shared-skill-scripts/prepare.py",
+      "templates/skills/handoff/issue_status.py",
+      "update.py"
+    ]
+  },
+  "mypy": {
+    "mode": "strict",
+    "result": "pass",
+    "source_file_count": 33,
+    "python_target": "3.12"
+  },
+  "completion_observation": {
+    "minimum_observation_seconds": 20,
+    "quiet_period_seconds": 8,
+    "requested_modes": ["standard", "strict"],
+    "assignment_diagnostic_observed_in_both_runs": true,
+    "strict_observation_required_missing_parameter_diagnostic": true,
+    "method": "All 33 source files were opened. Each run was observed after a quiet period. A temporary canary outside the project produced an assignment-type diagnostic in both runs; the strict observation additionally required a missing-parameter-type diagnostic. Canary diagnostics are excluded from the project results.",
+    "limitation": "Completion was inferred from a quiet-period heuristic, without an explicit per-file or analysis-completion handshake. The assignment diagnostic does not distinguish basic, standard, and strict modes."
+  },
+  "modes": {
+    "standard": {
+      "errors": 0,
+      "warnings": 0,
+      "hints": 41
+    },
+    "strict": {
+      "errors": 121,
+      "warnings": 0,
+      "hints": 39,
+      "errors_by_rule": {
+        "reportUnknownVariableType": 52,
+        "reportUnknownMemberType": 30,
+        "reportUnknownArgumentType": 34,
+        "reportUnknownLambdaType": 3,
+        "reportDeprecated": 2
+      },
+      "errors_by_file": {
+        "internal/development/tests/conftest.py": [
+          {
+            "line": 83,
+            "column": 12,
+            "rule": "reportUnknownVariableType",
+            "message": "Return type, \"list[Unknown] | list[Any]\", is partially unknown"
+          }
+        ],
+        "internal/development/tests/helpers.py": [
+          {
+            "line": 240,
+            "column": 5,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"settings\" is partially unknown\n  Type of \"settings\" is \"dict[str, Unknown]\""
+          }
+        ],
+        "internal/development/tests/test_docs.py": [
+          {
+            "line": 235,
+            "column": 13,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"append\" is partially unknown\n  Type of \"append\" is \"(object: Unknown, /) -> None\""
+          }
+        ],
+        "internal/development/tests/test_issue_status.py": [
+          {
+            "line": 78,
+            "column": 44,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"value\" in function \"setattr\"\n  Argument type is \"(facts: Unknown) -> Literal['gh']\""
+          },
+          {
+            "line": 78,
+            "column": 51,
+            "rule": "reportUnknownLambdaType",
+            "message": "Type of parameter \"facts\" is unknown"
+          },
+          {
+            "line": 104,
+            "column": 5,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"answer\" is partially unknown\n  Type of \"answer\" is \"dict[str, Unknown]\""
+          },
+          {
+            "line": 122,
+            "column": 28,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"out\" in function \"__init__\"\n  Argument type is \"dict[str, Unknown]\""
+          }
+        ],
+        "internal/development/tests/test_setup.py": [
+          {
+            "line": 163,
+            "column": 13,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"append\" is partially unknown\n  Type of \"append\" is \"(object: Unknown, /) -> None\""
+          },
+          {
+            "line": 410,
+            "column": 13,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"link\" is partially unknown\n  Type of \"link\" is \"Path | Unknown\""
+          },
+          {
+            "line": 411,
+            "column": 25,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"link\" in function \"remove_link\"\n  Argument type is \"Path | Unknown\""
+          },
+          {
+            "line": 1020,
+            "column": 5,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"preferences\" is partially unknown\n  Type of \"preferences\" is \"dict[str, Unknown]\""
+          }
+        ],
+        "internal/development/tests/test_setup_questions.py": [
+          {
+            "line": 94,
+            "column": 47,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"value\" in function \"setattr\"\n  Argument type is \"(name: Unknown) -> (Literal['gh'] | None)\""
+          },
+          {
+            "line": 94,
+            "column": 54,
+            "rule": "reportUnknownLambdaType",
+            "message": "Type of parameter \"name\" is unknown"
+          },
+          {
+            "line": 211,
+            "column": 17,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"link\" is partially unknown\n  Type of \"link\" is \"Path | Unknown\""
+          },
+          {
+            "line": 212,
+            "column": 29,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"link\" in function \"remove_link\"\n  Argument type is \"Path | Unknown\""
+          },
+          {
+            "line": 297,
+            "column": 5,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"old\" is partially unknown\n  Type of \"old\" is \"dict[str, Unknown]\""
+          },
+          {
+            "line": 770,
+            "column": 74,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"value\" in function \"setattr\"\n  Argument type is \"(name: Unknown) -> None\""
+          },
+          {
+            "line": 770,
+            "column": 81,
+            "rule": "reportUnknownLambdaType",
+            "message": "Type of parameter \"name\" is unknown"
+          }
+        ],
+        "internal/development/tests/test_sync.py": [
+          {
+            "line": 130,
+            "column": 13,
+            "rule": "reportDeprecated",
+            "message": "The function \"contextmanager\" is deprecated\n  Annotating the return type as `-> Iterator[Foo]` with `@contextmanager` is deprecated. Use `-> Generator[Foo]` instead."
+          }
+        ],
+        "internal/shared/claude_settings.py": [
+          {
+            "line": 54,
+            "column": 19,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"get\" is partially unknown\n  Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\""
+          },
+          {
+            "line": 54,
+            "column": 5,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"permissions\" is partially unknown\n  Type of \"permissions\" is \"Unknown | None\""
+          },
+          {
+            "line": 55,
+            "column": 15,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"get\" is partially unknown\n  Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\""
+          },
+          {
+            "line": 55,
+            "column": 5,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"folders\" is partially unknown\n  Type of \"folders\" is \"Unknown | None\""
+          },
+          {
+            "line": 60,
+            "column": 24,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"folder\" is unknown"
+          },
+          {
+            "line": 118,
+            "column": 9,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"data\" is partially unknown\n  Type of \"data\" is \"Any | dict[Unknown, Unknown]\""
+          },
+          {
+            "line": 132,
+            "column": 30,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"data\" in function \"dump\"\n  Argument type is \"dict[Unknown, Unknown]\""
+          },
+          {
+            "line": 137,
+            "column": 5,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"permissions\" is partially unknown\n  Type of \"permissions\" is \"Unknown | dict[Unknown, Unknown]\""
+          },
+          {
+            "line": 148,
+            "column": 5,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"folders\" is partially unknown\n  Type of \"folders\" is \"Unknown | list[Unknown]\""
+          },
+          {
+            "line": 155,
+            "column": 5,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"extend\" is partially unknown\n  Type of \"extend\" is \"(iterable: Iterable[Unknown], /) -> None\""
+          },
+          {
+            "line": 157,
+            "column": 21,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"data\" in function \"dump\"\n  Argument type is \"dict[Unknown, Unknown]\""
+          }
+        ],
+        "internal/shared/codex_config.py": [
+          {
+            "line": 35,
+            "column": 5,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"headers\" is partially unknown\n  Type of \"headers\" is \"list[Unknown]\""
+          },
+          {
+            "line": 36,
+            "column": 5,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"keys\" is partially unknown\n  Type of \"keys\" is \"list[Unknown]\""
+          },
+          {
+            "line": 388,
+            "column": 17,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"pop\" is partially unknown\n  Type of \"pop\" is \"Overload[(key: Unknown, /) -> Unknown, (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@pop, /) -> (Unknown | _T@pop)]\""
+          },
+          {
+            "line": 388,
+            "column": 5,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"old_roots\" is unknown"
+          },
+          {
+            "line": 389,
+            "column": 17,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"pop\" is partially unknown\n  Type of \"pop\" is \"Overload[(key: Unknown, /) -> Unknown, (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@pop, /) -> (Unknown | _T@pop)]\""
+          },
+          {
+            "line": 389,
+            "column": 5,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"new_roots\" is unknown"
+          },
+          {
+            "line": 390,
+            "column": 59,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is unknown\n  Argument corresponds to parameter \"obj\" in function \"len\""
+          },
+          {
+            "line": 392,
+            "column": 22,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is unknown\n  Argument corresponds to parameter \"obj\" in function \"len\""
+          }
+        ],
+        "internal/shared/configure.py": [
+          {
+            "line": 167,
+            "column": 5,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"words\" is partially unknown\n  Type of \"words\" is \"dict[Unknown, str]\""
+          }
+        ],
+        "internal/shared/settings.py": [
+          {
+            "line": 66,
+            "column": 9,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"data\" is unknown"
+          },
+          {
+            "line": 67,
+            "column": 12,
+            "rule": "reportUnknownVariableType",
+            "message": "Return type, \"object | Unknown\", is partially unknown"
+          },
+          {
+            "line": 100,
+            "column": 12,
+            "rule": "reportUnknownVariableType",
+            "message": "Return type, \"dict[Unknown, Unknown] | None\", is partially unknown"
+          },
+          {
+            "line": 133,
+            "column": 13,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"folder\" is unknown"
+          },
+          {
+            "line": 133,
+            "column": 21,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"entry\" is unknown"
+          },
+          {
+            "line": 134,
+            "column": 12,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"strip\" is unknown"
+          },
+          {
+            "line": 134,
+            "column": 70,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"get\" is partially unknown\n  Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\""
+          },
+          {
+            "line": 174,
+            "column": 24,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"get\" is partially unknown\n  Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\""
+          },
+          {
+            "line": 174,
+            "column": 13,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"declared\" is partially unknown\n  Type of \"declared\" is \"Unknown | None\""
+          },
+          {
+            "line": 179,
+            "column": 17,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"key\" is unknown"
+          },
+          {
+            "line": 179,
+            "column": 22,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"entry\" is unknown"
+          },
+          {
+            "line": 182,
+            "column": 36,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"get\" is partially unknown\n  Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\""
+          },
+          {
+            "line": 183,
+            "column": 36,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"get\" is partially unknown\n  Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\""
+          },
+          {
+            "line": 184,
+            "column": 25,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"strip\" is unknown"
+          },
+          {
+            "line": 185,
+            "column": 36,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"get\" is partially unknown\n  Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\""
+          },
+          {
+            "line": 180,
+            "column": 17,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"usable\" is partially unknown\n  Type of \"usable\" is \"Unknown | bool\""
+          },
+          {
+            "line": 187,
+            "column": 52,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"strip\" is unknown"
+          },
+          {
+            "line": 194,
+            "column": 72,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"get\" is partially unknown\n  Type of \"get\" is \"Unknown | Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\""
+          },
+          {
+            "line": 194,
+            "column": 33,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is unknown\n  Argument corresponds to parameter \"name\" in function \"__init__\""
+          },
+          {
+            "line": 194,
+            "column": 38,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is unknown\n  Argument corresponds to parameter \"default\" in function \"__init__\""
+          },
+          {
+            "line": 194,
+            "column": 56,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is unknown\n  Argument corresponds to parameter \"label\" in function \"__init__\""
+          },
+          {
+            "line": 194,
+            "column": 72,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is unknown\n  Argument corresponds to parameter \"help\" in function \"__init__\""
+          },
+          {
+            "line": 247,
+            "column": 17,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"folder\" is unknown"
+          },
+          {
+            "line": 247,
+            "column": 25,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"entry\" is unknown"
+          },
+          {
+            "line": 250,
+            "column": 34,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is unknown\n  Argument corresponds to parameter \"value\" in function \"wrong\""
+          },
+          {
+            "line": 252,
+            "column": 21,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"entry_key\" is unknown"
+          },
+          {
+            "line": 252,
+            "column": 32,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"answer\" is unknown"
+          },
+          {
+            "line": 256,
+            "column": 50,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is unknown\n  Argument corresponds to parameter \"value\" in function \"wrong\""
+          },
+          {
+            "line": 272,
+            "column": 17,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"key\" is unknown"
+          },
+          {
+            "line": 272,
+            "column": 22,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"answer\" is unknown"
+          },
+          {
+            "line": 273,
+            "column": 52,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is unknown\n  Argument corresponds to parameter \"key\" in function \"get\""
+          },
+          {
+            "line": 279,
+            "column": 50,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is unknown\n  Argument corresponds to parameter \"value\" in function \"wrong\""
+          },
+          {
+            "line": 293,
+            "column": 34,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"value\" in function \"check_group\"\n  Argument type is \"dict[Unknown, Unknown]\""
+          },
+          {
+            "line": 295,
+            "column": 30,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"value\" in function \"check_skills\"\n  Argument type is \"dict[Unknown, Unknown]\""
+          },
+          {
+            "line": 297,
+            "column": 36,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"value\" in function \"check_folders\"\n  Argument type is \"dict[Unknown, Unknown]\""
+          },
+          {
+            "line": 314,
+            "column": 5,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"claude_folders\" is partially unknown\n  Type of \"claude_folders\" is \"dict[Unknown, Unknown]\""
+          },
+          {
+            "line": 315,
+            "column": 5,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"codex_homes\" is partially unknown\n  Type of \"codex_homes\" is \"dict[Unknown, Unknown]\""
+          },
+          {
+            "line": 317,
+            "column": 5,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"data\" is partially unknown\n  Type of \"data\" is \"dict[Unknown, Unknown]\""
+          },
+          {
+            "line": 344,
+            "column": 18,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"data\" in function \"get\"\n  Argument type is \"dict[Unknown, Unknown]\""
+          },
+          {
+            "line": 347,
+            "column": 23,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"data\" in function \"get\"\n  Argument type is \"dict[Unknown, Unknown]\""
+          },
+          {
+            "line": 350,
+            "column": 50,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"data\" in function \"get\"\n  Argument type is \"dict[Unknown, Unknown]\""
+          },
+          {
+            "line": 351,
+            "column": 47,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"data\" in function \"get\"\n  Argument type is \"dict[Unknown, Unknown]\""
+          },
+          {
+            "line": 352,
+            "column": 19,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"get\" is partially unknown\n  Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\""
+          },
+          {
+            "line": 362,
+            "column": 20,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"map\" in function \"__init__\"\n  Argument type is \"dict[Unknown, Unknown]\""
+          },
+          {
+            "line": 362,
+            "column": 5,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"folders\" is partially unknown\n  Type of \"folders\" is \"dict[Unknown, Unknown]\""
+          },
+          {
+            "line": 363,
+            "column": 31,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"iterable\" in function \"__init__\"\n  Argument type is \"dict_items[Unknown, Unknown]\""
+          },
+          {
+            "line": 363,
+            "column": 9,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"folder\" is unknown"
+          },
+          {
+            "line": 363,
+            "column": 17,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"entry\" is unknown"
+          },
+          {
+            "line": 366,
+            "column": 23,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"get\" is partially unknown\n  Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\""
+          },
+          {
+            "line": 367,
+            "column": 36,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"key\" is unknown"
+          },
+          {
+            "line": 367,
+            "column": 41,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"value\" is unknown"
+          },
+          {
+            "line": 367,
+            "column": 13,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"rest\" is partially unknown\n  Type of \"rest\" is \"dict[Unknown, Unknown]\""
+          },
+          {
+            "line": 373,
+            "column": 17,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"get\" is partially unknown\n  Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\""
+          },
+          {
+            "line": 373,
+            "column": 9,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"entry\" is partially unknown\n  Type of \"entry\" is \"Unknown | None\""
+          },
+          {
+            "line": 379,
+            "column": 25,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"value\" in function \"put\"\n  Argument type is \"dict[Unknown, Unknown]\""
+          },
+          {
+            "line": 439,
+            "column": 28,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"data\" in function \"__init__\"\n  Argument type is \"dict[Unknown, Unknown]\""
+          },
+          {
+            "line": 439,
+            "column": 47,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"data\" in function \"layout\"\n  Argument type is \"dict[Unknown, Unknown]\""
+          }
+        ],
+        "internal/shared/sync.py": [
+          {
+            "line": 179,
+            "column": 13,
+            "rule": "reportDeprecated",
+            "message": "The function \"contextmanager\" is deprecated\n  Annotating the return type as `-> Iterator[Foo]` with `@contextmanager` is deprecated. Use `-> Generator[Foo]` instead."
+          }
+        ],
+        "templates/shared-skill-scripts/facts.py": [
+          {
+            "line": 410,
+            "column": 13,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"append\" is partially unknown\n  Type of \"append\" is \"(object: Unknown, /) -> None\""
+          },
+          {
+            "line": 412,
+            "column": 13,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"append\" is partially unknown\n  Type of \"append\" is \"(object: Unknown, /) -> None\""
+          },
+          {
+            "line": 413,
+            "column": 21,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"iterable\" in function \"join\"\n  Argument type is \"list[Unknown]\""
+          },
+          {
+            "line": 558,
+            "column": 17,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"append\" is partially unknown\n  Type of \"append\" is \"(object: Unknown, /) -> None\""
+          },
+          {
+            "line": 559,
+            "column": 29,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"iterable\" in function \"join\"\n  Argument type is \"list[Unknown]\""
+          },
+          {
+            "line": 681,
+            "column": 9,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"parts\" is partially unknown\n  Type of \"parts\" is \"list[str] | list[Unknown]\""
+          },
+          {
+            "line": 682,
+            "column": 35,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"part\" is partially unknown\n  Type of \"part\" is \"str | Unknown\""
+          },
+          {
+            "line": 682,
+            "column": 26,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"iterable\" in function \"join\"\n  Argument type is \"Generator[str | Unknown, None, None]\""
+          }
+        ],
+        "templates/skills/handoff/issue_status.py": [
+          {
+            "line": 162,
+            "column": 12,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"get\" is partially unknown\n  Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\""
+          },
+          {
+            "line": 162,
+            "column": 5,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"data\" is partially unknown\n  Type of \"data\" is \"Unknown | None\""
+          },
+          {
+            "line": 167,
+            "column": 18,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"get\" is partially unknown\n  Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\""
+          },
+          {
+            "line": 167,
+            "column": 9,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"error\" is unknown"
+          },
+          {
+            "line": 168,
+            "column": 16,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"get\" is partially unknown\n  Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\""
+          },
+          {
+            "line": 168,
+            "column": 9,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"path\" is partially unknown\n  Type of \"path\" is \"Unknown | None\""
+          },
+          {
+            "line": 170,
+            "column": 44,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"get\" is partially unknown\n  Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)] | Unknown\""
+          },
+          {
+            "line": 170,
+            "column": 44,
+            "rule": "reportUnknownArgumentType",
+            "message": "Argument type is partially unknown\n  Argument corresponds to parameter \"object\" in function \"__new__\"\n  Argument type is \"Unknown | Literal['']\""
+          },
+          {
+            "line": 174,
+            "column": 16,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"get\" is partially unknown\n  Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\""
+          },
+          {
+            "line": 174,
+            "column": 9,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"node\" is partially unknown\n  Type of \"node\" is \"Unknown | None\""
+          },
+          {
+            "line": 175,
+            "column": 17,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"get\" is partially unknown\n  Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\""
+          },
+          {
+            "line": 175,
+            "column": 9,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"found\" is partially unknown\n  Type of \"found\" is \"Unknown | None\""
+          },
+          {
+            "line": 176,
+            "column": 17,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"get\" is partially unknown\n  Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\""
+          },
+          {
+            "line": 176,
+            "column": 9,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"state\" is partially unknown\n  Type of \"state\" is \"Unknown | None\""
+          },
+          {
+            "line": 180,
+            "column": 22,
+            "rule": "reportUnknownMemberType",
+            "message": "Type of \"get\" is partially unknown\n  Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\""
+          },
+          {
+            "line": 180,
+            "column": 13,
+            "rule": "reportUnknownVariableType",
+            "message": "Type of \"reason\" is partially unknown\n  Type of \"reason\" is \"Unknown | None\""
+          }
+        ]
+      }
+    }
+  }
+}

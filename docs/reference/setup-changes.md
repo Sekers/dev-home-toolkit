@@ -30,7 +30,9 @@ folder link as a directory junction, which needs no admin rights and no Develope
   - `local-settings.json`: this PC's answers to setup's questions: where your dev-home is,
     whether to install updates automatically, and which extra Claude Code folders to set up,
     and which not to. The scripts read it to find your dev-home. Setup keeps any other key in
-    it, and never overwrites a file it can't read as JSON.
+    it, and never overwrites a file it can't read as JSON, or one with a `schemaVersion` it
+    doesn't know. One in an older layout, from before its settings were grouped, it offers to set
+    aside, as a dated backup beside it, and then asks its questions again.
 - **In each Claude Code folder** (`~\.claude`, plus any extra ones):
   - Links in `skills\` to each skill (this repo's, and your own from dev-home). In `rules\`,
     `dev-home-operating-rules` links to the operating rules, and `dev-home-global-rules` to your

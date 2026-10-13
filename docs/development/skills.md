@@ -1,0 +1,140 @@
+# Skills and everything else under templates/
+
+The rules for changing anything under `templates/`: the skills, the scripts they share, the
+operating rules, and the starter, and for adding a script anywhere. AGENTS.md points here; its
+rules apply too.
+
+## Where things go
+
+- Where a script goes depends on who runs it. The only scripts in the root are the ones a person
+  may run by hand; agents run those too. A script that only agents run goes under
+  `templates/`: in its skill's folder when one skill uses it, and in
+  `templates/shared-skill-scripts/` when skills share it. The same goes for anything else a
+  skill has: one skill's in its own folder, and what several skills share in a
+  `templates/shared-skill-*` folder for its kind.
+- `templates/dev-home-starter/` holds a new dev-home's first files. Setup copies them in once,
+  and after that they're the person's own: a change to the starter never reaches an existing
+  dev-home.
+
+## Templates, generated files, and names
+
+- Every file under `templates/` is a template: setup replaces these placeholders with
+  forward-slash absolute paths.
+  - `{{TOOLS_DIR}}`: this repo's folder on that PC.
+  - `{{CONTENT_DIR}}`: that person's dev-home folder.
+  - `{{SKILL_DIR}}`: the skill's own folder under `internal/.generated/skills/` (skills only).
+  - `{{SHARED_SKILL_SCRIPTS_DIR}}`: the shared scripts' folder,
+    `internal/.generated/shared-skill-scripts/`.
+  - `{{PYTHON}}`: `internal/.python/python.exe` in this repo's folder, the Python the scripts
+    run with. `internal/.python/` is a junction setup makes to a Python 3.12 or later, so the
+    path is short, has no spaces, and is the same on every PC.
+  - `{{SKILL_STAMP}}`: the skill's stamp, a fingerprint of its `SKILL.md` (skills only). See
+    "Skills" below.
+- `templates/operating-rules/`, `templates/skills/`, and `templates/shared-skill-scripts/` are
+  filled in on every setup run and written to `internal/.generated/`, at the same paths. The
+  skills and rules there are what gets linked into the tools, and the skills run the shared
+  scripts from there. The starter has no copy there, because setup fills it in only once (see
+  AGENTS.md's "The two repos"). Python adds `__pycache__` folders there when the scripts run,
+  and setup leaves those, and any link, alone.
+- A file and its folder keep the same name at every stage: template, generated copy, and link,
+  such as `operating-rules/operating-rules.md`. The links in each Claude Code folder's `rules/`
+  are the exception: nothing there says which repo a name belongs to, so each is named
+  `dev-home-` plus the folder it points to.
+- Pre-approvals in `allowed-tools` match the literal command text, so write every command with a
+  placeholder where the path goes, never a variable or `~`. After setup fills it in, the command
+  in the steps and the pre-approval match exactly.
+
+## Skills (templates/skills/)
+
+- Frontmatter uses only standard fields: `name`, `description`, and `allowed-tools`. The name
+  matches the folder name.
+- Refer to a skill's own files through `{{SKILL_DIR}}`, to a shared script through
+  `{{SHARED_SKILL_SCRIPTS_DIR}}`, and to anything else through `{{TOOLS_DIR}}` or
+  `{{CONTENT_DIR}}`.
+- Run a shared script as `{{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/<script>.py`, followed by
+  `--skill <the skill's name> --stamp {{SKILL_STAMP}}` and its own arguments. Setup stamps each
+  skill with a fingerprint of its `SKILL.md`, and the script compares the stamp it's given with
+  the one on disk, so a session following steps that have changed since it loaded them is told
+  to stop. Every skill command that syncs starts with `prepare.py`. Tests check all of this.
+- Run a script in the skill's own folder as `{{PYTHON}} -I {{SKILL_DIR}}/<script>.py`. It takes
+  no stamp when it runs only after the skill's start-up command, which has just checked it.
+  The shared scripts' rules for code apply to it too: Python 3.12 or later, the standard library
+  only, and ASCII only (tests check both).
+- Write steps in plain language, and write commands exactly as they will be run, with
+  forward-slash paths, so they work in Git Bash, PowerShell, and Codex.
+- Leave commands that publish outside dev-home, such as `gh issue create`, out of
+  `allowed-tools`. Whether they ask first is each person's choice, in their own settings.
+- Give each command both a `Bash(...)` and a `PowerShell(...)` pre-approval, as the Python
+  commands and `gh issue list` have (a test checks the Python ones). Add no command that starts
+  PowerShell (`pwsh`): dev-home-tools doesn't need it, and Claude Code's PowerShell tool asks
+  before running any command that starts another PowerShell, even one a `PowerShell(...)` rule
+  matches exactly (a test checks the generated skills).
+- Each skill stands on its own. Mention another skill only where that's part of how this one
+  works.
+- A skill's rules for when it may change, commit, and push live in that skill, not in the
+  operating rules or anyone's global rules.
+- Some skills have similar rules. When you change a rule in one skill, check whether another skill
+  has a similar rule that might need the same change. That it does is never a given: decide from
+  how each skill works.
+- After changing a skill, read it as AGENTS.md's "Clarity for agents" says, looking for anything
+  an agent could misread or slip through: two rules that disagree, a question whose answer is
+  unclear, a step the scripts can't do, or wording that only fits Claude Code.
+- Every question that offers something a person can take or turn down uses the answers in
+  [Offers use the same answers](decisions/offers-use-the-same-answers.md). To depart from them,
+  ask the developer first, then add the departure and its reason to that decision.
+- When you propose a commit that changes a skill's `SKILL.md`, say in chat about how many words
+  it gained or lost.
+- A skill that starts a second agent, as `/handoff audit` does, tells the end user before it
+  starts, since that agent's tokens come on top of the session's.
+- The handoff template has no line pointing agents to the handoff skill; the operating rules do
+  that, in every session.
+
+## Scripts the skills share (templates/shared-skill-scripts/)
+
+- These are scripts that only agents run, and that more than one skill may run. Skills point to
+  the one generated copy; never copy a script into each skill's folder.
+  [Scripts the skills share are generated once, and skills point to them](decisions/scripts-the-skills-share-are-generated-once-and-skills-point-to-them.md)
+  says why, and why they aren't at the root or in `internal/`.
+- One job per script, named for the job. `facts.py` reports facts about where a session is
+  running, one topic at a time. `prepare.py` prepares dev-home for a skill command: it runs the
+  sync inside its own process, checks the skill's stamp, then prints the facts for the topics
+  it's given.
+- Every skill command that syncs starts with `prepare.py`, so the agent gets everything it needs
+  before its own work in one call. Anything a skill needs at that point that takes no judgment
+  goes in the scripts, not in steps for the agent. `prepare.py` always exits 0 and says
+  everything in its lines, and it never commits: skills commit through `sync.py --message`.
+- `facts.py` only reports, and only from this PC: it changes nothing and never uses the network.
+  That's what makes it safe to pre-approve, and a test reads its code for both. Anything a skill
+  needs done, rather than told, goes in a script of its own.
+- `prepare.py` loads `facts.py` into its own process, after a sync that may have brought in a
+  newer `facts.py` than the `prepare.py` already running. So keep the names and arguments of
+  what `prepare.py` calls there, and `facts.py` changes nothing the whole process shares, such as
+  environment variables or the current folder, outside its `__main__` block (a test checks).
+- Python 3.12 or later, the standard library only, and ASCII only (tests check both). Both
+  scripts write UTF-8, and read git's output as UTF-8, so an accented letter reaches the agent as
+  it is. They find a program such as git by its full path in `PATH`, never in the current folder,
+  which is a project's.
+- A topic's lines are what skills build on. Add a topic freely: it costs nothing until a skill's
+  command asks for it, and that's the change to ask the developer about (AGENTS.md's "AI
+  usage"). Change or remove a line only after reading every skill that asks for its topic.
+- Each script's description has a "Called by:" line naming the skills that run it. Read those
+  skills before changing what the script takes or prints, and update the line when a skill starts
+  or stops running it. A test compares the line with the skills.
+- A skill writes each command in full, with fixed arguments, and pre-approves that exact text,
+  never a wildcard. A test checks that the two match.
+
+## Operating rules (templates/operating-rules/operating-rules.md)
+
+- These are the rules every session follows so that a person's dev-home and this tooling work
+  together: the same for everyone, and not theirs to edit.
+- Keep the first heading, "Private repo: dev-home (rules loaded)". The handoff skill checks for
+  it.
+- Only rules the skills and scripts depend on belong here. Personal preferences go in each
+  person's global rules, `global-rules/global-rules.md` in their dev-home, which load along with
+  these and win where the two conflict.
+- Claude Code loads both through links in each Claude folder's `rules/`, such as
+  `~/.claude/rules/dev-home-operating-rules` and `~/.claude/rules/dev-home-global-rules`. Codex
+  reads only one file, so setup writes `~/.codex/AGENTS.md` as the two joined, reading each by
+  name. So a person's `global-rules/` holds that one file. Keep the operating rules short: they
+  load in every session.
+- Codex's own `~/.codex/rules/` holds command policies, not these, and setup never touches it.

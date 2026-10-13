@@ -439,17 +439,16 @@ def test_the_claude_folder_in_claude_config_dir(box: Sandbox) -> None:
             r"whether to set it up\. Run setup\.py without --quiet: it asks about the folder"
         )
         assert result.code == 1 and result.has_line(pattern), str(result)
-        assert not result.has_line("claudeConfigDirs"), str(result)
-        # A folder setup doesn't offer is added to the list by hand.
+        assert not result.has_line("claudeCode.folders"), str(result)
+        # A folder setup doesn't offer is added by hand, through --configure.
         result = setup(box, env={"CLAUDE_CONFIG_DIR": str(other)})
         pattern = (
-            r'^PROBLEM\s+Claude Code settings in claude-alt: .* Add "~/claude-alt" to '
-            r"claudeConfigDirs in .*local-settings\.json, then run setup\.py without --quiet, "
-            "and it offers"
+            r"^PROBLEM\s+Claude Code settings in claude-alt: .* Run setup\.py --configure "
+            r"'claudeCode\.folders\+=~/claude-alt', then setup\.py without --quiet, and it offers"
         )
         assert result.code == 1 and result.has_line(pattern), str(result)
         listed = json.loads(settings_text)
-        listed["claudeConfigDirs"] = ["~/.claude-second"]
+        listed["claudeCode"] = {"folders": {"~/.claude-second": {"setUp": True}}}
         write_text(settings_path, json.dumps(listed, indent=2) + "\n")
         result = setup(box, env={"CLAUDE_CONFIG_DIR": str(session)})
         pattern = (
@@ -457,7 +456,7 @@ def test_the_claude_folder_in_claude_config_dir(box: Sandbox) -> None:
             "--quiet, and it offers"
         )
         assert result.code == 1 and result.has_line(pattern), str(result)
-        assert not result.has_line("claudeConfigDirs"), str(result)
+        assert not result.has_line("claudeCode.folders"), str(result)
         assert not result.has_line("hasn't asked"), str(result)
     finally:
         write_text(settings_path, settings_text)
@@ -472,7 +471,7 @@ def test_a_claude_folder_with_a_no_is_left_alone_even_from_a_session_there(box: 
     settings_path = box.tools / "local-settings.json"
     settings_text = read(settings_path)
     declined = json.loads(settings_text)
-    declined["declinedClaudeConfigDirs"] = ["~/.claude-declined"]
+    declined["claudeCode"] = {"folders": {"~/.claude-declined": {"setUp": False}}}
     write_text(settings_path, json.dumps(declined, indent=2) + "\n")
     try:
         result = setup(box, env={"CLAUDE_CONFIG_DIR": str(session)})
@@ -481,6 +480,44 @@ def test_a_claude_folder_with_a_no_is_left_alone_even_from_a_session_there(box: 
         remove_claude_folder(session)
     assert result.code == 0, str(result)
     assert not result.has_line("claude-declined"), str(result)
+
+
+def test_a_default_folder_with_a_no_is_left_alone(box: Sandbox) -> None:
+    # A test profile of its own, since a no leaves the links an earlier yes made.
+    settings_path = box.tools / "local-settings.json"
+    settings_text = read(settings_path)
+    declined = json.loads(settings_text)
+    declined["claudeCode"] = {"folders": {"~/.claude": {"setUp": False}}}
+    declined["codex"] = {"homes": {"~/.codex": {"setUp": False}}}
+    profile = box.root / "declined-profile"
+    for folder in (".claude", ".codex"):
+        (profile / folder).mkdir(parents=True)
+    declined["testHomeDir"] = profile.as_posix()
+    write_text(settings_path, json.dumps(declined, indent=2) + "\n")
+    try:
+        result = setup(box)
+    finally:
+        write_text(settings_path, settings_text)
+    assert result.code == 0, str(result)
+    assert not (profile / ".claude" / "skills").exists(), str(result)
+    assert not (profile / ".codex" / "AGENTS.md").exists(), str(result)
+    assert not (profile / ".agents").exists(), str(result)
+
+
+def test_a_folder_answered_yes_that_is_gone_is_skipped_without_a_word(box: Sandbox) -> None:
+    settings_path = box.tools / "local-settings.json"
+    settings_text = read(settings_path)
+    gone = json.loads(settings_text)
+    gone["claudeCode"] = {"folders": {"~/.claude-gone": {"setUp": True}}}
+    write_text(settings_path, json.dumps(gone, indent=2) + "\n")
+    try:
+        result = setup(box)
+        shown = run_python(box, "setup.py", "--configure")
+    finally:
+        write_text(settings_path, settings_text)
+    assert result.code == 0, str(result)
+    assert not result.has_line("claude-gone"), str(result)
+    assert shown.has_line(r"~/\.claude-gone: yes \(not found\)"), str(shown)
 
 
 def test_a_changed_template_reaches_the_generated_copy_and_codexs_rules(box: Sandbox) -> None:
@@ -654,7 +691,8 @@ def test_a_new_dev_home_folder_is_saved_with_test_home_dir_kept(box: Sandbox) ->
         saved = json.loads(read(settings))
     finally:
         write_text(settings, before)
-    assert saved["contentDir"].endswith("another-dev-home")
+    assert saved["schemaVersion"] == 1, saved
+    assert saved["devHome"]["folder"].endswith("another-dev-home")
     assert saved["testHomeDir"] == forward(box.profile)
     # With --quiet, a missing dev-home is reported instead of asked about.
     assert result.code == 1 and result.has_line("There is no dev-home"), str(result)
@@ -695,70 +733,84 @@ def test_keeps_settings_it_doesnt_know_and_leaves_auto_update_out_until_answered
     settings = box.tools / "local-settings.json"
     before = read(settings)
     edited = json.loads(before)
-    del edited["autoUpdate"]
+    del edited["updates"]
     edited["somethingNewer"] = {"kept": True}
+    edited["devHome"]["typo"] = 1
     write_text(settings, json.dumps(edited, indent=2) + "\n")
     try:
-        setup(box, "--content-dir", str(box.root / "yet-another-dev-home"))
+        result = setup(box, "--content-dir", str(box.root / "yet-another-dev-home"))
         saved = json.loads(read(settings))
     finally:
         write_text(settings, before)
-    assert saved["contentDir"].endswith("yet-another-dev-home")
+    assert saved["devHome"]["folder"].endswith("yet-another-dev-home")
     assert saved["somethingNewer"] == {"kept": True}
-    assert "autoUpdate" not in saved
-    assert "declinedClaudeConfigDirs" not in saved
+    assert saved["devHome"]["typo"] == 1
+    assert "updates" not in saved and "claudeCode" not in saved, saved
+    # Each key setup doesn't know is named, so typos and leftovers show.
+    for name in ("somethingNewer", r"devHome\.typo"):
+        pattern = rf"^PROBLEM\s+local-settings\.json has {name}, which setup doesn't know"
+        assert result.has_line(pattern), str(result)
 
 
-def test_reports_a_check_interval_that_isnt_whole_hours(box: Sandbox) -> None:
+def test_reports_a_value_of_the_wrong_kind_and_what_it_counts_as(box: Sandbox) -> None:
     settings = box.tools / "local-settings.json"
     before = read(settings)
     edited = json.loads(before)
-    edited.update({"updateCheckHours": "6", "contentCheckHours": -1})
+    edited["updates"].update({"checkEveryHours": "6", "installAutomatically": "yes"})
+    edited["devHome"]["checkEveryHours"] = -1
+    edited["claudeCode"] = {"folders": {"~/.claude-x": {"setUp": 1}}}
     write_text(settings, json.dumps(edited, indent=2) + "\n")
     try:
         result = setup(box)
     finally:
         write_text(settings, before)
     assert result.code == 1, str(result)
-    for key, value, default in (("updateCheckHours", '"6"', 24), ("contentCheckHours", "-1", 12)):
+    hours = "a whole number of hours, 0 or more"
+    for path, value, wanted, counts_as in (
+        (r"updates\.checkEveryHours", '"6"', hours, "every 24 hours"),
+        (r"devHome\.checkEveryHours", "-1", hours, "every 12 hours"),
+        (r"updates\.installAutomatically", '"yes"', "true or false", "not answered yet"),
+        (r"claudeCode\.folders ~/\.claude-x: setUp", "1", "true or false", "not answered yet"),
+    ):
         pattern = (
-            rf"^PROBLEM\s+{key} in .* is {value}, which isn't a whole number of hours, 0 or "
-            rf"more, so it counts as {default}\."
+            rf"^PROBLEM\s+{path} in local-settings\.json is {value}, which isn't {wanted}, so it "
+            rf"counts as {counts_as}\."
         )
         assert result.has_line(pattern), str(result)
 
 
-def test_reports_a_switch_that_isnt_true_or_false(box: Sandbox) -> None:
+@pytest.mark.parametrize(
+    ("version", "said"),
+    [
+        (
+            None,
+            r"is in an older layout, from before its settings were grouped, so setup can't read "
+            r"it\. Run .*setup\.py in a terminal: it offers to set the file aside",
+        ),
+        ("2", r"has a schemaVersion this dev-home-tools doesn't know, perhaps written by a newer"),
+    ],
+    ids=["older layout", "unknown version"],
+)
+def test_a_quiet_run_stops_at_settings_in_another_layout_and_saves_nothing(
+    box: Sandbox, version: str | None, said: str
+) -> None:
     settings = box.tools / "local-settings.json"
     before = read(settings)
     edited = json.loads(before)
-    edited["offerSecurityBugs"] = "no"
-    write_text(settings, json.dumps(edited, indent=2) + "\n")
+    if version is None:
+        del edited["schemaVersion"]
+    else:
+        edited["schemaVersion"] = version
+    text = json.dumps(edited, indent=2) + "\n"
+    write_text(settings, text)
     try:
         result = setup(box)
+        kept = read(settings)
     finally:
         write_text(settings, before)
-    assert result.code == 1, str(result)
-    pattern = (
-        r'^PROBLEM\s+offerSecurityBugs in .* is "no", which isn\'t true or false, so it counts '
-        r"as true\."
-    )
-    assert result.has_line(pattern), str(result)
-
-
-@pytest.mark.parametrize(
-    ("value", "yes", "usable"),
-    [
-        (None, True, True),
-        (False, False, True),
-        (True, True, True),
-        ("no", True, False),
-        (0, True, False),
-    ],
-)
-def test_reads_a_switch(box: Sandbox, value: object, yes: bool, usable: bool) -> None:
-    data = {} if value is None else {"offerSecurityBugs": value}
-    assert shared_module(box, "settings").switch_setting(data, "offerSecurityBugs") == (yes, usable)
+    assert result.code == 1 and result.has_line(rf"^PROBLEM\s+.*{said}"), str(result)
+    assert kept == text
+    assert not list(settings.parent.glob("local-settings.json.bak-*"))
 
 
 @pytest.mark.parametrize(
@@ -766,8 +818,8 @@ def test_reads_a_switch(box: Sandbox, value: object, yes: bool, usable: bool) ->
     [(None, 12, True), (0, 0, True), (6, 6, True), (True, 12, False), (1.5, 12, False)],
 )
 def test_reads_a_check_interval(box: Sandbox, value: object, hours: int, usable: bool) -> None:
-    data = {} if value is None else {"contentCheckHours": value}
-    found = shared_module(box, "settings").hours_setting(data, "contentCheckHours")
+    data = {} if value is None else {"devHome": {"checkEveryHours": value}}
+    found = shared_module(box, "settings").hours_setting(data, "devHome.checkEveryHours")
     assert found == (hours, usable)
 
 
@@ -805,7 +857,7 @@ def test_says_so_when_it_cant_save_its_settings(box: Sandbox) -> None:
     ("text", "says"),
     [
         (None, r"dev-home has no answer yet to whether it's in active use anywhere besides this "),
-        ('{"other": 1}\n', r"dev-home has no answer yet"),
+        ('{"schemaVersion": 1, "other": 1}\n', r"dev-home has no answer yet"),
         ("[true]\n", r"dev-home\.json could not be read as a JSON object of settings, so setup "),
     ],
     ids=["no file", "no answer", "not an object"],
@@ -852,11 +904,7 @@ def test_configure_alone_shows_the_settings_and_how_to_change_them(
     assert result.has_line(r"^\s+2\s+Install dev-home-tools updates automatically\s+no$"), str(
         result
     )
-    assert result.has_line(
-        r"^\s+6\s+Offer security bugs as GitHub issues\s+yes \(the default\)$"
-    ), str(result)
-    assert result.has_line(r"^\s+7\s+Copies of dev-home in active use\s+several$"), str(result)
-    assert result.has_line(r"^\s+offerSecurityBugs=true\|false\s"), str(result)
+    assert result.has_line(r"^\s+6\s+Copies of dev-home in active use\s+several$"), str(result)
     assert result.has_line(r"^\s+multiMachine=true\|false\s"), str(result)
     assert not result.has_line("All checks passed"), str(result)
     assert read(settings_kept) == before
@@ -864,28 +912,18 @@ def test_configure_alone_shows_the_settings_and_how_to_change_them(
 
 def test_configure_changes_one_setting_with_a_backup(box: Sandbox, settings_kept: Path) -> None:
     before = read(settings_kept)
-    result = setup_configure(box, "autoUpdate=true")
+    result = setup_configure(box, "updates.installAutomatically=true")
     assert result.code == 0, str(result)
     assert result.has_line(r"^CHANGE\s+This PC's settings: "), str(result)
-    assert result.has_line(r'^\s+\+\s+"autoUpdate": true,$'), str(result)
+    assert result.has_line(r'^\s+\+\s+"installAutomatically": true$'), str(result)
     assert result.has_line(r"^SET\s+This PC's settings: .* Backup of the old file: "), str(result)
-    assert json.loads(read(settings_kept))["autoUpdate"] is True
+    assert json.loads(read(settings_kept))["updates"]["installAutomatically"] is True
     backups = list(settings_kept.parent.glob("local-settings.json.bak-*"))
     assert len(backups) == 1 and read(backups[0]) == before
     # A second run finds it already set.
-    again = setup_configure(box, "autoUpdate=true")
-    assert again.code == 0 and again.has_line(r"^OK\s+autoUpdate is already set that way"), str(
-        again
-    )
-
-
-def test_configure_turns_off_offering_security_bugs(box: Sandbox, settings_kept: Path) -> None:
-    result = setup_configure(box, "offerSecurityBugs=false")
-    assert result.code == 0, str(result)
-    assert result.has_line(r'^\s+\+\s+"offerSecurityBugs": false$'), str(result)
-    assert json.loads(read(settings_kept))["offerSecurityBugs"] is False
-    shown = run_python(box, "setup.py", "--configure")
-    assert shown.has_line(r"^\s+6\s+Offer security bugs as GitHub issues\s+no$"), str(shown)
+    again = setup_configure(box, "updates.installAutomatically=true")
+    pattern = r"^OK\s+updates\.installAutomatically is already set that way"
+    assert again.code == 0 and again.has_line(pattern), str(again)
 
 
 def test_git_ignores_this_pcs_settings_and_what_saving_them_leaves_beside_them(
@@ -911,9 +949,9 @@ def test_configure_what_if_shows_the_change_and_makes_none(
     box: Sandbox, settings_kept: Path
 ) -> None:
     before = read(settings_kept)
-    result = setup_configure(box, "contentCheckHours=6", "--what-if")
+    result = setup_configure(box, "devHome.checkEveryHours=6", "--what-if")
     assert result.code == 0, str(result)
-    assert result.has_line(r'^\s+\+\s+"contentCheckHours": 6$'), str(result)
+    assert result.has_line(r'^\s+\+\s+"checkEveryHours": 6$'), str(result)
     assert result.has_line(r"^What if: Save this PC's settings"), str(result)
     assert read(settings_kept) == before
 
@@ -927,29 +965,42 @@ def test_the_dev_home_skills_configure_commands_work_as_written(
     configure = f"{box.python.as_posix()} -I {forward(box.tools)}/setup.py --configure"
     commands = re.findall(rf"`({re.escape(configure)}[^`]*)`", text)
     assert len(commands) == 3, commands
-    show, preview, change = (c.replace("'<name>=<value>'", "contentCheckHours=6") for c in commands)
+    show, preview, change = (
+        c.replace("'<name>=<value>'", "devHome.checkEveryHours=6") for c in commands
+    )
     before = read(settings_kept)
     shown = run_command(box, show, cwd=box.root)
     assert shown.code == 0 and shown.has_line(r"^dev-home-tools settings$"), str(shown)
     previewed = run_command(box, preview, cwd=box.root)
-    assert previewed.has_line(r'^\s+\+\s+"contentCheckHours": 6$'), str(previewed)
+    assert previewed.has_line(r'^\s+\+\s+"checkEveryHours": 6$'), str(previewed)
     assert read(settings_kept) == before
     changed = run_command(box, change, cwd=box.root)
     assert changed.code == 0, str(changed)
-    assert json.loads(read(settings_kept))["contentCheckHours"] == 6
+    assert json.loads(read(settings_kept))["devHome"]["checkEveryHours"] == 6
 
 
 @pytest.mark.parametrize(
     ("setting", "says"),
     [
         ("colour=red", r"There is no setting named colour\."),
-        ("autoUpdate=maybe", r"autoUpdate is true or false, not maybe\."),
-        ("offerSecurityBugs=no", r"offerSecurityBugs is true or false, not no\."),
-        ("updateCheckHours=-1", r"updateCheckHours is a whole number of hours, 0 or more"),
-        ("claudeConfigDirs=~/.claude-x", r"claudeConfigDirs changes one folder at a time"),
-        ("autoUpdate+=true", r"autoUpdate is set with =, as in autoUpdate=<value>\."),
-        ("claudeConfigDirs+=~/.claude-missing", r"There is no Claude Code folder at "),
+        (
+            "updates.installAutomatically=maybe",
+            r"updates\.installAutomatically is true or false, not maybe\.",
+        ),
+        (
+            "updates.checkEveryHours=-1",
+            r"updates\.checkEveryHours is a whole number of hours, 0 or more",
+        ),
+        ("claudeCode.folders=~/.claude-x", r"claudeCode\.folders changes one folder at a time"),
+        (
+            "updates.installAutomatically+=true",
+            r"updates\.installAutomatically is set with =, as in "
+            r"updates\.installAutomatically=<value>\.",
+        ),
+        ("claudeCode.folders+=~/.claude-missing", r"There is no Claude Code folder at "),
         ("nothing", r"--configure takes one setting as <name>=<value>, not nothing\."),
+        ("skills.handoff=true", r"A skill's preference is named skills\.<skill>\.<name>"),
+        ("skills.nobody.tidy=true", r"No skill named nobody declares preferences\."),
     ],
 )
 def test_configure_refuses_a_setting_it_cant_make(
@@ -959,8 +1010,44 @@ def test_configure_refuses_a_setting_it_cant_make(
     result = setup_configure(box, setting)
     assert result.code == 1, str(result)
     assert result.has_line(rf"^PROBLEM\s+{says}.* Nothing was changed\.$"), str(result)
-    assert result.has_line(r"^\s+contentDir=<folder>\s"), str(result)
+    assert result.has_line(r"^\s+devHome\.folder=<folder>\s"), str(result)
     assert read(settings_kept) == before
+
+
+def test_skill_preferences_are_read_checked_and_set(box: Sandbox, settings_kept: Path) -> None:
+    # A preference file only the test has, in a personal skill.
+    declared = box.content / "skills" / "mine" / "dev-home-skill.json"
+    preferences = {
+        "tidyOutput": {"default": True, "label": "Tidy the output", "help": "Whether to tidy."},
+        "broken": {"default": "yes"},
+    }
+    write_text(declared, json.dumps({"preferences": preferences}, indent=2) + "\n")
+    try:
+        changed = setup_configure(box, "skills.mine.tidyOutput=false")
+        saved = json.loads(read(settings_kept))
+        edited = json.loads(read(settings_kept))
+        edited["skills"]["mine"].update({"tidyOutput": "no", "other": True})
+        edited["skills"]["nobody"] = {}
+        write_text(settings_kept, json.dumps(edited, indent=2) + "\n")
+        checked = setup(box)
+        refused = setup_configure(box, "skills.mine.broken=true")
+    finally:
+        declared.unlink()
+    # The broken preference is reported on every run, so the change exits 1 too.
+    assert changed.has_line(r'^\s+\+\s+"tidyOutput": false$'), str(changed)
+    assert changed.has_line(r"^SET\s+This PC's settings: "), str(changed)
+    assert saved["skills"] == {"mine": {"tidyOutput": False}}, saved
+    for pattern in (
+        r'skills\.mine\.tidyOutput in local-settings\.json is "no", which isn\'t true or false, '
+        r"so it counts as true, its default\.",
+        r"local-settings\.json has skills\.mine\.other, which setup doesn't know",
+        r"local-settings\.json has skills\.nobody, a skill that declares no preferences,",
+        r"dev-home-skill\.json: the preference broken needs a name with no dots, a default of "
+        r"true or false, and a label, so it was skipped\.",
+    ):
+        assert checked.code == 1 and checked.has_line(rf"^PROBLEM\s+.*{pattern}"), str(checked)
+    pattern = r"The mine skill declares no preference named broken\. It declares: tidyOutput\."
+    assert refused.code == 1 and refused.has_line(pattern), str(refused)
 
 
 def test_configure_sets_content_dir_only_to_a_dev_home(box: Sandbox, settings_kept: Path) -> None:
@@ -969,31 +1056,30 @@ def test_configure_sets_content_dir_only_to_a_dev_home(box: Sandbox, settings_ke
     git("init", "--quiet", "-b", "main", str(other))
     plain = box.root / "configured-plain-folder"
     write_text(plain / "notes.md", "not a dev-home\n")
-    refused = setup_configure(box, f"contentDir={plain}")
-    accepted = setup_configure(box, f"contentDir={other}", "--what-if")
+    refused = setup_configure(box, f"devHome.folder={plain}")
+    accepted = setup_configure(box, f"devHome.folder={other}", "--what-if")
     assert refused.code == 1 and refused.has_line(r"configured-plain-folder isn't a dev-home"), str(
         refused
     )
-    assert accepted.has_line(r'^\s+\+\s+"contentDir": ".*configured-dev-home",$'), str(accepted)
+    assert accepted.has_line(r'^\s+\+\s+"folder": ".*configured-dev-home"$'), str(accepted)
 
 
 def test_configure_adds_and_removes_a_claude_folder(box: Sandbox, settings_kept: Path) -> None:
     added = box.profile / ".claude-configured"
     write_text(added / "settings.json", "{}\n")
     try:
-        result = setup_configure(box, "claudeConfigDirs+=~/.claude-configured")
+        result = setup_configure(box, "claudeCode.folders+=~/.claude-configured")
         linked = link_target(added / "skills" / "handoff")
-        listed = json.loads(read(settings_kept))["claudeConfigDirs"]
-        removed = setup_configure(box, "claudeConfigDirs-=~/.claude-configured")
+        listed = json.loads(read(settings_kept))["claudeCode"]["folders"]
+        removed = setup_configure(box, "claudeCode.folders-=~/.claude-configured")
         saved = json.loads(read(settings_kept))
     finally:
         remove_claude_folder(added)
     assert result.has_line(r"^SET\s+This PC's settings"), str(result)
-    assert listed == ["~/.claude-configured"]
+    assert listed == {"~/.claude-configured": {"setUp": True}}
     assert linked == box.generated / "skills" / "handoff"
     assert removed.code == 0, str(removed)
-    assert saved["claudeConfigDirs"] == []
-    assert saved["declinedClaudeConfigDirs"] == ["~/.claude-configured"]
+    assert saved["claudeCode"]["folders"] == {"~/.claude-configured": {"setUp": False}}
 
 
 def test_configure_switches_copies_then_commits_and_pushes_it(box: Sandbox) -> None:
@@ -1011,7 +1097,7 @@ def test_configure_switches_copies_then_commits_and_pushes_it(box: Sandbox) -> N
 
 
 def test_configure_doesnt_go_with_quiet(box: Sandbox) -> None:
-    result = setup(box, "--configure", "autoUpdate=true")
+    result = setup(box, "--configure", "updates.installAutomatically=true")
     assert result.code == 1, str(result)
     assert result.has_line(r"^PROBLEM\s+--configure doesn't go with --quiet"), str(result)
 
@@ -1057,7 +1143,7 @@ def test_refuses_a_dev_home_at_the_root_of_a_drive(box: Sandbox, form: str) -> N
     before = read(settings)
     edited = json.loads(before)
     root = Path(box.root.anchor).as_posix()
-    edited["contentDir"] = root if form == "root" else f"{root}dev-home/.."
+    edited["devHome"]["folder"] = root if form == "root" else f"{root}dev-home/.."
     write_text(settings, json.dumps(edited, indent=2) + "\n")
     try:
         result = setup(box)
@@ -1097,7 +1183,7 @@ def test_what_if_changes_nothing(box: Sandbox) -> None:
     template_bytes, rules_bytes = template.read_bytes(), generated_rules.read_bytes()
     settings_bytes = settings.read_bytes()
     unset = json.loads(settings_bytes)
-    unset["contentDir"] = ""
+    unset["devHome"]["folder"] = ""
     write_text(settings, json.dumps(unset, indent=2) + "\n")
     unset_bytes = settings.read_bytes()
     remove_link(link)

@@ -17,7 +17,7 @@ dev-home-tools' settings. The exact steps agents follow are in the skill itself:
   another session's work in progress, so it's left alone unless you say it's yours. What the
   sync's status words mean is in [The scripts](../reference/scripts.md#what-they-report).
 - **Settings change only through setup.** The agent runs `setup.py --configure` with the one
-  setting you agreed on, such as `contentCheckHours=6`: first with `--what-if`, to show you the
+  setting you agreed on, such as `devHome.checkEveryHours=6`: first with `--what-if`, to show you the
   change, then for real after your yes. Setup checks the value, and keeps a dated backup of
   `local-settings.json`.
 - **One setting is shared by every copy:** whether dev-home is in active use anywhere besides

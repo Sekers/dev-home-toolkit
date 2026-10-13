@@ -6,7 +6,7 @@ steps agents follow are in the skill itself:
 
 | Command | What it does |
 | --- | --- |
-| `/handoff` | Syncs your dev-home with GitHub, then summarizes this project's handoff, starting with Next up, with a link to the file. If the project has commits since the one the handoff last checked, it says how many and what they cover. If this copy of the project lacks commits that check had, it says to pull first. |
+| `/handoff` | Syncs your dev-home, then summarizes this project's handoff, starting with Next up, with a link to the file. If the project has commits since the one the handoff last checked, it says how many and what they cover. If this copy of the project lacks commits that check had, it says to pull first. |
 | `/handoff <question>` | The same, then answers the question. |
 | `/handoff update` | Brings the whole handoff up to date, including what this session decided, built, changed, and learned, and lists where each went so you can spot a gap. If Next up looks done, asks before clearing it. |
 | `/handoff update <text>` | The same, with your text worked in, in any words. The text can also set, add to, or clear Next up. |
@@ -73,6 +73,12 @@ is your go-ahead. Some examples:
   where the work moved, or keep it. An item can also link related issues that hold part of
   what's known, under "See also:", when its own issue doesn't link to them; those links stay
   until the item is done, and closing changes nothing for them.
+- **How often it checks GitHub depends on how many copies of dev-home you use.** Every handoff
+  command syncs first. With dev-home in active use on several copies, such as two PCs, that sync
+  checks GitHub every time, so you see your other copies' latest changes; with one, only once 12
+  hours have passed since the last check, since nothing else changes it. `/dev-home configure`
+  switches between the two. See
+  [How often a sync checks GitHub](../reference/scripts.md#how-often-a-sync-checks-github).
 - **In Codex, handoff commands edit but don't commit.** On Windows, Codex runs even the commands
   you approve inside its sandbox, where git and `gh` can't use your GitHub credentials. So the
   next `/handoff` in Claude Code lists the file, and offers to commit and push it once nobody has

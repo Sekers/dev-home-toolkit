@@ -40,14 +40,16 @@ SANDBOX_ROOT = REPO_ROOT / "internal" / "development" / ".test-sandbox"
 
 # What a sandbox's copy leaves out, by its path in the repo: what belongs to this PC (including
 # the Python link, which would copy the Python install), and everything for development, the
-# sandboxes among it. Python's __pycache__ folders are left out wherever they are.
+# sandboxes among it. Python's __pycache__ folders are left out wherever they are, and so is
+# everything in the root whose name starts with SETTINGS_FILES: this PC's settings, their dated
+# backups, and the new copy a save leaves beside them.
 NOT_COPIED = {
     ".git",
-    "local-settings.json",
     "internal/.generated",
     "internal/.python",
     "internal/development",
 }
+SETTINGS_FILES = "local-settings.json"
 
 
 @dataclass(frozen=True)
@@ -78,7 +80,7 @@ class Sandbox:
 
     @property
     def upstream(self) -> Path:
-        """A second clone of tools_remote, standing in for the maintainer pushing updates."""
+        """A second clone of tools_remote, standing in for the developer pushing updates."""
         return self.root / "tools-upstream"
 
     @property
@@ -226,13 +228,19 @@ def new_sandbox(name: str, *, tools_repo: bool = False) -> Sandbox:
 
     def leave_out(folder: str, names: list[str]) -> set[str]:
         here = Path(folder).relative_to(REPO_ROOT)
-        return {n for n in names if n == "__pycache__" or (here / n).as_posix() in NOT_COPIED}
+        return {
+            n
+            for n in names
+            if n == "__pycache__"
+            or (here / n).as_posix() in NOT_COPIED
+            or (here == Path() and n.startswith(SETTINGS_FILES))
+        }
 
     shutil.copytree(REPO_ROOT, box.tools, ignore=leave_out)
     settings = {
-        "contentDir": box.content.as_posix(),
-        "autoUpdate": False,
-        "claudeConfigDirs": [],
+        "schemaVersion": 1,
+        "devHome": {"folder": box.content.as_posix()},
+        "updates": {"installAutomatically": False},
         "testHomeDir": box.profile.as_posix(),
     }
     write_text(box.tools / "local-settings.json", json.dumps(settings, indent=2) + "\n")
@@ -253,7 +261,7 @@ def new_sandbox(name: str, *, tools_repo: bool = False) -> Sandbox:
     git("clone", "--quiet", str(box.remote), str(box.content))
     # Several active copies, so a sync fetches every time unless a test says otherwise.
     files = {
-        "dev-home.json": '{\n  "multiMachine": true\n}\n',
+        "dev-home.json": '{\n  "schemaVersion": 1,\n  "multiMachine": true\n}\n',
         "global-rules/global-rules.md": "# My rules\n\n- Personal rule one.\n",
         "knowledge/README.md": "# Knowledge base\n",
         "handoffs/demo/HANDOFF.md": "# demo handoff\n",

@@ -104,7 +104,7 @@ def test_the_dev_home_skills_sync_fetches_every_time(box: Sandbox, project: Path
     # Even when dev-home is set to one copy, and a fetch has just been made.
     settings = box.content / "dev-home.json"
     before = settings.read_bytes()
-    write_text(settings, '{\n  "multiMachine": false\n}\n')
+    write_text(settings, '{\n  "schemaVersion": 1,\n  "multiMachine": false\n}\n')
     try:
         run_command(box, skill_command(box, "handoff", "prepare.py"), cwd=project)
         result = run_command(box, skill_command(box, "dev-home", "prepare.py"), cwd=project)

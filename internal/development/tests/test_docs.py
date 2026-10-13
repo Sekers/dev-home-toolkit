@@ -1,4 +1,5 @@
-"""README.md and docs/, read without running anything: links, headings, and the pages for skills."""
+"""README.md, docs/, and the rest of the repo's text, read without running anything: links,
+headings, the pages for skills, and the words for the developer."""
 
 import re
 from pathlib import Path
@@ -171,9 +172,12 @@ def test_every_link_to_a_heading_points_to_one_that_exists() -> None:
 
 
 def test_the_readme_links_to_every_page_under_docs() -> None:
-    # The README's table is the only list of the pages, so a page it leaves out can't be found.
-    from_readme = {file for _, file, _ in linked_files(REPO_ROOT / "README.md")}
-    unlisted = [name(page) for page in pages()[1:] if page.resolve() not in from_readme]
+    # The README's table lists the pages, and a folder of many, such as the decisions, lists its
+    # own on an index page the README links. A page neither lists can't be found.
+    listed = {file for _, file, _ in linked_files(REPO_ROOT / "README.md")}
+    for index in [file for file in listed if file.name == "index.md"]:
+        listed |= {file for _, file, _ in linked_files(index)}
+    unlisted = [name(page) for page in pages()[1:] if page.resolve() not in listed]
     assert unlisted == []
 
 
@@ -188,6 +192,39 @@ def test_the_readme_links_to_each_skills_page_never_its_skill_file() -> None:
     # A skill's page is written for people and its SKILL.md for agents.
     from_readme = [name(file) for _, file, _ in linked_files(REPO_ROOT / "README.md")]
     assert [f for f in from_readme if f.endswith("/SKILL.md")] == []
+
+
+def written_files() -> list[Path]:
+    """Every Markdown and Python file in the repo, leaving out what tools and setup make."""
+    made = {".git", ".venv", ".test-sandbox", ".generated", ".python", "__pycache__"}
+    return sorted(
+        path
+        for pattern in ("*.md", "*.py")
+        for path in REPO_ROOT.rglob(pattern)
+        if not made.intersection(path.relative_to(REPO_ROOT).parts)
+        and not any(part.endswith("_cache") for part in path.parts)
+    )
+
+
+# The names for the developer that AGENTS.md's "Who's who" section rules out, so that every other
+# word for a person means an end user. Spaced as patterns, so this file doesn't match itself.
+OTHER_NAMES = re.compile(
+    r"\b(?:the|its)\s+(?:author|maintainers?)\b|\bperson\s+you\s+work\s+for\b", re.IGNORECASE
+)
+
+
+def test_no_file_calls_the_developer_anything_but_the_developer() -> None:
+    found: list[str] = []
+    for path in written_files():
+        in_rule = False
+        for number, line in enumerate(lines_of(path), 1):
+            # The section that sets the rule names what it rules out.
+            if path.name == "AGENTS.md" and line.startswith("## "):
+                in_rule = line.startswith("## Who's who")
+            if not in_rule and OTHER_NAMES.search(line):
+                found.append(f"{name(path)}:{number}: {line.strip()}")
+    assert len(written_files()) > 10
+    assert found == []
 
 
 def test_every_skills_page_links_to_its_skill_file() -> None:

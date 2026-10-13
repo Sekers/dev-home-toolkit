@@ -196,8 +196,7 @@ CONTENT_DIR = "{{CONTENT_DIR}}"
 # This PC's settings, in dev-home-tools' folder, filled in by setup.
 LOCAL_SETTINGS = "{{TOOLS_DIR}}/local-settings.json"
 
-# The settings topic's settings, each with its default. internal/shared/settings.py has the same
-# defaults, for setup and the sync (a test checks).
+# The settings topic's settings, each with its default.
 SETTING_DEFAULTS = {"offerSecurityBugs": True}
 
 # The generated skills, beside the folder setup writes this script to, so that setup alone

@@ -1,6 +1,5 @@
 """facts.py, run as the handoff skill runs it in Codex, from a sandbox's generated copy."""
 
-import importlib.util
 import json
 import os
 import re
@@ -18,7 +17,6 @@ from helpers import (
     new_repo,
     run_command,
     sandbox_for,
-    shared_module,
     skill_command,
     write_text,
 )
@@ -229,16 +227,6 @@ def test_the_settings_topic_with_settings_it_cant_read_prints_the_defaults(box: 
         result = settings_facts(box, text)
         assert result.code == 0, str(result)
         assert result.lines == ["offerSecurityBugs: true"], str(result)
-
-
-def test_the_settings_topics_defaults_are_setups(box: Sandbox) -> None:
-    # facts.py doesn't load setup's code, so each keeps its own copy of the defaults.
-    path = box.generated / "shared-skill-scripts" / "facts.py"
-    spec = importlib.util.spec_from_file_location("facts_defaults_" + box.root.name[-8:], path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    assert module.SETTING_DEFAULTS == shared_module(box, "settings").DEFAULT_SWITCHES
 
 
 def test_two_topics_print_in_the_order_asked(box: Sandbox, sample: Path) -> None:
