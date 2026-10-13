@@ -47,7 +47,7 @@ Research a decision rests on has its own page in `../research/`.
 - [Offers use the same answers](offers-use-the-same-answers.md)
 - [The handoff update goes through what the session did](the-handoff-update-goes-through-what-the-session-did.md)
 - [/handoff audit has a fresh agent check the handoff](handoff-audit-has-a-fresh-agent-check-the-handoff.md)
-- [Issue candidates are bugs, features, and improvements, decided or not](issue-candidates-are-bugs-features-and-improvements-decided-or-not.md)
+- [Issue candidates are decided bugs, features, and improvements, offered one at a time](issue-candidates-are-decided-bugs-features-and-improvements-offered-one-at-a-time.md)
 - [A security bug is offered with a warning, and each PC can turn the offers off](a-security-bug-is-offered-with-a-warning-and-each-pc-can-turn-the-offers-off.md)
 - [A closed duplicate follows the original, and a not-planned close is shown and asked about](a-closed-duplicate-follows-the-original-and-a-not-planned-close-is-shown-and-asked-about.md)
 - [local-settings.json groups its settings, and both settings files carry a version](local-settings-json-groups-its-settings-and-both-settings-files-carry-a-version.md)

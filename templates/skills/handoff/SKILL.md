@@ -445,12 +445,14 @@ test:
 - This session added or changed it, or it carries a reminder that's due: `(Issue: remind me)`,
   or `(Issue: remind me from <date>)` with that date today or earlier.
 - This session hasn't suggested it already.
-- It's a bug, a feature, or an improvement to the project itself, such as tests, docs,
-  refactoring, performance, or upgrading what it depends on, decided or not, and someone outside
-  the project would understand it. So a proposal or idea still to decide qualifies too, such as
-  an item that starts "Decide whether": an issue is where others can weigh in. Work done outside
-  the project doesn't, such as a release, an account to set up, or a step of the user's own
-  workflow.
+- It's a bug, a feature, or an improvement to the project's own files, such as tests, docs,
+  refactoring, performance, or upgrading what it depends on, and someone outside the project
+  would understand it. Chores, checks, research, reviews, the user's own workflow steps, and work
+  outside the project, such as a release or an account to set up, never qualify.
+- It isn't a decision still to make: an item that starts "Decide whether" or similar, even after
+  a prefix such as "README:" (see To do in "Sections"), or a proposal not decided yet. An issue
+  would split one decision across two places. A decision already made but not built yet can
+  qualify.
 - It can be written without anything private.
 - It's likely to stay open beyond the next session or two.
 - It doesn't link to an issue yet, and it isn't marked "Not for a GitHub issue".
@@ -458,16 +460,19 @@ test:
   one that could let someone read, change, or do what they shouldn't, such as a leak of private
   data, an injection, or a way around a sign-in or a permission check.
 
-Suggest only items from To do or Bugs, and at most three; most updates have none. Ask in one line
-each: `Issue candidate: <section>: <item>. Create a GitHub issue for it, skip (no reminder), remind
-me next session (or in N days), or no (never ask again)? The item stays in the handoff either way,
-as a link to the issue if you create one. I'll mark it to match your answer, then commit and push
-any change.`
+Suggest only items from To do or Bugs, and at most one per update: a bug when one qualifies, and
+of those that are left to choose from, the one likely to stay open longest. Most updates have
+none. Put each of these lines in your message in this order, so the question comes last:
 
-For a security bug, put this warning first, in its own line: `This is a security bug: a public
-issue tells everyone about the hole before it's fixed. GitHub's draft security advisories keep it
-private until a fix is out.` After the question, add once: `To stop these offers, set
-offerSecurityBugs to false in dev-home-tools' settings.`
+1. When other items qualify too: `Besides the item below, <N> more qualify as issue candidates;
+   /handoff issue lists them.`
+2. For a security bug: `This is a security bug: a public issue tells everyone about the hole
+   before it's fixed. GitHub's draft security advisories keep it private until a fix is out.`
+   Then: `To stop these offers, set offerSecurityBugs to false in dev-home-tools' settings.`
+3. The question, as the last line: `Issue candidate: <section>: <item>. The item stays in the
+   handoff either way, as a link to the issue if you create one, and I'll commit and push any
+   change your answer makes. Create a GitHub issue for it, skip (no reminder), remind me next
+   session (or in N days), or no (never ask again)?`
 
 Each answer replaces any mark the item had, at the end of the item:
 
@@ -481,14 +486,15 @@ Each answer replaces any mark the item had, at the end of the item:
   if they gave none. Never suggest a marked item again; `/handoff issue` can still file it, and
   the link replaces the mark.
 
-No answer changes nothing, so a due reminder stays, and a later session asks again. Make every
-mark the answers call for, then commit once, as in "Changing the handoff".
+No answer changes nothing, so a due reminder stays, and a later session asks again. Make the
+change the answer calls for, if any, then commit as in "Changing the handoff".
 
 `/handoff issue` with nothing after it lists every item that qualifies by the tests and sections
-above, ignoring the first two tests, and asks which to file. Put the warning above before each
-security bug it lists, and when it lists any, the line about stopping these offers once, at the
-end. When `offerSecurityBugs` left a security bug out, end the list by saying so, and that
-`/handoff issue <item>` still files one if the user names it.
+above, ignoring the first two tests, with the warning above before each security bug. After the
+list, say that decisions still to make aren't listed, and when `offerSecurityBugs` left a
+security bug out, say that too: `/handoff issue <item>` still files any item the user names.
+When the list has a security bug, add the line about stopping these offers once. Then ask which
+to file, as the last line.
 
 ## In Codex
 

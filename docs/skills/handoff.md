@@ -51,16 +51,17 @@ is your go-ahead. Some examples:
   but it can update another environment when it has reliable evidence about it, such as your
   report, output from there, direct inspection, or a project-wide change. It never infers one
   environment's state from another.
-- **Issues.** After an update, the agent may suggest up to three items as issues, only when
-  filing one really makes sense: bugs, features, and improvements to the project, such as tests
-  or docs, whether or not you've decided on them. For each, you can create a GitHub issue for
-  it, skip it (no reminder), have it suggested again next session or in a number of days, or say
-  no (never ask again). Whatever you answer, the item stays in the handoff; a new issue turns it
-  into a link to the issue. Skip leaves no trace, so the item comes up again only if a later
-  session changes it. A reminder or a no marks the item, and the mark is committed and pushed;
-  the question says so. No item is suggested twice in one session. Filing always shows you the
-  draft and waits for your yes. Issues work in Claude Code only, for projects on GitHub, with
-  `gh` signed in.
+- **Issues.** After an update, the agent may suggest one item as an issue, only when filing one
+  really makes sense: a bug, a feature, or an improvement to the project's own files, such as
+  tests or docs, never a decision still to make. A bug comes first. When more items qualify, it
+  says how many, and `/handoff issue` lists them all; `/handoff issue <item>` files anything you
+  name, decided or not. You can create a GitHub issue for the suggested item, skip it (no
+  reminder), have it suggested again next session or in a number of days, or say no (never ask
+  again). Whatever you answer, the item stays in the handoff; a new issue turns it into a link
+  to the issue. Skip leaves no trace, so the item comes up again only if a later session changes
+  it. A reminder or a no marks the item, and the mark is committed and pushed; the question says
+  so. No item is suggested twice in one session. Filing always shows you the draft and waits for
+  your yes. Issues work in Claude Code only, for projects on GitHub, with `gh` signed in.
 - **Security bugs come with a warning,** when they're suggested and when you file one: a public
   issue tells everyone about the hole before it's fixed, and GitHub's draft security advisories
   keep it private instead. To never have them suggested on a PC, set `offerSecurityBugs` to
