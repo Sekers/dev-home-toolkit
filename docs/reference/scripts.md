@@ -47,19 +47,30 @@ left uncommitted.
 
 ## What they report
 
-Agents pass on what `sync.py` reports, and `prepare.py` with it:
+Agents pass on what `sync.py` reports, and `prepare.py` with it. A change in your dev-home is in
+one of three places, and each has its own words:
+
+| Where the change is | What the sync reports |
+| --- | --- |
+| In a file on this PC, not in a commit yet | `LEFT` or `STALE`, naming the file |
+| In a commit on this PC, not on GitHub yet | `PUSHED` once the sync sends it, or `PENDING` when it couldn't |
+| On GitHub, not on this PC yet | `PULLED` or `MERGED` once the sync brings it in, `OFFLINE` when GitHub couldn't be reached, or an `OK` line saying GitHub wasn't checked this time |
+
+So `LEFT` and `STALE` never mean a commit that isn't pushed: a change that isn't in a commit
+can't be pushed, so it's only on this PC. Every sync tries to send the commits waiting on this
+PC, and says so when it can't.
 
 | Word | Meaning |
 | --- | --- |
-| `OK` | Up to date, or nothing to do. |
+| `OK` | Nothing needed doing. `dev-home is up to date with GitHub` means the sync checked GitHub just now, and found the same commits there as on this PC; any `LEFT` or `STALE` lines after it are changes not in a commit yet. The other `OK` lines say that GitHub wasn't checked this time and why, or that there was nothing to commit. |
 | `COMMITTED` | Committed the files it was given. |
 | `PULLED`, `MERGED` | Brought in commits from GitHub. `MERGED` means two PCs both had new commits. |
 | `PUSHED` | Sent this PC's commits to GitHub. |
 | `PENDING` | Commits saved on this PC, not synced to GitHub yet. The next sync sends them. |
 | `OFFLINE` | GitHub couldn't be reached. The line says for which repo: your dev-home may be behind, or dev-home-tools wasn't checked for updates. When dev-home is set to one active copy, it says nothing should be missing, since no other copy writes to it. |
 | `SETTING` | dev-home is set to one active copy, but a sync brought in commits from another copy. If another copy is in use, switch the setting with `/dev-home configure`. |
-| `LEFT` | A file changed recently and isn't committed. Another session may be working on it. |
-| `STALE` | An uncommitted file nobody has touched for 15 minutes. The agent asks whether to commit and push it. |
+| `LEFT` | A file on this PC changed in the last 15 minutes, and the change isn't in a commit yet. Another session may be working on it, so the agent leaves it alone. |
+| `STALE` | A file on this PC whose change isn't in a commit yet, and that nobody has touched for 15 minutes. The agent asks whether to commit and push it. Stale means nobody is working on it, not that it's behind GitHub. |
 | `UPDATE` | New dev-home-tools commits are waiting. |
 | `PROBLEM` | Needs you. The message says what to do. |
 | `RELOAD` | From `prepare.py`: the skill has changed since the session loaded it, such as after an update, so the agent stops. Type the skill's command again to load its new steps. |
