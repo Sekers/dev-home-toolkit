@@ -172,9 +172,12 @@ def test_every_link_to_a_heading_points_to_one_that_exists() -> None:
 
 
 def test_the_readme_links_to_every_page_under_docs() -> None:
-    # The README's table is the only list of the pages, so a page it leaves out can't be found.
-    from_readme = {file for _, file, _ in linked_files(REPO_ROOT / "README.md")}
-    unlisted = [name(page) for page in pages()[1:] if page.resolve() not in from_readme]
+    # The README's table lists the pages, and a folder of many, such as the decisions, lists its
+    # own on an index page the README links. A page neither lists can't be found.
+    listed = {file for _, file, _ in linked_files(REPO_ROOT / "README.md")}
+    for index in [file for file in listed if file.name == "index.md"]:
+        listed |= {file for _, file, _ in linked_files(index)}
+    unlisted = [name(page) for page in pages()[1:] if page.resolve() not in listed]
     assert unlisted == []
 
 

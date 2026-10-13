@@ -15,7 +15,7 @@ offer; its rules apply too.
   down (see AGENTS.md's "AI usage"): give it only the changed text, the files that text refers to
   or works with, and the scenarios; ask it to read nothing else; and ask for a short report.
   Offer it once for a piece of work, when its text is ready to approve, saying what it will read
-  and which model and effort you'd use (the decision "/handoff audit has a fresh agent check the
-  handoff", in [Design decisions](decisions.md), has measurements of both). If your tool can't
-  start one, say so rather than offering it; if it can't set the model or effort, say which it
-  will run on. A no covers that piece of work.
+  and which model and effort you'd use (the decision
+  [/handoff audit has a fresh agent check the handoff](decisions/handoff-audit-has-a-fresh-agent-check-the-handoff.md)
+  has measurements of both). If your tool can't start one, say so rather than offering it; if it
+  can't set the model or effort, say which it will run on. A no covers that piece of work.

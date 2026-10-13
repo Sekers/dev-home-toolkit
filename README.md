@@ -249,7 +249,7 @@ Everything beyond getting started is in the `docs/` folder:
 | Skills | [dev-home](docs/skills/dev-home.md) | `/dev-home sync`, `configure`, and `skills`: syncing when you ask, changing a setting, and listing your skills. |
 | Reference | [The scripts](docs/reference/scripts.md) | `setup.py`, `sync.py`, and `update.py`: when each one runs, what their status words mean, how updates are installed, and where they come from. |
 | Reference | [What setup changes on your PC](docs/reference/setup-changes.md) | Every link, file, and setting that setup adds, why, and how to remove it all. |
-| Development | [Design decisions](docs/development/decisions.md) | For people changing dev-home-tools: decisions made and options set aside, with the reasons. |
+| Development | [Design decisions](docs/development/decisions/index.md) | For people changing dev-home-tools: decisions made and options set aside, with the reasons. |
 | Development | [Skills and everything else under templates/](docs/development/skills.md) | The rules for changing the skills, the scripts they share, the operating rules, and the starter. |
 | Development | [setup.py, sync.py, and update.py](docs/development/scripts.md) | The rules for changing the scripts and their code in `internal/shared/`. |
 | Development | [Testing](docs/development/testing.md) | How the tests work, and the rules for writing them. |
@@ -316,7 +316,7 @@ Everything beyond getting started is in the `docs/` folder:
 
 [AGENTS.md](AGENTS.md) has the rules for changing this repo, for developers and agents alike, and
 points to a page in `docs/development/` for each area's own rules.
-[Design decisions](docs/development/decisions.md) says why it works the way it does.
+[Design decisions](docs/development/decisions/index.md) says why it works the way it does.
 
 Changing dev-home-tools takes [uv](https://docs.astral.sh/uv/), which installs the pinned
 development tools (pytest, ruff, and mypy) the first time you run them. Before committing, run

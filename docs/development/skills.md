@@ -80,8 +80,8 @@ rules apply too.
   an agent could misread or slip through: two rules that disagree, a question whose answer is
   unclear, a step the scripts can't do, or wording that only fits Claude Code.
 - Every question that offers something a person can take or turn down uses the answers in
-  "Offers use the same answers", in [Design decisions](decisions.md). To depart from them, ask
-  the developer first, then add the departure and its reason to that entry.
+  [Offers use the same answers](decisions/offers-use-the-same-answers.md). To depart from them,
+  ask the developer first, then add the departure and its reason to that decision.
 - When you propose a commit that changes a skill's `SKILL.md`, say in chat about how many words
   it gained or lost.
 - A skill that starts a second agent, as `/handoff audit` does, tells the end user before it
@@ -93,7 +93,8 @@ rules apply too.
 
 - These are scripts that only agents run, and that more than one skill may run. Skills point to
   the one generated copy; never copy a script into each skill's folder.
-  [Design decisions](decisions.md) says why, and why they aren't at the root or in `internal/`.
+  [Scripts the skills share are generated once, and skills point to them](decisions/scripts-the-skills-share-are-generated-once-and-skills-point-to-them.md)
+  says why, and why they aren't at the root or in `internal/`.
 - One job per script, named for the job. `facts.py` reports facts about where a session is
   running, one topic at a time. `prepare.py` prepares dev-home for a skill command: it runs the
   sync inside its own process, checks the skill's stamp, then prints the facts for the topics

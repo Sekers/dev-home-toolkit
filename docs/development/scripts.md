@@ -33,7 +33,7 @@ points here; its rules apply too.
   the scripts would otherwise each copy there.
 - The entry points in the root stay short: they check the Python version, load
   `internal/shared/` by its path, and run the module of their own name (a test checks).
-  [Design decisions](decisions.md) says why the code isn't in the root.
+  [What the root holds](decisions/what-the-root-holds.md) says why the code isn't in the root.
 - Safe to re-run. setup.py never overwrites or deletes anything except its own generated files,
   links whose target is gone, links it made to skills that no longer exist, the
   `internal/.python/` junction once the `python.exe` it leads to is gone, and settings files the

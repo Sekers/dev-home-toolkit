@@ -84,7 +84,7 @@ Never leave it to the reader to guess which: name the repo whenever both could f
   `C:\Programming\dev-home`, and `example.com` for any domain. For parts that vary per run or
   per PC, such as a timestamp, hash, or ID, use a placeholder in code formatting, such as
   `local-settings.json.bak-YYYYMMDD-HHMMSS` or `<commit>`, never a value that looks real. Facts
-  and evidence, such as versions and test dates in `decisions.md`, stay exact. A test may use a
+  and evidence, such as versions and test dates in `decisions/`, stay exact. A test may use a
   real-looking value it needs to test against, but makes it up rather than copying it from a
   real machine.
 - Before proposing a commit, read the whole diff for those.
@@ -137,12 +137,12 @@ as a step written in a handoff or a plan.
 ## Clarity for agents
 
 - Anything agents read and act on, such as the skills, the operating rules, the starter files,
-  AGENTS.md, decisions.md, and the lines the scripts print for agents, must be clear to an agent
+  AGENTS.md, the decisions, and the lines the scripts print for agents, must be clear to an agent
   with none of your session's context. A misread costs more than a shorter version saves: a
   wrong action, or extra turns to put it right.
 - After a change to such text, read it the way an agent new to it would: top to bottom, each
-  sentence taken literally. Read the whole of a skill or the operating rules, the whole section
-  or entry of a longer file such as AGENTS.md or decisions.md, and every passage, in that file or
+  sentence taken literally. Read the whole of a skill, the operating rules, or a decision, the
+  whole section of a longer file such as AGENTS.md, and every passage, in that file or
   another, that names or relies on what changed. Skip this for a change that can't alter the
   meaning, such as a typo or a rewrapped line.
 - For a new skill, a new or rewritten section, or a change to what the operating rules mean,
@@ -169,7 +169,8 @@ Each area's rules are on a page of their own. Read the page before changing that
   Claude Code recommends for an instruction file. Everything else for developers goes in
   `docs/development/`, one page per topic, such as how the code is laid out and how the tests
   work, and AGENTS.md links to a page where an agent needs it. Each design decision, with its full
-  reasons and the options set aside, goes in `decisions.md`; read it before reopening one.
+  reasons and the options set aside, has its own file in `docs/development/decisions/`; read it
+  before reopening one.
 - Each fact lives in one place, and other pages link to it.
 
 ## Testing

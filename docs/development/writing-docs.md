@@ -10,8 +10,8 @@ apply too.
   - `docs/guide/` (not made yet): how-to pages read start to finish, when one leaves the README.
   - `docs/development/`: for people and agents changing dev-home-tools (see AGENTS.md's "Docs"):
     - one page for each area's rules, such as `skills.md`, which AGENTS.md points to
-    - `decisions.md`: each design decision, with its reasons, the options set aside, and when to
-      look again
+    - `decisions/`: one file per design decision, named for it, with its reasons, the options set
+      aside, and when to look again, and `decisions/index.md` listing them all, oldest first
     - `research/`: one page per investigation, saying what was tested, how, when, the results,
       the limits, and when to redo it. Data a page cites sits beside it with the same name, such
       as `pylance-comparison.json`. Research can come before any decision, and a decision cites
@@ -24,4 +24,5 @@ apply too.
 - Keep `docs/` ready to publish as a website: lowercase file names with hyphens, one `#` title
   per page, relative links between pages, and as few links out of `docs/` as possible, because
   those would break on a site, where each would have to become a full GitHub address.
-- When you add, rename, or remove a page, update the README's table. A test checks it.
+- When you add, rename, or remove a page, update the README's table, or for a decision,
+  `decisions/index.md`, which the README links. A test checks it.
