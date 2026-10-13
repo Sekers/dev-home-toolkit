@@ -127,7 +127,7 @@ handoff item as an issue, which needs the project on GitHub.
 Then it links everything and checks Claude Code's and Codex's settings (see
 [What setup changes](docs/reference/setup-changes.md) for what and why). When a setting is
 missing, it shows the exact lines it would change and asks first. On a `y`, it saves a dated
-backup of the file, such as `settings.json.bak-20260926-101500`, before writing. It never edits a
+backup of the file, named `settings.json.bak-YYYYMMDD-HHMMSS`, before writing. It never edits a
 file it can't fully read, such as a `settings.json` that isn't valid JSON (Claude Code can't use
 one either), or a read-only one; it prints what to add by hand instead.
 
@@ -250,6 +250,11 @@ Everything beyond getting started is in the `docs/` folder:
 | Reference | [The scripts](docs/reference/scripts.md) | `setup.py`, `sync.py`, and `update.py`: when each one runs, what their status words mean, how updates are installed, and where they come from. |
 | Reference | [What setup changes on your PC](docs/reference/setup-changes.md) | Every link, file, and setting that setup adds, why, and how to remove it all. |
 | Development | [Design decisions](docs/development/decisions.md) | For people changing dev-home-tools: decisions made and options set aside, with the reasons. |
+| Development | [Skills and everything else under templates/](docs/development/skills.md) | The rules for changing the skills, the scripts they share, the operating rules, and the starter. |
+| Development | [setup.py, sync.py, and update.py](docs/development/scripts.md) | The rules for changing the scripts and their code in `internal/shared/`. |
+| Development | [Testing](docs/development/testing.md) | How the tests work, and the rules for writing them. |
+| Development | [Writing the docs](docs/development/writing-docs.md) | Where each page goes, and the rules for the README and `docs/`. |
+| Development | [A fresh agent's read](docs/development/fresh-agent-reads.md) | How to have a second agent, with no context, check a change. |
 
 ## Safety and privacy
 
@@ -308,7 +313,8 @@ Everything beyond getting started is in the `docs/` folder:
 | `internal/development/` | Only for changing dev-home-tools: the development tools' settings (`pyproject.toml`, `uv.lock`) and the tests (`tests/`, run with pytest). People who only use dev-home-tools never need it. |
 | `docs/` | Everything this README leaves out (see [Documentation](#documentation)). |
 
-[AGENTS.md](AGENTS.md) has the rules for changing this repo, for people and agents alike, and
+[AGENTS.md](AGENTS.md) has the rules for changing this repo, for developers and agents alike, and
+points to a page in `docs/development/` for each area's own rules.
 [Design decisions](docs/development/decisions.md) says why it works the way it does.
 
 Changing dev-home-tools takes [uv](https://docs.astral.sh/uv/), which installs the pinned

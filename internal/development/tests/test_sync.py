@@ -1,7 +1,7 @@
 """sync.py and update.py, run from a sandbox's copy as a person or a skill runs them.
 
 The sandbox's copy of this repo is a git clone with a remote, as a person's is, and a second
-clone of that remote stands in for the maintainer pushing updates. The tests run in order and
+clone of that remote stands in for the developer pushing updates. The tests run in order and
 share the sandbox, so each one starts from where the one before it left off.
 """
 
@@ -69,7 +69,7 @@ def generated_skill(box: Sandbox) -> str:
 
 
 def push_update(box: Sandbox, line: str) -> None:
-    """The maintainer pushes a change to the handoff skill."""
+    """The developer pushes a change to the handoff skill."""
     append(box.upstream / "templates" / "skills" / "handoff" / "SKILL.md", line)
     git("-C", str(box.upstream), "commit", "--quiet", "-am", f"handoff: {line}")
     git("-C", str(box.upstream), "push", "--quiet")
@@ -833,7 +833,7 @@ def test_after_waiting_its_limit_for_another_sync_says_so(
 def test_an_error_in_one_step_still_lets_the_update_check_and_setup_run(
     box: Sandbox, monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str]
 ) -> None:
-    # An update is waiting (the maintainer's change four), so the update check reports it.
+    # An update is waiting (the developer's change four), so the update check reports it.
     code = shared_module(box, "sync")
 
     def broken(_self: object) -> None:
@@ -1078,7 +1078,7 @@ def test_setups_commit_brings_in_commits_without_running_setup_or_the_update_che
 
 
 def test_the_update_check_waits_its_interval_and_uses_what_it_knows(box: Sandbox) -> None:
-    # An update fetched earlier is still waiting: the maintainer's change four.
+    # An update fetched earlier is still waiting: the developer's change four.
     set_setting(box, "updates.checkEveryHours", 24)
     try:
         sync(box)

@@ -41,7 +41,7 @@ Claude Code 2.1.284. Claude Code's mods docs were read on 2026-10-03, for 2.1.28
   - A mod runs with full access and no consent prompt.
 
   Without a mod, only a SessionStart hook could print the rules: capped at 10,000 characters in
-  Claude Code and about 2,500 tokens by default in Codex, which also asks the user to trust the
+  Claude Code and about 2,500 tokens by default in Codex, which also asks the end user to trust the
   hook again after every change.
 - **What setup would still do.** Nearly everything, plus registering the plugin in each Claude
   config folder, and `update.py` would still pull the clone. Hooks don't need a plugin: setup
@@ -93,7 +93,7 @@ shared folder there would need an exception in each of those.
 that runs in place is live at once in every session on the PC. A generated script changes only
 when setup runs, in the same run that rewrites the skill text that calls it, so the two files
 are never out of step. A session that loaded the skill before that run still has the old text
-until the user runs the skill's command again, and the skill's stamp tells it so (see below).
+until the end user runs the skill's command again, and the skill's stamp tells it so (see below).
 `templates/` is also where everything the tools get from this repo already lives.
 
 **Why one script with topics, not one that does everything:** `facts.py` is safe to pre-approve
@@ -108,7 +108,7 @@ above), where each would need the scripts bundled with it.
 **Decision:** no such rule.
 
 **The problem:** agents joined the commands a skill gave them, such as `sync.ps1; facts.ps1`,
-although the skill said to run them exactly as written. A joined call asks the user first when
+although the skill said to run them exactly as written. A joined call asks the end user first when
 any part of it isn't pre-approved.
 
 **Why not:** a joined call whose parts are all pre-approved runs without asking (seen in Claude
@@ -219,12 +219,12 @@ stops starting with it.
 
 **Decision:** an environment subsection says where a fact applies, not which session owns the
 text. A session may edit any environment's subsection only when it has reliable evidence about
-that environment: direct inspection, a fact from the user, output from there, or a project-wide
+that environment: direct inspection, a fact from the end user, output from there, or a project-wide
 change that makes an item plainly obsolete. Facts learned locally belong to the current
 environment by default, and a session never infers one environment's state from another.
 
 **Why:** limiting a session to its current environment prevents guesses about another one, but
-it also blocks corrections the user supplies, facts checked through a remote tool, retiring or
+it also blocks corrections the end user supplies, facts checked through a remote tool, retiring or
 renaming an environment, and removal of notes that a project-wide change made obsolete. The
 source of the evidence is the useful safety boundary; the session's location is not.
 
@@ -296,7 +296,7 @@ symbolic link will do the same job on macOS and Linux.
 
 **Why a junction:** dev-home-tools' path has no spaces, so the command is the same unquoted text
 in Claude Code's Bash and PowerShell tools and in Codex, and each is pre-approved as both
-`Bash(...)` and `PowerShell(...)`. Python's own path is usually under the user's profile, which
+`Bash(...)` and `PowerShell(...)`. Python's own path is usually under the end user's profile, which
 can have a space, and a quoted path needs a different text in each tool (a probe skill showed
 both tools pre-approving a Python command). Python runs normally through a junction, which added
 3 to 5 ms to a start of about 32 ms.
@@ -312,9 +312,9 @@ so not `internal/.generated/`; and sync's and setup's agent commands run through
 Setup's cleanup of the generated files never looks inside a link, so a junction nearby can't
 lead it into the Python install.
 
-**Why `-I`:** it ignores `PYTHON*` environment variables and the user's site-packages, so nothing
-in a project's environment can change what loads. It costs no measurable time. It also leaves the
-script's folder off the import path, so `prepare.py` loads `facts.py` by its path.
+**Why `-I`:** it ignores `PYTHON*` environment variables and the end user's site-packages, so
+nothing in a project's environment can change what loads. It costs no measurable time. It also
+leaves the script's folder off the import path, so `prepare.py` loads `facts.py` by its path.
 
 **The bytecode cache stays:** Python writes `__pycache__` beside the scripts, and setup leaves it
 alone. Without it, compiling a 600-line module took about 8 ms on every run.
@@ -381,8 +381,9 @@ isn't built yet.
 
 **The problem:** about 11 lines are the same word for word in the handoff, knowledge, and dev-home
 skills, and about 15 more in the handoff and knowledge skills, with more that differ only in a
-noun. Only a reminder in AGENTS.md keeps them in line, and the planned global-rules skill adds
-another copy. As skills are added, each passage may be shared by a different set of them.
+noun. Only a reminder in [skills.md](skills.md) keeps them in line, and the planned global-rules
+skill adds another copy. As skills are added, each passage may be shared by a different set of
+them.
 
 **Why:**
 
@@ -394,15 +395,16 @@ another copy. As skills are added, each passage may be shared by a different set
   and the review AGENTS.md asks for after a change reads the template as it is. Nothing new runs
   on people's PCs except removing the markers, so the tests catch a mistake before a commit, and
   the stamp needs no change.
-- AGENTS.md's rule that a similar rule in another skill may need the same change, but "never a
-  given", stays. The fingerprints make sure each change to a related passage gets that check.
+- The rule in [skills.md](skills.md) that a similar rule in another skill may need the same
+  change, but "never a given", stays. The fingerprints make sure each change to a related passage
+  gets that check.
 - Indented markers: GitHub ends a list at a marker that starts a line between its items, splitting
   it in two, while a marker indented to the item's text keeps the list whole and shows nothing
   (checked through GitHub's Markdown API, 2026-10-10).
 - The folder stays in `templates/`, though only the script and the tests read it: it's skill
   text, with the same placeholders, edited along with the skills.
 - Tokens: sessions using the skills load the same text as before. Sessions working on
-  dev-home-tools load a few more lines of AGENTS.md, and read bigger diffs.
+  dev-home-tools read a few more lines of the rules for skills, and bigger diffs.
 
 **What it costs:** one more thing to learn. A change to a shared passage shows up in each skill
 that has it, and two branches that change the same passage conflict in each copy. A passage that
@@ -433,7 +435,7 @@ along that whole lines can't hold.
 of the text with this PC's paths filled in, written into the skill's own commands as
 `--skill <name> --stamp <stamp>`. `prepare.py` and `facts.py` compare the stamp they're given
 with the one in that `SKILL.md` on disk. When they differ, `prepare.py` prints a `RELOAD` line,
-and `facts.py` an error, saying the session's steps are out of date and to ask the user to run
+and `facts.py` an error, saying the session's steps are out of date and to ask the end user to run
 the skill's command again. Neither prints any facts then, so the old steps can't carry on.
 
 **The problem:** an agent keeps the text of a skill it has loaded. When an update changes the
@@ -444,38 +446,10 @@ have changed or are gone.
 sync that may install the change, so this catches any change to a skill, not just renamed
 scripts. It adds a file read and a comparison, and no process. Typing a skill's command again
 loads its new text and its new pre-approvals, with no need for a new session (tested); an agent
-that invokes the skill again itself is asked first outside auto mode, so the skill asks the user
-instead.
+that invokes the skill again itself is asked first outside auto mode, so the skill asks the end
+user instead.
 
 **Look again if:** the tools reload a skill by themselves when its file changes.
-
-## No backwards compatibility in the scripts, for now
-
-**Decision:** the scripts carry no code for older versions of dev-home-tools: nothing that moves
-an older layout forward, keeps an old path working, or forwards an old script to a new one. When
-a change needs something done on each PC that's already set up, such as deleting a folder the
-old layout used, it's done there by hand, and the change says what.
-
-**Why:** only the user's own two PCs run dev-home-tools today, so a step by hand on each is
-cheaper than code that stays in the scripts long after both have moved. And dev-home-tools has
-no changelog or version numbers yet, so there's nothing to say which versions such code would
-have to cover.
-
-**What it means for the move to Python:** a session that loaded a skill before an update can
-find its old steps naming paths that are gone. Its steps say to show the error and stop, and
-typing the command again loads the new ones; the skill's stamp catches the rest (see above).
-In phases 2 and 3, `sync.ps1`, `update.ps1`, and `setup.ps1` don't forward to the Python
-versions: the operating rules and the docs change with them, and each PC is updated by hand.
-
-**Options set aside:**
-
-- Setup moving an older layout forward, such as removing the root's `.generated/` from before
-  the generated files moved into `internal/`, and re-pointing the links into it.
-- A stand-in at an old script's path, printing that the skill changed.
-- Forwarders from the PowerShell scripts to their Python versions through phases 2 and 3.
-
-**Look again if:** dev-home-tools gets a changelog and version numbers, or people other than its
-author use it.
 
 ## Only the latest versions of Claude Code and Codex
 
@@ -543,9 +517,9 @@ settings, the tests, and what the tools write: `.venv`, caches, and the test san
   that code in the root would put that folder there. People run them as `py <path>\sync.py`,
   since the Python install manager's
   `py` is an app execution alias in `%LocalAppData%\Microsoft\WindowsApps`, which Windows puts
-  on every user's PATH by default (aliases arrived in Windows 10 version 1709), and as `python3`
-  on macOS and Linux. An entry point checks the Python version before anything else, so an older
-  Python gets a message instead of a syntax error.
+  on every Windows account's PATH by default (aliases arrived in Windows 10 version 1709), and
+  as `python3` on macOS and Linux. An entry point checks the Python version before anything
+  else, so an older Python gets a message instead of a syntax error.
 - `templates/`: the repo's main content, what setup fills in and links into the tools.
 - `internal/`: there to keep everything else out of the root.
 - `docs/`: GitHub Pages, without a build workflow, publishes only from the root or `docs/`.
@@ -678,7 +652,7 @@ On this PC, the two small folder scans together took about 0.08 ms.
 - Run setup in a Python process of its own every time: simpler isolation, but every skill
   command that syncs pays the process start.
 - Accept a rare, recoverable import error and let the next sync repair the generated files: the
-  failed run leaves the current setup incomplete and tells the user there is a problem when the
+  failed run leaves the current setup incomplete and tells the end user there is a problem when the
   code can prevent it at negligible cost.
 
 **Look again if:** setup needs something the whole process shares, such as its own current
@@ -1034,8 +1008,8 @@ unless the person says it's theirs. In Codex, both say which command to run in a
 change nothing, while Codex can't use git's and gh's sign-ins.
 
 Plain `/knowledge` stops being the sync someone asks for. It reads the local copy, unless
-`devHome.checkEveryHours` has passed, when it syncs first, in both modes. `/knowledge <question>` still
-never syncs.
+`devHome.checkEveryHours` has passed, when it syncs first, in both modes.
+`/knowledge <question>` still never syncs.
 
 **Why:** one place to sync and configure that's easy to find, with room for more dev-home
 commands without a skill for each. `/dev-home` alone lists rather than syncs, so typing the name
@@ -1057,7 +1031,7 @@ Codex too.
 
 **Why:** turning skills on and off is planned, with a default set that dev-home-tools chooses,
 so some of its skills may ship turned off, and this list is where people find them. Listing takes
-no judgment, so it belongs in a script (see AGENTS.md), and a `facts.py` topic is one
+no judgment, so it belongs in a script (see [skills.md](skills.md)), and a `facts.py` topic is one
 pre-approved command that costs a Python start only when someone types it. `skills` names what
 it shows, and turning skills on and off can sit under the same word later.
 
@@ -1086,9 +1060,9 @@ read, `next`, or `issue`. It adds one Python start, about 0.04 s, and replaces a
 for each link with one.
 
 **Why:** reading a link and checking its state takes no judgment, so it belongs in a script (see
-AGENTS.md). One call covers any number of links. When issues on GitLab, Bitbucket, or Azure
-DevOps come, it's the one place that learns each host's tool, so the skill's steps don't grow
-with each host. Its lines can be tested with a faked `gh`.
+[skills.md](skills.md)). One call covers any number of links. When issues on GitLab, Bitbucket,
+or Azure DevOps come, it's the one place that learns each host's tool, so the skill's steps don't
+grow with each host. Its lines can be tested with a faked `gh`.
 
 **Options set aside:**
 
@@ -1328,8 +1302,9 @@ across several PCs.
 
 **Decision:** setup finds each `~/.codex-*` folder that holds a Codex `config.toml` or
 `auth.json`, and the folder `CODEX_HOME` names when setup runs from a Codex session. It asks once
-about each, and saves the answers in `codex.homes` in `local-settings.json`. A yes gets that home what `~/.codex` gets: the always-on rules in its
-`AGENTS.md`, and dev-home in its `config.toml`. A home elsewhere can be added by its path.
+about each, and saves the answers in `codex.homes` in `local-settings.json`. A yes gets that
+home what `~/.codex` gets: the always-on rules in its `AGENTS.md`, and dev-home in its
+`config.toml`. A home elsewhere can be added by its path.
 
 **Why:** Codex reads its folder from `CODEX_HOME`, which can point anywhere, and each home has its
 own `config.toml`, `AGENTS.md`, and sign-in. Every home on a PC shares `~/.agents/skills` (Codex's
@@ -1593,14 +1568,14 @@ path, as in git config and Codex's `-c`:
   later, such as recommended settings per Claude folder and skills per PC, have an obvious place:
   a folder's answer and its recommended settings share one entry, in place of two lists and a
   map. "Setup asks each question whose answer isn't saved yet" set aside one map only because it
-  changed a format already in use, a cost the person waived.
+  changed a format already in use, a cost the developer waived.
 - A file newer than the code happens when a branch is checked out in the live folder and then
   `main` again, and with `dev-home.json` when the PCs update at different times. An older file
   happens when a backup is restored. Without a version, the code would read either as broken
   settings. "schemaVersion" follows Docker's image manifests: "version" alone would read as
   dev-home-tools' own version.
-- Setting an old file aside, rather than moving it forward, follows "No backwards compatibility in
-  the scripts, for now": each PC answers setup's questions again, once.
+- Setting an old file aside, rather than moving it forward, keeps code for an old layout out of
+  the scripts: each PC answers setup's questions again, once.
 - A `PROBLEM` on every sync for a folder that's gone nags someone who removed an account on
   purpose, and a folder that's only gone for a while, such as one on a drive that's unplugged,
   gets set up again as soon as it's back.
@@ -1625,5 +1600,36 @@ folders"; where "Setup offers recommended settings for Claude Code and Codex" an
 skills per PC, and the tools show or hide them" save their answers; and the schema version that
 "A dev-home has one active copy, or several" set aside until the format changed.
 
-**Look again if:** a setting needs more than two levels of grouping, or backwards compatibility
-returns, when a file without a version could be moved forward instead of set aside.
+**Look again if:** a setting needs more than two levels of grouping, or a file without a version
+should be moved forward instead of set aside.
+
+## AGENTS.md holds only what every session needs
+
+**Decision:** AGENTS.md holds the rules every agent working here needs in every session, each
+with a short reason, and stays under 200 lines. The rules for one area, and how things work, live
+in pages under `docs/development/`: `skills.md`, `scripts.md`, `testing.md`, `writing-docs.md`,
+and `fresh-agent-reads.md`. AGENTS.md's "Rules for each area" says which page to read before
+changing which area.
+
+**Why:**
+
+- Claude Code's docs (read 2026-10-12) say to "target under 200 lines per CLAUDE.md file. Longer
+  files consume more context and reduce adherence", and Claude Code warns at startup about a
+  longer one. AGENTS.md had reached 449 lines.
+- Codex stops reading instruction files once the global file and the project's together reach
+  `project_doc_max_bytes`, 32 KiB by default, and cuts the project's part without a warning.
+  AGENTS.md alone was 32,155 bytes.
+- A page is read only when its area changes, so a session pays for it only then.
+
+**Options set aside:**
+
+- Moving only explanations and reference: AGENTS.md stayed at about 350 lines.
+- An AGENTS.md in each folder: Claude Code loads one when it works in that folder, but Codex
+  reads only from the repo root down to the folder it started in, once at startup (OpenAI's
+  docs, read 2026-10-12), so it would miss them.
+- A limit with headroom, "well under 200 lines": vague, and the developer chose to readjust when
+  it gets close.
+- A test that fails at 200 lines, with a rule to ask what to move.
+
+**Look again if:** Codex reads AGENTS.md files in subfolders as it works in them, or Claude
+Code's recommended size changes.
