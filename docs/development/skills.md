@@ -48,6 +48,8 @@ rules apply too.
 
 - Frontmatter uses only standard fields: `name`, `description`, and `allowed-tools`. The name
   matches the folder name.
+- A skill's preferences, declared in a `dev-home-skill.json` in its folder, follow
+  [settings.md](settings.md).
 - Refer to a skill's own files through `{{SKILL_DIR}}`, to a shared script through
   `{{SHARED_SKILL_SCRIPTS_DIR}}`, and to anything else through `{{TOOLS_DIR}}` or
   `{{CONTENT_DIR}}`.

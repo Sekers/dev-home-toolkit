@@ -252,6 +252,7 @@ Everything beyond getting started is in the `docs/` folder:
 | Development | [Design decisions](docs/development/decisions/index.md) | For people changing dev-home-tools: decisions made and options set aside, with the reasons. |
 | Development | [Skills and everything else under templates/](docs/development/skills.md) | The rules for changing the skills, the scripts they share, the operating rules, and the starter. |
 | Development | [setup.py, sync.py, and update.py](docs/development/scripts.md) | The rules for changing the scripts and their code in `internal/shared/`. |
+| Development | [Settings](docs/development/settings.md) | The rules for adding or changing a setting, or a skill's preference. |
 | Development | [Testing](docs/development/testing.md) | How the tests work, and the rules for writing them. |
 | Development | [Writing the docs](docs/development/writing-docs.md) | Where each page goes, and the rules for the README and `docs/`. |
 | Development | [A fresh agent's read](docs/development/fresh-agent-reads.md) | How to have a second agent, with no context, check a change. |

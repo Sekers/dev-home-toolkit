@@ -53,3 +53,4 @@ Research a decision rests on has its own page in `../research/`.
 - [local-settings.json groups its settings, and both settings files carry a version](local-settings-json-groups-its-settings-and-both-settings-files-carry-a-version.md)
 - [AGENTS.md holds only what every session needs](agents-md-holds-only-what-every-session-needs.md)
 - [The sync's status words stay, and the reference explains them](the-syncs-status-words-stay-and-the-reference-explains-them.md)
+- [Settings record answers, not just values](settings-record-answers-not-just-values.md)

@@ -31,6 +31,7 @@ points here; its rules apply too.
   (`--configure`'s menu and assignments). They write UTF-8, read git's output as UTF-8, and find
   a program such as git by its full path in `PATH`, never in the current folder. Put anything
   the scripts would otherwise each copy there.
+- Adding or changing a setting, or a skill's preference, follows [settings.md](settings.md).
 - The entry points in the root stay short: they check the Python version, load
   `internal/shared/` by its path, and run the module of their own name (a test checks).
   [What the root holds](decisions/what-the-root-holds.md) says why the code isn't in the root.
