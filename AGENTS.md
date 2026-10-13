@@ -55,9 +55,9 @@ Never leave it to the reader to guess which: name the repo whenever both could f
   `setup.py`, `sync.py`, `update.py`, and the folders `templates/`, `internal/`, and
   `docs/`. Setup adds `local-settings.json` on each PC, and beside it a dated backup each time
   `--configure` changes it or setup sets aside a file in an older layout, such as
-  `local-settings.json.bak-YYYYMMDD-HHMMSS`; git ignores both. Never add a file or folder to
-  the root, or have a script or tool create one there, without asking the developer first, in
-  a question of its own.
+  `local-settings.json.bak-YYYYMMDD-HHMMSS`; git ignores both. Anything new in the root, even
+  what a script or tool creates, needs the developer's approval in a question of its own. When
+  the root is better, propose it and say why; never settle for a worse place to avoid asking.
 - `internal/` is dev-home-tools' own machinery, which nobody runs directly
   ([scripts.md](docs/development/scripts.md) says what's in it). Never edit
   `internal/.generated/` or `local-settings.json`, or change `internal/.python/`. Setup
