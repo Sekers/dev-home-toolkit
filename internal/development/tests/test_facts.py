@@ -6,22 +6,26 @@ import os
 import re
 import shutil
 import sys
+import uuid
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
 from helpers import (
+    LAUNCHER,
     Run,
     Sandbox,
     git,
     new_repo,
+    run,
     run_command,
     sandbox_for,
     shared_module,
     skill_command,
     write_text,
 )
+from read_only_launcher import EXIT_CODE, FAILED
 
 pytestmark = pytest.mark.xdist_group("facts")
 
@@ -631,3 +635,79 @@ def test_options_need_their_values_and_each_other(box: Sandbox, sample: Path) ->
         result = run_command(box, " ".join([*start, arguments]), cwd=sample)
         assert result.code == 1, f"{arguments}: {result}"
         assert result.has_line(reason), f"{arguments}: {result}"
+
+
+# ---------------------------------------------------------------------------------------------
+# The launcher that watches each run of facts.py (read_only_launcher.py, through run_command).
+
+
+def watched(box: Sandbox, folder: Path, code: str, *, name: str = "facts.py") -> Run:
+    """Runs code through the launcher as a script of that name, in a folder of the sandbox."""
+    script = folder / name
+    write_text(script, code)
+    return run(box, [sys.executable, "-I", str(LAUNCHER), str(script)], cwd=folder)
+
+
+# Each, in a probe's own folder, which {folder} stands for.
+FORBIDDEN = {
+    "open for writing": "open({new!r}, 'w')",
+    "io.FileIO": "import io\nio.FileIO({new!r}, 'w')",
+    "os.open": "import os\nos.open({new!r}, os.O_WRONLY | os.O_CREAT)",
+    "Path.write_text": "from pathlib import Path\nPath({new!r}).write_text('x')",
+    "os.remove": "import os\nos.remove({kept!r})",
+    "os.mkdir": "import os\nos.mkdir({new!r})",
+    "environment": "import os\nos.environ['DEV_HOME_PROBE'] = '1'",
+    "git that changes": "import subprocess\nsubprocess.run(['git', 'init', {new!r}])",
+    "another program": "import subprocess, sys\nsubprocess.run([sys.executable, '-c', 'pass'])",
+    "network": "import socket\nsocket.create_connection(('127.0.0.1', 9), timeout=1)",
+    "a database": "import sqlite3\nsqlite3.connect({new!r})",
+    "a Windows file handle": (
+        "import _winapi\n_winapi.CreateFile({new!r}, 0x40000000, 0, 0, 2, 0, 0)"
+    ),
+    "Path.copy": "from pathlib import Path\nPath({kept!r}).copy({new!r})",
+    "a DLL function not allowed": "import ctypes\nctypes.WinDLL('kernel32').DeleteFileW({kept!r})",
+}
+
+
+@pytest.mark.parametrize("code", FORBIDDEN.values(), ids=FORBIDDEN.keys())
+def test_the_launcher_stops_a_script_before_it_changes_anything(box: Sandbox, code: str) -> None:
+    if ("_winapi" in code or "WinDLL" in code) and sys.platform != "win32":
+        pytest.skip("Windows only")
+    folder = box.root / "probes" / uuid.uuid4().hex[:8]
+    new, kept = folder / "new", folder / "kept.txt"
+    write_text(kept, "kept\n")
+    result = watched(box, folder, code.format(new=str(new), kept=str(kept)))
+    assert result.code == EXIT_CODE, str(result)
+    assert result.has_line(re.escape(FAILED)), str(result)
+    assert not new.exists() and kept.is_file(), str(result)
+
+
+def test_the_launcher_stops_at_a_kind_of_event_it_hasnt_sorted_and_says_what_to_do(
+    box: Sandbox,
+) -> None:
+    # Such as one a new Python version raises: it fails until someone decides what it is.
+    folder = box.root / "probes" / "unsorted"
+    result = watched(box, folder, "import sys\nsys.audit('dev_home.probe.new_kind')\n")
+    assert result.code == EXIT_CODE, str(result)
+    assert result.has_line(r"hasn't sorted\. .* add it to HARMLESS"), str(result)
+    assert result.has_line(r"dev_home\.probe\.new_kind"), str(result)
+
+
+def test_the_launcher_lets_reads_git_reads_and_pythons_own_cache_through(
+    box: Sandbox, sample: Path
+) -> None:
+    folder = box.root / "probes" / "reads"
+    write_text(folder / "helper.py", "VALUE = 1\n")
+    code = (
+        "import shutil, subprocess, sys\n"
+        f"sys.path.insert(0, {str(folder)!r})\n"
+        "import helper\n"
+        f"print(open({str(folder / 'helper.py')!r}).read().strip())\n"
+        "done = subprocess.run([shutil.which('git'), 'cat-file', '--batch-check'],\n"
+        f"    input='HEAD\\n', capture_output=True, text=True, cwd={str(sample)!r})\n"
+        "print(done.stdout.split()[1])\n"
+    )
+    result = watched(box, folder, code)
+    assert result.code == 0, str(result)
+    assert result.lines == ["VALUE = 1", "commit"], str(result)
+    assert list((folder / "__pycache__").glob("helper.*.pyc")), "Python saved its cache"

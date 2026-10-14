@@ -23,6 +23,11 @@ proposing a commit, and points here; its rules apply too.
   `internal/.python/python.exe`, because a virtual environment's `python.exe` can't run through
   a junction; that also lets coverage measure the scripts. One test runs a command unchanged.
   Adding `--cov` to the pytest command reports coverage, on demand and with no minimum.
+- A script that should only report, `facts.py` or the handoff skill's `issue_status.py`, runs
+  through `tests/read_only_launcher.py` whenever `run_command` runs it, and the test fails at
+  anything the script changes, or at a kind of audit event the launcher hasn't sorted yet, such
+  as one a new Python version raises; the failure says how to sort it
+  ([why](decisions/the-tests-check-the-scripts-that-only-report-in-two-ways.md)).
 - Fake only what needs a person or an outside service, such as a console answer, `gh`,
   Developer Mode, or another platform; git and the file system stay real. Use `monkeypatch` and
   small typed fakes first, and `unittest.mock` only with `autospec`, where recording calls saves

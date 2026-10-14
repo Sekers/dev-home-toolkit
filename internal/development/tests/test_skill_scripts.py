@@ -4,6 +4,8 @@ points in the root, and the code they load from internal/shared/."""
 
 import ast
 import re
+import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -15,6 +17,7 @@ from helpers import (
     find_process_wide_changes,
     non_standard_imports,
 )
+from read_only_launcher import PROGRAMS, allowed_command, split_command_line
 
 SCRIPTS = REPO_ROOT / "templates" / "shared-skill-scripts"
 SKILLS = REPO_ROOT / "templates" / "skills"
@@ -115,20 +118,59 @@ CHANGES = [
     "ctypes.WinDLL('kernel32').DeleteFileW('x')",
     "exec('x')",
     "importlib.import_module('socket')",
+    "import importlib\nimportlib.import_module('socket')",
+    "import io\nio.FileIO('x', 'w')",
+    "import json\njson.dump({}, f)",
+    "import os as o\no.remove('x')",
+    "write = os",
+    "getattr(shutil, 'rmtree')('x')",
+    "from os import remove",
+    "from shutil import *",
+    "from . import facts",
+    "subprocess.Popen(['git', 'status'])",
+    "def run_gh(gh, text):\n    return subprocess.run([gh, 'issue', 'close', text])",
+    "def run_gh(gh, text):\n    return subprocess.run(text)",
+    "def run_gh(gh, path):\n    return subprocess.run([gh, 'api', 'graphql', '--input', path])",
+    "sys.modules['os'].remove('x')",
+    "sys.modules.get('os')",
+    "kernel32 = ctypes.WinDLL('kernel32')\nkernel32.DeleteFileW('x')",
+    "Path('x').copy('y')",
+    "Path('x').move_into('y')",
+    "Path('x').open('w')",
+    "text.encode('utf-8')",
+    "getattr(Path('x'), 'write_text')('y')",
+    "write = open\nwrite('x', 'w')",
+    "__builtins__.open('x', 'w')",
+    "env = os.environ\nenv['X'] = '1'",
+    "os.environ.copy()",
+    "for p in map(Path.unlink, files):\n    pass",
+    "write = Path('x').write_text\nwrite('y')",
+    "move = Path('x').replace\nmove('y')",
 ]
 READS = [
     "import os, re, subprocess",
     "from urllib.parse import quote",
+    "from pathlib import Path",
     "os.environ.get('X')",
+    "x = os.environ['X'] if 'X' in os.environ else ''",
+    "env = os.environ | {'X': '1'}",
     "os.path.abspath('x')",
     "shutil.which('git')",
     "Path('x').read_text()",
     "'a\\r\\n'.replace('\\r\\n', '\\n')",
+    "import json\njson.loads('{}')",
+    "import io\nisinstance(sys.stdout, io.TextIOWrapper)",
+    "import importlib.util\nimportlib.util.spec_from_file_location('x', 'x.py')",
     "run_git('rev-parse', 'HEAD')",
     "run_git('remote', 'get-url', 'origin')",
     "run_git('cat-file', '--batch-check')",
     "ctypes.WinDLL('kernel32').GetComputerNameW(b, s)",
     "def run_git(*args):\n    return subprocess.run(['git', *args])",
+    "def run_gh(gh, q):\n    return subprocess.run([gh, 'api', 'graphql', '-f', f'query={q}'])",
+    "sys.modules[spec.name] = module",
+    "print(done.returncode, done.stdout)",
+    "sorted(names, key=str.lower)",
+    "@dataclass\nclass Place:\n    url: str\n\nprint(Place('x').url)",
 ]
 PROCESS_WIDE = [
     "os.environ['X'] = '1'",
@@ -159,10 +201,92 @@ def test_the_search_for_process_wide_changes_finds_each_kind_and_no_reads() -> N
     assert found_lines(find_process_wide_changes, PROCESS_READS) == []
 
 
-def test_facts_changes_nothing_and_never_uses_the_network() -> None:
-    # Which is what lets a skill run it without asking first.
-    facts = SCRIPTS / "facts.py"
-    assert lines_of(find_changes_or_network_use(parse(facts)), facts) == []
+# The scripts each script that only reports loads into its own process, and whose names it may
+# read.
+LOADS = {"issue_status.py": [SCRIPTS / "facts.py"]}
+
+
+@pytest.mark.parametrize(
+    "script", [SCRIPTS / "facts.py", SKILLS / "handoff" / "issue_status.py"], ids=repo_path
+)
+def test_the_scripts_that_only_report_change_nothing_as_far_as_their_code_shows(
+    script: Path,
+) -> None:
+    # Which is what lets a skill run them without asking first. Each may start only the programs
+    # the launcher allows it: issue_status.py reaches the network only through gh api graphql,
+    # with queries the tests that fake gh check.
+    loads = [parse(loaded) for loaded in LOADS.get(script.name, [])]
+    found = find_changes_or_network_use(parse(script), PROGRAMS[script.name], loads)
+    assert lines_of(found, script) == [], (
+        "Each line uses something the check doesn't allow. If it can't change anything or reach "
+        "the network, add the name to REPORTING_NAMES, REPORTING_METHODS, or "
+        "REPORTING_ATTRIBUTES in helpers.py, and say in the commit that it's a safety change."
+    )
+
+
+def test_a_script_may_start_only_its_own_programs() -> None:
+    # facts.py may run git, but not gh, even through a function called run_gh.
+    code = "def run_gh(gh, text):\n    return subprocess.run([gh, 'api', 'graphql', '-f', text])"
+    assert find_changes_or_network_use(ast.parse(code), PROGRAMS["facts.py"])
+
+
+@pytest.mark.parametrize(
+    ("command", "programs", "allowed"),
+    [
+        (["C:/Git/cmd/git.exe", "rev-parse", "HEAD"], {"git"}, True),
+        (["/usr/bin/git", "remote", "get-url", "origin"], {"git"}, True),
+        (["git", "remote", "add", "x", "y"], {"git"}, False),
+        (["git", "status"], {"git"}, False),
+        (["gh", "api", "graphql", "-f", "query=query { viewer { login } }"], {"git", "gh"}, True),
+        (["gh", "api", "graphql", "-f", "query=mutation { closeIssue }"], {"git", "gh"}, False),
+        (["gh", "issue", "close", "1"], {"git", "gh"}, False),
+        (["gh", "api", "graphql", "--input", "query.json"], {"git", "gh"}, False),
+        (["gh", "api", "graphql", "-F", "query=@query.graphql"], {"git", "gh"}, False),
+        (["gh", "api", "graphql", "-f", "query=query { x }", "-X", "PUT"], {"git", "gh"}, False),
+        (["gh", "api", "graphql", "-f", "query=query { x }"], {"git"}, False),
+        (["cmd.exe", "/c", "git rev-parse HEAD"], {"git"}, False),
+    ],
+    ids=[
+        "git read",
+        "git remote read",
+        "git remote add",
+        "git status",
+        "gh query",
+        "gh mutation",
+        "gh issue close",
+        "gh query from a file",
+        "gh query from a file with -F",
+        "gh with more options",
+        "gh not allowed",
+        "a shell",
+    ],
+)
+def test_the_launcher_allows_only_git_reads_and_gh_queries_that_read(
+    command: list[str], programs: set[str], allowed: bool
+) -> None:
+    assert allowed_command(command, programs) is allowed
+    if sys.platform == "win32":
+        # Where subprocess gives the audit event the command line it builds.
+        assert allowed_command(subprocess.list2cmdline(command), programs) is allowed
+
+
+def test_the_launcher_checks_the_program_subprocess_starts_not_just_the_first_word() -> None:
+    # subprocess.run(["git", "rev-parse"], executable="other") starts other.
+    command = ["git", "rev-parse", "HEAD"]
+    assert allowed_command(command, {"git"}, "C:/Git/cmd/git.exe")
+    assert not allowed_command(command, {"git"}, "C:/Windows/System32/cmd.exe")
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        ["C:/Program Files/Git/cmd/git.exe", "rev-parse", "HEAD"],
+        ["gh", "-f", 'query=query { r(owner: "you", name: "a b") }', "", 'a\\"b', "c:\\x\\"],
+    ],
+    ids=["spaces", "quotes, an empty word, and backslashes"],
+)
+def test_the_launcher_splits_a_windows_command_line_back_into_its_words(words: list[str]) -> None:
+    assert split_command_line(subprocess.list2cmdline(words)) == words
 
 
 def test_facts_changes_nothing_the_whole_process_shares() -> None:

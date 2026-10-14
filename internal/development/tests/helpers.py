@@ -27,16 +27,20 @@ import stat
 import subprocess
 import sys
 import uuid
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
 
 import pytest
 
+from read_only_launcher import DLL_CALLS, FAILED, GIT_READS, PROGRAMS
+
 # This file is in internal/development/tests/, three folders below the repo's root.
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SANDBOX_ROOT = REPO_ROOT / "internal" / "development" / ".test-sandbox"
+# Runs a script that should only report with Python's audit hooks watching it.
+LAUNCHER = Path(__file__).resolve().with_name("read_only_launcher.py")
 
 # What a sandbox's copy leaves out, by its path in the repo: what belongs to this PC (including
 # the Python link, which would copy the Python install), and everything for development, the
@@ -330,11 +334,11 @@ def remove_sandbox(box: Sandbox) -> None:
 
 
 def check_in_sandbox(argv: list[str]) -> None:
-    """Refuses to run a script outside a sandbox."""
+    """Refuses to run a script outside a sandbox, other than the tests' own launcher."""
     for word in argv:
         if word.endswith(".py"):
             path = Path(word).resolve()
-            if SANDBOX_ROOT.resolve() not in path.parents:
+            if path != LAUNCHER and SANDBOX_ROOT.resolve() not in path.parents:
                 raise AssertionError(f"Refusing to run {path}, which is not in a sandbox.")
 
 
@@ -461,12 +465,19 @@ def run_command(
 ) -> Run:
     """Runs a skill's command. Its paths have no spaces, so it splits on them. Unless
     through_link, it starts with this environment's Python, by its real path, in place of the
-    sandbox's internal/.python/python.exe (see the description above)."""
+    sandbox's internal/.python/python.exe (see the description above), and a script that should
+    only report, such as facts.py, runs through the launcher that watches it, failing the test
+    at anything it changes."""
     words = command.split(" ")
-    assert words[0] == box.python.as_posix(), command
-    if not through_link:
-        words[0] = sys.executable
-    return run(box, words, cwd=cwd, env=env)
+    assert words[0] == box.python.as_posix() and words[1] == "-I", command
+    if through_link:
+        return run(box, words, cwd=cwd, env=env)
+    watched = Path(words[2]).name in PROGRAMS
+    words[:2] = [sys.executable, "-I", *([str(LAUNCHER)] if watched else [])]
+    result = run(box, words, cwd=cwd, env=env)
+    if any(line.startswith(FAILED) for line in result.lines):
+        raise AssertionError(str(result))
+    return result
 
 
 def new_repo(
@@ -509,99 +520,322 @@ def main_block_nodes(tree: ast.Module) -> set[ast.AST]:
     return inside
 
 
-# What a script that only reports may import: none of these can write files or reach the
-# network by being imported, and the calls below are checked one by one.
-REPORTING_IMPORTS = {
-    "__future__",
-    "collections.abc",
-    "ctypes",
-    "dataclasses",
-    "functools",
-    "io",
-    "json",
-    "os",
-    "pathlib",
-    "re",
-    "shutil",
-    "subprocess",
-    "sys",
-    "typing",
-    "urllib.parse",
-}
-# What it may use of os, shutil, and ctypes, which can also change things.
-REPORTING_ATTRIBUTES = {
-    "os": {"environ", "path", "pathsep", "sep", "getcwd", "uname", "fspath"},
-    "shutil": {"which"},
+# What a script that only reports may import, and the names it may use from each module, in
+# module.name or from module import name. Any other use of these modules, such as passing one
+# around, counts as a change, and so does sys.modules or ctypes.WinDLL anywhere but the one place
+# allowed_in_place allows it. Adding a name is a safety change: say so in the commit. Calls are
+# also checked one by one, below.
+REPORTING_NAMES = {
+    "__future__": {"annotations"},
+    "collections.abc": {"Callable", "Sequence"},
     "ctypes": {"create_unicode_buffer", "c_ulong", "byref", "WinDLL"},
+    "dataclasses": {"dataclass"},
+    "functools": {"cache"},
+    "importlib.util": {"spec_from_file_location", "module_from_spec"},
+    "io": {"TextIOWrapper"},
+    "json": {"loads", "dumps"},
+    "os": {"environ", "path", "pathsep", "sep", "getcwd", "uname", "fspath"},
+    "pathlib": {"Path"},
+    "re": {"IGNORECASE", "Match", "compile", "escape", "fullmatch", "match", "search", "sub"},
+    "shutil": {"which"},
+    "subprocess": {"run", "DEVNULL", "TimeoutExpired"},
+    "sys": {"argv", "exit", "modules", "platform", "stderr", "stdout"},
+    "types": {"ModuleType"},
+    "typing": {"Any"},
+    "urllib.parse": {"quote", "unquote"},
 }
-# What it may call from a Windows DLL.
-REPORTING_DLL_CALLS = {"GetComputerNameW"}
-# Method names that write or remove a file or folder. replace and rename count only with one
-# argument, the form pathlib's take: str.replace takes two.
-WRITING_METHODS = {
-    "write_text",
-    "write_bytes",
-    "mkdir",
-    "touch",
-    "unlink",
-    "rmdir",
-    "chmod",
-    "lchmod",
-    "symlink_to",
-    "hardlink_to",
+# The methods a script that only reports may call on an object, as obj.name(...); any other
+# method fails. Calls on a module are checked against REPORTING_NAMES instead. A name means the
+# same whatever the object, so each must be safe on any object that has it. replace counts only
+# with two arguments or more, the form str.replace takes: Path.replace takes one, and moves a
+# file. Adding a name is a safety change: say so in the commit.
+REPORTING_METHODS = {
+    # Text.
+    "endswith",
+    "isspace",
+    "join",
+    "lower",
+    "replace",
+    "rstrip",
+    "split",
+    "splitlines",
+    "startswith",
+    "strip",
+    # The script's own lists, dicts, and sets, in memory.
+    "add",
+    "append",
+    "extend",
+    "fromkeys",
+    "get",
+    "index",
+    "insert",
+    "items",
+    "pop",
+    "setdefault",
+    "values",
+    # Regular expressions and their matches.
+    "end",
+    "finditer",
+    "group",
+    "match",
+    "search",
+    "start",
+    # Paths, read only.
+    "cwd",
+    "is_absolute",
+    "is_dir",
+    "is_file",
+    "iterdir",
+    "read_text",
+    # The output streams, given a new encoding.
+    "reconfigure",
+    # issue_status.py loading facts.py, which this check reads too, and calling its functions.
+    "exec_module",
+    "find_handoff_place",
+    "find_program",
+}
+# The data attributes a script that only reports may read from Python's own objects, such as a
+# finished program's returncode. An attribute read without a call must be one of these, a method
+# in REPORTING_METHODS, or a name the script defines itself, such as a field of its own
+# dataclass (see defined_names). Adding a name is a safety change: say so in the commit.
+REPORTING_ATTRIBUTES = {
+    # A finished program: its exit code and output.
+    "returncode",
+    "stderr",
+    "stdout",
+    # A path's folder.
+    "parent",
+    # A class's name, such as an error's.
+    "__name__",
+    # The computer's name from os.uname(), and the text a DLL function wrote to a buffer.
+    "nodename",
+    "value",
+    # What loads a module from its file, and the module's name, for issue_status.py loading
+    # facts.py.
+    "loader",
+    "name",
+}
+# Built-ins that write, run code, or reach a method or a name by text, past both lists, and
+# __builtins__, which hands out all of them. Any mention fails, not only a call, so none can be
+# given another name first.
+CHANGING_BUILTINS = {
+    "__builtins__",
     "open",
+    "exec",
+    "eval",
+    "compile",
+    "__import__",
+    "breakpoint",
+    "getattr",
+    "setattr",
+    "delattr",
+    "vars",
+    "globals",
+    "locals",
 }
-ONE_ARGUMENT_WRITERS = {"replace", "rename"}
-# What run_git may be given: the first word, or first two, of a git command that only reads.
-GIT_READS = {"rev-parse", "rev-list", "cat-file", "remote get-url"}
-CHANGING_BUILTINS = {"open", "exec", "eval", "compile", "__import__", "breakpoint"}
 ENVIRON_CHANGES = {"update", "pop", "popitem", "setdefault", "clear", "__setitem__", "__delitem__"}
+# The one function that may start each program. run_git's callers must name a command in
+# GIT_READS; run_gh may only send a GraphQL request, and the tests that fake gh check that each
+# query only reads.
+PROGRAM_RUNNERS = {"run_git", "run_gh"}
 
 
-def is_changing_call(node: ast.Call, in_run_git: set[ast.AST]) -> bool:
-    """Whether a call may change something or reach the network (see the function below)."""
+def runs_gh_graphql(node: ast.Call) -> bool:
+    """Whether a call inside run_gh starts gh as gh api graphql -f query=<text>: the query in
+    the command, where the launcher and the tests that fake gh can check it, never in a file."""
+    command = node.args[0] if node.args else None
+    if not isinstance(command, ast.List) or len(command.elts) != 5:
+        return False
+    words = [e.value if isinstance(e, ast.Constant) else None for e in command.elts[1:4]]
+    query = command.elts[4]
+    if isinstance(query, ast.JoinedStr) and query.values:
+        query = query.values[0]
+    return (
+        words == ["api", "graphql", "-f"]
+        and isinstance(query, ast.Constant)
+        and str(query.value).startswith("query=")
+    )
+
+
+def is_changing_call(node: ast.Call, runner: str | None, modules: Collection[str]) -> bool:
+    """Whether a call may change something or reach the network (see the function below).
+    runner is the program runner the call is inside, if any, and modules the names that stand
+    for modules (see module_names)."""
     name = call_name(node)
     func = node.func
     method = func.attr if isinstance(func, ast.Attribute) else ""
     owner = func.value if isinstance(func, ast.Attribute) else None
     if isinstance(owner, ast.Call) and call_name(owner) == "ctypes.WinDLL":
         # A function from a Windows DLL, such as ctypes.WinDLL("kernel32").Function().
-        return method not in REPORTING_DLL_CALLS
+        return method not in DLL_CALLS
     if name.startswith("subprocess."):
-        return node not in in_run_git
+        return not (runner == "run_git" or (runner == "run_gh" and runs_gh_graphql(node)))
     if name == "run_git":
         words = [str(a.value) for a in node.args[:2] if isinstance(a, ast.Constant)]
         return not ({words[0] if words else "", " ".join(words)} & GIT_READS)
-    if name in CHANGING_BUILTINS or name.startswith("importlib"):
+    if name.startswith("importlib") and not name.startswith("importlib.util."):
+        # What importlib.util offers is checked against REPORTING_NAMES.
         return True
     if name.startswith("os.environ.") and method in ENVIRON_CHANGES:
         return True
-    return method in WRITING_METHODS or (method in ONE_ARGUMENT_WRITERS and len(node.args) == 1)
+    if not method or name.split(".")[0] in modules:
+        # A function by its own name, or one of a module's, which REPORTING_NAMES checks.
+        return False
+    if method == "replace":
+        return len(node.args) < 2
+    return method not in REPORTING_METHODS
 
 
-def find_changes_or_network_use(tree: ast.Module) -> list[ast.AST]:
-    """Where a script that should only report changes something or reaches the network, as far
-    as its code can show: an import beyond REPORTING_IMPORTS; os, shutil, or ctypes beyond what
-    REPORTING_ATTRIBUTES allows; a DLL call beyond REPORTING_DLL_CALLS; a method that writes a
-    file; open, exec, and the like; a change to os.environ; or a program started, unless it's
-    git run by run_git with a command that only reads."""
-    found: list[ast.AST] = []
-    in_run_git: set[ast.AST] = set()
+def module_names(tree: ast.Module) -> dict[str, list[str]]:
+    """Each name in the script that stands for a module REPORTING_NAMES lists, with the modules
+    it may stand for: each module's first word, such as os or importlib for importlib.util, and
+    the name an import gives a module with as."""
+    names: dict[str, list[str]] = {}
+    for module in REPORTING_NAMES:
+        names.setdefault(module.split(".")[0], []).append(module)
     for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef) and node.name == "run_git":
-            in_run_git.update(ast.walk(node))
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.asname and alias.name in REPORTING_NAMES:
+                    names[alias.asname] = [alias.name]
+    return names
+
+
+def allowed_in_place(module: str, name: str, use: ast.AST, parents: dict[ast.AST, ast.AST]) -> bool:
+    """Whether an allowed name is used where it's allowed. sys.modules can hand out any module,
+    ctypes.WinDLL any function of a DLL, and os.environ a way to change the environment once
+    it's given another name, so each is allowed only where it can't: sys.modules[name] = module;
+    ctypes.WinDLL(dll).Function(...) with a function in DLL_CALLS, the functions the launcher
+    allows too; and os.environ read in place, as os.environ.get(...), os.environ[name],
+    name in os.environ, or os.environ | other."""
+    parent = parents.get(use)
+    if (module, name) == ("sys", "modules"):
+        return isinstance(parent, ast.Subscript) and isinstance(parent.ctx, ast.Store)
+    if (module, name) == ("os", "environ"):
+        if isinstance(parent, ast.Attribute):
+            return parent.attr == "get" and isinstance(parents.get(parent), ast.Call)
+        if isinstance(parent, ast.Subscript):
+            return isinstance(parent.ctx, ast.Load)
+        return isinstance(parent, ast.Compare) or (
+            isinstance(parent, ast.BinOp) and isinstance(parent.op, ast.BitOr)
+        )
+    if (module, name) == ("ctypes", "WinDLL"):
+        method = parents.get(parent) if isinstance(parent, ast.Call) else None
+        return (
+            isinstance(method, ast.Attribute)
+            and method.attr in DLL_CALLS
+            and isinstance(parents.get(method), ast.Call)
+        )
+    return True
+
+
+def find_disallowed_module_uses(tree: ast.Module) -> list[ast.AST]:
+    """Each use of a module REPORTING_NAMES lists that isn't module.name with a name it allows,
+    in a place it allows it (see allowed_in_place), such as os.remove, or os itself passed to a
+    function or given another name."""
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    names = module_names(tree)
+    found: list[ast.AST] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Name) or node.id not in names:
+            continue
+        # The attributes after the name, with the node that ends at each: for os.path.join,
+        # path then join.
+        parts = [node.id]
+        ends: list[ast.AST] = [node]
+        while isinstance(parent := parents.get(ends[-1]), ast.Attribute) and (
+            parent.value is ends[-1]
+        ):
+            parts.append(parent.attr)
+            ends.append(parent)
+        for module in sorted(names[node.id], key=len, reverse=True):
+            # The words after the module's own: for importlib.util.module_from_spec, the
+            # module is importlib.util and the name module_from_spec.
+            words = module.split(".")
+            rest = parts[len(words) :]
+            if parts[1 : len(words)] == words[1:] and rest:
+                use = ends[len(words)]
+                if rest[0] not in REPORTING_NAMES[module] or not allowed_in_place(
+                    module, rest[0], use, parents
+                ):
+                    found.append(node)
+                break
+        else:
+            found.append(node)
+    return found
+
+
+def defined_names(tree: ast.Module) -> set[str]:
+    """The names a script defines: its functions, classes, and module-level names, and the
+    fields, names, and methods of its classes."""
+    names: set[str] = set()
+    bodies = [tree.body] + [n.body for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]
+    for body in bodies:
+        for node in body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                names.add(node.name)
+            targets = node.targets if isinstance(node, ast.Assign) else []
+            if isinstance(node, ast.AnnAssign):
+                targets = [node.target]
+            names.update(t.id for t in targets if isinstance(t, ast.Name))
+    return names
+
+
+def find_disallowed_attributes(
+    tree: ast.Module, modules: Collection[str], defined: Collection[str]
+) -> list[ast.AST]:
+    """Each attribute of an object, not a module, read without calling it, that isn't in
+    REPORTING_ATTRIBUTES, a method in REPORTING_METHODS, or a name in defined. A method called
+    is checked by is_changing_call instead. This is what stops a method being used by
+    reference, as in map(Path.unlink, files). replace counts only when called, where its
+    arguments tell str.replace from Path.replace."""
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    allowed = (REPORTING_METHODS - {"replace"}) | REPORTING_ATTRIBUTES | set(defined)
+    found: list[ast.AST] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Attribute) or node.attr in allowed:
+            continue
+        root = node.value
+        while isinstance(root, ast.Attribute):
+            root = root.value
+        parent = parents.get(node)
+        called = isinstance(parent, ast.Call) and parent.func is node
+        if not called and not (isinstance(root, ast.Name) and root.id in modules):
+            found.append(node)
+    return found
+
+
+def find_changes_or_network_use(
+    tree: ast.Module, programs: Collection[str] = ("git", "gh"), loads: Sequence[ast.Module] = ()
+) -> list[ast.AST]:
+    """Where a script that should only report changes something or reaches the network, as far
+    as its code can show: an import of a module REPORTING_NAMES doesn't list, or a name from one
+    that it doesn't allow; a DLL call beyond DLL_CALLS; a method on an object that
+    REPORTING_METHODS doesn't list, or an attribute read that find_disallowed_attributes doesn't
+    allow; open, exec, getattr, and the like; a change to os.environ; or a program started,
+    unless it's one of the programs given, started by its runner: git by run_git with a command
+    that only reads, or gh api graphql by run_gh. loads are the scripts it loads, whose names
+    it may read too, as issue_status.py reads facts.py's."""
+    found: list[ast.AST] = find_disallowed_module_uses(tree)
+    modules = module_names(tree)
+    defined = set().union(*(defined_names(t) for t in (tree, *loads)))
+    found.extend(find_disallowed_attributes(tree, modules, defined))
+    runners: dict[ast.AST, str] = {}
+    allowed_runners = {f"run_{program}" for program in programs} & PROGRAM_RUNNERS
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name in allowed_runners:
+            runners.update(dict.fromkeys(ast.walk(node), node.name))
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            found.extend(node for alias in node.names if alias.name not in REPORTING_IMPORTS)
+            found.extend(node for alias in node.names if alias.name not in REPORTING_NAMES)
         elif isinstance(node, ast.ImportFrom):
-            if (node.module or "") not in REPORTING_IMPORTS:
+            allowed = REPORTING_NAMES.get(node.module or "") if node.level == 0 else None
+            if allowed is None or any(alias.name not in allowed for alias in node.names):
                 found.append(node)
-        elif isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
-            allowed = REPORTING_ATTRIBUTES.get(node.value.id)
-            if allowed is not None and node.attr not in allowed:
-                found.append(node)
-        elif isinstance(node, ast.Call) and is_changing_call(node, in_run_git):
+        elif (
+            isinstance(node, ast.Call) and is_changing_call(node, runners.get(node), modules)
+        ) or (isinstance(node, ast.Name) and node.id in CHANGING_BUILTINS):
             found.append(node)
         elif isinstance(node, (ast.Assign, ast.AugAssign, ast.Delete)):
             targets = node.targets if isinstance(node, (ast.Assign, ast.Delete)) else [node.target]

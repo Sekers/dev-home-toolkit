@@ -106,8 +106,12 @@ rules apply too.
   goes in the scripts, not in steps for the agent. `prepare.py` always exits 0 and says
   everything in its lines, and it never commits: skills commit through `sync.py --message`.
 - `facts.py` only reports, and only from this PC: it changes nothing and never uses the network.
-  That's what makes it safe to pre-approve, and a test reads its code for both. Anything a skill
-  needs done, rather than told, goes in a script of its own.
+  That's what makes it safe to pre-approve. The tests read its code, and watch it as it runs (see
+  [The tests check the scripts that only report in two ways](decisions/the-tests-check-the-scripts-that-only-report-in-two-ways.md)).
+  Adding a name to what it may use (`REPORTING_NAMES`, `REPORTING_METHODS`, or
+  `REPORTING_ATTRIBUTES` in `internal/development/tests/helpers.py`) is a safety change: say so
+  in the commit. Anything a skill needs done, rather than told, goes
+  in a script of its own.
 - `prepare.py` loads `facts.py` into its own process, after a sync that may have brought in a
   newer `facts.py` than the `prepare.py` already running. So keep the names and arguments of
   what `prepare.py` calls there, and `facts.py` changes nothing the whole process shares, such as

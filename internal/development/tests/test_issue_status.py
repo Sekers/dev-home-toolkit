@@ -7,6 +7,7 @@ generated copy, with gh faked. One runs the skill's command as a process, with n
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 from collections.abc import Iterator
@@ -54,7 +55,8 @@ def load(box: Sandbox) -> ModuleType:
 
 class FakeGh:
     """gh's GraphQL requests, answering each with the next answer a test gives, the last one
-    again once they run out, and recording each query."""
+    again once they run out, and recording each query. A query that could change anything on
+    GitHub fails the test."""
 
     def __init__(self, module: ModuleType, code: int, out: object, err: str = "") -> None:
         self.module = module
@@ -69,8 +71,28 @@ class FakeGh:
         return self
 
     def __call__(self, gh: str, text: str) -> Any:
+        if not text.startswith("query {") or re.search(r"\bmutation\b", text):
+            # pytest.fail, not assert: the script turns an Exception into a PROBLEM line, and
+            # this has to fail the test.
+            pytest.fail(f"a query that could change GitHub: {text}")
         self.queries.append(text)
         return self.results[min(len(self.queries), len(self.results)) - 1]
+
+
+def test_the_fake_gh_fails_a_query_that_could_change_github_even_inside_the_script(
+    box: Sandbox,
+    project: Path,
+    handoff: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # So every test that runs the script with gh faked checks that its queries only read, and
+    # the script's own catch-all can't turn the failure into a line.
+    write_text(handoff, "https://github.com/you/tool/issues/1\n")
+    module = load(box)
+    monkeypatch.setattr(module, "query", lambda issues: "mutation { closeIssue }")
+    with pytest.raises(pytest.fail.Exception):
+        run_here(box, project, monkeypatch, capsys, FakeGh(module, 0, {"data": {}}), module)
 
 
 def closed(reason: str, original: object = None) -> dict[str, object]:
