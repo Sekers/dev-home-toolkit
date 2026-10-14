@@ -55,20 +55,25 @@ def find_program(name: str) -> str | None:
     return None
 
 
-def run_setup(*, fresh: bool = False, sync_holds_lock: bool = False) -> bool:
-    """Runs setup with --quiet, which prints its own lines, PROBLEM lines included. Returns
-    whether it had no problem. It runs inside this process unless fresh, or another process
+def run_setup(
+    *, fresh: bool = False, sync_holds_lock: bool = False, at_console: bool = False
+) -> bool:
+    """Runs setup, which prints its own lines, PROBLEM lines included, and returns whether it
+    had no problem. It runs with --quiet, inside this process unless fresh, or another process
     changed the shared modules since this one loaded them. Setup then runs as a Python process
     of its own, which loads one consistent version of the code. A sync that holds its lock says
-    so, and setup's save doesn't wait for the lock it would otherwise take."""
-    if fresh or _shared_code_changed():
+    so, and setup's save doesn't wait for the lock it would otherwise take. at_console runs it
+    as a person runs it by hand instead: without --quiet, in a process of its own, with this
+    one's input, so at a console it asks about anything not answered yet."""
+    if at_console or fresh or _shared_code_changed():
         # Setup writes to the same output, so this process's lines go out first.
         sys.stdout.flush()
         # Only the new process's environment changes, never this one's.
         environment = os.environ | {SYNC_HOLDS_LOCK: "1"} if sync_holds_lock else None
+        options = [] if at_console else ["--quiet"]
         done = subprocess.run(
-            [sys.executable, "-I", str(TOOLS_ROOT / "setup.py"), "--quiet"],
-            stdin=subprocess.DEVNULL,
+            [sys.executable, "-I", str(TOOLS_ROOT / "setup.py"), *options],
+            stdin=None if at_console else subprocess.DEVNULL,
             env=environment,
             check=False,
         )

@@ -1,9 +1,10 @@
 """Shows the dev-home-tools commits waiting on GitHub, and pulls them after a yes.
 
 Lists each waiting commit and the files it changes, and points to the command that shows every
-changed line. On a yes, it pulls them (fast-forward only), then runs setup so the updated
-skills and rules take effect on this PC. It holds the sync's lock on dev-home for the pull and
-that setup, as a sync does for its own, so a sync in another session waits for them.
+changed line. On a yes, it pulls them (fast-forward only), holding the sync's lock on dev-home
+so a sync in another session waits for the pull, then runs setup as a person runs it by hand,
+so the updated skills and rules take effect on this PC, and at a console setup asks about
+anything new.
 
 Everything about dev-home-tools updates happens here: a sync runs its quiet check, the same as
 --quiet, and a person runs it without. So what the user is told and what gets installed come
@@ -209,24 +210,26 @@ def check(*, quiet: bool) -> tuple[int, bool]:
                 f"{LOCK_WAIT_SECONDS // 60} minutes. Run {by_hand('update.py')} again shortly.",
             ), False
         merge = run_git(TOOLS_ROOT, "merge", "--ff-only", "--quiet", commit)
-        if merge.code != 0:
-            problem = f"Could not pull them. git: {first_line(merge.err + merge.out)}"
-            return stop(quiet, problem), False
-        print(color(f"Pulled {waiting}. Running setup so they take effect:", CYAN), flush=True)
-        # The code just pulled is new, so setup runs in a process of its own to load it.
-        if not run_setup(fresh=True, sync_holds_lock=True):
-            return 1, True
+    if merge.code != 0:
+        problem = f"Could not pull them. git: {first_line(merge.err + merge.out)}"
+        return stop(quiet, problem), False
+    print(color(f"Pulled {waiting}. Running setup so they take effect:", CYAN), flush=True)
+    # Setup runs as a person runs it by hand, so at a console it asks about anything new, such as
+    # a skill the update brings, and it loads the code just pulled.
+    if not run_setup(at_console=True):
+        return 1, True
     print(color("Done.", GREEN))
     return 0, True
 
 
 @contextlib.contextmanager
 def sync_lock() -> Iterator[bool]:
-    """The sync's lock on dev-home, which a person's update holds for its pull and the setup
-    after it, as a sync holds it for its own. Otherwise a sync in another session could run setup
-    while git replaces the skills' files, and see a skill missing for a moment, or generate files
-    from half-updated templates. The question before it never holds the lock, so a sync never
-    waits on a person. Yields whether this run holds it, or True when there's no lock to take: no
+    """The sync's lock on dev-home, which a person's update holds for its pull, as a sync holds
+    it for its own. Otherwise a sync in another session could run setup while git replaces the
+    skills' files, and see a skill missing for a moment, or generate files from half-updated
+    templates. Neither the question before it nor the setup after it holds the lock, since setup
+    may ask questions too, and a sync never waits on a person; setup takes the lock itself where
+    it needs it. Yields whether this run holds it, or True when there's no lock to take: no
     dev-home folder set yet, one whose .git isn't a folder, or a lock file that can't be opened,
     which nothing else can hold either."""
     folder = get(read_settings() or {}, "devHome.folder")

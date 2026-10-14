@@ -484,6 +484,27 @@ def test_update_with_a_yes_pulls_and_sets_it_up(box: Sandbox) -> None:
     result = run_python(box, "update.py", answer="y")
     assert result.code == 0, str(result)
     assert "Upstream change two." in generated_skill(box)
+    # Setup ran as a person runs it, without --quiet, which prints only changes and problems.
+    assert result.has_line(r"^OK\s+dev-home git config"), str(result)
+
+
+def test_setup_at_the_console_runs_as_a_person_runs_it(
+    box: Sandbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Without --quiet, and with the update's own input, so at a console it can ask.
+    programs = shared_module(box, "programs")
+    calls: list[tuple[list[str], dict[str, object]]] = []
+
+    def fake_run(argv: list[str], **options: object) -> subprocess.CompletedProcess[str]:
+        calls.append((argv, options))
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(programs.subprocess, "run", fake_run)
+    assert programs.run_setup(at_console=True)
+    argv, options = calls[0]
+    assert argv[-1].endswith("setup.py"), argv
+    assert "--quiet" not in argv, argv
+    assert options["stdin"] is None and options["env"] is None, options
 
 
 def test_update_pulls_only_the_commits_it_showed(box: Sandbox) -> None:
@@ -1132,24 +1153,33 @@ def test_update_by_hand_pulls_nothing_while_a_sync_holds_the_lock(
     assert git("-C", str(box.tools), "rev-parse", "HEAD") == head
 
 
-def test_update_by_hand_holds_the_lock_while_it_pulls_and_sets_up(
+def test_update_by_hand_holds_the_lock_for_the_pull_then_runs_setup_at_the_console(
     box: Sandbox, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # A sync in another session would otherwise run setup while git replaces the skills' files.
+    # Setup comes after, without the lock: it may ask questions, and a sync never waits on one.
     push_update(box, "Upstream change under the lock.")
     code = shared_module(box, "update")
     monkeypatch.setattr(code, "input", lambda _prompt: "y", raising=False)
-    seen: list[tuple[bool, dict[str, bool]]] = []
+    merges: list[bool] = []
+    setups: list[tuple[bool, dict[str, bool]]] = []
+    real_git = code.run_git
 
-    def setup_while_pulled(**options: bool) -> bool:
-        seen.append((lock_is_held(box), options))
+    def watched_git(repo: Path, *args: str) -> object:
+        if args[:1] == ("merge",):
+            merges.append(lock_is_held(box))
+        return real_git(repo, *args)
+
+    def setup_after_the_pull(**options: bool) -> bool:
+        setups.append((lock_is_held(box), options))
         return True
 
-    monkeypatch.setattr(code, "run_setup", setup_while_pulled)
+    monkeypatch.setattr(code, "run_git", watched_git)
+    monkeypatch.setattr(code, "run_setup", setup_after_the_pull)
     returned = code.main([])
     out = capsys.readouterr().out
     assert returned == 0, out
-    assert seen == [(True, {"fresh": True, "sync_holds_lock": True})], seen
-    assert not lock_is_held(box), "let go once the update is done"
+    assert merges == [True], merges
+    assert setups == [(False, {"at_console": True})], setups
     head = git("-C", str(box.tools), "log", "-1", "--format=%s")
     assert head == ["handoff: Upstream change under the lock."], head
