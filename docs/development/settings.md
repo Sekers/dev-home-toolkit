@@ -14,6 +14,9 @@ AGENTS.md's rules apply too.
   read the declaration, so never write a setting's default or label anywhere else.
 - Pick its kind from the four in the decision. The help of a setting with no default says what
   happens until it's answered.
+- Ask about a yes-or-no setting with a default through setup's `choose_or_default`, so every
+  such question reads the same: `y, n, or d for the default (<its default>)`, with the capital
+  letter showing what Enter gives, such as `[y/n/D]`.
 - Decide what Enter does at its question when nothing is answered yet, apart from its default:
   for a setting with a default, Enter means default; a folder's question takes Enter as yes,
   though a folder nobody has answered for isn't set up; and `multiMachine`'s question has no

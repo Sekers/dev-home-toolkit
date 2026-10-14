@@ -57,6 +57,36 @@ def confirm(question: str) -> bool:
     return re.fullmatch(r"\s*(y|yes)\s*", answer, re.IGNORECASE) is not None
 
 
+# The answer that follows a setting's default, whatever it becomes, rather than choosing a value.
+DEFAULT = "default"
+
+
+def choose_or_default(question: str, default: bool, enter: bool | str) -> bool | str | None:
+    """True for yes, False for no, and DEFAULT to follow the setting's default, which the
+    question names. enter is what Enter gives, shown as the capital letter: the saved yes or no,
+    or DEFAULT when nothing is saved yet, or the saved answer already follows the default, so
+    Enter never turns a choice into following the default unnoticed. None when input ends
+    without an answer."""
+    letters = {True: "y", False: "n", DEFAULT: "d"}
+    hint = "/".join(letter.upper() if key == enter else letter for key, letter in letters.items())
+    words = "yes" if default else "no"
+    while True:
+        try:
+            answer = input(f"{question} y, n, or d for the default ({words}) [{hint}]: ")
+        except EOFError:
+            return None
+        text = answer.strip().lower()
+        if text in ("y", "yes"):
+            return True
+        if text in ("n", "no"):
+            return False
+        if text in ("d", "default"):
+            return DEFAULT
+        if not text:
+            return enter
+        print("Type y, n, or d.", flush=True)
+
+
 def choose(question: str, default: bool | None = None) -> bool | None:
     """True for yes and False for no. Enter gives the default, shown as the capital letter; with
     no default, Enter says to type y or n and asks again, as any other answer does. None when

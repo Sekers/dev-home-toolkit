@@ -163,7 +163,7 @@ one's name is its path, which `--configure` takes too:
 
 - `devHome.folder` is your dev-home folder. To use a different one, run setup with
   `--content-dir <folder>`.
-- `updates.installAutomatically` is `true` or `false` (`false` unless set).
+- `updates.installAutomatically` is `true` or `false` (`true` unless set).
 - `updates.checkEveryHours` and `devHome.checkEveryHours` say how often a sync checks GitHub for
   dev-home-tools updates (24 hours unless set) and for dev-home's changes (12 hours unless set,
   when one copy is in active use, and for a plain `/knowledge`), where 0 means every time.
@@ -278,8 +278,10 @@ Everything beyond getting started is in the `docs/` folder:
 - **`setup.py` replaces only its own work:** its generated files, links whose target is gone,
   and links it made to skills that no longer exist. Anything else in its way is reported, not
   changed. Settings changes are shown first, need your yes, and keep a backup.
-- **Tooling updates wait for you** unless you turn on `updates.installAutomatically`, because
-  whoever controls this repo on GitHub controls code that runs on your PC.
+- **Tooling updates install themselves,** as most apps' do, unless you turn off
+  `updates.installAutomatically`. Whoever controls this repo on GitHub controls code that runs on
+  your PC, so turn it off if you'd rather look at each update first and install it with
+  `update.py`.
 - **Never run `Remove-Item -Recurse`** on `~\.claude`, `~\.claude-*`, or `~\.agents`. It follows
   the links into your dev-home and deletes what's there. Remove a single link with
   `cmd /c rmdir <link>`.

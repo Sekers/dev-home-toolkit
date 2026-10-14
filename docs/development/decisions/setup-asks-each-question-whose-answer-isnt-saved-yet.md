@@ -7,7 +7,9 @@ give" in
 
 - Whether to pull updates automatically: asked until answered. A quiet run leaves
   `updates.installAutomatically` out of `local-settings.json`, and a sync treats a missing answer
-  as no.
+  as no. (Later changed by
+  [dev-home-tools updates install themselves unless you say no](dev-home-tools-updates-install-themselves-unless-you-say-no.md):
+  a missing answer follows the default, yes.)
 - Each `~/.claude-*` folder: asked once. A yes or a no is saved in `claudeCode.folders`, so it
   isn't asked again.
 - A quiet run never asks, so it names each `~/.claude-*` folder with no answer, in a line the

@@ -106,15 +106,18 @@ from .paths import comparable, forward, is_inside, resolve_home, same_path, unsa
 from .programs import SYNC_HOLDS_LOCK, by_hand, find_program
 from .settings import (
     AUTO_UPDATE,
+    BY_PATH,
     CLAUDE_FOLDERS,
     CODEX_HOMES,
     DEFAULT_FOLDERS,
     DEV_HOME_SETTINGS,
+    MISSING,
     SCHEMA_VERSION,
     SETTINGS_PATH,
     TOOLS_ROOT,
     Checked,
     LocalSettings,
+    Setting,
     answered,
     apply_changes,
     check_settings,
@@ -127,6 +130,7 @@ from .settings import (
     local_settings_text,
     put,
     read_dev_home_settings,
+    saved_answer,
     setting_value,
     settings_text,
     skill_preferences,
@@ -240,16 +244,28 @@ class Setup:
     def choose(self, question: str, default: bool | None = None) -> bool | None:
         return console.choose(question, default) if self.can_ask else None
 
+    def choose_or_default(self, question: str, setting: Setting, data: dict[str, Any]) -> object:
+        """Asks about a yes-or-no setting with a default, one of dev-home-tools' own or a
+        skill's preference, saved in data: yes, no, or follow the default. Returns the answer as
+        it's saved (see saved_answer), or MISSING when no answer came. Enter keeps a saved yes or
+        no, and otherwise follows the default."""
+        if not self.can_ask:
+            return MISSING
+        saved = get(data, setting.path, MISSING)
+        enter: bool | str = saved if isinstance(saved, bool) else console.DEFAULT
+        answer = console.choose_or_default(question, bool(setting.default), enter)
+        return MISSING if answer is None else saved_answer(answer)
+
     # The questions about settings, which the first run and --configure's menu both ask.
 
-    def ask_auto_update(self, current: bool | None) -> bool:
+    def ask_auto_update(self, data: dict[str, Any]) -> object:
+        """Whether a sync installs updates by itself, as choose_or_default returns it."""
         self.line(
             "sync.py can pull dev-home-tools updates on every sync, or only tell you when there "
             "are some,"
         )
         self.line("so you can look at them first and pull them with update.py.")
-        answer = self.choose("Pull updates automatically?", bool(current))
-        return bool(current) if answer is None else answer
+        return self.choose_or_default("Pull updates automatically?", BY_PATH[AUTO_UPDATE], data)
 
     def ask_claude_folder(self, folder: Path, current: bool | None) -> bool:
         answer = self.choose(f"Also set up {folder}, for another Claude account?", bool(current))
@@ -1080,8 +1096,10 @@ class Setup:
             save = True
 
         if self.can_ask and not setting_value(settings.data, AUTO_UPDATE)[1]:
-            put(settings.data, AUTO_UPDATE, self.ask_auto_update(None))
-            save = True
+            updates = self.ask_auto_update(settings.data)
+            if updates is not MISSING:
+                put(settings.data, AUTO_UPDATE, updates)
+                save = True
         # Each ~/.claude-<name> folder is another Claude account, run with CLAUDE_CONFIG_DIR.
         # Setup asks about each one once, and keeps the answer, a no included.
         unanswered = [

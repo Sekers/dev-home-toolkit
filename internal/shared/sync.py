@@ -32,7 +32,8 @@ and push again. A push that fails for any other reason, such as offline, waits f
 
 Then it runs update's quiet check (internal/shared/update.py, the same as its --quiet), which
 checks dev-home-tools for new commits and makes every decision about them: it pulls them when
-updates.installAutomatically is on in local-settings.json, and otherwise says they're waiting. It
+updates.installAutomatically is on, as it is unless local-settings.json turns it off, and
+otherwise says they're waiting. It
 checks GitHub only once updates.checkEveryHours (24 by default) have passed since it last did.
 
 Last, it runs setup's code with --quiet, inside this process, so updated skills, and skills

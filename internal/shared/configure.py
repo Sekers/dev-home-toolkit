@@ -311,8 +311,10 @@ def keeps(settings: LocalSettings, path: str, answer: object) -> bool:
 
 
 def change_auto_update(run: "Setup", settings: LocalSettings) -> bool:
-    answer = run.ask_auto_update(setting_value(settings.data, AUTO_UPDATE)[0])
-    if keeps(settings, AUTO_UPDATE, answer):
+    answer = run.ask_auto_update(settings.data)
+    saved = get(settings.data, AUTO_UPDATE, MISSING)
+    # By type too, since 1 == True: a value of the wrong kind is replaced by the answer.
+    if answer is MISSING or (type(answer) is type(saved) and answer == saved):
         return False
     put(settings.data, AUTO_UPDATE, answer)
     return True

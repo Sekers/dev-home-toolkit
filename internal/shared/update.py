@@ -17,8 +17,9 @@ Options:
               for every time) have passed since the last fetch, and otherwise uses what that
               fetch found. Then prints at most one line, in the sync's format: OFFLINE when
               GitHub can't be reached, UPDATE while commits are waiting, or PULLED once it has
-              pulled them, which it does only when updates.installAutomatically is on in
-              local-settings.json. Leaves setup to the sync, which runs it next.
+              pulled them, which it does only when updates.installAutomatically is on, as it is
+              unless local-settings.json turns it off. Leaves setup to the sync, which runs it
+              next.
 
 Run without --quiet, it always checks GitHub.
 
@@ -160,9 +161,11 @@ def check(*, quiet: bool) -> tuple[int, bool]:
         ), False
 
     if quiet:
-        # Only the setting turned on installs anything unasked. A file that can't be read counts as
-        # missing, so the setting is its default.
-        if setting_value(read_settings() or {}, AUTO_UPDATE)[0] is not True:
+        # Only the setting turned on, by an answer or its default, installs anything unasked. A
+        # file that can't be read installs nothing, whatever the default: something has gone wrong
+        # on this PC. (A sync stops before this when it can't read the file either.)
+        settings = read_settings()
+        if settings is None or setting_value(settings, AUTO_UPDATE)[0] is not True:
             status_line(
                 "UPDATE",
                 f"{waiting} waiting in dev-home-tools. To see them and install them, the user "

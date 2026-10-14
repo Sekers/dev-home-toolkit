@@ -150,6 +150,12 @@ def read_value(value: object, setting: Setting) -> tuple[Any, bool, bool]:
     return fallback, False, False
 
 
+def saved_answer(answer: bool | str) -> object:
+    """How the answer to a yes-or-no question about a setting with a default is saved: yes or
+    no as the plain value, and "default" as the default state, so it follows the default."""
+    return {STATE: "default"} if answer == "default" else answer
+
+
 def setting_value(data: dict[str, Any], path: str) -> tuple[Any, bool, bool]:
     """read_value for one of dev-home-tools' own settings, from the file's data."""
     return read_value(get(data, path, MISSING), BY_PATH[path])

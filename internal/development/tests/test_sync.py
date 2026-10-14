@@ -1183,3 +1183,31 @@ def test_update_by_hand_holds_the_lock_for_the_pull_then_runs_setup_at_the_conso
     assert setups == [(False, {"at_console": True})], setups
     head = git("-C", str(box.tools), "log", "-1", "--format=%s")
     assert head == ["handoff: Upstream change under the lock."], head
+
+
+def test_a_settings_file_the_update_check_cant_read_installs_nothing(
+    box: Sandbox, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Whatever the default says: something has gone wrong on this PC. A sync stops before its
+    # update check when it can't read the file, so this runs the check's code here.
+    push_update(box, "Upstream change with unreadable settings.")
+    git("-C", str(box.tools), "fetch", "--quiet")
+    head = git("-C", str(box.tools), "rev-parse", "HEAD")
+    code = shared_module(box, "update")
+    monkeypatch.setattr(code, "read_settings", lambda: None)
+    returned = code.quiet_check()
+    out = capsys.readouterr().out
+    assert returned == (0, False), out
+    assert re.search(r"^UPDATE\s+\d+ commits? waiting in dev-home-tools\.", out, re.M), out
+    assert git("-C", str(box.tools), "rev-parse", "HEAD") == head
+
+
+def test_with_no_answer_a_sync_installs_updates_by_default(box: Sandbox) -> None:
+    push_update(box, "Upstream change installed by default.")
+    set_setting(box, "updates.installAutomatically", None)
+    try:
+        result = sync(box)
+    finally:
+        set_setting(box, "updates.installAutomatically", False)
+    assert result.has_line(r"^PULLED\s+"), str(result)
+    assert "Upstream change installed by default." in generated_skill(box)

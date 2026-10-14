@@ -8,7 +8,7 @@
     },
     "updates.installAutomatically": {
       "type": "yes-no",
-      "default": false,
+      "default": true,
       "asked": true,
       "label": "Install dev-home-tools updates automatically",
       "help": "Whether a sync installs dev-home-tools updates as soon as it finds them."

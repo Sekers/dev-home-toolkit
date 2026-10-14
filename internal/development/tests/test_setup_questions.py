@@ -32,6 +32,9 @@ from helpers import (
 
 pytestmark = pytest.mark.xdist_group("setup-questions")
 
+# The question about installing updates, whatever Enter gives.
+UPDATES = r"^Pull updates automatically\? y, n, or d for the default \(yes\) \[[yY]/[nN]/[dD]\]: $"
+
 
 @pytest.fixture(scope="module")
 def box(request: pytest.FixtureRequest) -> Iterator[Sandbox]:
@@ -194,7 +197,7 @@ def test_a_first_run_asks_about_updates_and_each_claude_folder(
     third.mkdir()
     person.answers.update(
         {
-            r"^Pull updates automatically\? \[y/N\]: $": "y",
+            UPDATES: "y",
             r"\.claude-second, for another Claude account\? \[y/N\]: $": "yes",
             r"\.claude-third, for another Claude account\? \[y/N\]: $": "n",
             # A yes to the settings change the new folder needs.
@@ -241,7 +244,7 @@ def test_asks_each_question_whose_answer_isnt_saved_yet_then_never_again(
     later.mkdir()
     person.answers.update(
         {
-            r"^Pull updates automatically\? \[y/N\]: $": "n",
+            UPDATES: "n",
             r"\.claude-later, for another Claude account\? \[y/N\]: $": "n",
         }
     )
@@ -258,6 +261,95 @@ def test_asks_each_question_whose_answer_isnt_saved_yet_then_never_again(
     assert person.asked == asked, person.asked
     assert written["updates"]["installAutomatically"] is False
     assert written["claudeCode"]["folders"] == {"~/.claude-later": {"setUp": False}}
+
+
+def test_enter_at_the_first_updates_question_follows_the_default(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Saved as the default, not as its value, so a later change of default reaches this PC.
+    unanswered_updates(settings)
+    person.answers[UPDATES] = ""
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    written = json.loads(settings.read_text(encoding="utf-8"))
+    assert returned == 0, out
+    assert any(asked.endswith("(yes) [y/n/D]: ") for asked in person.asked), person.asked
+    assert written["updates"]["installAutomatically"] == {"$state": "default"}, written
+
+
+def test_with_no_answer_to_the_updates_question_nothing_is_saved(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The input ends, as when a person closes the console: the question stays unanswered.
+    unanswered_updates(settings)
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    written = json.loads(settings.read_text(encoding="utf-8"))
+    assert returned == 0, out
+    assert any(re.search(UPDATES, asked) for asked in person.asked), person.asked
+    assert "installAutomatically" not in written.get("updates", {}), written
+
+
+@pytest.mark.parametrize(
+    ("saved", "answer", "hint", "written"),
+    [
+        (None, "", "[y/n/D]", {"$state": "default"}),
+        (True, "", "[Y/n/d]", True),
+        (False, "", "[y/N/d]", False),
+        ({"$state": "default"}, "", "[y/n/D]", {"$state": "default"}),
+        (True, "d", "[Y/n/d]", {"$state": "default"}),
+        ({"$state": "default"}, "n", "[y/n/D]", False),
+        (False, ["maybe", "yes"], "[y/N/d]", True),
+    ],
+    ids=[
+        "nothing saved, Enter",
+        "yes saved, Enter",
+        "no saved, Enter",
+        "default saved, Enter",
+        "yes saved, d",
+        "default saved, n",
+        "an answer it doesn't take",
+    ],
+)
+def test_the_updates_question_takes_yes_no_or_default_and_enter_keeps_a_saved_answer(
+    box: Sandbox,
+    backups_removed: Path,
+    person: Person,
+    capsys: pytest.CaptureFixture[str],
+    saved: object,
+    answer: str | list[str],
+    hint: str,
+    written: object,
+) -> None:
+    # Enter never turns a yes or a no into following the default without the person noticing.
+    data = json.loads(backups_removed.read_text(encoding="utf-8"))
+    data["updates"].pop("installAutomatically", None)
+    if saved is not None:
+        data["updates"]["installAutomatically"] = saved
+    write_text(backups_removed, json.dumps(data, indent=2) + "\n")
+    person.answers.update({MENU: ["2", ""], UPDATES: answer})
+    returned = setup_here(box, "--configure")
+    out = capsys.readouterr().out
+    result = json.loads(backups_removed.read_text(encoding="utf-8"))
+    assert returned == 0, out
+    asked = [prompt for prompt in person.asked if re.search(UPDATES, prompt)]
+    assert asked and all(prompt.endswith(f"(yes) {hint}: ") for prompt in asked), asked
+    assert result["updates"]["installAutomatically"] == written, result
+    assert ("Type y, n, or d." in out) == isinstance(answer, list), out
+
+
+def test_a_yes_replaces_a_value_of_the_wrong_kind_that_equals_it_in_python(
+    box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # In Python, 1 == True, but the file needs true: 1 isn't a value the setting takes.
+    data = json.loads(backups_removed.read_text(encoding="utf-8"))
+    data["updates"]["installAutomatically"] = 1
+    write_text(backups_removed, json.dumps(data, indent=2) + "\n")
+    person.answers.update({MENU: ["2", ""], UPDATES: "y"})
+    setup_here(box, "--configure")
+    out = capsys.readouterr().out
+    written = json.loads(backups_removed.read_text(encoding="utf-8"))
+    assert written["updates"]["installAutomatically"] is True, out
 
 
 def unanswered_updates(settings: Path) -> None:
@@ -277,15 +369,15 @@ def test_a_save_keeps_what_a_sync_wrote_while_a_question_waited(
     code = shared_module(box, "setup")
     asking = code.Setup.ask_auto_update
 
-    def ask_while_a_sync_writes(run: Any, current: bool | None) -> bool:
+    def ask_while_a_sync_writes(run: Any, data: dict[str, Any]) -> object:
         meanwhile = json.loads(settings.read_text(encoding="utf-8"))
         meanwhile["devHome"]["checkEveryHours"] = 6
         write_text(settings, json.dumps(meanwhile, indent=2) + "\n")
-        answer: bool = asking(run, current)
+        answer: object = asking(run, data)
         return answer
 
     monkeypatch.setattr(code.Setup, "ask_auto_update", ask_while_a_sync_writes)
-    person.answers[r"^Pull updates automatically\? \[y/N\]: $"] = "y"
+    person.answers[UPDATES] = "y"
     returned = setup_here(box)
     out = capsys.readouterr().out
     written = json.loads(settings.read_text(encoding="utf-8"))
@@ -302,7 +394,7 @@ def test_setup_by_hand_saves_only_once_a_sync_lets_go_of_its_lock(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     unanswered_updates(settings)
-    person.answers[r"^Pull updates automatically\? \[y/N\]: $"] = "y"
+    person.answers[UPDATES] = "y"
     sync = shared_module(box, "sync")
     monkeypatch.setattr(sync, "LOCK_WAIT_SECONDS", 0)
     git_dir = box.content / ".git"
@@ -338,7 +430,7 @@ def test_an_answer_that_cant_be_saved_leaves_the_old_settings_whole(
     saved.get("updates", {}).pop("installAutomatically", None)
     write_text(settings, json.dumps(saved, indent=2) + "\n")
     before = settings.read_bytes()
-    person.answers[r"^Pull updates automatically\? \[y/N\]: $"] = "n"
+    person.answers[UPDATES] = "n"
     with settings.open("rb"):
         returned = setup_here(box)
     out = capsys.readouterr().out
@@ -365,7 +457,7 @@ def test_at_a_console_settings_in_the_older_layout_are_set_aside_and_asked_again
         {
             SET_ASIDE: "",
             r"^Your dev-home folder \[.*\]: $": content,
-            r"^Pull updates automatically\? \[y/N\]: $": "n",
+            UPDATES: "n",
         }
     )
     try:
@@ -610,7 +702,7 @@ def backups_removed(settings: Path) -> Iterator[Path]:
 def test_the_menu_changes_the_setting_picked_and_keeps_a_backup(
     box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    person.answers.update({MENU: ["9", "2", ""], r"^Pull updates automatically\? \[y/N\]: $": "y"})
+    person.answers.update({MENU: ["9", "2", ""], UPDATES: "y"})
     returned = setup_here(box, "--configure")
     out = capsys.readouterr().out
     assert returned == 0, out
@@ -630,7 +722,7 @@ def test_the_menu_goes_through_every_setting_with_its_answer_as_the_default(
         {
             MENU: ["a", ""],
             r"^Your dev-home folder \[.*\]: $": "",
-            r"^Pull updates automatically\? \[y/N\]: $": "",
+            UPDATES: "",
             UPDATE_HOURS: ["six", "6"],
             CONTENT_HOURS: "",
             ELSEWHERE.replace(r"\[y/n\]", r"\[Y/n\]"): "",
@@ -660,7 +752,7 @@ def test_enter_in_the_menu_keeps_a_setting_that_follows_its_default(
         {
             MENU: ["a", ""],
             r"^Your dev-home folder \[.*\]: $": "",
-            r"^Pull updates automatically\? \[y/N\]: $": "",
+            UPDATES: "",
             UPDATE_HOURS: "",
             CONTENT_HOURS: "",
             ELSEWHERE.replace(r"\[y/n\]", r"\[Y/n\]"): "",

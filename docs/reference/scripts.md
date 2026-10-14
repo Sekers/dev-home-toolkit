@@ -88,8 +88,10 @@ answer to setup's question about installing them automatically, `updates.install
 
 | `updates.installAutomatically` | When new commits are waiting | What you do |
 | --- | --- | --- |
-| Off (the default, and until you answer) | Nothing is installed, and the agent tells you an update is waiting. | When you're ready, run `update.py` (below). It lists the commits and the files they change, and installs them only if you answer `y`. |
-| On | The sync installs them, and the agent tells you it did. | Nothing. |
+| On (the default, and until you answer) | The sync installs them, and the agent tells you it did. | Nothing. |
+| Off | Nothing is installed, and the agent tells you an update is waiting. | When you're ready, run `update.py` (below). It lists the commits and the files they change, and installs them only if you answer `y`. |
+
+A settings file the update check can't read installs nothing, whatever the default.
 
 ```powershell
 py C:\Programming\dev-home-tools\update.py

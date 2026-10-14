@@ -871,7 +871,7 @@ def test_reports_a_value_of_the_wrong_kind_and_what_it_counts_as(box: Sandbox) -
     for path, value, wanted, counts_as in (
         (r"updates\.checkEveryHours", '"6"', hours, "every 24 hours"),
         (r"devHome\.checkEveryHours", r'\{"\$state": "unanswered"\}', hours, "every 12 hours"),
-        (r"updates\.installAutomatically", '"yes"', "true or false", "false, its default"),
+        (r"updates\.installAutomatically", '"yes"', "true or false", "true, its default"),
         (r"claudeCode\.folders ~/\.claude-x: setUp", "1", "true or false", "not answered yet"),
     ):
         pattern = (
@@ -1072,7 +1072,7 @@ def test_the_settings_definitions_declare_what_setup_needs(box: Sandbox) -> None
         assert setting.label and setting.help, setting
         assert not setting.has_default or settings.is_valid(setting.type, setting.default), setting
     # Today's behavior: no automatic updates until the user says so.
-    assert declared["updates.installAutomatically"].default is False
+    assert declared["updates.installAutomatically"].default is True
     assert settings.DEFAULT_HOURS == {"updates.checkEveryHours": 24, "devHome.checkEveryHours": 12}
 
 
