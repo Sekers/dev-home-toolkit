@@ -1202,6 +1202,61 @@ def test_a_settings_file_the_update_check_cant_read_installs_nothing(
     assert git("-C", str(box.tools), "rev-parse", "HEAD") == head
 
 
+def test_the_notice_names_only_changed_defaults_this_pc_follows(box: Sandbox) -> None:
+    code = shared_module(box, "update")
+    default = code.Default
+    before = {
+        "x.followed": default("Followed", "yes-no", True),
+        "x.hours": default("Hours", "hours", 24),
+        "x.chosen": default("Chosen", "yes-no", True),
+        "x.same": default("Same", "yes-no", False),
+    }
+    after = {
+        "x.followed": default("Followed", "yes-no", False),
+        "x.hours": default("Hours", "hours", 6),
+        "x.chosen": default("Chosen", "yes-no", False),
+        "x.same": default("Same", "yes-no", False),
+        "x.new": default("New", "yes-no", True),
+    }
+    # Unsaved and unanswered follow the default too; a value of its own never changes.
+    settings = {"x": {"followed": {"$state": "default"}, "chosen": True}}
+    assert code.changed_defaults_notice(before, after, settings) == (
+        " It changed the default of settings this PC follows: Followed is now no; Hours is now "
+        "every 6 hours. To choose your own value: /dev-home configure."
+    )
+    one = {"x.hours": after["x.hours"]}
+    assert " of a setting this PC follows: Hours is now every 6 hours." in (
+        code.changed_defaults_notice(before, one, {})
+    )
+    assert code.changed_defaults_notice(before, after, None) == "", "settings it can't read"
+
+
+def test_update_by_hand_says_which_defaults_it_changed_that_this_pc_follows(
+    box: Sandbox,
+) -> None:
+    # The sandbox's PC has its own value for updates.checkEveryHours, and none for the others.
+    definitions = box.upstream / "internal" / "shared" / "setting-definitions.json"
+    declared = json.loads(definitions.read_text(encoding="utf-8"))
+    declared["settings"]["devHome.checkEveryHours"]["default"] = 6
+    declared["settings"]["updates.checkEveryHours"]["default"] = 6
+    write_text(definitions, json.dumps(declared, indent=2) + "\n")
+    skill = box.upstream / "templates" / "skills" / "handoff" / "dev-home-skill.json"
+    preferences = json.loads(skill.read_text(encoding="utf-8"))
+    preferences["preferences"]["includeSecurityBugsInIssueOffers"]["default"] = False
+    write_text(skill, json.dumps(preferences, indent=2) + "\n")
+    git("-C", str(box.upstream), "commit", "--quiet", "-am", "settings: new defaults")
+    git("-C", str(box.upstream), "push", "--quiet")
+    result = run_python(box, "update.py", answer="y")
+    assert result.code == 0, str(result)
+    # The piped answer isn't echoed, so the line starts with the question.
+    notice = (
+        r"Pulled \d+ commits?\. It changed the default of settings this PC follows: Check "
+        r"GitHub for dev-home's changes is now every 6 hours; Include security bugs in GitHub "
+        r"issue offers is now no\. To choose your own value: /dev-home configure\.$"
+    )
+    assert result.has_line(notice), str(result)
+
+
 def test_with_no_answer_a_sync_installs_updates_by_default(box: Sandbox) -> None:
     push_update(box, "Upstream change installed by default.")
     set_setting(box, "updates.installAutomatically", None)

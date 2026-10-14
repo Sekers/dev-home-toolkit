@@ -64,7 +64,7 @@ PC, and says so when it can't.
 | --- | --- |
 | `OK` | Nothing needed doing. `dev-home is up to date with GitHub` means the sync checked GitHub just now, and found the same commits there as on this PC; any `LEFT` or `STALE` lines after it are changes not in a commit yet. The other `OK` lines say that GitHub wasn't checked this time and why, or that there was nothing to commit. |
 | `COMMITTED` | Committed the files it was given. |
-| `PULLED`, `MERGED` | Brought in commits from GitHub. `MERGED` means two PCs both had new commits. |
+| `PULLED`, `MERGED` | Brought in commits from GitHub. `MERGED` means two PCs both had new commits. When a dev-home-tools update changes the default of a setting you haven't chosen a value for, its `PULLED` line names it and its new value. |
 | `PUSHED` | Sent this PC's commits to GitHub. |
 | `PENDING` | Commits saved on this PC, not synced to GitHub yet. The next sync sends them. |
 | `OFFLINE` | GitHub couldn't be reached. The line says for which repo: your dev-home may be behind, or dev-home-tools wasn't checked for updates. When dev-home is set to one active copy, it says nothing should be missing, since no other copy writes to it. |

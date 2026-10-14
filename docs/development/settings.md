@@ -55,7 +55,10 @@ AGENTS.md's rules apply too.
 - Never give a new setting a removed one's name: a PC that gets both changes in one update would
   apply the old answer to the new setting.
 - To change its default, change the declaration. Each PC that follows the default gets the new
-  one, and the update says so once (not built yet).
+  one, and the update that installs it says so once, in its `PULLED` line or, run by hand,
+  after "Pulled". It compares the declarations before and after the pull, so a setting renamed
+  in the same update gets no notice. A person's own skills don't come with updates, so their
+  preferences get none either.
 - To change what a setting holds, such as hours to minutes, or the structure of a file, raise the
   file's `schemaVersion`, and add a conversion step for that version, with a test (not built
   yet).

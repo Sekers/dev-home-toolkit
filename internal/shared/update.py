@@ -4,7 +4,8 @@ Lists each waiting commit and the files it changes, and points to the command th
 changed line. On a yes, it pulls them (fast-forward only), holding the sync's lock on dev-home
 so a sync in another session waits for the pull, then runs setup as a person runs it by hand,
 so the updated skills and rules take effect on this PC, and at a console setup asks about
-anything new.
+anything new. When the pull changes the default of a setting this PC follows, one it hasn't
+chosen a value for, it says so, once, then and there.
 
 Everything about dev-home-tools updates happens here: a sync runs its quiet check, the same as
 --quiet, and a person runs it without. So what the user is told and what gets installed come
@@ -32,14 +33,29 @@ and can't stop the rest of the sync: an update is how fixes arrive.
 """
 
 import contextlib
+import json
 from collections.abc import Iterator, Sequence
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from .git import GIT_MISSING, last_fetch_age, run_git
 from .output import CYAN, GREEN, RED, color, commit_count, first_line, status_line
 from .paths import comparable
 from .programs import by_hand, find_program, run_setup
-from .settings import AUTO_UPDATE, TOOLS_ROOT, get, hours_setting, read_settings, setting_value
+from .settings import (
+    AUTO_UPDATE,
+    DEFINITIONS_PATH,
+    MISSING,
+    SKILL_SETTINGS,
+    STATE,
+    TOOLS_ROOT,
+    get,
+    hours_setting,
+    hours_text,
+    read_settings,
+    setting_value,
+)
 from .sync import LOCK_WAIT_SECONDS, LockError, one_run_at_a_time
 
 
@@ -172,6 +188,7 @@ def check(*, quiet: bool) -> tuple[int, bool]:
                 f"runs: {by_hand('update.py')}",
             )
             return 0, False
+        before = declared_defaults()
         merge = run_git(TOOLS_ROOT, "merge", "--ff-only", "--quiet", commit)
         if merge.code != 0:
             status_line(
@@ -180,7 +197,8 @@ def check(*, quiet: bool) -> tuple[int, bool]:
                 f"git: {first_line(merge.err + merge.out)}",
             )
             return 0, False
-        status_line("PULLED", f"{waiting} to dev-home-tools.")
+        notice = changed_defaults_notice(before, declared_defaults(), settings)
+        status_line("PULLED", f"{waiting} to dev-home-tools.{notice}")
         return 0, True
 
     print(f"{waiting} waiting in dev-home-tools:")
@@ -212,17 +230,100 @@ def check(*, quiet: bool) -> tuple[int, bool]:
                 f"Nothing was pulled: a sync, or another update, has been using dev-home for "
                 f"{LOCK_WAIT_SECONDS // 60} minutes. Run {by_hand('update.py')} again shortly.",
             ), False
+        before = declared_defaults()
         merge = run_git(TOOLS_ROOT, "merge", "--ff-only", "--quiet", commit)
     if merge.code != 0:
         problem = f"Could not pull them. git: {first_line(merge.err + merge.out)}"
         return stop(quiet, problem), False
-    print(color(f"Pulled {waiting}. Running setup so they take effect:", CYAN), flush=True)
+    notice = changed_defaults_notice(before, declared_defaults(), read_settings())
+    print(color(f"Pulled {waiting}.{notice}", CYAN))
+    print(color("Running setup so they take effect:", CYAN), flush=True)
     # Setup runs as a person runs it by hand, so at a console it asks about anything new, such as
     # a skill the update brings, and it loads the code just pulled.
     if not run_setup(at_console=True):
         return 1, True
     print(color("Done.", GREEN))
     return 0, True
+
+
+@dataclass(frozen=True)
+class Default:
+    """A default dev-home-tools declares: the setting's label, its type, and the value."""
+
+    label: str
+    type: str
+    value: object
+
+
+def read_json(path: Path) -> object:
+    try:
+        return json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return None
+
+
+def declared_defaults() -> dict[str, Default]:
+    """Every default dev-home-tools declares, by the setting's name, as its files say right now:
+    its own settings in setting-definitions.json, and each of its skills' preferences. Read from
+    the files each time, since an update changes them; one that can't be read declares nothing.
+    A person's own skills don't come with updates, so they're left out."""
+    found: dict[str, Default] = {}
+    definitions = read_json(DEFINITIONS_PATH)
+    settings = definitions.get("settings") if isinstance(definitions, dict) else None
+    for path, entry in settings.items() if isinstance(settings, dict) else ():
+        if isinstance(entry, dict) and "default" in entry:
+            label = str(entry.get("label") or path)
+            found[path] = Default(label, str(entry.get("type", "")), entry["default"])
+    try:
+        skills = sorted((TOOLS_ROOT / "templates" / "skills").iterdir())
+    except OSError:
+        # A notice that can't be worked out is left out, never the pull it would follow.
+        skills = []
+    for skill in skills:
+        declared = read_json(skill / SKILL_SETTINGS)
+        preferences = declared.get("preferences") if isinstance(declared, dict) else None
+        for name, entry in preferences.items() if isinstance(preferences, dict) else ():
+            if isinstance(entry, dict) and isinstance(entry.get("default"), bool):
+                label = str(entry.get("label") or name)
+                path = f"skills.{skill.name}.preferences.{name}"
+                found[path] = Default(label, "yes-no", entry["default"])
+    return found
+
+
+def default_text(default: Default) -> str:
+    if default.type == "hours" and isinstance(default.value, int):
+        return hours_text(default.value)
+    if isinstance(default.value, bool):
+        return "yes" if default.value else "no"
+    return str(default.value)
+
+
+def changed_defaults_notice(
+    before: dict[str, Default], after: dict[str, Default], settings: dict[str, Any] | None
+) -> str:
+    """The sentence an update adds when it changes the default of a setting this PC follows:
+    one it hasn't saved, or saved as unanswered or as the default. A saved value of its own never
+    changes, so it isn't named. Empty when there's none, or this PC's settings can't be read."""
+    if settings is None:
+        return ""
+    changes: list[str] = []
+    for path, new in after.items():
+        old = before.get(path)
+        if old is None or (old.value == new.value and type(old.value) is type(new.value)):
+            continue
+        saved = get(settings, path, MISSING)
+        follows = saved is MISSING or (
+            isinstance(saved, dict) and saved.get(STATE) in ("default", "unanswered")
+        )
+        if follows:
+            changes.append(f"{new.label} is now {default_text(new)}")
+    if not changes:
+        return ""
+    which = "a setting" if len(changes) == 1 else "settings"
+    return (
+        f" It changed the default of {which} this PC follows: {'; '.join(changes)}. To choose "
+        "your own value: /dev-home configure."
+    )
 
 
 @contextlib.contextmanager
