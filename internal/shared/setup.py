@@ -22,7 +22,8 @@ local-settings.json groups the settings, and each one's name is its path, such a
 devHome.folder. Its schemaVersion says which layout it has. A file without one, from before the
 settings were grouped, is set aside: a run by hand offers to rename it to a dated backup and ask
 its questions again, and a quiet run says so and stops. Every value is checked on every run, and
-a key setup doesn't know is kept, with a problem naming it.
+a setting nothing declares is removed, with one line and a backup: the answers of a skill that's
+gone only by a sync's run, which holds the sync's lock.
 
 dev-home.json, in dev-home, says whether dev-home is in active use on one PC or on several, and
 each sync acts on it. A new dev-home starts with one. Setup asks when the file has no answer,
@@ -1008,9 +1009,10 @@ class Setup:
                 f"({by_hand('update.py')}), or set the file aside and run setup.py again.",
             )
             raise CannotGoOnError
-        preferences, unusable = skill_preferences(settings.content_dir)
-        checked = check_settings(settings.data, preferences)
-        for problem in unusable + checked.problems:
+        declared = skill_preferences(settings.content_dir)
+        # Only a run that holds the sync's lock removes the answers of a skill that's gone.
+        checked = check_settings(settings.data, declared, remove_gone_skills=self.sync_holds_lock)
+        for problem in declared.problems + checked.problems:
             self.status("PROBLEM", problem)
         save = False
         if checked.moved or checked.removed:

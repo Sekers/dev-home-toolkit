@@ -778,6 +778,60 @@ def test_a_configure_that_changes_nothing_still_removes_what_nothing_declares(
     assert result.has_line(r"^SET\s+This PC's settings: .*\. Removed leftover: "), str(result)
 
 
+def test_a_syncs_setup_removes_a_gone_skills_answers_and_setup_by_hand_leaves_them(
+    box: Sandbox, settings_kept: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Only a run that holds the sync's lock removes them: without it, a sync or an update could
+    # be replacing the skill's files at that moment, so the skill would only look gone.
+    edited = json.loads(read(settings_kept))
+    edited["skills"] = {"gone": {"preferences": {"tidy": True}}}
+    write_text(settings_kept, json.dumps(edited, indent=2) + "\n")
+    by_hand = setup(box)
+    kept = json.loads(read(settings_kept))
+    returned = shared_module(box, "setup").main(["--quiet"], sync_holds_lock=True)
+    out = capsys.readouterr().out
+    saved = json.loads(read(settings_kept))
+    assert by_hand.code == 0, str(by_hand)
+    assert kept["skills"] == {"gone": {"preferences": {"tidy": True}}}, kept
+    assert returned == 0, out
+    assert "skills" not in saved, "no empty group is left behind"
+    assert re.search(r"^SET\s+This PC's settings: .*\. Removed skills\.gone: ", out, re.M), out
+    assert len(list(settings_kept.parent.glob("local-settings.json.bak-*"))) == 1
+
+
+def test_a_skill_whose_preferences_cant_be_read_keeps_its_answers(
+    box: Sandbox, settings_kept: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # It's still there, so what it declares isn't known.
+    skill = box.content / "skills" / "mine" / "dev-home-skill.json"
+    write_text(skill, "{not json\n")
+    edited = json.loads(read(settings_kept))
+    edited["skills"] = {"mine": {"preferences": {"tidy": False}}}
+    write_text(settings_kept, json.dumps(edited, indent=2) + "\n")
+    try:
+        shared_module(box, "setup").main(["--quiet"], sync_holds_lock=True)
+    finally:
+        skill.unlink()
+    out = capsys.readouterr().out
+    saved = json.loads(read(settings_kept))
+    assert saved["skills"] == {"mine": {"preferences": {"tidy": False}}}, saved
+    assert re.search(r"^PROBLEM\s+.*dev-home-skill\.json could not be read as JSON", out, re.M)
+
+
+def test_no_skill_counts_as_gone_while_dev_home_isnt_there(box: Sandbox) -> None:
+    # Such as before it's cloned, or on a drive that's unplugged.
+    settings = shared_module(box, "settings")
+    there = settings.skill_preferences(str(box.content))
+    missing = settings.skill_preferences(str(box.root / "not-cloned-yet"))
+    empty = box.root / "made-for-a-clone"
+    empty.mkdir()
+    waiting = settings.skill_preferences(str(empty))
+    assert there.is_gone("deleted-skill") and not there.is_gone("Handoff")
+    assert not there.is_gone("mine"), "a personal skill with no preferences is still there"
+    assert not missing.is_gone("deleted-skill")
+    assert not waiting.is_gone("mine"), "an empty folder isn't a dev-home with no skills"
+
+
 def test_moves_an_answer_saved_under_a_former_name(box: Sandbox, settings_kept: Path) -> None:
     # The definitions come with the code, so the sandbox's copy is changed, then put back.
     definitions = box.tools / "internal" / "shared" / "setting-definitions.json"

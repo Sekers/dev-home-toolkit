@@ -38,7 +38,9 @@ setting counts as missing.
 - A setting found under a name in `formerNames` has its answer moved to the new name on the first
   setup run that sees it, quiet runs included, with one line. One that nothing declares any more,
   dev-home-tools' own or a skill's, is deleted on the first run that sees it, with one line and a
-  backup, and nobody is asked.
+  backup, and nobody is asked. A whole skill that's gone has its answers deleted by the first run
+  that holds the sync's lock, a sync's setup, so a skill that a sync or an update is replacing at
+  that moment never looks gone.
 - When an update changes a default, the PCs that follow it get the new value, and the update says
   so once. It reads the definitions, and each skill's `dev-home-skill.json`, before and after it
   pulls.

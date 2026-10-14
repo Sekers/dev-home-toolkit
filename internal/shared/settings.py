@@ -246,36 +246,73 @@ class Preference:
         )
 
 
-def skill_preferences(content_dir: str) -> tuple[dict[str, dict[str, Preference]], list[str]]:
-    """Every preference the skills declare, by skill and then name: dev-home-tools' skills, then
-    the person's own in dev-home, where one with the same name as a dev-home-tools skill isn't
-    set up, so its file is skipped. Also a problem for each file, or each preference in one, that
-    can't be used."""
-    found: dict[str, dict[str, Preference]] = {}
-    problems: list[str] = []
+@dataclass
+class SkillDeclarations:
+    """What the skills declare. preferences has every skill there is, by name, with the
+    preferences it declares by name, none for a skill without a dev-home-skill.json. unread
+    names, in lowercase, each skill whose file couldn't be read, so what it declares isn't known.
+    complete says whether every skills folder could be listed, so a skill in neither is gone.
+    problems has one for each file, or each preference in one, that can't be used."""
+
+    preferences: dict[str, dict[str, Preference]] = field(default_factory=dict)
+    unread: set[str] = field(default_factory=set)
+    complete: bool = True
+    problems: list[str] = field(default_factory=list)
+
+    def is_gone(self, skill: str) -> bool:
+        """Whether a skill is in no skills folder, so its saved answers can go. Never while a
+        folder couldn't be listed, or for a skill whose file couldn't be read."""
+        return (
+            self.complete
+            and find_skill(self.preferences, skill) is None
+            and skill.lower() not in self.unread
+        )
+
+
+def skill_preferences(content_dir: str) -> SkillDeclarations:
+    """Every skill and the preferences it declares: dev-home-tools' skills, then the person's
+    own in dev-home, where one with the same name as a dev-home-tools skill isn't set up, so its
+    file is skipped (see SkillDeclarations). The list is complete only when dev-home's folder is a
+    git repo, so a PC whose dev-home isn't cloned yet, even into a folder already made for it, or
+    is on a drive that's unplugged, loses no answers."""
+    found = SkillDeclarations()
     folders = [TOOLS_ROOT / "templates" / "skills"]
-    if content_dir:
+    if content_dir and (Path(content_dir) / ".git").exists():
         folders.append(Path(content_dir) / "skills")
+    else:
+        found.complete = False
     for folder in folders:
         try:
             skills = sorted(f for f in folder.iterdir() if (f / "SKILL.md").is_file())
+        except FileNotFoundError:
+            # A dev-home with no skills of its own yet.
+            continue
         except OSError:
+            found.complete = False
             continue
         for skill in skills:
             path = skill / SKILL_SETTINGS
-            taken = any(skill.name.lower() == known.lower() for known in found)
-            if taken or not path.is_file():
+            if find_skill(found.preferences, skill.name) is not None:
+                continue
+            if not path.is_file():
+                found.preferences[skill.name] = {}
                 continue
             try:
                 data = json.loads(path.read_text(encoding="utf-8-sig"))
             except (OSError, ValueError) as error:
-                problems.append(f"{path} could not be read as JSON, so it was skipped. {error}")
+                found.problems.append(
+                    f"{path} could not be read as JSON, so it was skipped. {error}"
+                )
+                found.unread.add(skill.name.lower())
                 continue
             declared = data.get("preferences", {}) if isinstance(data, dict) else None
             if not isinstance(declared, dict):
-                problems.append(f"{path}: preferences isn't a JSON object, so it was skipped.")
+                found.problems.append(
+                    f"{path}: preferences isn't a JSON object, so it was skipped."
+                )
+                found.unread.add(skill.name.lower())
                 continue
-            found[skill.name] = {}
+            found.preferences[skill.name] = {}
             for key, entry in declared.items():
                 former = entry.get("formerNames", []) if isinstance(entry, dict) else None
                 usable = (
@@ -288,13 +325,13 @@ def skill_preferences(content_dir: str) -> tuple[dict[str, dict[str, Preference]
                     and all(isinstance(name, str) and name.strip() for name in former)
                 )
                 if not usable or "." in key or not key.strip():
-                    problems.append(
+                    found.problems.append(
                         f"{path}: the preference {key} needs a name with no dots, a default of "
                         "true or false, a label, and formerNames, if any, as a list of names, so "
                         "it was skipped."
                     )
                     continue
-                found[skill.name][key] = Preference(
+                found.preferences[skill.name][key] = Preference(
                     skill.name,
                     key,
                     entry["default"],
@@ -302,7 +339,7 @@ def skill_preferences(content_dir: str) -> tuple[dict[str, dict[str, Preference]
                     entry.get("help", ""),
                     tuple(former or ()),
                 )
-    return found, problems
+    return found
 
 
 def find_skill(preferences: dict[str, dict[str, Preference]], skill: str) -> str | None:
@@ -339,11 +376,16 @@ class Checked:
     removed: list[str] = field(default_factory=list)
 
 
-def check_settings(data: dict[str, Any], preferences: dict[str, dict[str, Preference]]) -> Checked:
+def check_settings(
+    data: dict[str, Any], declared: SkillDeclarations, *, remove_gone_skills: bool
+) -> Checked:
     """Checks this PC's settings against the declarations: an answer saved under a setting's
     former name moves to its name, a setting nothing declares is removed, and a value of the wrong
-    kind is a problem, saying what it counts as instead. A skill whose preferences can't be read,
-    such as one whose folder is gone, keeps its answers. The settings passed in aren't changed."""
+    kind is a problem, saying what it counts as instead. A skill whose file can't be read keeps
+    its answers. So does a skill that's gone, unless remove_gone_skills: only a run that holds the
+    sync's lock passes it, since a sync or an update may be replacing a skill's files at that
+    moment, and the skill would only look gone. The settings passed in aren't changed."""
+    preferences = declared.preferences
     checked = Checked(copy.deepcopy(data))
     data = checked.data
     problems = checked.problems
@@ -409,10 +451,11 @@ def check_settings(data: dict[str, Any], preferences: dict[str, dict[str, Prefer
                     )
 
     def check_skills(value: dict[str, Any]) -> None:
-        for skill, inner in value.items():
+        for skill, inner in list(value.items()):
             name = find_skill(preferences, skill)
-            # Kept until setup can tell a skill that's gone from one an update is replacing.
             if name is None:
+                if remove_gone_skills and declared.is_gone(skill):
+                    remove(value, skill, f"skills.{skill}")
                 continue
             if not isinstance(inner, dict):
                 wrong(f"skills.{skill}", inner, "a JSON object", "the defaults")
@@ -432,11 +475,11 @@ def check_settings(data: dict[str, Any], preferences: dict[str, dict[str, Prefer
                             saved[preference.name] = saved.pop(old)
                             checked.moved.append(f"{where}.{old} to {where}.{preference.name}")
                     for key, answer in list(saved.items()):
-                        declared = preferences[name].get(key)
-                        if declared is None:
+                        known = preferences[name].get(key)
+                        if known is None:
                             remove(saved, key, f"{where}.{key}")
                         else:
-                            check_value(f"{where}.{key}", answer, declared.setting)
+                            check_value(f"{where}.{key}", answer, known.setting)
 
     groups = {path.split(".")[0] for path in BY_PATH}
     for key, value in list(data.items()):
@@ -454,6 +497,9 @@ def check_settings(data: dict[str, Any], preferences: dict[str, dict[str, Prefer
                 check_skills(value)
             else:
                 check_folders(key, value)
+            # A group left empty goes too, or the save would write it back.
+            if isinstance(value, dict) and not value:
+                del data[key]
         else:
             remove(data, key, key)
     return checked

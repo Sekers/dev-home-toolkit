@@ -47,9 +47,11 @@ AGENTS.md's rules apply too.
 
 - To rename one, add its old name to its `formerNames`. Setup moves each PC's answer, and
   `schemaVersion` stays as it is.
-- To remove one, delete its declaration. Setup deletes each PC's answer on its next run. For
-  now, a skill whose preferences setup can't read, such as one whose folder is gone, keeps its
-  answers, until setup can tell such a skill from one an update is replacing at that moment.
+- To remove one, delete its declaration. Setup deletes each PC's answer on its next run. When a
+  whole skill is gone, the next sync's setup deletes its answers: it holds the sync's lock, so a
+  skill that a sync or an update is replacing at that moment never looks gone, while a run of
+  setup by hand leaves them. A skill whose `dev-home-skill.json` can't be read keeps its
+  answers, and so does every skill while dev-home's folder isn't there.
 - Never give a new setting a removed one's name: a PC that gets both changes in one update would
   apply the old answer to the new setting.
 - To change its default, change the declaration. Each PC that follows the default gets the new
