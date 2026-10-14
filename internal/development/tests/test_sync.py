@@ -823,7 +823,8 @@ def test_after_waiting_its_limit_for_another_sync_says_so(
             let_go(handle)
     out = capsys.readouterr().out
     assert returned == 1, out
-    assert re.search(r"^PROBLEM\s+Another sync in dev-home has been running for ", out, re.M), out
+    pattern = r"^PROBLEM\s+Another sync, or an update, has been using dev-home for "
+    assert re.search(pattern, out, re.M), out
     assert not re.search(r"^(OK|LEFT|UPDATE)\s", out, re.M), out
 
 
@@ -1094,3 +1095,61 @@ def test_the_update_check_waits_its_interval_and_uses_what_it_knows(box: Sandbox
     assert due.has_line(r"^UPDATE\s+2 commits waiting"), str(due)
     # update.py run by hand always checks GitHub.
     assert by_hand.has_line(r"handoff: Upstream change six\."), str(by_hand)
+
+
+# The tests from here on change which commits wait, so they come last.
+
+
+def lock_is_held(box: Sandbox) -> bool:
+    """Whether some run holds the sync's lock on the sandbox's dev-home."""
+    with (box.content / ".git" / "dev-home-sync.lock").open("a+b") as handle:
+        try:
+            hold(handle)
+        except OSError:
+            return True
+        let_go(handle)
+        return False
+
+
+def test_update_by_hand_pulls_nothing_while_a_sync_holds_the_lock(
+    box: Sandbox, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The wait is 2 minutes, so this runs update's code here, with no wait.
+    push_update(box, "Upstream change while locked.")
+    head = git("-C", str(box.tools), "rev-parse", "HEAD")
+    monkeypatch.setattr(shared_module(box, "sync"), "LOCK_WAIT_SECONDS", 0)
+    code = shared_module(box, "update")
+    monkeypatch.setattr(code, "input", lambda _prompt: "y", raising=False)
+    with (box.content / ".git" / "dev-home-sync.lock").open("a+b") as handle:
+        hold(handle)
+        try:
+            returned = code.main([])
+        finally:
+            let_go(handle)
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    assert "Nothing was pulled: a sync, or another update, has been using dev-home" in out, out
+    assert git("-C", str(box.tools), "rev-parse", "HEAD") == head
+
+
+def test_update_by_hand_holds_the_lock_while_it_pulls_and_sets_up(
+    box: Sandbox, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A sync in another session would otherwise run setup while git replaces the skills' files.
+    push_update(box, "Upstream change under the lock.")
+    code = shared_module(box, "update")
+    monkeypatch.setattr(code, "input", lambda _prompt: "y", raising=False)
+    seen: list[tuple[bool, dict[str, bool]]] = []
+
+    def setup_while_pulled(**options: bool) -> bool:
+        seen.append((lock_is_held(box), options))
+        return True
+
+    monkeypatch.setattr(code, "run_setup", setup_while_pulled)
+    returned = code.main([])
+    out = capsys.readouterr().out
+    assert returned == 0, out
+    assert seen == [(True, {"fresh": True, "sync_holds_lock": True})], seen
+    assert not lock_is_held(box), "let go once the update is done"
+    head = git("-C", str(box.tools), "log", "-1", "--format=%s")
+    assert head == ["handoff: Upstream change under the lock."], head

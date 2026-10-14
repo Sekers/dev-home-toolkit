@@ -356,9 +356,9 @@ class Setup:
                         if not owned:
                             self.status(
                                 "PROBLEM",
-                                f"This PC's settings weren't saved: a sync in dev-home has been "
-                                f"running for {sync.LOCK_WAIT_SECONDS // 60} minutes. Run "
-                                f"{by_hand('setup.py')} again shortly.",
+                                f"This PC's settings weren't saved: a sync, or an update, has "
+                                f"been using dev-home for {sync.LOCK_WAIT_SECONDS // 60} minutes. "
+                                f"Run {by_hand('setup.py')} again shortly.",
                             )
                             return
                         kept = self.write_settings(settings, read, backup=backup)

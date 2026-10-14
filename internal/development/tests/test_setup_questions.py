@@ -316,7 +316,7 @@ def test_setup_by_hand_saves_only_once_a_sync_lets_go_of_its_lock(
     out = capsys.readouterr().out
     saved = json.loads(settings.read_text(encoding="utf-8"))
     assert waited == 1, out
-    pattern = r"^PROBLEM\s+This PC's settings weren't saved: a sync in dev-home has been running"
+    pattern = r"^PROBLEM\s+This PC's settings weren't saved: a sync, or an update, has been using"
     assert re.search(pattern, out, re.M), out
     assert "installAutomatically" not in unsaved.get("updates", {}), unsaved
     assert held == 0, out

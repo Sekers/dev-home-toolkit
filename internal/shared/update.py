@@ -2,7 +2,8 @@
 
 Lists each waiting commit and the files it changes, and points to the command that shows every
 changed line. On a yes, it pulls them (fast-forward only), then runs setup so the updated
-skills and rules take effect on this PC.
+skills and rules take effect on this PC. It holds the sync's lock on dev-home for the pull and
+that setup, as a sync does for its own, so a sync in another session waits for them.
 
 Everything about dev-home-tools updates happens here: a sync runs its quiet check, the same as
 --quiet, and a person runs it without. So what the user is told and what gets installed come
@@ -28,12 +29,16 @@ A sync loads this module only when it gets to the update check, and an error in 
 and can't stop the rest of the sync: an update is how fixes arrive.
 """
 
-from collections.abc import Sequence
+import contextlib
+from collections.abc import Iterator, Sequence
+from pathlib import Path
 
 from .git import GIT_MISSING, last_fetch_age, run_git
 from .output import CYAN, GREEN, RED, color, commit_count, first_line, status_line
+from .paths import comparable
 from .programs import by_hand, find_program, run_setup
-from .settings import AUTO_UPDATE, TOOLS_ROOT, hours_setting, read_settings, setting_value
+from .settings import AUTO_UPDATE, TOOLS_ROOT, get, hours_setting, read_settings, setting_value
+from .sync import LOCK_WAIT_SECONDS, LockError, one_run_at_a_time
 
 
 def stop(quiet: bool, text: str) -> int:
@@ -196,13 +201,39 @@ def check(*, quiet: bool) -> tuple[int, bool]:
         print("Nothing was pulled.")
         return 0, False
 
-    merge = run_git(TOOLS_ROOT, "merge", "--ff-only", "--quiet", commit)
-    if merge.code != 0:
-        problem = f"Could not pull them. git: {first_line(merge.err + merge.out)}"
-        return stop(quiet, problem), False
-    print(color(f"Pulled {waiting}. Running setup so they take effect:", CYAN), flush=True)
-    # The code just pulled is new, so setup runs in a process of its own to load it.
-    if not run_setup(fresh=True):
-        return 1, True
+    with sync_lock() as owned:
+        if not owned:
+            return stop(
+                quiet,
+                f"Nothing was pulled: a sync, or another update, has been using dev-home for "
+                f"{LOCK_WAIT_SECONDS // 60} minutes. Run {by_hand('update.py')} again shortly.",
+            ), False
+        merge = run_git(TOOLS_ROOT, "merge", "--ff-only", "--quiet", commit)
+        if merge.code != 0:
+            problem = f"Could not pull them. git: {first_line(merge.err + merge.out)}"
+            return stop(quiet, problem), False
+        print(color(f"Pulled {waiting}. Running setup so they take effect:", CYAN), flush=True)
+        # The code just pulled is new, so setup runs in a process of its own to load it.
+        if not run_setup(fresh=True, sync_holds_lock=True):
+            return 1, True
     print(color("Done.", GREEN))
     return 0, True
+
+
+@contextlib.contextmanager
+def sync_lock() -> Iterator[bool]:
+    """The sync's lock on dev-home, which a person's update holds for its pull and the setup
+    after it, as a sync holds it for its own. Otherwise a sync in another session could run setup
+    while git replaces the skills' files, and see a skill missing for a moment, or generate files
+    from half-updated templates. The question before it never holds the lock, so a sync never
+    waits on a person. Yields whether this run holds it, or True when there's no lock to take: no
+    dev-home folder set yet, one whose .git isn't a folder, or a lock file that can't be opened,
+    which nothing else can hold either."""
+    folder = get(read_settings() or {}, "devHome.folder")
+    git_dir = Path(comparable(folder)) / ".git" if isinstance(folder, str) and folder else None
+    with contextlib.ExitStack() as held:
+        owned = True
+        if git_dir is not None and git_dir.is_dir():
+            with contextlib.suppress(LockError):
+                owned = held.enter_context(one_run_at_a_time(git_dir))
+        yield owned

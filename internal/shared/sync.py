@@ -727,8 +727,9 @@ def sync_root(
             else:
                 run.status(
                     "PROBLEM",
-                    f"Another sync in dev-home has been running for {LOCK_WAIT_SECONDS // 60} "
-                    "minutes. Try again shortly, and if it keeps happening, ask the user.",
+                    f"Another sync, or an update, has been using dev-home for "
+                    f"{LOCK_WAIT_SECONDS // 60} minutes. Try again shortly, and if it keeps "
+                    "happening, ask the user.",
                 )
     except LockError as error:
         return problem(
