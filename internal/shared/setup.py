@@ -245,6 +245,12 @@ class Setup:
     def choose(self, question: str, default: bool | None = None) -> bool | None:
         return console.choose(question, default) if self.can_ask else None
 
+    def choose_from_list(
+        self, intro: str, question: str, items: Sequence[console.ListItem]
+    ) -> console.ListAnswer | None:
+        """The shared prompt for every list of optional items, or None without a console."""
+        return console.choose_from_list(intro, question, items) if self.can_ask else None
+
     def choose_or_default(self, question: str, setting: Setting, data: dict[str, Any]) -> object:
         """Asks about a yes-or-no setting with a default, one of dev-home-tools' own or a
         skill's preference, saved in data: yes, no, or follow the default. Returns the answer as

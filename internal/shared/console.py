@@ -3,6 +3,8 @@
 import os
 import re
 import sys
+from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import TextIO
 
 if sys.platform == "win32":
@@ -105,3 +107,99 @@ def choose(question: str, default: bool | None = None) -> bool | None:
             return default
         # Without this, the same question coming back looks as if the answer went unseen.
         print("Type y or n.", flush=True)
+
+
+# The answers to a list of optional items, as choose_from_list returns them.
+ALL = "all"
+RECOMMENDED = "recommended"
+NONE = "none"
+EACH = "each"
+
+
+@dataclass(frozen=True)
+class ListItem:
+    """One optional item: its name in the list, whether dev-home-tools recommends it, and its own
+    question, such as "Set up ~/.claude-<name>?", for when the items are asked one at a time."""
+
+    name: str
+    recommended: bool
+    question: str
+
+
+@dataclass(frozen=True)
+class ListAnswer:
+    """The answer to the whole list, one of ALL, RECOMMENDED, NONE, and EACH, and what it means
+    for each item, by name: True for yes and False for no. The caller decides what to save, so
+    a list whose items have a default can save RECOMMENDED as following it."""
+
+    choice: str
+    answers: dict[str, bool]
+
+
+def choose_from_list(intro: str, question: str, items: Sequence[ListItem]) -> ListAnswer | None:
+    """One prompt for a list of optional items: a for all, r for the recommended ones (what
+    Enter gives), n for none, or e to ask for each, whose question defaults to that item's
+    recommendation. An answer that would do the same as All recommended is left out, and its
+    letter means All recommended: with every item recommended, a, and with none, n. So a letter
+    and Enter, shown as the same, never give two answers that a caller could save differently.
+    A list of one asks its item's question alone, since a list prompt for one item only adds a
+    step, and its answer is the choice the list's own letters would give: RECOMMENDED for the
+    recommendation, and ALL or NONE for the other, so one item and several are saved alike. An
+    empty list asks nothing. None when input ends without an answer, even partway through the
+    items, so nothing half answered is saved."""
+    if not items:
+        return ListAnswer(RECOMMENDED, {})
+    if len(items) == 1:
+        item = items[0]
+        answer = choose(item.question, item.recommended)
+        if answer is None:
+            return None
+        return ListAnswer(
+            RECOMMENDED if answer == item.recommended else ALL if answer else NONE,
+            {item.name: answer},
+        )
+    every = all(item.recommended for item in items)
+    some = any(item.recommended for item in items)
+    print(intro, flush=True)
+    width = max(len(item.name) for item in items)
+    for item in items:
+        if some and not every:
+            note = "recommended" if item.recommended else "not recommended"
+            print(f"  {item.name.ljust(width)}    {note}", flush=True)
+        else:
+            print(f"  {item.name}", flush=True)
+    if every:
+        letters = {"a": RECOMMENDED, "n": NONE, "e": EACH}
+    elif some:
+        letters = {"a": ALL, "r": RECOMMENDED, "n": NONE, "e": EACH}
+    else:
+        letters = {"a": ALL, "n": RECOMMENDED, "e": EACH}
+    words = {"a": "a for all", "r": "r for the recommended ones", "n": "n for none"}
+    offered = [words[letter] for letter in letters if letter != "e"]
+    enter = next(letter for letter, choice in letters.items() if choice == RECOMMENDED)
+    hint = "/".join(letter.upper() if letter == enter else letter for letter in letters)
+    choice = None
+    while choice is None:
+        try:
+            typed = input(f"{question} {', '.join(offered)}, or e to ask for each [{hint}]: ")
+        except EOFError:
+            return None
+        text = typed.strip().lower() or enter
+        choice = letters.get(text)
+        if choice is None:
+            print(f"Type {', '.join(list(letters)[:-1])}, or e.", flush=True)
+    if choice == EACH:
+        answers: dict[str, bool] = {}
+        for item in items:
+            answer = choose(item.question, item.recommended)
+            if answer is None:
+                return None
+            answers[item.name] = answer
+        return ListAnswer(EACH, answers)
+    return ListAnswer(
+        choice,
+        {
+            item.name: choice == ALL or (choice == RECOMMENDED and item.recommended)
+            for item in items
+        },
+    )

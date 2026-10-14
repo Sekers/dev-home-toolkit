@@ -60,7 +60,9 @@ points here; its rules apply too.
   comes from a real console and its output goes to one (`console.py`), so it never waits for an
   answer nobody can see or give.
 - A question of setup's that offers something a person can take or turn down uses the standard
-  answers, as [skills.md](skills.md) says for every such question.
+  answers, as [skills.md](skills.md) says for every such question. A list of such items, of one
+  type, is asked through setup's `choose_from_list`, the one prompt
+  ([One prompt for every optional list](decisions/one-prompt-for-every-optional-list.md)).
 - update.py pulls exactly the commit it showed the end user, so nothing new can slip in between
   their yes and the pull.
 - Everything about dev-home-tools updates happens in update's code, so what the end user is told

@@ -161,6 +161,126 @@ def test_output_to_a_file_is_no_console(box: Sandbox) -> None:
         assert not console.is_console_stream(file)
 
 
+# The shared prompt for a list of optional items. Nothing calls it yet, so these call it
+# directly.
+
+
+def items(box: Sandbox, *recommended: bool) -> list[Any]:
+    """Optional items named one, two, and so on, each recommended or not, in order."""
+    names = ["one", "two", "three"]
+    console = shared_module(box, "console")
+    return [
+        console.ListItem(name, wanted, f"Add {name}?")
+        for name, wanted in zip(names, recommended, strict=False)
+    ]
+
+
+def choose_from_list(box: Sandbox, *recommended: bool) -> Any:
+    return shared_module(box, "console").choose_from_list(
+        "These items are new:", "Add them?", items(box, *recommended)
+    )
+
+
+def test_a_list_all_recommended_offers_all_none_or_each_and_enter_takes_all(
+    box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    person.answers[r"^Add them\?"] = ["", "a", "all", "a", "n"]
+    enter = choose_from_list(box, True, True)
+    assert capsys.readouterr().out == "These items are new:\n  one\n  two\n"
+    assert person.asked == ["Add them? a for all, n for none, or e to ask for each [A/n/e]: "]
+    assert (enter.choice, enter.answers) == ("recommended", {"one": True, "two": True})
+    # a is All recommended here, as Enter is, so the two can never be saved differently.
+    assert choose_from_list(box, True, True).choice == "recommended"
+    # Only the letters count.
+    assert choose_from_list(box, True, True).choice == "recommended"
+    assert "Type a, n, or e." in capsys.readouterr().out
+    none = choose_from_list(box, True, True)
+    assert (none.choice, none.answers) == ("none", {"one": False, "two": False})
+
+
+def test_a_mixed_list_marks_each_item_and_enter_takes_the_recommended_ones(
+    box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    person.answers[r"^Add them\?"] = ["", "a", "r"]
+    enter = choose_from_list(box, True, False, True)
+    out = capsys.readouterr().out
+    assert out == (
+        "These items are new:\n"
+        "  one      recommended\n"
+        "  two      not recommended\n"
+        "  three    recommended\n"
+    )
+    assert person.asked == [
+        "Add them? a for all, r for the recommended ones, n for none, or e to ask for each "
+        "[a/R/n/e]: "
+    ]
+    assert (enter.choice, enter.answers) == (
+        "recommended",
+        {"one": True, "two": False, "three": True},
+    )
+    every = choose_from_list(box, True, False, True)
+    assert (every.choice, every.answers) == ("all", {"one": True, "two": True, "three": True})
+    assert choose_from_list(box, True, False, True).choice == "recommended"
+
+
+def test_a_list_with_nothing_recommended_takes_enter_as_none(box: Sandbox, person: Person) -> None:
+    person.answers[r"^Add them\?"] = ["", "n", "a"]
+    enter = choose_from_list(box, False, False)
+    assert person.asked == ["Add them? a for all, n for none, or e to ask for each [a/N/e]: "]
+    assert (enter.choice, enter.answers) == ("recommended", {"one": False, "two": False})
+    assert choose_from_list(box, False, False).choice == "recommended"
+    every = choose_from_list(box, False, False)
+    assert (every.choice, every.answers) == ("all", {"one": True, "two": True})
+
+
+def test_asking_for_each_item_defaults_to_its_recommendation(box: Sandbox, person: Person) -> None:
+    person.answers[r"^Add them\?"] = "e"
+    person.answers[r"^Add (one|two|three)\?"] = ["", "", "y"]
+    answer = choose_from_list(box, True, False, False)
+    assert person.asked[1:] == ["Add one? [Y/n]: ", "Add two? [y/N]: ", "Add three? [y/N]: "]
+    assert (answer.choice, answer.answers) == ("each", {"one": True, "two": False, "three": True})
+
+
+def test_a_list_of_one_asks_only_its_items_question(
+    box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    person.answers[r"^Add one\?"] = ["", "n", "y"]
+    answer = choose_from_list(box, False)
+    assert person.asked == ["Add one? [y/N]: "]
+    assert capsys.readouterr().out == ""
+    # Its answer is the choice the list's letters would give, so one item is saved as several
+    # would be: the recommendation, typed or by Enter, is All recommended.
+    assert (answer.choice, answer.answers) == ("recommended", {"one": False})
+    assert choose_from_list(box, False).choice == "recommended"
+    every = choose_from_list(box, False)
+    assert (every.choice, every.answers) == ("all", {"one": True})
+    person.answers[r"^Add one\?"] = "n"
+    none = choose_from_list(box, True)
+    assert (none.choice, none.answers) == ("none", {"one": False})
+
+
+def test_an_empty_list_asks_nothing(box: Sandbox, person: Person) -> None:
+    answer = choose_from_list(box)
+    assert person.asked == []
+    assert (answer.choice, answer.answers) == ("recommended", {})
+
+
+def test_a_list_answered_only_partway_gives_no_answer(box: Sandbox, person: Person) -> None:
+    person.answers[r"^Add them\?"] = "e"
+    person.answers[r"^Add one\?"] = "y"
+    # The question about two ends the input, as when a person closes the console.
+    assert choose_from_list(box, True, True) is None
+    assert person.asked[-1] == "Add two? [Y/n]: "
+    person.answers.clear()
+    assert choose_from_list(box, True, True) is None
+
+
+def test_setup_asks_no_list_without_a_console(box: Sandbox, person: Person) -> None:
+    run = shared_module(box, "setup").Setup(quiet=True, what_if=False)
+    assert run.choose_from_list("These items are new:", "Add them?", items(box, True)) is None
+    assert person.asked == []
+
+
 def test_asks_for_the_dev_home_folder_when_none_is_saved(
     box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
