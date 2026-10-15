@@ -11,6 +11,7 @@ import stat
 import sys
 import threading
 import time
+import tomllib
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -356,23 +357,68 @@ def test_never_writes_through_a_link_to_a_generated_file(box: Sandbox) -> None:
     assert kept == "keep\n"
 
 
-def test_reports_missing_settings_without_changing_them(box: Sandbox) -> None:
+def remove_backups(path: Path) -> None:
+    """The dated backups setup kept of a settings file."""
+    for backup in path.parent.glob(path.name + ".bak-*"):
+        backup.unlink()
+
+
+def test_a_sync_puts_back_the_settings_a_folder_answered_yes_needs(box: Sandbox) -> None:
+    # The yes to setting up a folder approved the one change its settings file needs, so even a
+    # quiet run makes it, with a backup, whenever it goes missing, and says so.
     claude = box.profile / ".claude" / "settings.json"
     codex = box.profile / ".codex" / "config.toml"
     claude_bytes, codex_bytes = claude.read_bytes(), codex.read_bytes()
-    write_text(claude, "{}\n")
-    write_text(codex, "")
+    write_text(claude, '{\n  "model": "x"\n}\n')
+    write_text(codex, 'model = "x"\n')
     try:
         result = setup(box)
-        unchanged = read(claude) == "{}\n" and read(codex) == ""
+        claude_data = json.loads(read(claude))
+        codex_data = tomllib.loads(read(codex))
+        backups = [read(next(f.parent.glob(f.name + ".bak-*"))) for f in (claude, codex)]
+        again = setup(box)
     finally:
         claude.write_bytes(claude_bytes)
         codex.write_bytes(codex_bytes)
-    assert result.code == 1, str(result)
-    assert result.has_line("additionalDirectories") and result.has_line("writable_roots"), str(
-        result
+        remove_backups(claude)
+        remove_backups(codex)
+    pattern = (
+        r"^SET\s+Claude Code settings in \.claude: added dev-home and dev-home-tools to "
+        r"permissions\.additionalDirectories in .*settings\.json\. Backup of the old file: "
     )
-    assert unchanged
+    assert result.code == 0 and result.has_line(pattern), str(result)
+    pattern = (
+        r"^SET\s+Codex config in \.codex: added dev-home to writable_roots, and "
+        r"project_doc_max_bytes, in .*config\.toml\. Backup of the old file: "
+    )
+    assert result.has_line(pattern), str(result)
+    assert (
+        claude_data["model"] == "x"
+        and len(claude_data["permissions"]["additionalDirectories"]) == 2
+    )
+    assert codex_data["model"] == "x" and codex_data["project_doc_max_bytes"] == 65536
+    assert backups == ['{\n  "model": "x"\n}\n', 'model = "x"\n'], backups
+    assert again.code == 0 and not again.has_line(r"^SET"), str(again)
+
+
+def test_a_sync_reports_a_settings_change_it_cant_make_safely(box: Sandbox) -> None:
+    # Setup won't edit a file with comments, so it says what's missing, and that a run in a
+    # terminal shows what to add by hand.
+    claude = box.profile / ".claude" / "settings.json"
+    before = claude.read_bytes()
+    write_text(claude, '{\n  // mine\n  "model": "x"\n}\n')
+    try:
+        result = setup(box)
+        kept = read(claude)
+    finally:
+        claude.write_bytes(before)
+    pattern = (
+        r"^PROBLEM\s+Claude Code settings in \.claude: .*settings\.json needs .* in "
+        r"permissions\.additionalDirectories\. Setup won't change this file itself: .*\. Run "
+        r".*setup\.py in a terminal to see what to add by hand\.$"
+    )
+    assert result.code == 1 and result.has_line(pattern), str(result)
+    assert kept == '{\n  // mine\n  "model": "x"\n}\n'
 
 
 def test_reads_a_settings_file_with_comments_that_has_the_folders(box: Sandbox) -> None:
@@ -451,11 +497,12 @@ def test_a_claude_folder_nobody_has_answered_for_isnt_set_up(box: Sandbox) -> No
         write_text(settings_path, json.dumps(listed, indent=2) + "\n")
         result = setup(box)
         assert link_target(session / "skills" / "handoff") == box.generated / "skills" / "handoff"
+        # The yes approved the change its settings.json needs, so a sync makes it.
         pattern = (
-            r"^PROBLEM\s+Claude Code settings in \.claude-second: .* Run setup\.py without "
-            "--quiet, and it offers"
+            r"^SET\s+Claude Code settings in \.claude-second: added dev-home and dev-home-tools to "
+            r"permissions\.additionalDirectories in .*settings\.json\. Backup of the old file: "
         )
-        assert result.code == 1 and result.has_line(pattern), str(result)
+        assert result.code == 0 and result.has_line(pattern), str(result)
         assert not result.has_line("hasn't asked"), str(result)
     finally:
         write_text(settings_path, settings_text)
@@ -527,15 +574,13 @@ def test_a_codex_home_found_later_gets_the_main_homes_answer(
     try:
         result = setup(box, env={"CODEX_HOME": str(other)})
         saved = json.loads(read(settings_kept))["codex"]
-        # Each gets what ~/.codex gets: the rules, and an offer of the config.toml lines.
+        # Each gets what ~/.codex gets: the rules, and the config.toml lines, which the yes
+        # approved.
         assert read(second / "AGENTS.md") == read(box.profile / ".codex" / "AGENTS.md")
         assert read(other / "AGENTS.md") == read(box.profile / ".codex" / "AGENTS.md")
         assert not (plain / "AGENTS.md").exists(), str(result)
-        pattern = (
-            r"^PROBLEM\s+Codex config in \.codex-second: .* Run setup\.py without --quiet, and it "
-            "offers"
-        )
-        assert result.code == 1 and result.has_line(pattern), str(result)
+        pattern = r"^SET\s+Codex config in \.codex-second: added dev-home to writable_roots, and "
+        assert result.code == 0 and result.has_line(pattern), str(result)
         assert not result.has_line("hasn't asked"), str(result)
         assert result.has_line(
             r"^SET\s+dev-home is now set up for Codex in ~/\.codex-second and ~/codex-alt, to "

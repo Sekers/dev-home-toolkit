@@ -39,8 +39,9 @@ folder link as a directory junction, which needs no admin rights and no Develope
     `dev-home-operating-rules` links to the operating rules, and `dev-home-global-rules` to your
     dev-home's `global-rules\`. Nothing in that folder says which repo a name belongs to, so
     each link starts with `dev-home-`.
-  - After your yes, `settings.json` gets your dev-home and dev-home-tools folders in
-    `permissions.additionalDirectories`, so Claude Code can use them from any project.
+  - `settings.json` gets your dev-home and dev-home-tools folders in
+    `permissions.additionalDirectories`, so Claude Code can use them from any project. Your yes to
+    the folder approves this, and every sync puts it back if it goes missing, with a backup.
   - Your own `CLAUDE.md` there is never touched.
 - **For Codex,** once you've said yes to it, in every Codex home (`~\.codex`, and any extra
   ones). Every home reads the same skills, so it's all of them or none:
@@ -48,8 +49,9 @@ folder link as a directory junction, which needs no admin rights and no Develope
   - `AGENTS.md` in each home, such as `~\.codex\AGENTS.md`: the operating rules and your global
     rules joined into one file, because Codex reads only one always-on file. Setup rewrites it
     whenever it runs, but never replaces an `AGENTS.md` it didn't write.
-  - After your yes, `config.toml` gets dev-home in `[sandbox_workspace_write]` `writable_roots`,
-    so Codex can edit handoffs and knowledge from any project. It also gets
+  - `config.toml` gets dev-home in `[sandbox_workspace_write]` `writable_roots`, so Codex can
+    edit handoffs and knowledge from any project. Your yes to Codex approves this, and every sync
+    puts it back if it goes missing, with a backup. It also gets
     `project_doc_max_bytes = 65536`. Codex joins its global `AGENTS.md` with a project's own
     `AGENTS.md` files and stops reading at 32 KiB by default. The global file comes first, so
     the cut would fall on the project's own instructions, without a warning. Twice the default

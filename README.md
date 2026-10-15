@@ -113,19 +113,18 @@ first, and setup saves none of your answers until it's in place:
 | Your dev-home folder | Where your dev-home is, or should go. Press Enter for the suggestion: a `dev-home` folder next to this one, such as `C:\Programming\dev-home`. The same rules for the path apply. A folder that already has files in it must be a dev-home: setup checks for the files every dev-home starts with (`global-rules\global-rules.md` and `knowledge\README.md`), and asks again if they're missing, so it never changes a project's repo by mistake. |
 | Clone your existing dev-home (c), create a new private one (n), or stop (s)? | Only when the dev-home folder doesn't exist yet. On your first PC, `n` creates a private repo on GitHub from the files in `templates/dev-home-starter/`. On every later PC, `c` clones it. Either way, it then asks for the repo's name; Enter accepts `dev-home`. |
 | Pull updates automatically? | Enter, or `d`, follows the default, yes: new versions of this repo install as soon as a sync finds them. `n` tells you about them instead, to install yourself, and `y` keeps yes even if a later version changes the default. See [Updates](docs/reference/scripts.md#updates). |
-| Set up Claude Code in `<folder>` with dev-home's skills and rules? | Asked once for each Claude Code folder it finds: `~\.claude`, once Claude Code has made it, and each `~\.claude-<name>`, one per extra Claude account you run with `CLAUDE_CONFIG_DIR`, including one made after your first run. Several are asked about together: Enter sets them all up, `n` none, and `e` asks about each, where Enter means yes. A no is kept, so it isn't asked again. Setup sets up no folder before you answer: when a quiet run finds one it hasn't asked about, it leaves it as it is, and the agent tells you to run setup in a terminal to answer. |
-| Set up Codex in every Codex home with dev-home's skills and rules? | Asked once, for all the Codex homes it finds: `~\.codex`, once Codex has made it, and each `~\.codex-<name>` that Codex has used, one per extra home you run with `CODEX_HOME`. Every Codex home reads the same skills, so it's all of them or none: a home made later gets the same answer, and the sync that gives it says so. Enter means yes. Until you answer, setup leaves Codex as it is. |
+| Set up Claude Code in `<folder>` with dev-home's skills and rules? | Asked once for each Claude Code folder it finds: `~\.claude`, once Claude Code has made it, and each `~\.claude-<name>`, one per extra Claude account you run with `CLAUDE_CONFIG_DIR`, including one made after your first run. Several are asked about together: Enter sets them all up, `n` none, and `e` asks about each, where Enter means yes. A yes also approves the one change the folder's `settings.json` needs, which the question says first: your dev-home and dev-home-tools folders in `permissions.additionalDirectories`, so Claude Code can use them from any project. A no is kept, so it isn't asked again. Setup sets up no folder before you answer: when a quiet run finds one it hasn't asked about, it leaves it as it is, and the agent tells you to run setup in a terminal to answer. |
+| Set up Codex in every Codex home with dev-home's skills and rules? | Asked once, for all the Codex homes it finds: `~\.codex`, once Codex has made it, and each `~\.codex-<name>` that Codex has used, one per extra home you run with `CODEX_HOME`. Every Codex home reads the same skills, so it's all of them or none: a home made later gets the same answer, and the sync that gives it says so. A yes also approves the change each home's `config.toml` needs, which the question says first: dev-home in `writable_roots`, so Codex can write there from any project, and `project_doc_max_bytes`. Enter means yes. Until you answer, setup leaves Codex as it is. |
 | Is dev-home in active use anywhere besides this PC? | Asked on each PC's first setup, since adding a PC is when the answer most often changes, with your dev-home's answer as the default; and whenever your dev-home has no answer yet, or you've just cloned one set to a single copy. Not asked when setup has just created your dev-home. Type `y` if another PC, virtual machine, or cloud session uses it too, and each command then checks GitHub first; or `n` if this PC is the only one, such as one replacing a PC you've retired, and syncs then check GitHub only every few hours. With no answer yet, there's no default. Setup shows the change, and after a `y` to saving it, commits and pushes `dev-home.json`, so every copy agrees. |
 
 Then it shows every setting, as `--configure` does (see below): change any, or press Enter to go
-on. It also checks Claude Code's and Codex's settings (see
-[What setup changes](docs/reference/setup-changes.md) for what and why): when a setting is
-missing, it shows the exact lines it would change, and asks. Once you've answered everything, it
-does its work: it links the skills and rules, then makes each settings change you said `y` to,
-saving a dated backup of the file first, named `settings.json.bak-YYYYMMDD-HHMMSS`. If a file
-changed after setup showed you its change, it shows the new change and asks again. It never edits
-a file it can't fully read, such as a `settings.json` that isn't valid JSON (Claude Code can't use
-one either), or a read-only one; it prints what to add by hand instead.
+on. Once you've answered everything, it does its work: it links the skills and rules, then makes
+the change each folder you said yes to needs in Claude Code's or Codex's settings (see
+[What setup changes](docs/reference/setup-changes.md) for what and why), saving a dated backup
+of the file first, named `settings.json.bak-YYYYMMDD-HHMMSS`. Every sync puts the change back if
+it goes missing, and says so. It never edits a file it can't fully read, such as a
+`settings.json` that isn't valid JSON (Claude Code can't use one either), or a read-only one; it
+prints what to add by hand instead.
 
 Setup can create or clone dev-home only on GitHub for now; automated setup for GitLab,
 Bitbucket, and Azure DevOps is coming. If your dev-home is already on one of those, or on your
@@ -288,7 +287,8 @@ Everything beyond getting started is in the `docs/` folder:
   deletes a git lock file.
 - **`setup.py` replaces only its own work:** its generated files, links whose target is gone,
   and links it made to skills that no longer exist. Anything else in its way is reported, not
-  changed. Settings changes are shown first, need your yes, and keep a backup.
+  changed. It changes a tool's settings file only in a folder you said yes to, after saying what
+  that yes changes, and keeps a backup.
 - **Tooling updates install themselves,** as most apps' do, unless you turn off
   `updates.installAutomatically`. Whoever controls this repo on GitHub controls code that runs on
   your PC, so turn it off if you'd rather look at each update first and install it with

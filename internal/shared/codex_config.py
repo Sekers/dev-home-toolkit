@@ -129,9 +129,15 @@ def value_text(lines: list[str], key: Key) -> str:
 
 
 def is_configured(text: str, writable_root: str, min_doc_bytes: int) -> bool:
-    """Whether the text has writable_root in [sandbox_workspace_write] writable_roots, and a
-    top-level project_doc_max_bytes of at least min_doc_bytes. Comments and other tables don't
-    count. For a file the reader can't follow, it falls back to a plain text search."""
+    """Whether the text has both settings (see configured_parts)."""
+    return all(configured_parts(text, writable_root, min_doc_bytes))
+
+
+def configured_parts(text: str, writable_root: str, min_doc_bytes: int) -> tuple[bool, bool]:
+    """Whether the text has writable_root in [sandbox_workspace_write] writable_roots, and
+    whether it has a top-level project_doc_max_bytes of at least min_doc_bytes. Comments and other
+    tables don't count. For a file the reader can't follow, it falls back to a plain text
+    search."""
     pattern = path_pattern(writable_root)
     lines = to_lines(text)
     layout = None if MULTI_LINE_STRING.search(text) else read_layout(lines)
@@ -139,7 +145,8 @@ def is_configured(text: str, writable_root: str, min_doc_bytes: int) -> bool:
         roots = re.search(r"writable_roots\s*=\s*\[[^\]]*" + pattern, text, re.IGNORECASE)
         max_bytes = re.search(r"(?m)^\s*project_doc_max_bytes\s*=\s*(\d+)", text)
         return (
-            roots is not None and max_bytes is not None and int(max_bytes.group(1)) >= min_doc_bytes
+            roots is not None,
+            max_bytes is not None and int(max_bytes.group(1)) >= min_doc_bytes,
         )
     has_root = False
     has_max_bytes = False
@@ -154,7 +161,7 @@ def is_configured(text: str, writable_root: str, min_doc_bytes: int) -> bool:
             and re.search(pattern, value_text(lines, key), re.IGNORECASE)
         ):
             has_root = True
-    return has_root and has_max_bytes
+    return has_root, has_max_bytes
 
 
 def names_key(name: str, key: Key) -> bool:

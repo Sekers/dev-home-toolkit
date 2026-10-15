@@ -39,20 +39,24 @@ points here; its rules apply too.
 - Safe to re-run. setup.py never overwrites or deletes anything except its own generated files,
   links whose target is gone, links it made to skills that no longer exist, the
   `internal/.python/` junction once the `python.exe` it leads to is gone, and settings files the
-  person said yes to changing. A settings change is shown as a diff first, waits for a typed
-  yes, saves a dated backup, and is never offered for a file the script can't fully parse, or
-  for a read-only one. The exception to the backup is dev-home's `dev-home.json`, whose history
-  is in git: setup commits and pushes it through the sync's `commit_for_setup`, which skips the
-  update check and setup, since setup is already running. sync.py never stages, commits, or
-  discards a file it wasn't given, and runs no destructive git command: no `add -A`, stash,
-  `reset`, `checkout`, `clean`, or rebase.
+  person said yes to changing. A change to Claude Code's or Codex's settings file is the one
+  change a folder setup sets up needs there, and the yes to setting up that folder approves it:
+  the question says what the yes changes, including the access it grants, so every run, quiet
+  ones included, makes the change when it's missing, with a dated backup and a `SET` line
+  ([A yes to set up a folder approves the settings change it needs](decisions/a-yes-to-set-up-a-folder-approves-the-settings-change-it-needs.md)).
+  Any other settings change is shown as a diff first and waits for a typed yes. Setup never
+  changes a file it can't fully parse, or a read-only one. The exception to the backup is
+  dev-home's `dev-home.json`, whose history is in git: setup commits and pushes it through the
+  sync's `commit_for_setup`, which skips the update check and setup, since setup is already
+  running. sync.py never stages, commits, or discards a file it wasn't given, and runs no
+  destructive git command: no `add -A`, stash, `reset`, `checkout`, `clean`, or rebase.
 - Never remove a link, or a folder that may hold one, with a recursive delete such as
   `Remove-Item -Recurse` or `shutil.rmtree`: whether it stops at a junction depends on the tool
   and its version, and one that doesn't deletes what the link points to. Remove each link by
   itself first (`links.py` does, and so does the tests' `remove_sandbox`), or use
   `cmd /c rmdir`.
-- Agents run setup.py only with `--quiet`, which never prompts: no settings changes, and no
-  creating repos. sync.py runs it that way after every sync that doesn't commit, and after one
+- Agents run setup.py only with `--quiet`, which never prompts: no settings changes beyond the
+  ones a folder's yes approved, and no creating repos. sync.py runs it that way after every sync that doesn't commit, and after one
   that commits when it brought in commits from GitHub. The one other way an agent runs it is
   `--configure '<name>=<value>'`, which changes that one setting with no prompt, after the end
   user approves the exact change in chat (`--what-if` shows it first): that chat approval stands

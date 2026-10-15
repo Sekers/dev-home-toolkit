@@ -416,6 +416,7 @@ def change_folders(run: "Setup", settings: LocalSettings, tool: Tool) -> bool:
         run.line(f"Setup found no {tool.name} {tool.folder}s.")
         return False
     changed = False
+    explained = False
     for entry, current in answers:
         folder = Path(resolve_home(entry, run.home))
         if not folder.is_dir():
@@ -426,6 +427,9 @@ def change_folders(run: "Setup", settings: LocalSettings, tool: Tool) -> bool:
             continue
         if tool.shared:
             continue
+        if not explained:
+            run.explain_yes(tool)
+            explained = True
         answer = run.ask_folder(tool, folder, current)
         if answer is not None and answer != current:
             set_folder(settings, run, tool, Path(comparable(folder)), answer)

@@ -351,8 +351,6 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_codex(
             folder_question(second): "yes",
             folder_question(third): "n",
             CODEX: "",
-            # A yes to the settings changes the new folder and the new home need.
-            r"Make this change\? \[y/N\]: $": "y",
         }
     )
     try:
@@ -392,10 +390,19 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_codex(
     assert work_config["sandbox_workspace_write"]["writable_roots"] == [str(box.content)]
     assert written["testHomeDir"] == saved["testHomeDir"]
     assert linked == box.generated / "skills" / "handoff"
+    # Each yes approved the settings change its folder or home needs, and the questions said so
+    # first.
     assert len(allowed["permissions"]["additionalDirectories"]) == 2
+    pattern = (
+        r"^SET\s+Claude Code settings in \.claude-second: added dev-home and dev-home-tools to "
+        r"permissions\.additionalDirectories in .*settings\.json \(new file\)$"
+    )
+    assert re.search(pattern, out, re.M), out
+    assert re.search(r"^A yes also adds your dev-home and dev-home-tools folders to ", out, re.M)
     assert re.search(
-        r"^SET\s+Claude Code settings in \.claude-second: changed .* \(new file\)", out, re.M
-    ), out
+        r"^A yes also changes each home's config\.toml: it adds your dev-home ", out, re.M
+    )
+    assert not any(re.search(r"change\?", asked) for asked in person.asked), person.asked
 
 
 def test_enter_at_the_list_of_claude_folders_sets_them_all_up(
@@ -407,7 +414,7 @@ def test_enter_at_the_list_of_claude_folders_sets_them_all_up(
     write_text(settings, json.dumps(saved, indent=2) + "\n")
     extra = box.profile / ".claude-extra"
     write_text(extra / "settings.json", "{}\n")
-    person.answers.update({FOLDERS: "", r"Make this change\? \[y/N\]: $": "n"})
+    person.answers[FOLDERS] = ""
     try:
         setup_here(box)
         out = capsys.readouterr().out
@@ -616,8 +623,9 @@ def test_a_run_by_hand_asks_everything_before_its_work_which_holds_the_sync_lock
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    # The questions, the menu, and the settings change, in that order, with the lock free, so no
-    # sync waits on a person; then the work, holding it; then the settings file, without it.
+    # The questions and the menu, in that order, with the lock free, so no sync waits on a person;
+    # then the work, holding it, the settings file the folder's yes approved included, since a
+    # sync writes it too.
     unanswered_updates(settings)
     path = box.profile / ".claude" / "settings.json"
     before = path.read_bytes()
@@ -658,7 +666,6 @@ def test_a_run_by_hand_asks_everything_before_its_work_which_holds_the_sync_lock
         {
             UPDATES: answering("updates", "y"),
             MENU: answering("menu", ""),
-            MAKE_CHANGE: answering("settings change", "y"),
         }
     )
     try:
@@ -672,9 +679,8 @@ def test_a_run_by_hand_asks_everything_before_its_work_which_holds_the_sync_lock
     assert events == [
         "updates, lock held: False",
         "menu, lock held: False",
-        "settings change, lock held: False",
         "work, lock held: True",
-        "settings file, lock held: False",
+        "settings file, lock held: True",
     ], events
     assert json.loads(settings.read_text(encoding="utf-8"))["updates"]["installAutomatically"]
 
@@ -1206,13 +1212,13 @@ def test_the_menu_keeps_several_copies_unless_the_others_are_retired(
     assert git("-C", str(box.remote), "rev-parse", "main") == head
 
 
-def test_a_yes_to_a_settings_change_writes_it_and_keeps_a_backup(
+def test_a_run_by_hand_makes_a_folders_settings_change_without_asking(
     box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    # The yes to setting up the folder approved it.
     path = box.profile / ".claude" / "settings.json"
     before = path.read_bytes()
     write_text(path, '{\n  "model": "x"\n}\n')
-    person.answers[r"Make this change\? \[y/N\]: $"] = "y"
     try:
         returned = setup_here(box)
         out = capsys.readouterr().out
@@ -1224,37 +1230,23 @@ def test_a_yes_to_a_settings_change_writes_it_and_keeps_a_backup(
         for backup in path.parent.glob("settings.json.bak-*"):
             backup.unlink()
     assert returned == 0, out
+    assert not any(re.search(r"change\?", asked) for asked in person.asked), person.asked
     assert changed["model"] == "x"
     assert len(changed["permissions"]["additionalDirectories"]) == 2
     assert backup_text == '{\n  "model": "x"\n}\n'
-    assert re.search(r"^\s+Line \d+:$", out, re.M) and re.search(r"^\s+\+ ", out, re.M), out
+    pattern = (
+        r"^SET\s+Claude Code settings in \.claude: added dev-home and dev-home-tools to "
+        r"permissions\.additionalDirectories in .*settings\.json\. Backup of the old file: "
+    )
+    assert re.search(pattern, out, re.M), out
 
 
-def test_a_no_to_a_settings_change_leaves_the_file_and_says_so(
-    box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
-) -> None:
-    path = box.profile / ".claude" / "settings.json"
-    before = path.read_bytes()
-    write_text(path, "{}\n")
-    person.answers[r"Make this change\? \[y/N\]: $"] = "n"
-    try:
-        returned = setup_here(box)
-        out = capsys.readouterr().out
-        kept = path.read_text(encoding="utf-8")
-    finally:
-        path.write_bytes(before)
-    assert returned == 1, out
-    assert kept == "{}\n"
-    assert re.search(r"^PROBLEM\s+Claude Code settings in \.claude: left unchanged", out, re.M), out
-
-
-def test_a_yes_to_a_codex_config_change_writes_its_toml(
+def test_a_run_by_hand_makes_a_codex_homes_config_change_in_its_toml(
     box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
     path = box.profile / ".codex" / "config.toml"
     before = path.read_bytes()
     write_text(path, 'model = "x"\n')
-    person.answers[r"Make this change\? \[y/N\]: $"] = "y"
     try:
         returned = setup_here(box)
         out = capsys.readouterr().out
@@ -1266,61 +1258,31 @@ def test_a_yes_to_a_codex_config_change_writes_its_toml(
     assert returned == 0, out
     assert changed.startswith('model = "x"\nproject_doc_max_bytes = 65536\n'), changed
     assert f"writable_roots = ['{box.content}']" in changed, changed
-    assert re.search(
-        r"^SET\s+Codex config in \.codex: changed .* Backup of the old file: ", out, re.M
-    ), out
+    pattern = (
+        r"^SET\s+Codex config in \.codex: added dev-home to writable_roots, and "
+        r"project_doc_max_bytes, in .*config\.toml\. Backup of the old file: "
+    )
+    assert re.search(pattern, out, re.M), out
 
 
-MAKE_CHANGE = r"Make this change\? \[y/N\]: $"
-
-
-def test_a_file_that_changes_after_its_change_is_shown_is_shown_again(
-    box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
+def test_a_file_that_changes_after_its_change_is_planned_is_left_alone(
+    box: Sandbox,
+    person: Person,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    # Such as Claude Code saving the file while setup's other questions wait: the work shows the
-    # change it needs now, and asks again.
+    # Such as Claude Code saving it at that moment: the next run plans the change again.
     path = box.profile / ".claude" / "settings.json"
     before = path.read_bytes()
     write_text(path, "{}\n")
-    edits = ['{"model": "y"}\n']
+    code = shared_module(box, "setup")
+    reading = code.read_settings_file
 
-    def yes_after_an_edit(prompt: str = "") -> str:
-        if edits:
-            write_text(path, edits.pop())
-        return "y"
+    def edited_first(file: Path) -> Any:
+        write_text(path, '{"model": "z"}\n')
+        return reading(file)
 
-    person.answers[MAKE_CHANGE] = yes_after_an_edit
-    try:
-        returned = setup_here(box)
-        out = capsys.readouterr().out
-        changed = json.loads(path.read_text(encoding="utf-8"))
-    finally:
-        path.write_bytes(before)
-        for backup in path.parent.glob("settings.json.bak-*"):
-            backup.unlink()
-    assert returned == 0, out
-    assert sum(1 for asked in person.asked if re.search(MAKE_CHANGE, asked)) == 2, person.asked
-    assert "The file changed after setup showed its change." in out, out
-    assert changed["model"] == "y", changed
-    assert len(changed["permissions"]["additionalDirectories"]) == 2, changed
-
-
-def test_a_file_that_changes_while_setup_waits_is_left_alone(
-    box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
-) -> None:
-    # It changes again while the second question waits, so the work's last check finds it
-    # changed, and leaves it alone.
-    path = box.profile / ".claude" / "settings.json"
-    before = path.read_bytes()
-    write_text(path, "{}\n")
-    edits = ['{"model": "z"}\n', '{"model": "y"}\n']
-
-    def yes_after_an_edit(prompt: str = "") -> str:
-        if edits:
-            write_text(path, edits.pop())
-        return "y"
-
-    person.answers[MAKE_CHANGE] = yes_after_an_edit
+    monkeypatch.setattr(code, "read_settings_file", edited_first)
     try:
         returned = setup_here(box)
         out = capsys.readouterr().out
@@ -1331,7 +1293,10 @@ def test_a_file_that_changes_while_setup_waits_is_left_alone(
     assert returned == 1, out
     assert kept == '{"model": "z"}\n'
     assert backups == []
-    pattern = r"^PROBLEM\s+Claude Code settings in \.claude: could not write .* The file changed"
+    pattern = (
+        r"^PROBLEM\s+Claude Code settings in \.claude: could not write .* The file changed while "
+        r"setup was planning its change, so it was left alone\. The next run makes the change\.$"
+    )
     assert re.search(pattern, out, re.M), out
 
 

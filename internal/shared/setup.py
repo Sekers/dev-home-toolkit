@@ -21,14 +21,12 @@ A run goes in this order, so the questions come first and the work after:
    the first run. A no is saved too, so it's asked about once. Every run, quiet ones included,
    also gives each Codex home the main home's answer, saying so.
 3. At a console, the settings menu that --configure shows, so any setting can be changed.
-4. The changes to confirm: to dev-home.json, and to Claude Code's and Codex's settings files.
+4. The change to confirm to dev-home.json.
 5. The work, which asks nothing, and holds the sync's lock, so a sync in another session waits
    for it, while no sync ever waits for a person's answer: it saves this PC's answers in
-   local-settings.json in dev-home-tools' folder, commits dev-home.json, and sets up everything
-   else.
-6. Last, the changes to the tools' settings files. No sync writes them, so the lock doesn't
-   cover them, and a file that changed after setup showed its change is shown and asked about
-   again.
+   local-settings.json in dev-home-tools' folder, commits dev-home.json, sets up everything
+   else, and last makes the change each folder it sets up needs in Claude Code's or Codex's
+   settings file.
 
 local-settings.json groups the settings, and each one's name is its path, such as
 devHome.folder. Its schemaVersion says which layout it has. A file without one, from before the
@@ -49,10 +47,12 @@ internal/.generated/, at the same paths they have under templates/, and links th
 rules into the tools. Pre-approved commands must match the command text exactly, so the paths
 can't be variables.
 
-When a settings file is missing something, it shows the exact lines it would change and asks
-first. On yes, it saves a dated backup of the file, then writes the change. It never edits a file
-it can't fully parse (a settings.json with comments, for example), or a read-only one; it prints
-what to add by hand instead.
+Each Claude Code folder and Codex home setup sets up needs one change in its settings file, so
+the tool can reach dev-home from any project. The yes to setting up the folder approves it, and
+the question says so, so every run, quiet ones included, makes the change when it's missing: it
+saves a dated backup of the file, then writes the change, and says so. It never edits a file it
+can't fully parse (a settings.json with comments, for example), or a read-only one; it reports
+it, and a run by hand prints what to add by hand.
 
 Run it by hand once per PC. After that, each sync runs it with --quiet, so changes to the
 skills, and skills added on another PC, reach this one.
@@ -125,6 +125,7 @@ import os
 import re
 import stat
 import subprocess
+import textwrap
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -186,6 +187,9 @@ from .settings_files import (
 # the project's own instructions, without a warning. Twice the default leaves room for long
 # project files.
 CODEX_DOC_BYTES = 65536
+# What each folder Claude Code's settings.json gets in additionalDirectories is called, in the
+# order settings_checks lists them.
+ALLOWED_NAMES = ("dev-home", "dev-home-tools")
 GENERATED_ROOT = TOOLS_ROOT / "internal" / ".generated"
 PYTHON_LINK = TOOLS_ROOT / "internal" / ".python"
 GENERATED_FOLDERS = ("skills", "shared-skill-scripts", "operating-rules")
@@ -195,7 +199,6 @@ FOLDER_NOTE = (
     "filled in. Don't edit it: the next setup\nrun rewrites it. Python writes the __pycache__ "
     "folders when the scripts run, to start them\nfaster, and setup leaves those alone.\n"
 )
-QUIET_ADVICE = "Run setup.py without --quiet, and it offers to make the change."
 # Files every dev-home starts with, from templates/dev-home-starter/.
 DEV_HOME_FILES = ("global-rules/global-rules.md", "knowledge/README.md")
 
@@ -207,7 +210,8 @@ class CannotGoOnError(Exception):
 @dataclass(frozen=True)
 class SettingsChange:
     """A change one of the tools' settings files needs: what it's for, the file, what the file
-    needs, the plan, and what to add by hand where setup can't make it."""
+    needs, the plan, what to add by hand where setup can't make it, and what the change adds, as
+    the line saying it's made puts it."""
 
     subject: str
     path: Path
@@ -215,6 +219,7 @@ class SettingsChange:
     plan: Plan
     how_to: str
     snippet: str
+    added: str
 
 
 # What a check of one settings file found: a line to report as it is, or a change it needs.
@@ -228,11 +233,6 @@ class ToolFolders:
 
     claude_dirs: list[str]
     codex_homes: list[str]
-
-
-def approval_key(path: Path) -> str:
-    """A settings file's path, as the answers given before the work are kept by."""
-    return os.path.normcase(comparable(path))
 
 
 def cleanup(checked: Checked) -> list[str]:
@@ -275,9 +275,6 @@ class Setup:
         # That change once shown, and confirmed: dev-home.json's layout and text as shown, the
         # new text, and the answer.
         self.copies_change: tuple[str, str, str, bool] | None = None
-        # Each settings change shown before the work, by the file's path (see approval_key): the
-        # file's text as shown, and the answer.
-        self.approved: dict[str, tuple[str, bool]] = {}
         # Set once the menu changes a setting, so the save keeps a backup.
         self.changed_by_hand = False
         # Set when --configure only shows the settings, so the run ends with no summary.
@@ -358,6 +355,11 @@ class Setup:
         self.line("so you can look at them first and pull them with update.py.")
         return self.choose_or_default("Pull updates automatically?", BY_PATH[AUTO_UPDATE], data)
 
+    def explain_yes(self, tool: Tool) -> None:
+        """Says what a yes to setting up one of a tool's folders also changes (see YES_ALSO)."""
+        for text in textwrap.wrap(YES_ALSO[tool.setting], 100):
+            self.line(text)
+
     def ask_folder(self, tool: Tool, folder: Path, current: bool | None) -> bool | None:
         """Whether to set up one of a tool's folders. Enter keeps its answer, and takes yes for one
         with no answer yet. None when no answer came."""
@@ -372,6 +374,7 @@ class Setup:
             "Every Codex home reads the same skills, so setup sets up all of them, homes found "
             "later included, or none."
         )
+        self.explain_yes(CODEX)
         return self.choose(CODEX_QUESTION, True if current is None else current)
 
     def ask_copies(self, current: bool | None) -> bool | None:
@@ -1212,93 +1215,65 @@ class Setup:
         except OSError as error:
             self.status("PROBLEM", f"{label}: could not link {PYTHON_LINK} to {folder}. {error}")
 
-    # Settings changes. Each change is planned in full first, checked by reading the new text
-    # back, shown as a line diff, and written only after a yes, with a backup. At a console, each
-    # is shown and asked about before the work starts, so the work never waits for an answer;
-    # the work plans each one again, and makes it while the file is as it was shown.
+    # Settings changes. Each is the one change a folder setup sets up needs in its settings file,
+    # which the yes to setting up that folder approved, so no run asks about it, and every run,
+    # quiet ones included, makes it again if it goes missing. Each is planned in full first,
+    # checked by reading the new text back, and written with a backup, while the file is as it
+    # was planned.
 
-    def offer_settings_changes(self, checks: list[SettingsCheck]) -> None:
-        """At a console, shows each settings change setup can make, and asks about it, before the
-        work. A preview asks nothing, and shows each one in the work instead."""
-        for check in checks:
-            if isinstance(check, SettingsChange) and not check.plan.reason:
-                yes = self.offer_setting(check)
-                self.approved[approval_key(check.path)] = (check.plan.file.text, yes)
-
-    def show_setting(self, change: SettingsChange, note: str = "") -> None:
+    def show_setting(self, change: SettingsChange) -> None:
         """Shows a planned settings change: what it's for, then the changed lines."""
         self.status("CHANGE", f"{change.subject}: {change.path} needs {change.need}.")
-        if note:
-            self.line("          " + note)
         self.line(
-            "          Setup can make this change, and keeps a backup of the file first. Lines "
+            "          Setup would make this change, and keep a backup of the file first. Lines "
             "marked + are added, - removed:"
         )
         if change.plan.note:
             self.line("          " + change.plan.note)
         self.print_diff(change.plan.file.text, change.plan.new_text or "")
 
-    def offer_setting(self, change: SettingsChange, note: str = "") -> bool:
-        """Shows a planned settings change, and asks whether to make it."""
-        self.show_setting(change, note)
-        return self.confirm("          Make this change?")
-
     def repair_setting(self, change: SettingsChange) -> None:
-        """Makes a planned settings change after a yes, and writes the file with a backup. The yes
-        is the one given before the work while the file is still as it was then; otherwise setup
-        shows the change it needs now, and asks again. When the change can't be made safely, the
-        answer is no, or setup runs with --quiet, it reports a problem and leaves the file alone.
-        With --quiet, the problem says how to make the change."""
+        """Makes a settings change a folder needs, and writes the file with a backup, saying so.
+        When the change can't be made safely, it reports a problem and leaves the file alone, and,
+        except with --quiet, says what to add by hand."""
         plan = change.plan
         problem = f"{change.subject}: {change.path} needs {change.need}."
         if plan.reason:
+            if self.quiet:
+                self.status(
+                    "PROBLEM",
+                    f"{problem} Setup won't change this file itself: {plan.reason}. Run "
+                    f"{by_hand('setup.py')} in a terminal to see what to add by hand.",
+                )
+                return
             self.status("PROBLEM", problem)
-            if not self.quiet:
-                self.line(f"          Setup won't change this file itself: {plan.reason}.")
-                self.line("          " + change.how_to)
-                self.line(change.snippet, YELLOW)
-            return
-        if self.quiet:
-            self.status("PROBLEM", f"{problem} {QUIET_ADVICE}")
+            self.line(f"          Setup won't change this file itself: {plan.reason}.")
+            self.line("          " + change.how_to)
+            self.line(change.snippet, YELLOW)
             return
         if self.what_if:
             self.show_setting(change)
-            self.should(change.path, "Change the lines shown, after asking, and keep a backup")
-            return
-
-        shown = self.approved.get(approval_key(change.path))
-        if shown is not None and shown[0] == plan.file.text:
-            yes = shown[1]
-        else:
-            note = "" if shown is None else "The file changed after setup showed its change."
-            yes = self.offer_setting(change, note)
-        if not yes:
-            self.status(
-                "PROBLEM",
-                f"{change.subject}: left unchanged. Make the change shown above by hand, or run "
-                "setup.py again and answer y.",
-            )
+            self.should(change.path, "Change the lines shown, and keep a backup")
             return
         try:
             now = read_settings_file(change.path)
             if now.reason or now.text != plan.file.text:
                 raise OSError(
-                    "The file changed while setup was waiting for an answer, so it was left "
-                    "alone. Run setup.py again."
+                    "The file changed while setup was planning its change, so it was left alone. "
+                    "The next run makes the change."
                 )
             backup = write_settings_file(
                 change.path, plan.new_text or "", bom=plan.file.bom, backup=True
             )
-            saved = f" Backup of the old file: {backup}" if backup else " (new file)"
-            self.status("SET", f"{change.subject}: changed {change.path}.{saved}")
+            saved = f". Backup of the old file: {backup}" if backup else " (new file)"
+            self.status("SET", f"{change.subject}: added {change.added} in {change.path}{saved}")
         except (OSError, ValueError) as error:
             self.status("PROBLEM", f"{change.subject}: could not write {change.path}. {error}")
 
     # The run, in order: where things are; dev-home; the questions not answered yet; at a
-    # console, the settings menu; the changes to confirm; then the work, which asks nothing and
-    # holds the sync's lock; and last, the settings files, which the lock doesn't cover, since
-    # no sync writes them, and a file that changed after setup showed its change is asked about
-    # again.
+    # console, the settings menu; the change to dev-home.json to confirm; then the work, which
+    # asks nothing and holds the sync's lock, the tools' settings files last, since a sync makes
+    # their changes too.
 
     def run(self, content_dir_option: str) -> None:
         settings, read, checked = self.read_settings()
@@ -1338,11 +1313,9 @@ class Setup:
         if settings.content_dir != saved_folder:
             save = True
 
-        # 4. The changes to confirm, shown and asked about before the work.
+        # 4. The change to dev-home.json to confirm, shown and asked about before the work.
         tools = self.tool_folders(settings)
         self.confirm_copies(content_root)
-        if self.can_ask and not self.what_if:
-            self.offer_settings_changes(self.settings_checks(content_root, tools))
 
         # 5. The work.
         with self.work_lock(content_root) as owned:
@@ -1365,14 +1338,13 @@ class Setup:
                 elif saved:
                     self.status("SET", matched)
             self.set_up(settings, content_root, tools)
-
-        # 6. The tools' settings files. A missing setting is offered as a change: shown first,
-        # made only after a yes, and with a backup. See repair_setting.
-        for check in self.settings_checks(content_root, tools):
-            if isinstance(check, SettingsChange):
-                self.repair_setting(check)
-            else:
-                self.status(*check)
+            # The tools' settings files: the change each folder set up needs, which its yes
+            # approved, made with a backup. See repair_setting.
+            for check in self.settings_checks(content_root, tools):
+                if isinstance(check, SettingsChange):
+                    self.repair_setting(check)
+                else:
+                    self.status(*check)
 
     def read_settings(self) -> tuple[LocalSettings, dict[str, Any] | None, Checked]:
         """Where things are: dev-home-tools' folder, the profile to set up, and this PC's
@@ -1594,6 +1566,7 @@ class Setup:
                     return True
                 which = f"{tool.name}, so setup left it as it is"
             else:
+                self.explain_yes(tool)
                 answer = self.choose_from_list(
                     f"{tool.name} {tool.folder}s setup hasn't asked about yet, one for each "
                     f"{tool.account} account:",
@@ -1885,6 +1858,9 @@ class Setup:
                 )
             present = [comparable(resolve_home(folder, self.home)) for folder in folders]
         missing = [d for d in wanted_dirs if not any(same_path(d, p) for p in present)]
+        added = and_list(
+            [name for d, name in zip(wanted_dirs, ALLOWED_NAMES, strict=True) if d in missing]
+        )
         if not missing:
             return (
                 "OK",
@@ -1911,6 +1887,7 @@ class Setup:
             'Merge this into the file. If it already has "permissions", put '
             "additionalDirectories inside that block:",
             snippet,
+            f"{added} to permissions.additionalDirectories",
         )
 
     def check_codex_config(self, home: Path, content_root: str) -> SettingsCheck:
@@ -1925,8 +1902,16 @@ class Setup:
                 f"{path} could not be read, so its settings were not checked. {error}",
             )
         subject = f"Codex config in {home.name}"
-        if codex_config.is_configured(text, content_root, CODEX_DOC_BYTES):
+        has_root, has_doc_bytes = codex_config.configured_parts(text, content_root, CODEX_DOC_BYTES)
+        if has_root and has_doc_bytes:
             return ("OK", f"{subject}: writable_roots and project_doc_max_bytes")
+        added = (
+            f"project_doc_max_bytes = {CODEX_DOC_BYTES}"
+            if has_root
+            else "dev-home to writable_roots"
+            if has_doc_bytes
+            else "dev-home to writable_roots, and project_doc_max_bytes,"
+        )
         try:
             plan = codex_config.plan(path, content_root, CODEX_DOC_BYTES)
         except Exception as error:
@@ -1946,11 +1931,31 @@ class Setup:
             "the file already has [sandbox_workspace_write], add only the writable_roots line "
             "under it:",
             snippet,
+            added,
         )
 
 
 def folder_question(tool: Tool, folder: Path) -> str:
     return f"Set up {tool.name} in {folder} with dev-home's skills and rules?"
+
+
+# What a yes to setting up a tool's folder also changes, by the tool's setting: the one change
+# setup makes in the folder's settings file, which the yes approves (see repair_setting). The
+# question about it says so first.
+YES_ALSO = {
+    CLAUDE_CODE.setting: (
+        "A yes also adds your dev-home and dev-home-tools folders to "
+        "permissions.additionalDirectories in that folder's settings.json, so Claude Code has the "
+        "same access to them from any project as it has to the project itself. Setup keeps a "
+        "backup of the file first."
+    ),
+    CODEX.setting: (
+        "A yes also changes each home's config.toml: it adds your dev-home folder to "
+        "writable_roots, so Codex's sandbox lets it write there from any project, and sets "
+        f"project_doc_max_bytes to {CODEX_DOC_BYTES}, so Codex reads all of your rules and a "
+        "project's AGENTS.md. Setup keeps a backup of each file first."
+    ),
+}
 
 
 CODEX_QUESTION = "Set up Codex in every Codex home with dev-home's skills and rules?"

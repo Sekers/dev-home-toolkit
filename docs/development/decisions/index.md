@@ -57,3 +57,4 @@ Research a decision rests on has its own page in `../research/`.
 - [The tests check the scripts that only report in two ways](the-tests-check-the-scripts-that-only-report-in-two-ways.md)
 - [dev-home-tools updates install themselves unless you say no](dev-home-tools-updates-install-themselves-unless-you-say-no.md)
 - [Codex is set up in every Codex home, or in none](codex-is-set-up-in-every-codex-home-or-in-none.md)
+- [A yes to set up a folder approves the settings change it needs](a-yes-to-set-up-a-folder-approves-the-settings-change-it-needs.md)
