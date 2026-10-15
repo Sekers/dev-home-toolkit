@@ -3,9 +3,13 @@
 import os
 import re
 import sys
+import textwrap
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TextIO
+
+# How wide lines of text get at the console, wrapped at spaces.
+LINE_WIDTH = 100
 
 if sys.platform == "win32":
     import ctypes
@@ -136,8 +140,11 @@ class ListAnswer:
     answers: dict[str, bool]
 
 
-def choose_from_list(intro: str, question: str, items: Sequence[ListItem]) -> ListAnswer | None:
-    """One prompt for a list of optional items: a for all, r for the recommended ones (what
+def choose_from_list(
+    intro: str, question: str, items: Sequence[ListItem], details: str = ""
+) -> ListAnswer | None:
+    """One prompt for a list of optional items, with details, if any, between the list and the
+    question, such as what a yes does: a for all, r for the recommended ones (what
     Enter gives), n for none, or e to ask for each, whose question defaults to that item's
     recommendation. An answer that would do the same as All recommended is left out, and its
     letter means All recommended: with every item recommended, a, and with none, n. So a letter
@@ -168,6 +175,11 @@ def choose_from_list(intro: str, question: str, items: Sequence[ListItem]) -> Li
             print(f"  {item.name.ljust(width)}    {note}", flush=True)
         else:
             print(f"  {item.name}", flush=True)
+    if details:
+        print(flush=True)
+        for line in textwrap.wrap(details, LINE_WIDTH):
+            print(line, flush=True)
+        print(flush=True)
     if every:
         letters = {"a": RECOMMENDED, "n": NONE, "e": EACH}
     elif some:

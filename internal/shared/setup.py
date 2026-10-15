@@ -327,10 +327,12 @@ class Setup:
         return console.choose(question, default) if self.can_ask else None
 
     def choose_from_list(
-        self, intro: str, question: str, items: Sequence[console.ListItem]
+        self, intro: str, question: str, items: Sequence[console.ListItem], details: str = ""
     ) -> console.ListAnswer | None:
         """The shared prompt for every list of optional items, or None without a console."""
-        return console.choose_from_list(intro, question, items) if self.can_ask else None
+        if not self.can_ask:
+            return None
+        return console.choose_from_list(intro, question, items, details)
 
     def choose_or_default(self, question: str, setting: Setting, data: dict[str, Any]) -> object:
         """Asks about a yes-or-no setting with a default, one of dev-home-tools' own or a
@@ -355,10 +357,17 @@ class Setup:
         self.line("so you can look at them first and pull them with update.py.")
         return self.choose_or_default("Pull updates automatically?", BY_PATH[AUTO_UPDATE], data)
 
-    def explain_yes(self, tool: Tool) -> None:
-        """Says what a yes to setting up one of a tool's folders also changes (see YES_ALSO)."""
-        for text in textwrap.wrap(YES_ALSO[tool.setting], 100):
+    def introduce_folders(self, tool: Tool, folders: Sequence[Path]) -> None:
+        """Before a question about a tool's folders: which they are, then what a yes does (see
+        yes_does), each after a blank line."""
+        several = len(folders) > 1 or tool.shared
+        kind = f"{tool.name} {tool.folder}{'s' if several else ''}"
+        self.line()
+        self.line(f"{kind}: {folder_list(folders) or 'none found yet'}")
+        self.line()
+        for text in textwrap.wrap(yes_does(tool, several=len(folders) > 1), console.LINE_WIDTH):
             self.line(text)
+        self.line()
 
     def ask_folder(self, tool: Tool, folder: Path, current: bool | None) -> bool | None:
         """Whether to set up one of a tool's folders. Enter keeps its answer, and takes yes for one
@@ -368,13 +377,7 @@ class Setup:
     def ask_codex(self, homes: Sequence[Path], current: bool | None) -> bool | None:
         """Whether to set up Codex, in every Codex home, which all read the same skills. Enter
         keeps its answer, and takes yes with no answer yet. None when no answer came."""
-        found = folder_list(homes) or "none found yet"
-        self.line(f"Codex homes on this PC, one for each Codex account: {found}")
-        self.line(
-            "Every Codex home reads the same skills, so setup sets up all of them, homes found "
-            "later included, or none."
-        )
-        self.explain_yes(CODEX)
+        self.introduce_folders(CODEX, homes)
         return self.choose(CODEX_QUESTION, True if current is None else current)
 
     def ask_copies(self, current: bool | None) -> bool | None:
@@ -1566,13 +1569,25 @@ class Setup:
                     return True
                 which = f"{tool.name}, so setup left it as it is"
             else:
-                self.explain_yes(tool)
-                answer = self.choose_from_list(
-                    f"{tool.name} {tool.folder}s setup hasn't asked about yet, one for each "
-                    f"{tool.account} account:",
-                    f"Set up {tool.name} in them with dev-home's skills and rules?",
-                    [console.ListItem(str(f), True, folder_question(tool, f)) for f in unanswered],
-                )
+                if len(unanswered) == 1:
+                    # A list of one asks its item's question alone, so the folder and what a
+                    # yes does come first, as for Codex.
+                    self.introduce_folders(tool, unanswered)
+                    question = f"Set up {tool.name} in this {tool.folder}?"
+                    items = [console.ListItem(str(unanswered[0]), True, question)]
+                    answer = self.choose_from_list("", "", items)
+                else:
+                    self.line()
+                    answer = self.choose_from_list(
+                        f"{tool.name} {tool.folder}s setup hasn't asked about yet, one for each "
+                        f"{tool.account} account:",
+                        f"Set up {tool.name} in them with dev-home's skills and rules?",
+                        [
+                            console.ListItem(str(f), True, folder_question(tool, f))
+                            for f in unanswered
+                        ],
+                        yes_does(tool, several=True),
+                    )
                 if answer is not None:
                     for folder in unanswered:
                         entry = self.entry_for(tool, settings, folder)
@@ -1936,29 +1951,35 @@ class Setup:
 
 
 def folder_question(tool: Tool, folder: Path) -> str:
-    return f"Set up {tool.name} in {folder} with dev-home's skills and rules?"
+    return f"Set up {tool.name} in {folder}?"
 
 
-# What a yes to setting up a tool's folder also changes, by the tool's setting: the one change
-# setup makes in the folder's settings file, which the yes approves (see repair_setting). The
-# question about it says so first.
-YES_ALSO = {
-    CLAUDE_CODE.setting: (
-        "A yes also adds your dev-home and dev-home-tools folders to "
-        "permissions.additionalDirectories in that folder's settings.json, so Claude Code has the "
-        "same access to them from any project as it has to the project itself. Setup keeps a "
-        "backup of the file first."
-    ),
-    CODEX.setting: (
-        "A yes also changes each home's config.toml: it adds your dev-home folder to "
-        "writable_roots, so Codex's sandbox lets it write there from any project, and sets "
-        f"project_doc_max_bytes to {CODEX_DOC_BYTES}, so Codex reads all of your rules and a "
-        "project's AGENTS.md. Setup keeps a backup of each file first."
-    ),
-}
+def yes_does(tool: Tool, *, several: bool) -> str:
+    """What a yes to setting up a tool's folders does, said before the question: the one change
+    setup also makes in each folder's settings file, which the yes approves (see
+    repair_setting), included."""
+    if tool.shared:
+        return (
+            f"Every {tool.name} {tool.folder} reads the same skills, so they share one answer. A "
+            f"yes sets up dev-home's skills and rules in each {tool.folder}. In each "
+            f"{tool.folder}'s config.toml, it also adds your dev-home folder to writable_roots, "
+            f"so {tool.name} can write there from any project, and sets project_doc_max_bytes to "
+            f"{CODEX_DOC_BYTES}, so {tool.name} reads all of your rules. Setup backs up each file "
+            "first."
+        )
+    where, settings_file, backup = (
+        ("in each", f"each {tool.folder}'s settings.json", "each file")
+        if several
+        else ("there", "its settings.json", "the file")
+    )
+    return (
+        f"A yes sets up dev-home's skills and rules {where}. It also adds your dev-home and "
+        f"dev-home-tools folders to permissions.additionalDirectories in {settings_file}, so "
+        f"{tool.name} can use them from any project. Setup backs up {backup} first."
+    )
 
 
-CODEX_QUESTION = "Set up Codex in every Codex home with dev-home's skills and rules?"
+CODEX_QUESTION = "Set up Codex in every Codex home?"
 
 
 def folder_list(folders: Sequence[Path]) -> str:

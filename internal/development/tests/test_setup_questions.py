@@ -308,14 +308,16 @@ FOLDERS = (
 
 
 def folder_question(folder: Path, hint: str = r"\[Y/n\]") -> str:
-    return (
-        rf"^Set up Claude Code in {re.escape(str(folder))} with dev-home's skills and rules\? "
-        rf"{hint}: $"
-    )
+    """One folder's question, in a list asked about one at a time, or in the menu."""
+    return rf"^Set up Claude Code in {re.escape(str(folder))}\? {hint}: $"
+
+
+# The question about the only Claude Code folder setup hasn't asked about, after a line naming it.
+THIS_FOLDER = r"^Set up Claude Code in this folder\? \[Y/n\]: $"
 
 
 # The one question for Codex, which covers every Codex home, since they all read the same skills.
-CODEX = r"^Set up Codex in every Codex home with dev-home's skills and rules\? \[Y/n\]: $"
+CODEX = r"^Set up Codex in every Codex home\? \[Y/n\]: $"
 
 
 def test_a_first_run_asks_about_updates_each_claude_folder_and_codex(
@@ -372,7 +374,7 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_codex(
     assert sum(1 for asked in person.asked if re.search(CODEX, asked)) == 1, person.asked
     assert re.search(r"^Claude Code folders setup hasn't asked about yet", out, re.M), out
     homes = f"{box.profile / '.codex'}, {work}"
-    pattern = rf"^Codex homes on this PC, one for each Codex account: {re.escape(homes)}$"
+    pattern = rf"^Codex homes: {re.escape(homes)}$"
     assert re.search(pattern, out, re.M), out
     assert ".codex-plain" not in out, out
     assert written["updates"]["installAutomatically"] is True
@@ -398,10 +400,23 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_codex(
         r"permissions\.additionalDirectories in .*settings\.json \(new file\)$"
     )
     assert re.search(pattern, out, re.M), out
-    assert re.search(r"^A yes also adds your dev-home and dev-home-tools folders to ", out, re.M)
-    assert re.search(
-        r"^A yes also changes each home's config\.toml: it adds your dev-home ", out, re.M
+    # The list, then what a yes does, then the question; and for Codex, the homes first.
+    words = " ".join(out.split())
+    claude = (
+        f"{box.profile / '.claude-third'} A yes sets up dev-home's skills and rules in each. It "
+        "also adds your dev-home and dev-home-tools folders to permissions.additionalDirectories "
+        "in each folder's settings.json, so Claude Code can use them from any project. Setup "
+        "backs up each file first."
     )
+    assert claude in words, out
+    codex = (
+        f"Codex homes: {homes} Every Codex home reads the same skills, so they share one answer. "
+        "A yes sets up dev-home's skills and rules in each home. In each home's config.toml, it "
+        "also adds your dev-home folder to writable_roots, so Codex can write there from any "
+        "project, and sets project_doc_max_bytes to 65536, so Codex reads all of your rules. "
+        "Setup backs up each file first."
+    )
+    assert codex in words, out
     assert not any(re.search(r"change\?", asked) for asked in person.asked), person.asked
 
 
@@ -442,8 +457,8 @@ def test_asks_each_question_whose_answer_isnt_saved_yet_then_never_again(
     write_text(settings, json.dumps(saved, indent=2) + "\n")
     later = box.profile / ".claude-later"
     later.mkdir()
-    # A list of one asks only its folder's question.
-    person.answers.update({UPDATES: "n", folder_question(later): "n"})
+    # A list of one names its folder, says what a yes does, and asks only about that folder.
+    person.answers.update({UPDATES: "n", THIS_FOLDER: "n"})
     try:
         returned = setup_here(box)
         written = json.loads(settings.read_text(encoding="utf-8"))
@@ -457,6 +472,8 @@ def test_asks_each_question_whose_answer_isnt_saved_yet_then_never_again(
     questions = [prompt for prompt in person.asked if not re.search(MENU, prompt)]
     assert len(asked) == 3 and re.search(MENU, asked[-1]), asked
     assert questions == asked[:2], person.asked
+    assert re.search(rf"^Claude Code folder: {re.escape(str(later))}$", out, re.M), out
+    assert "A yes sets up dev-home's skills and rules there." in out, out
     assert written["updates"]["installAutomatically"] is False
     assert written["claudeCode"]["folders"] == {
         "~/.claude": {"setUp": True},
@@ -728,7 +745,7 @@ def test_at_a_console_settings_in_the_older_layout_are_set_aside_and_asked_again
             SET_ASIDE: "",
             r"^Your dev-home folder \[.*\]: $": content,
             UPDATES: "n",
-            folder_question(box.profile / ".claude"): "",
+            THIS_FOLDER: "",
             CODEX: "",
         }
     )

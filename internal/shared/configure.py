@@ -428,7 +428,8 @@ def change_folders(run: "Setup", settings: LocalSettings, tool: Tool) -> bool:
         if tool.shared:
             continue
         if not explained:
-            run.explain_yes(tool)
+            present = [Path(resolve_home(name, run.home)) for name, _ in answers]
+            run.introduce_folders(tool, [f for f in present if f.is_dir()])
             explained = True
         answer = run.ask_folder(tool, folder, current)
         if answer is not None and answer != current:
