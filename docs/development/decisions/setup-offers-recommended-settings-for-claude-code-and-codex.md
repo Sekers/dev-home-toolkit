@@ -27,7 +27,10 @@ session's transcript.
   again. If the value changes after a yes, setup asks again rather than changing it back. An
   answer is saved only once its change is written, so a run that stops partway records nothing.
 - A settings file gets one diff for everything setup changes in it, the required lines and the
-  chosen recommendations together, with one yes and one backup.
+  chosen recommendations together, with one yes and one backup. (Later changed by
+  [A yes to set up a folder approves the settings change it needs](a-yes-to-set-up-a-folder-approves-the-settings-change-it-needs.md):
+  the required lines need no yes of their own, so step 7 settles how a recommendation's diff
+  shares a file with them.)
 
 **Why:** these settings suit most people, but each changes the person's own file, so each needs
 their yes on each PC. Codex has neither: its commit and pull request attribution is a setting of

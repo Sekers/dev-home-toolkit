@@ -13,12 +13,17 @@
    setting can be changed: a number for one, `a` for all, and Enter to go on. A dev-home folder
    changed here goes back through step 1, and the new dev-home's copies question.
 4. The changes to confirm: the change to `dev-home.json`, if any, and each settings file's diff,
-   each shown and asked about.
+   each shown and asked about. (Later changed by
+   [A yes to set up a folder approves the settings change it needs](a-yes-to-set-up-a-folder-approves-the-settings-change-it-needs.md):
+   the settings files' changes aren't asked about, since the folder's yes approved them.)
 5. The work, without stopping, holding the sync's lock: save this PC's answers, commit
    `dev-home.json` if it changed, then the Python link, the generated files, the skill links, and
    the rules. Then, with the lock let go, the settings files. Each is read again first; if it
    changed since its diff was shown, setup shows the new diff and asks again. `dev-home.json` is
    read again too, and left as it is, with a `PROBLEM`, if it changed since its change was shown.
+   (Later changed by the same decision: the settings files are written while the lock is held,
+   since a sync writes them too, and one that changed since its change was planned is left alone
+   until the next run.)
 
 A run with no console, such as a quiet one, asks nothing and shows no menu, and does the rest in
 the same order, its work holding the lock too, unless a sync that runs it holds the lock already.
@@ -82,7 +87,9 @@ held the lock only while it saved, now runs inside the work's lock.
   the old one would leave it at several copies for good.
 - The settings files' diffs before the menu: a change made in the menu could make them wrong.
 - Holding the lock for the settings files too: asking again about a changed file would hold up
-  every sync until the person answered.
+  every sync until the person answered. (Later changed by
+  [A yes to set up a folder approves the settings change it needs](a-yes-to-set-up-a-folder-approves-the-settings-change-it-needs.md):
+  nothing asks about them any more, so the lock covers them.)
 - A sync setting up a folder it finds right away, then asking to confirm: it would link dev-home
   into a backup copy or a work account before the person says anything.
 - An off switch on the default folders: hidden from the people who need it, and two rules.
