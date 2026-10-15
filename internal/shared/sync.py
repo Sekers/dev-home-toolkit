@@ -692,13 +692,14 @@ def sync(argv: Sequence[str]) -> int:
     return sync_root(root, paths, message, fetch_when, check_hours)
 
 
-def commit_for_setup(root: Path, path: str, message: str) -> int:
+def commit_for_setup(root: Path, path: str, message: str, *, holds_lock: bool = False) -> int:
     """Commits one file in the dev-home at root, named relative to it, and syncs, as
     sync.py --message does. Setup runs this, so it skips the update check and setup, which a sync
-    that brings in commits otherwise runs: setup would start again inside itself. Returns 0, or 1
+    that brings in commits otherwise runs: setup would start again inside itself. Setup says
+    when it holds the lock already, which this sync would otherwise wait for. Returns 0, or 1
     when the user needs to act, and never raises."""
     try:
-        return sync_root(root, [path], message, FETCH_WHEN[0], 0, then=False)
+        return sync_root(root, [path], message, FETCH_WHEN[0], 0, then=False, holds_lock=holds_lock)
     except Exception as error:
         return problem(f"The commit of {path} stopped: {describe(error)}")
 
@@ -711,8 +712,10 @@ def sync_root(
     check_hours: int,
     *,
     then: bool = True,
+    holds_lock: bool = False,
 ) -> int:
-    """One run on the dev-home at root, once the arguments are checked."""
+    """One run on the dev-home at root, once the arguments are checked. With holds_lock, the
+    caller holds the lock already."""
     if find_program("git") is None:
         return problem(f"dev-home was not synced. {GIT_MISSING}")
     found = run_git(root, "rev-parse", "--absolute-git-dir")
@@ -721,6 +724,9 @@ def sync_root(
     git_dir = Path(first_line(found.out))
 
     run = Sync(root, git_dir, fetch_when, check_hours, then=then)
+    if holds_lock:
+        run.run(paths, message)
+        return 1 if run.problems else 0
     try:
         with one_run_at_a_time(git_dir) as owned:
             if owned:

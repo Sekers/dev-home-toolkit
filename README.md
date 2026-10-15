@@ -105,15 +105,26 @@ py C:\Programming\dev-home-tools\setup.py
 To see what it would change first, add `--what-if`. It still asks its questions, but changes
 nothing.
 
-The first run asks these, and a later run asks any whose answer isn't saved yet:
+The first run asks these, and a later run asks any whose answer isn't saved yet. dev-home comes
+first, and setup saves none of your answers until it's in place:
 
 | Question | What to answer |
 | --- | --- |
 | Your dev-home folder | Where your dev-home is, or should go. Press Enter for the suggestion: a `dev-home` folder next to this one, such as `C:\Programming\dev-home`. The same rules for the path apply. A folder that already has files in it must be a dev-home: setup checks for the files every dev-home starts with (`global-rules\global-rules.md` and `knowledge\README.md`), and asks again if they're missing, so it never changes a project's repo by mistake. |
-| Pull updates automatically? | `y` to install new versions of this repo as soon as a sync finds them, or Enter for no: you're told about them and install them yourself. See [Updates](docs/reference/scripts.md#updates). |
-| Also set up `~\.claude-<name>`? | Asked once for each extra Claude Code folder it finds, one per Claude account you run with `CLAUDE_CONFIG_DIR`, including one made after your first run. `y` sets that account up too, and `n` is kept, so it isn't asked again. When a quiet run finds a folder it hasn't asked about, the agent tells you: run setup in a terminal to answer. |
-| Is dev-home in active use anywhere besides this PC? | Asked once, for a dev-home with no answer yet. After a clone of one set to a single copy, it's asked as "Will another copy stay in use alongside this one?" There's no default: type `y` if another PC, virtual machine, or cloud session uses it too, and each command then checks GitHub first; or `n` if this PC is the only one, such as one replacing a PC you've retired, and syncs then check GitHub only every few hours. Setup shows the change, and after a `y` to saving it, commits and pushes `dev-home.json`, so every copy agrees. |
 | Clone your existing dev-home (c), create a new private one (n), or stop (s)? | Only when the dev-home folder doesn't exist yet. On your first PC, `n` creates a private repo on GitHub from the files in `templates/dev-home-starter/`. On every later PC, `c` clones it. Either way, it then asks for the repo's name; Enter accepts `dev-home`. |
+| Pull updates automatically? | Enter, or `d`, follows the default, yes: new versions of this repo install as soon as a sync finds them. `n` tells you about them instead, to install yourself, and `y` keeps yes even if a later version changes the default. See [Updates](docs/reference/scripts.md#updates). |
+| Also set up `~\.claude-<name>`? | Asked once for each extra Claude Code folder it finds, one per Claude account you run with `CLAUDE_CONFIG_DIR`, including one made after your first run. `y` sets that account up too, and `n` is kept, so it isn't asked again. When a quiet run finds a folder it hasn't asked about, the agent tells you: run setup in a terminal to answer. |
+| Is dev-home in active use anywhere besides this PC? | Asked on each PC's first setup, since adding a PC is when the answer most often changes, with your dev-home's answer as the default; and whenever your dev-home has no answer yet, or you've just cloned one set to a single copy. Not asked when setup has just created your dev-home. Type `y` if another PC, virtual machine, or cloud session uses it too, and each command then checks GitHub first; or `n` if this PC is the only one, such as one replacing a PC you've retired, and syncs then check GitHub only every few hours. With no answer yet, there's no default. Setup shows the change, and after a `y` to saving it, commits and pushes `dev-home.json`, so every copy agrees. |
+
+Then it shows every setting, as `--configure` does (see below): change any, or press Enter to go
+on. It also checks Claude Code's and Codex's settings (see
+[What setup changes](docs/reference/setup-changes.md) for what and why): when a setting is
+missing, it shows the exact lines it would change, and asks. Once you've answered everything, it
+does its work: it links the skills and rules, then makes each settings change you said `y` to,
+saving a dated backup of the file first, named `settings.json.bak-YYYYMMDD-HHMMSS`. If a file
+changed after setup showed you its change, it shows the new change and asks again. It never edits
+a file it can't fully read, such as a `settings.json` that isn't valid JSON (Claude Code can't use
+one either), or a read-only one; it prints what to add by hand instead.
 
 Setup can create or clone dev-home only on GitHub for now; automated setup for GitLab,
 Bitbucket, and Azure DevOps is coming. If your dev-home is already on one of those, or on your
@@ -123,13 +134,6 @@ uses it as it is, and syncing works the same as with GitHub.
 This limit applies only to where dev-home itself is hosted. Your project repos can be anywhere,
 or not hosted at all, and the skills work with them the same way. The one exception is filing a
 handoff item as an issue, which needs the project on GitHub.
-
-Then it links everything and checks Claude Code's and Codex's settings (see
-[What setup changes](docs/reference/setup-changes.md) for what and why). When a setting is
-missing, it shows the exact lines it would change and asks first. On a `y`, it saves a dated
-backup of the file, named `settings.json.bak-YYYYMMDD-HHMMSS`, before writing. It never edits a
-file it can't fully read, such as a `settings.json` that isn't valid JSON (Claude Code can't use
-one either), or a read-only one; it prints what to add by hand instead.
 
 ### 4. Restart, and check
 
@@ -154,9 +158,10 @@ terminal:
 py C:\Programming\dev-home-tools\setup.py --configure
 ```
 
-It shows every setting with its value. Type a setting's number to change it, `a` to go through
-them all, or press Enter to finish; each question has your current answer as its default. Setup
-keeps a dated backup of `local-settings.json` before it saves a change.
+It shows every setting with its value, as every run of setup in a terminal does once it has
+asked its questions. Type a setting's number to change it, `a` to go through them all, or press
+Enter to go on; each question has your current answer as its default. Setup keeps a dated backup
+of `local-settings.json` before it saves a change.
 
 You can also edit `local-settings.json` and run setup again. Its settings are grouped, and each
 one's name is its path, which `--configure` takes too:

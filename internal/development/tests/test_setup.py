@@ -684,19 +684,19 @@ def test_refuses_a_dev_home_path_with_a_space_and_keeps_the_settings(box: Sandbo
     assert read(settings) == before
 
 
-def test_a_new_dev_home_folder_is_saved_with_test_home_dir_kept(box: Sandbox) -> None:
+def test_a_dev_home_folder_with_no_dev_home_yet_is_reported_and_not_saved(box: Sandbox) -> None:
+    # Saved, it would leave later syncs saying it isn't a git repo, instead of a run by hand
+    # offering to clone or create dev-home there.
     settings = box.tools / "local-settings.json"
     before = read(settings)
     try:
         result = setup(box, "--content-dir", str(box.root / "another-dev-home"))
-        saved = json.loads(read(settings))
+        after = read(settings)
     finally:
         write_text(settings, before)
-    assert saved["schemaVersion"] == 1, saved
-    assert saved["devHome"]["folder"].endswith("another-dev-home")
-    assert saved["testHomeDir"] == forward(box.profile)
     # With --quiet, a missing dev-home is reported instead of asked about.
     assert result.code == 1 and result.has_line("There is no dev-home"), str(result)
+    assert after == before
 
 
 def write_starter_files(folder: Path) -> None:
@@ -742,9 +742,10 @@ def test_removes_settings_nothing_declares_and_leaves_auto_update_out_until_answ
     previewed = setup(box, "--what-if")
     assert read(settings_kept) == edited_text
     assert previewed.has_line(r"^What if: Removed devHome\.typo, somethingNewer, "), str(previewed)
-    result = setup(box, "--content-dir", str(box.root / "yet-another-dev-home"))
+    result = setup(box)
     saved = json.loads(read(settings_kept))
-    assert saved["devHome"]["folder"].endswith("yet-another-dev-home")
+    assert saved["devHome"]["folder"] == edited["devHome"]["folder"], saved
+    assert saved["testHomeDir"] == forward(box.profile), saved
     assert "somethingNewer" not in saved and "typo" not in saved["devHome"], saved
     assert saved["claudeCode"] == {"folders": {"~/.claude-x": {"setUp": False}}}, saved
     assert "updates" not in saved, saved
@@ -1006,17 +1007,25 @@ def test_stops_at_a_settings_file_that_isnt_an_object(box: Sandbox) -> None:
 
 
 def test_says_so_when_it_cant_save_its_settings(box: Sandbox) -> None:
+    # A setting nothing declares makes the run save, and a generated file that's gone shows
+    # the rest of the work still goes on.
     settings = box.tools / "local-settings.json"
     before = read(settings)
+    edited = json.loads(before)
+    edited["leftover"] = 1
+    write_text(settings, json.dumps(edited, indent=2) + "\n")
+    (box.generated / "skills" / "handoff" / "SKILL.md").unlink()
     settings.chmod(stat.S_IREAD)
     try:
-        result = setup(box, "--content-dir", str(box.root / "unsaved-dev-home"))
+        result = setup(box)
     finally:
         settings.chmod(stat.S_IREAD | stat.S_IWRITE)
         write_text(settings, before)
     assert result.has_line(r"^PROBLEM\s+Could not save this PC's settings in "), str(result)
-    # The rest of the run still goes on.
-    assert result.has_line("There is no dev-home"), str(result)
+    assert result.has_line(r"^WROTE\s+Skills, their shared scripts, and operating rules"), str(
+        result
+    )
+    assert (box.generated / "skills" / "handoff" / "SKILL.md").is_file()
 
 
 @pytest.mark.parametrize(

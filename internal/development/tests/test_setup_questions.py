@@ -11,7 +11,7 @@ import re
 import shutil
 import subprocess
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -42,11 +42,12 @@ def box(request: pytest.FixtureRequest) -> Iterator[Sandbox]:
 
 
 class Person:
-    """Answers questions at the console: the answer whose pattern the question matches, or the
-    next of a list of them, one each time it's asked. A question with no answer ends the input,
-    as when a person closes the console."""
+    """Answers questions at the console: the answer whose pattern the question matches, the next
+    of a list of them, one each time it's asked, or what a function gives, for a person who also
+    does something while answering. A question with no answer ends the input, as when a person
+    closes the console."""
 
-    def __init__(self, answers: dict[str, str | list[str]]) -> None:
+    def __init__(self, answers: dict[str, str | list[str] | Callable[[str], str]]) -> None:
         self.answers = answers
         self.asked: list[str] = []
 
@@ -58,6 +59,8 @@ class Person:
                     if not answer:
                         break
                     return answer.pop(0)
+                if callable(answer):
+                    return answer(prompt)
                 return answer
         raise EOFError
 
@@ -377,8 +380,10 @@ def test_asks_each_question_whose_answer_isnt_saved_yet_then_never_again(
     finally:
         shutil.rmtree(later)
     assert returned == 0 and again == 0, out
-    assert len(asked) == 2, asked
-    assert person.asked == asked, person.asked
+    # Every run by hand shows the settings menu too.
+    questions = [prompt for prompt in person.asked if not re.search(MENU, prompt)]
+    assert len(asked) == 3 and re.search(MENU, asked[-1]), asked
+    assert questions == asked[:2], person.asked
     assert written["updates"]["installAutomatically"] is False
     assert written["claudeCode"]["folders"] == {"~/.claude-later": {"setUp": False}}
 
@@ -506,7 +511,7 @@ def test_a_save_keeps_what_a_sync_wrote_while_a_question_waited(
     assert written["devHome"]["checkEveryHours"] == 6, written
 
 
-def test_setup_by_hand_saves_only_once_a_sync_lets_go_of_its_lock(
+def test_setup_by_hand_does_its_work_only_once_a_sync_lets_go_of_its_lock(
     box: Sandbox,
     settings: Path,
     person: Person,
@@ -523,16 +528,86 @@ def test_setup_by_hand_saves_only_once_a_sync_lets_go_of_its_lock(
         assert owned
         waited = setup_here(box)
         unsaved = json.loads(settings.read_text(encoding="utf-8"))
-        # A sync runs setup while it holds the lock, so that setup saves without it.
+        # A sync runs setup while it holds the lock, so that setup works without taking it.
         held = shared_module(box, "setup").main([], sync_holds_lock=True)
     out = capsys.readouterr().out
     saved = json.loads(settings.read_text(encoding="utf-8"))
     assert waited == 1, out
-    pattern = r"^PROBLEM\s+This PC's settings weren't saved: a sync, or an update, has been using"
+    pattern = r"^PROBLEM\s+Setup changed nothing: a sync, or an update, has been using dev-home"
     assert re.search(pattern, out, re.M), out
     assert "installAutomatically" not in unsaved.get("updates", {}), unsaved
     assert held == 0, out
     assert saved["updates"]["installAutomatically"] is True, saved
+
+
+def test_a_run_by_hand_asks_everything_before_its_work_which_holds_the_sync_lock(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # The questions, the menu, and the settings change, in that order, with the lock free, so no
+    # sync waits on a person; then the work, holding it; then the settings file, without it.
+    unanswered_updates(settings)
+    path = box.profile / ".claude" / "settings.json"
+    before = path.read_bytes()
+    write_text(path, "{}\n")
+    sync = shared_module(box, "sync")
+    code = shared_module(box, "setup")
+    monkeypatch.setattr(sync, "LOCK_WAIT_SECONDS", 0)
+    events: list[str] = []
+
+    def lock_held() -> bool:
+        with sync.one_run_at_a_time(box.content / ".git") as owned:
+            return not owned
+
+    def answering(event: str, answer: str) -> Callable[[str], str]:
+        def answer_it(prompt: str) -> str:
+            events.append(f"{event}, lock held: {lock_held()}")
+            return answer
+
+        return answer_it
+
+    making_the_link = code.Setup.sync_python_link
+
+    def python_link(run: Any, *args: Any, **kwargs: Any) -> None:
+        events.append(f"work, lock held: {lock_held()}")
+        making_the_link(run, *args, **kwargs)
+
+    writing = code.write_settings_file
+
+    def write_file(file: Path, *args: Any, **kwargs: Any) -> str:
+        if file == path:
+            events.append(f"settings file, lock held: {lock_held()}")
+        written: str = writing(file, *args, **kwargs)
+        return written
+
+    monkeypatch.setattr(code.Setup, "sync_python_link", python_link)
+    monkeypatch.setattr(code, "write_settings_file", write_file)
+    person.answers.update(
+        {
+            UPDATES: answering("updates", "y"),
+            MENU: answering("menu", ""),
+            MAKE_CHANGE: answering("settings change", "y"),
+        }
+    )
+    try:
+        returned = setup_here(box)
+        out = capsys.readouterr().out
+    finally:
+        path.write_bytes(before)
+        for backup in path.parent.glob("settings.json.bak-*"):
+            backup.unlink()
+    assert returned == 0, out
+    assert events == [
+        "updates, lock held: False",
+        "menu, lock held: False",
+        "settings change, lock held: False",
+        "work, lock held: True",
+        "settings file, lock held: False",
+    ], events
+    assert json.loads(settings.read_text(encoding="utf-8"))["updates"]["installAutomatically"]
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="only Windows refuses to replace an open file")
@@ -647,10 +722,30 @@ def test_at_a_console_enter_stops_at_a_folder_that_isnt_a_dev_home(
     assert settings.read_text(encoding="utf-8") == before
 
 
+def test_a_folder_chosen_in_the_menu_is_checked_before_anything_is_saved(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = box.root / "menu-project"
+    write_text(project / "README.md", "# a project\n")
+    before = settings.read_text(encoding="utf-8")
+    person.answers.update(
+        {MENU: ["1", ""], r"^Your dev-home folder \[.*\]: $": str(project), NOT_A_DEV_HOME: ""}
+    )
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    pattern = r"^PROBLEM\s+Stopped: .*menu-project doesn't look like a dev-home\."
+    assert re.search(pattern, out, re.M), out
+    assert settings.read_text(encoding="utf-8") == before
+
+
 # How many copies of dev-home are in active use, asked of a dev-home of the test's own.
 
 ELSEWHERE = r"^Is dev-home in active use anywhere besides this PC, .*\? \[y/n\]: $"
-ALONGSIDE = r"^Will another copy stay in use alongside this one, .*\? \[y/n\]: $"
+# The same question, with dev-home.json's answer, several or one, as its default.
+ELSEWHERE_YES = ELSEWHERE.replace(r"\[y/n\]", r"\[Y/n\]")
+ELSEWHERE_NO = ELSEWHERE.replace(r"\[y/n\]", r"\[y/N\]")
+RETIRED = r"^Have all the other copies been retired, .*\? \[y/N\]: $"
 SAVE_COPIES = r"Save it, commit it, and push it to GitHub\? \[y/N\]: $"
 
 
@@ -671,11 +766,25 @@ def own_dev_home(box: Sandbox, name: str, copies: str | None) -> tuple[Path, Pat
     return home, remote
 
 
-def check_copies(box: Sandbox, home: Path, *, cloned: bool = False) -> int:
-    """Asks setup's question about copies for one dev-home, and returns setup's exit code."""
-    run = shared_module(box, "setup").Setup(quiet=False, what_if=False)
+def check_copies(
+    box: Sandbox,
+    home: Path,
+    *,
+    quiet: bool = False,
+    first_setup: bool = False,
+    cloned: bool = False,
+    created: bool = False,
+) -> int:
+    """Asks setup's question about copies for one dev-home, shows the change, and makes it, as
+    a run of setup does in its questions, its changes to confirm, and its work. Returns setup's
+    exit code."""
+    run = shared_module(box, "setup").Setup(quiet=quiet, what_if=False)
     run.cloned = cloned
-    run.check_copies(home)
+    run.created = created
+    settings = shared_module(box, "settings").LocalSettings(content_dir=str(home))
+    run.ask_about_copies(settings, home, first_setup=first_setup)
+    run.confirm_copies(home)
+    run.write_copies(home)
     returned: int = run.finish()
     return returned
 
@@ -713,16 +822,19 @@ def test_a_no_to_saving_the_copies_answer_leaves_dev_home_as_it_is(
     assert git("-C", str(remote), "log", "-1", "--format=%s") == ["test: dev-home"]
 
 
-@pytest.mark.parametrize(("answer", "several"), [("y", True), ("n", False)])
-def test_after_a_clone_set_to_one_copy_asks_whether_another_stays(
+@pytest.mark.parametrize(
+    ("answer", "several"), [("y", True), ("n", False), ("", False)], ids=["y", "n", "Enter"]
+)
+def test_after_a_clone_set_to_one_copy_asks_with_one_as_the_default(
     box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str], answer: str, several: bool
 ) -> None:
     text = '{"schemaVersion": 1, "multiMachine": false, "x": 1}\n'
-    home, remote = own_dev_home(box, f"copies-cloned-{answer}", text)
-    person.answers.update({ALONGSIDE: answer, SAVE_COPIES: "y"})
+    home, remote = own_dev_home(box, f"copies-cloned-{answer or 'enter'}", text)
+    person.answers.update({ELSEWHERE_NO: answer, SAVE_COPIES: "y"})
     returned = check_copies(box, home, cloned=True)
     out = capsys.readouterr().out
     assert returned == 0, out
+    assert any(re.search(ELSEWHERE_NO, asked) for asked in person.asked), person.asked
     saved = json.loads((home / "dev-home.json").read_text(encoding="utf-8"))
     # A key setup doesn't know is kept.
     assert saved == {"schemaVersion": 1, "multiMachine": several, "x": 1}, saved
@@ -738,12 +850,76 @@ def test_an_answered_dev_home_is_asked_nothing(box: Sandbox, person: Person) -> 
     assert person.asked == []
 
 
+def test_a_first_setup_asks_with_dev_home_jsons_answer_as_the_default(
+    box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Adding a PC is when the answer most often changes. Enter keeps several copies.
+    text = '{"schemaVersion": 1, "multiMachine": true}\n'
+    home, remote = own_dev_home(box, "copies-first-setup", text)
+    person.answers[ELSEWHERE_YES] = ""
+    returned = check_copies(box, home, first_setup=True)
+    out = capsys.readouterr().out
+    assert returned == 0, out
+    assert any(re.search(ELSEWHERE_YES, asked) for asked in person.asked), person.asked
+    assert (home / "dev-home.json").read_text(encoding="utf-8") == text
+    assert git("-C", str(remote), "log", "-1", "--format=%s") == ["test: dev-home"]
+
+
+@pytest.mark.parametrize(("retired", "several"), [("y", False), ("n", True)])
+def test_a_first_setup_that_says_one_copy_asks_whether_the_others_are_retired(
+    box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str], retired: str, several: bool
+) -> None:
+    # Such as a new PC that replaces one being retired.
+    text = '{"schemaVersion": 1, "multiMachine": true}\n'
+    home, remote = own_dev_home(box, f"copies-replacing-{retired}", text)
+    person.answers.update({ELSEWHERE_YES: "n", RETIRED: retired, SAVE_COPIES: "y"})
+    returned = check_copies(box, home, first_setup=True)
+    out = capsys.readouterr().out
+    assert returned == 0, out
+    saved = json.loads((home / "dev-home.json").read_text(encoding="utf-8"))
+    assert saved["multiMachine"] is several, saved
+    subjects = git("-C", str(remote), "log", "-1", "--format=%s")
+    assert subjects == ["test: dev-home" if several else "dev-home: one active copy"], subjects
+
+
+def test_a_dev_home_this_run_created_is_asked_nothing_even_on_a_first_setup(
+    box: Sandbox, person: Person
+) -> None:
+    # Nothing else can be using a dev-home that was just created.
+    text = '{"schemaVersion": 1, "multiMachine": false}\n'
+    home, _ = own_dev_home(box, "copies-created", text)
+    assert check_copies(box, home, first_setup=True, created=True) == 0
+    assert person.asked == []
+
+
+def test_a_dev_home_json_that_changes_after_its_change_is_shown_is_left_as_it_is(
+    box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Such as a sync bringing in another copy's answer while setup's questions wait.
+    home, remote = own_dev_home(box, "copies-changed-meanwhile", None)
+    path = home / "dev-home.json"
+    meanwhile = '{"schemaVersion": 1, "multiMachine": false}\n'
+
+    def yes_after_a_sync(prompt: str) -> str:
+        write_text(path, meanwhile)
+        return "y"
+
+    person.answers.update({ELSEWHERE: "y", SAVE_COPIES: yes_after_a_sync})
+    returned = check_copies(box, home)
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    pattern = r"^PROBLEM\s+.*dev-home\.json changed after setup showed its change"
+    assert re.search(pattern, out, re.M), out
+    assert path.read_text(encoding="utf-8") == meanwhile
+    assert git("-C", str(remote), "log", "-1", "--format=%s") == ["test: dev-home"]
+
+
 def test_an_older_dev_home_json_is_asked_again_and_rewritten_in_place(
     box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # Its old answer is the default, so Enter keeps it, and git has the old file.
     home, remote = own_dev_home(box, "copies-older", '{"multiMachine": false, "x": 1}\n')
-    person.answers.update({ELSEWHERE.replace(r"\[y/n\]", r"\[y/N\]"): "", SAVE_COPIES: "y"})
+    person.answers.update({ELSEWHERE_NO: "", SAVE_COPIES: "y"})
     returned = check_copies(box, home)
     out = capsys.readouterr().out
     assert returned == 0, out
@@ -774,10 +950,9 @@ def test_a_quiet_run_leaves_a_dev_home_json_in_another_layout_alone(
 ) -> None:
     name = "copies-quiet-" + ("older" if "schemaVersion" not in text else "newer")
     home, _ = own_dev_home(box, name, text)
-    run = shared_module(box, "setup").Setup(quiet=True, what_if=False)
-    run.check_copies(home)
+    returned = check_copies(box, home, quiet=True)
     out = capsys.readouterr().out
-    assert run.finish() == 1, out
+    assert returned == 1, out
     assert re.search(rf"^PROBLEM\s+.*{said}", out, re.M), out
     assert (home / "dev-home.json").read_text(encoding="utf-8") == text
 
@@ -794,7 +969,7 @@ def test_a_copies_answer_that_cant_be_saved_leaves_dev_home_as_it_is(
     home, remote = own_dev_home(box, "copies-held-open", text)
     path = home / "dev-home.json"
     before = path.read_bytes()
-    person.answers.update({ALONGSIDE: "y", SAVE_COPIES: "y"})
+    person.answers.update({ELSEWHERE_NO: "y", SAVE_COPIES: "y"})
     with path.open("rb"):
         returned = check_copies(box, home, cloned=True)
     out = capsys.readouterr().out
@@ -807,7 +982,7 @@ def test_a_copies_answer_that_cant_be_saved_leaves_dev_home_as_it_is(
 
 # --configure's menu at a console.
 
-MENU = r"^Number to change, a to go through them all, or Enter to finish: $"
+MENU = r"^Number to change, a to go through them all, or Enter to go on: $"
 UPDATE_HOURS = r"^Check GitHub for dev-home-tools updates every how many hours .*\[24\]: $"
 CONTENT_HOURS = r"^Check GitHub for dev-home's changes every how many hours .*\[12\]: $"
 
@@ -827,7 +1002,7 @@ def test_the_menu_changes_the_setting_picked_and_keeps_a_backup(
     out = capsys.readouterr().out
     assert returned == 0, out
     assert "dev-home-tools settings" in out and "Shared by every copy of dev-home" in out, out
-    assert "Type a number from 1 to 6, or a, or press Enter to finish." in out, out
+    assert "Type a number from 1 to 6, or a, or press Enter to go on." in out, out
     saved = json.loads(backups_removed.read_text(encoding="utf-8"))
     assert saved["updates"]["installAutomatically"] is True, saved
     assert re.search(r"^SET\s+This PC's settings: .* Backup of the old file: ", out, re.M), out
@@ -845,7 +1020,7 @@ def test_the_menu_goes_through_every_setting_with_its_answer_as_the_default(
             UPDATES: "",
             UPDATE_HOURS: ["six", "6"],
             CONTENT_HOURS: "",
-            ELSEWHERE.replace(r"\[y/n\]", r"\[Y/n\]"): "",
+            ELSEWHERE_YES: "",
         }
     )
     returned = setup_here(box, "--configure")
@@ -875,7 +1050,7 @@ def test_enter_in_the_menu_keeps_a_setting_that_follows_its_default(
             UPDATES: "",
             UPDATE_HOURS: "",
             CONTENT_HOURS: "",
-            ELSEWHERE.replace(r"\[y/n\]", r"\[Y/n\]"): "",
+            ELSEWHERE_YES: "",
         }
     )
     returned = setup_here(box, "--configure")
@@ -892,8 +1067,8 @@ def test_the_menu_keeps_several_copies_unless_the_others_are_retired(
     person.answers.update(
         {
             MENU: ["6", ""],
-            ELSEWHERE.replace(r"\[y/n\]", r"\[Y/n\]"): "n",
-            r"^Have all the other copies been retired, .*\? \[y/N\]: $": "n",
+            ELSEWHERE_YES: "n",
+            RETIRED: "n",
         }
     )
     head = git("-C", str(box.remote), "rev-parse", "main")
@@ -967,21 +1142,56 @@ def test_a_yes_to_a_codex_config_change_writes_its_toml(
     assert re.search(r"^SET\s+Codex config: changed .* Backup of the old file: ", out, re.M), out
 
 
-def test_a_file_that_changes_while_setup_waits_is_left_alone(
-    box: Sandbox,
-    person: Person,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
+MAKE_CHANGE = r"Make this change\? \[y/N\]: $"
+
+
+def test_a_file_that_changes_after_its_change_is_shown_is_shown_again(
+    box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    # Such as Claude Code saving the file while setup's other questions wait: the work shows the
+    # change it needs now, and asks again.
     path = box.profile / ".claude" / "settings.json"
     before = path.read_bytes()
     write_text(path, "{}\n")
+    edits = ['{"model": "y"}\n']
 
     def yes_after_an_edit(prompt: str = "") -> str:
-        write_text(path, '{"model": "y"}\n')
+        if edits:
+            write_text(path, edits.pop())
         return "y"
 
-    monkeypatch.setattr("builtins.input", yes_after_an_edit)
+    person.answers[MAKE_CHANGE] = yes_after_an_edit
+    try:
+        returned = setup_here(box)
+        out = capsys.readouterr().out
+        changed = json.loads(path.read_text(encoding="utf-8"))
+    finally:
+        path.write_bytes(before)
+        for backup in path.parent.glob("settings.json.bak-*"):
+            backup.unlink()
+    assert returned == 0, out
+    assert sum(1 for asked in person.asked if re.search(MAKE_CHANGE, asked)) == 2, person.asked
+    assert "The file changed after setup showed its change." in out, out
+    assert changed["model"] == "y", changed
+    assert len(changed["permissions"]["additionalDirectories"]) == 2, changed
+
+
+def test_a_file_that_changes_while_setup_waits_is_left_alone(
+    box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # It changes again while the second question waits, so the work's last check finds it
+    # changed, and leaves it alone.
+    path = box.profile / ".claude" / "settings.json"
+    before = path.read_bytes()
+    write_text(path, "{}\n")
+    edits = ['{"model": "z"}\n', '{"model": "y"}\n']
+
+    def yes_after_an_edit(prompt: str = "") -> str:
+        if edits:
+            write_text(path, edits.pop())
+        return "y"
+
+    person.answers[MAKE_CHANGE] = yes_after_an_edit
     try:
         returned = setup_here(box)
         out = capsys.readouterr().out
@@ -990,7 +1200,7 @@ def test_a_file_that_changes_while_setup_waits_is_left_alone(
     finally:
         path.write_bytes(before)
     assert returned == 1, out
-    assert kept == '{"model": "y"}\n'
+    assert kept == '{"model": "z"}\n'
     assert backups == []
     pattern = r"^PROBLEM\s+Claude Code settings in \.claude: could not write .* The file changed"
     assert re.search(pattern, out, re.M), out
@@ -1076,11 +1286,14 @@ def test_says_what_stopped_a_clone(
         fake_gh.failing = ("repo", "clone")
     person.answers.update({CHOICE: "c", REPO_NAME: ""})
     missing = box.root / "not-yet-dev-home"
+    before = settings.read_bytes()
     returned = setup_here(box, "--content-dir", str(missing))
     out = capsys.readouterr().out
     assert returned == 1, out
     assert re.search(rf"^PROBLEM\s+.*{problem}", out, re.M), out
     assert not (missing / ".git").exists()
+    # Nothing is saved before dev-home is in place, so the next run offers to clone it again.
+    assert settings.read_bytes() == before
 
 
 def test_a_clone_that_isnt_a_dev_home_gets_no_git_config(
@@ -1209,7 +1422,7 @@ def test_creates_a_new_dev_home_from_the_starter(
         "schemaVersion": 1,
         "multiMachine": False,
     }
-    copies = (ELSEWHERE, ALONGSIDE)
+    copies = (ELSEWHERE, ELSEWHERE_YES, ELSEWHERE_NO)
     assert not any(re.search(p, asked) for p in copies for asked in person.asked), person.asked
     create = ("repo", "create", "my-dev-home", "--private", "--source", str(new_home))
     assert any(call[: len(create)] == create for call in fake_gh.calls), fake_gh.calls

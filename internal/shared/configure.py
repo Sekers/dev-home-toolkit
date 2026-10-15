@@ -1,8 +1,9 @@
 """setup.py --configure: changing a setting after the first run.
 
-At a console, it shows a menu of every setting with its current value: a number changes one, a
-goes through them all, and Enter finishes. Each entry asks the question the first run asks, from
-setup's own steps, so a setting is asked about, checked, and written one way.
+At a console, every run of setup shows a menu of every setting with its current value, after its
+questions, --configure or not: a number changes one, a goes through them all, and Enter goes on
+with setup's work. Each entry asks the question the first run asks, from setup's own steps, so a
+setting is asked about, checked, and written one way.
 
 An agent can't answer at a console, so it gives one setting instead, as <name>=<value>, such as
 updates.installAutomatically=true, which its user approved in chat; nothing is asked. A setting's
@@ -127,11 +128,12 @@ def change_settings(run: "Setup", settings: LocalSettings) -> bool:
     """Makes --configure's change to this PC's settings, or chooses dev-home.json's answer, which
     setup writes later in its run. Returns whether this PC's settings changed. With nobody to
     answer and no setting given, shows the settings and how to change them, and sets
-    run.just_showing."""
+    run.just_showing. At a console, setup shows the menu later in its run, as every run by hand
+    does."""
     if run.assigned:
         return assign(run, settings, run.configure or "")
     if run.can_ask:
-        return menu(run, settings)
+        return False
     for line in overview(run, settings) + preferences_overview(settings):
         run.line(line)
     run.line()
@@ -259,7 +261,8 @@ def preferences_overview(settings: LocalSettings) -> list[str]:
 
 
 def menu(run: "Setup", settings: LocalSettings) -> bool:
-    """Shows every setting, and changes the ones the person picks, until Enter."""
+    """Shows every setting, and changes the ones the person picks, until Enter, after which setup
+    goes on. Returns whether this PC's settings changed."""
     changers: dict[str, Callable[[Setup, LocalSettings], bool]] = {
         "devHome.folder": change_content_dir,
         AUTO_UPDATE: change_auto_update,
@@ -277,12 +280,12 @@ def menu(run: "Setup", settings: LocalSettings) -> bool:
         for line in overview(run, settings):
             run.line(line)
         run.line()
-        choice = run.ask("Number to change, a to go through them all, or Enter to finish")
+        choice = run.ask("Number to change, a to go through them all, or Enter to go on")
         if not choice:
             return changed
         picked = list(steps) if choice.strip().lower() == "a" else [choice.strip()]
         if not all(number in steps for number in picked):
-            run.line(f"Type a number from 1 to {len(steps)}, or a, or press Enter to finish.")
+            run.line(f"Type a number from 1 to {len(steps)}, or a, or press Enter to go on.")
             continue
         for number in picked:
             changed = steps[number](run, settings) or changed

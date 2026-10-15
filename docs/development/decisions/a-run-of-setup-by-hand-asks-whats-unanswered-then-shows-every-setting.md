@@ -5,16 +5,23 @@
 1. dev-home first: its folder, then, when it's missing, clone or create it, with the repo's name,
    after checking that `gh` is there and signed in. If that fails, setup stops and saves nothing.
 2. The questions not answered yet: extra Claude folders and Codex homes, automatic updates, the
-   copies question, skills, recommended settings, and each settings file's diff. The copies
-   question is always asked on a PC's first setup, with `dev-home.json`'s answer as the default,
-   since adding a PC is when that answer most often changes. Wherever a saved answer exists, a
-   question shows it as the default.
+   copies question, skills, and recommended settings. The copies question is always asked on a
+   PC's first setup, with `dev-home.json`'s answer as the default, since adding a PC is when that
+   answer most often changes, except for a dev-home setup has just created, which nothing else
+   can be using yet. Wherever a saved answer exists, a question shows it as the default.
 3. The settings list that `--configure` shows, with skills and recommended settings added, so any
-   setting can be changed: a number for one, `a` for all, and Enter to go on.
-4. The work, without stopping: save this PC's answers, commit `dev-home.json` if it changed, then
-   the Python link, the generated files, the skill links, the rules, and the settings files. Each
-   settings file is read again first; if it changed since its diff was shown, setup shows the new
-   diff and asks again.
+   setting can be changed: a number for one, `a` for all, and Enter to go on. A dev-home folder
+   changed here goes back through step 1, and the new dev-home's copies question.
+4. The changes to confirm: the change to `dev-home.json`, if any, and each settings file's diff,
+   each shown and asked about.
+5. The work, without stopping, holding the sync's lock: save this PC's answers, commit
+   `dev-home.json` if it changed, then the Python link, the generated files, the skill links, and
+   the rules. Then, with the lock let go, the settings files. Each is read again first; if it
+   changed since its diff was shown, setup shows the new diff and asks again. `dev-home.json` is
+   read again too, and left as it is, with a `PROBLEM`, if it changed since its change was shown.
+
+A run with no console, such as a quiet one, asks nothing and shows no menu, and does the rest in
+the same order, its work holding the lock too, unless a sync that runs it holds the lock already.
 
 Setup also detects which tools a PC has, Claude Code when `~/.claude` exists and Codex when
 `~/.codex` does, instead of always setting up `~/.claude`.
@@ -27,11 +34,22 @@ clone that can't work stops setup after one or two answers. Committing `dev-home
 questions, not between them, means nothing has been pushed until the work starts, so Ctrl+C
 during the questions leaves everything as it was.
 
-This changes two other decisions: the menu from
+The diffs come after the menu, because the menu can change the folders and the dev-home they're
+for. The work holds the sync's lock, so a sync in another session can't set up at the same moment
+or save this PC's settings in between, and since every question comes first, no sync waits for a
+person. The settings files come after the lock is let go: no sync writes them, and asking again
+about one that changed would otherwise hold the lock while a question waits. A changed
+`dev-home.json` isn't asked about again: it's committed while the lock is held, where a question
+would hold up every sync, and only a sync bringing in another copy's change can change it, which
+is rare.
+
+This changes three other decisions: the menu from
 [setup.py --configure changes every setting](setup-py-configure-changes-every-setting.md) becomes
-part of every run by hand, and the copies question from
+part of every run by hand; the copies question from
 [A dev-home has one active copy, or several](a-dev-home-has-one-active-copy-or-several.md) is
-asked on every PC's first setup.
+asked on every PC's first setup; and the save in
+[Settings record answers, not just values](settings-record-answers-not-just-values.md), which
+held the lock only while it saved, now runs inside the work's lock.
 
 **Options set aside:**
 
@@ -42,5 +60,8 @@ asked on every PC's first setup.
   the usual way to add a PC, and personal skills can't be listed before the clone.
 - Skipping the copies question when `dev-home.json` answers it: moving to a new PC and retiring
   the old one would leave it at several copies for good.
+- The settings files' diffs before the menu: a change made in the menu could make them wrong.
+- Holding the lock for the settings files too: asking again about a changed file would hold up
+  every sync until the person answered.
 
 **Look again if:** a question comes to depend on work that setup does after the questions.

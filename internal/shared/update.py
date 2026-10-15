@@ -332,10 +332,10 @@ def sync_lock() -> Iterator[bool]:
     it for its own. Otherwise a sync in another session could run setup while git replaces the
     skills' files, and see a skill missing for a moment, or generate files from half-updated
     templates. Neither the question before it nor the setup after it holds the lock, since setup
-    may ask questions too, and a sync never waits on a person; setup takes the lock itself where
-    it needs it. Yields whether this run holds it, or True when there's no lock to take: no
-    dev-home folder set yet, one whose .git isn't a folder, or a lock file that can't be opened,
-    which nothing else can hold either."""
+    may ask questions too, and a sync never waits on a person; setup takes the lock itself for
+    its work, after its questions. Yields whether this run holds it, or True when there's no lock
+    to take: no dev-home folder set yet, one whose .git isn't a folder, or a lock file that can't
+    be opened, which nothing else can hold either."""
     folder = get(read_settings() or {}, "devHome.folder")
     git_dir = Path(comparable(folder)) / ".git" if isinstance(folder, str) and folder else None
     with contextlib.ExitStack() as held:

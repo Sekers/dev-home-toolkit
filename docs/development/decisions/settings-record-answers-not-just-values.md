@@ -39,8 +39,8 @@ setting counts as missing.
   setup run that sees it, quiet runs included, with one line. One that nothing declares any more,
   dev-home-tools' own or a skill's, is deleted on the first run that sees it, with one line and a
   backup, and nobody is asked. A whole skill that's gone has its answers deleted by the first run
-  that holds the sync's lock, a sync's setup, so a skill that a sync or an update is replacing at
-  that moment never looks gone.
+  that holds the sync's lock from its start, a sync's setup, so a skill that a sync or an update
+  is replacing at that moment never looks gone.
 - When an update changes a default, the PCs that follow it get the new value, and the update says
   so once. It reads the definitions, and each skill's `dev-home-skill.json`, before and after it
   pulls.
@@ -51,7 +51,10 @@ setting counts as missing.
   of saving: it reads the file again, and applies only the answers that run changed, so whatever
   a sync wrote in the meantime is kept. Where both changed the same setting, the end user's answer
   wins. Reading the file never waits for the lock. Before there's a dev-home, there's no sync,
-  and no lock to take.
+  and no lock to take. (Later changed by
+  [A run of setup by hand asks what's unanswered, then shows every setting](a-run-of-setup-by-hand-asks-whats-unanswered-then-shows-every-setting.md):
+  setup holds the lock for all its work, the save included, which comes after every question, so
+  still no sync waits while a question does.)
 - A backup is made only when a person changes a setting, or answers are deleted, never for a
   write that only records something, such as `unanswered`.
 

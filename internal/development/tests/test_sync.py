@@ -1099,6 +1099,28 @@ def test_setups_commit_brings_in_commits_without_running_setup_or_the_update_che
     assert ran == [], ran
 
 
+def test_setups_commit_runs_inside_the_lock_its_setup_holds(
+    box: Sandbox, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Setup holds the lock for its work, so a commit that waited for it would never start.
+    code = shared_module(box, "sync")
+    monkeypatch.setattr(code, "LOCK_WAIT_SECONDS", 0)
+    write_text(box.content / "notes" / "inside-the-lock.md", "committed inside setup's lock\n")
+    with code.one_run_at_a_time(box.content / ".git") as owned:
+        assert owned
+        waited = code.commit_for_setup(
+            box.content, "notes/inside-the-lock.md", "notes: inside the lock"
+        )
+        held = code.commit_for_setup(
+            box.content, "notes/inside-the-lock.md", "notes: inside the lock", holds_lock=True
+        )
+    out = capsys.readouterr().out
+    assert waited == 1, out
+    assert re.search(r"^PROBLEM\s+Another sync, or an update, has been using dev-home", out, re.M)
+    assert held == 0, out
+    assert git("-C", str(box.remote), "log", "-1", "--format=%s") == ["notes: inside the lock"]
+
+
 def test_the_update_check_waits_its_interval_and_uses_what_it_knows(box: Sandbox) -> None:
     # An update fetched earlier is still waiting: the developer's change four.
     set_setting(box, "updates.checkEveryHours", 24)

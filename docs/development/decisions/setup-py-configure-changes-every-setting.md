@@ -10,7 +10,10 @@ run: `devHome.folder`, `updates.installAutomatically`, `updates.checkEveryHours`
   ASCII like every script. A number changes one setting, `a` goes through all of them with the
   current answers as defaults, and Enter finishes. Each entry asks the question the first run
   asks, so the questions are one piece of code. The Claude folders entry asks about each folder,
-  one answered no included, so a no can be taken back.
+  one answered no included, so a no can be taken back. (Later changed by
+  [A run of setup by hand asks what's unanswered, then shows every setting](a-run-of-setup-by-hand-asks-whats-unanswered-then-shows-every-setting.md):
+  every run at a console shows the menu after its questions, `--configure` or not, and Enter goes
+  on with setup's work.)
 - An agent can't answer at a console, so it names one setting per run:
   `--configure '<name>=<value>'`, with a plain value, always in single quotes: `true` or `false`,
   a whole number of hours, a path, or `claudeCode.folders+=<folder>` to set up a folder and

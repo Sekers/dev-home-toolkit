@@ -6,29 +6,41 @@ Safe to run any number of times. It rewrites only its own generated files, creat
 replaces links whose target is gone, removes links it made to skills that no longer exist, and
 reports anything else without changing it.
 
-On the first run it asks where your dev-home is (the private repo that holds your handoffs and
-knowledge base), and saves the answer in local-settings.json in dev-home-tools' folder. If that
-folder doesn't exist yet, it offers to clone your dev-home from GitHub, or to create a new
-private one from the files in templates/dev-home-starter/. A folder that exists must look like a
-dev-home: it has the files the starter makes, global-rules/global-rules.md and
-knowledge/README.md. Setup sets that repo's own git config, so it never works on a folder
-without them, such as a project's repo named by mistake.
+A run goes in this order, so the questions come first and the work after:
 
-Each of its other questions, whether to pull updates automatically and whether to set up each
-~/.claude-* folder, is asked whenever its answer isn't saved yet, not only on the first run. A
-no to a Claude folder is saved too, so it's asked about once.
+1. dev-home first. On the first run it asks where your dev-home is (the private repo that holds
+   your handoffs and knowledge base). If that folder doesn't exist yet, it offers to clone your
+   dev-home from GitHub, or to create a new private one from the files in
+   templates/dev-home-starter/. A folder that exists must look like a dev-home: it has the files
+   the starter makes, global-rules/global-rules.md and knowledge/README.md. Setup sets that
+   repo's own git config, so it never works on a folder without them, such as a project's repo
+   named by mistake. When dev-home can't be put in place, setup stops, and saves nothing.
+2. The questions not answered yet: whether to pull updates automatically, whether to set up each
+   ~/.claude-* folder, and how many copies of dev-home are in active use. Each is asked whenever
+   its answer isn't saved yet, not only on the first run. A no to a Claude folder is saved too,
+   so it's asked about once.
+3. At a console, the settings menu that --configure shows, so any setting can be changed.
+4. The changes to confirm: to dev-home.json, and to Claude Code's and Codex's settings files.
+5. The work, which asks nothing, and holds the sync's lock, so a sync in another session waits
+   for it, while no sync ever waits for a person's answer: it saves this PC's answers in
+   local-settings.json in dev-home-tools' folder, commits dev-home.json, and sets up everything
+   else.
+6. Last, the changes to the tools' settings files. No sync writes them, so the lock doesn't
+   cover them, and a file that changed after setup showed its change is shown and asked about
+   again.
 
 local-settings.json groups the settings, and each one's name is its path, such as
 devHome.folder. Its schemaVersion says which layout it has. A file without one, from before the
 settings were grouped, is set aside: a run by hand offers to rename it to a dated backup and ask
 its questions again, and a quiet run says so and stops. Every value is checked on every run, and
 a setting nothing declares is removed, with one line and a backup: the answers of a skill that's
-gone only by a sync's run, which holds the sync's lock.
+gone only by a sync's run, which holds the sync's lock from its start.
 
 dev-home.json, in dev-home, says whether dev-home is in active use on one PC or on several, and
-each sync acts on it. A new dev-home starts with one. Setup asks when the file has no answer,
-and after cloning one set to one, whether another copy stays in use. It shows the change, and
-after a yes writes that file alone, then commits and pushes it, so every copy agrees.
+each sync acts on it. A new dev-home starts with one. Setup asks on a PC's first setup, with the
+file's answer as the default, when the file has no answer, and after cloning one set to one. It
+shows the change, and after a yes writes that file alone, then commits and pushes it, so every
+copy agrees.
 
 The templates in this repo hold placeholders where paths go. Setup writes copies of the skills,
 the scripts they share, and the operating rules, with this PC's paths filled in, to
@@ -67,9 +79,10 @@ Options:
                             this way: anything that needs an answer is reported instead.
     --content-dir <folder>  Your dev-home folder. Saved in local-settings.json, so later runs
                             don't need it.
-    --configure             Changes a setting after the first run. At a console, a menu shows
-                            every setting: pick one to change, or go through them all. Without
-                            a console, it shows the settings and how to change them.
+    --configure             Changes a setting after the first run. At a console, every run
+                            shows a menu of every setting after its questions, with or without
+                            this: pick one to change, or go through them all. Without a
+                            console, it shows the settings and how to change them.
     --configure '<name>=<value>'
                             Changes one setting, the way an agent does, with no questions, then
                             prints only changes and problems. --configure with no setting says
@@ -95,7 +108,8 @@ import os
 import re
 import stat
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -168,6 +182,40 @@ class CannotGoOnError(Exception):
     """Ends the run early, after a problem that the rest of setup can't get past."""
 
 
+@dataclass(frozen=True)
+class SettingsChange:
+    """A change one of the tools' settings files needs: what it's for, the file, what the file
+    needs, the plan, what to add by hand where setup can't make it, and what a quiet run
+    advises."""
+
+    subject: str
+    path: Path
+    need: str
+    plan: Plan
+    how_to: str
+    snippet: str
+    quiet_advice: str = QUIET_ADVICE
+
+
+# What a check of one settings file found: a line to report as it is, or a change it needs.
+SettingsCheck = tuple[str, str] | SettingsChange
+
+
+@dataclass(frozen=True)
+class ToolFolders:
+    """Where setup sets up each tool: each Claude Code folder, the session's own folder when no
+    list names it, and whether Codex is set up."""
+
+    claude_dirs: list[str]
+    unlisted_claude_dir: str | None
+    codex_installed: bool
+
+
+def approval_key(path: Path) -> str:
+    """A settings file's path, as the answers given before the work are kept by."""
+    return os.path.normcase(comparable(path))
+
+
 def cleanup(checked: Checked) -> list[str]:
     """What check_settings removed and moved, a sentence for each, for the line that says so."""
     sentences = []
@@ -202,16 +250,27 @@ class Setup:
         self.quiet = quiet or self.assigned
         self.what_if = what_if
         self.can_ask = not self.quiet and console.is_console()
-        # dev-home.json's answer that --configure chose, which check_copies then writes.
+        # dev-home.json's answer that a question, the menu, or --configure chose, which
+        # confirm_copies shows, and the work then writes.
         self.wanted_copies: bool | None = None
+        # That change once shown, and confirmed: dev-home.json's layout and text as shown, the
+        # new text, and the answer.
+        self.copies_change: tuple[str, str, str, bool] | None = None
+        # Each settings change shown before the work, by the file's path (see approval_key): the
+        # file's text as shown, and the answer.
+        self.approved: dict[str, tuple[str, bool]] = {}
+        # Set once the menu changes a setting, so the save keeps a backup.
+        self.changed_by_hand = False
         # Set when --configure only shows the settings, so the run ends with no summary.
         self.just_showing = False
         self.problems: list[str] = []
         self.unknown_placeholders: list[str] = []
         self.unplaced_notes: list[str] = []
         self.generated_changes = 0
-        # Set once this run clones dev-home, which then may have another copy still in use.
+        # Set once this run clones dev-home, which then may have another copy still in use, or
+        # creates one, which nothing else can be using yet.
         self.cloned = False
+        self.created = False
         # The profile folder to set up: yours, unless local-settings.json sets testHomeDir.
         self.home = Path.home()
 
@@ -357,37 +416,43 @@ class Setup:
             self.status("SET", f"The old settings, set aside: {backup}")
         return fresh
 
+    @contextlib.contextmanager
+    def work_lock(self, content_root: Path) -> Iterator[bool]:
+        """The sync's lock on dev-home, held for setup's work, after its questions, so a sync in
+        another session can't set up at the same moment, or save this PC's settings in between,
+        and no sync waits while a question does. A sync that runs setup holds it already, and a
+        preview changes nothing. Yields whether the work may go on: True also when there's no
+        lock to take, for a dev-home whose .git isn't a folder, or a lock file that can't be
+        opened, which nothing else can hold either."""
+        git_dir = content_root / ".git"
+        if self.sync_holds_lock or self.what_if or not git_dir.is_dir():
+            yield True
+            return
+        # Loaded only now, as for committing dev-home.json.
+        sync = importlib.import_module(f"{__package__}.sync")
+        with contextlib.ExitStack() as held:
+            owned = True
+            with contextlib.suppress(sync.LockError):
+                owned = held.enter_context(sync.one_run_at_a_time(git_dir))
+            if not owned:
+                self.status(
+                    "PROBLEM",
+                    f"Setup changed nothing: a sync, or an update, has been using dev-home for "
+                    f"{sync.LOCK_WAIT_SECONDS // 60} minutes. Run {by_hand('setup.py')} again "
+                    "shortly.",
+                )
+            yield owned
+
     def save_settings(
         self, settings: LocalSettings, read: dict[str, Any] | None, checked: Checked
     ) -> None:
         """Saves this PC's settings, and says so in one line, which names any setting this run
         moved or removed. The file is backed up first when a person changed a setting, through
-        --configure, or a setting was removed. A sync that runs setup holds its lock already;
-        otherwise setup takes it, only while it saves, so a sync's own save can't come in between.
-        A dev-home whose .git isn't a folder has no lock to take."""
-        backup = self.configure is not None or bool(checked.removed)
-        git_dir = Path(comparable(settings.content_dir)) / ".git" if settings.content_dir else None
+        the menu or --configure, or a setting was removed. The work that runs this holds the
+        sync's lock, so a sync's own save can't come in between."""
+        backup = self.changed_by_hand or self.assigned or bool(checked.removed)
         try:
-            if self.sync_holds_lock or git_dir is None or not git_dir.is_dir():
-                kept = self.write_settings(settings, read, backup=backup)
-            else:
-                # Loaded only now, as for committing dev-home.json.
-                sync = importlib.import_module(f"{__package__}.sync")
-                try:
-                    lock = sync.one_run_at_a_time(git_dir)
-                    with lock as owned:
-                        if not owned:
-                            self.status(
-                                "PROBLEM",
-                                f"This PC's settings weren't saved: a sync, or an update, has "
-                                f"been using dev-home for {sync.LOCK_WAIT_SECONDS // 60} minutes. "
-                                f"Run {by_hand('setup.py')} again shortly.",
-                            )
-                            return
-                        kept = self.write_settings(settings, read, backup=backup)
-                except sync.LockError:
-                    # The lock file can't be opened, so nothing else can hold it either.
-                    kept = self.write_settings(settings, read, backup=backup)
+            kept = self.write_settings(settings, read, backup=backup)
         except OSError as error:
             self.status("PROBLEM", f"Could not save this PC's settings in {SETTINGS_PATH}. {error}")
             return
@@ -632,6 +697,7 @@ class Setup:
                     f"git: {first_line(done.err + done.out)}",
                 )
                 return
+        self.created = True
         code, lines = run_tool(
             gh,
             "repo",
@@ -654,14 +720,18 @@ class Setup:
             return
         self.status("CREATED", f"New private repo {name} on GitHub, with this PC's copy in {path}")
 
-    def check_copies(self, content_root: Path) -> None:
+    def ask_about_copies(
+        self, settings: LocalSettings, content_root: Path, *, first_setup: bool
+    ) -> None:
         """dev-home.json says whether dev-home has one active copy or several, and the sync acts
-        on it. A new dev-home starts with one. Setup asks when the file has no answer yet, and
-        after a clone set to one, whether the copy it came from stays in use. A change is shown
-        first, then written to that file alone and committed and pushed, so every copy agrees.
-        A file without a schemaVersion, from before the layout was versioned, gets the question
-        again, with its old answer as the default, and is rewritten in place: git has its
-        history. One with a version the code doesn't know is left alone."""
+        on it. A new dev-home starts with one, and nothing else can be using one this run created,
+        so it isn't asked about. Otherwise setup asks on a PC's first setup, since adding a PC is
+        when the answer most often changes; when the file has no answer yet; after a clone set to
+        one; and when the file has no schemaVersion, from before the layout was versioned, which
+        then is rewritten in place even with the same answer, since git has its history. Wherever
+        the file has an answer, the question takes it as the default. The answer is shown with
+        the change it makes (see confirm_copies), and written by the work. A file with a version
+        the code doesn't know is left alone."""
         path = content_root / DEV_HOME_SETTINGS
         found = read_dev_home_settings(content_root)
         if found.layout == "unreadable":
@@ -682,58 +752,87 @@ class Setup:
         older = found.layout == "older"
         answer = found.answer
         # --configure's answer, already given, which a person or an agent's chat approved.
-        several: bool | None = self.wanted_copies
-        if several is None:
-            if not older and answer is not None and not (answer is False and self.cloned):
-                return
-            if not self.can_ask:
-                if older:
-                    self.status(
-                        "PROBLEM",
-                        f"{path} is in an older layout, without a schemaVersion, so each sync "
-                        f"checks GitHub every time. Run {by_hand('setup.py')} in a terminal: it "
-                        "asks its question again, then rewrites the file.",
-                    )
-                elif answer is None:
-                    self.status(
-                        "PROBLEM",
-                        "dev-home has no answer yet to whether it's in active use anywhere "
-                        "besides this PC, so each sync checks GitHub every time. Run "
-                        f"{by_hand('setup.py')} in a terminal, and it asks.",
-                    )
-                return
-            if older:
-                self.line(
-                    f"{path} is in an older layout. Setup asks its question again, with its old "
-                    "answer as the default, then rewrites it."
-                )
-                several = self.ask_copies(answer)
-            elif answer is not None:
-                self.line(
-                    "dev-home is set to one active copy, so its syncs check GitHub only every "
-                    "few hours."
-                )
-                several = self.choose(
-                    "Will another copy stay in use alongside this one, such as on your other PC?"
-                )
-            else:
-                several = self.ask_copies(None)
-            if several is None:
-                self.status("PROBLEM", f"No answer came, so {path} was left as it is.")
-                return
-        if several == answer and not older:
+        if self.wanted_copies is not None:
             return
+        due = (
+            older
+            or answer is None
+            or (first_setup and not self.created)
+            or (answer is False and self.cloned)
+        )
+        if not due:
+            return
+        if not self.can_ask:
+            if older:
+                self.status(
+                    "PROBLEM",
+                    f"{path} is in an older layout, without a schemaVersion, so each sync checks "
+                    f"GitHub every time. Run {by_hand('setup.py')} in a terminal: it asks its "
+                    "question again, then rewrites the file.",
+                )
+            elif answer is None:
+                self.status(
+                    "PROBLEM",
+                    "dev-home has no answer yet to whether it's in active use anywhere besides "
+                    f"this PC, so each sync checks GitHub every time. Run {by_hand('setup.py')} "
+                    "in a terminal, and it asks.",
+                )
+            return
+        if older:
+            self.line(
+                f"{path} is in an older layout. Setup asks its question again, with its old answer "
+                "as the default, then rewrites it."
+            )
+        configure.change_copies(self, settings)
+        if self.wanted_copies is None and (older or answer is None):
+            self.status(
+                "PROBLEM",
+                f"{path} was left as it is, so each sync checks GitHub every time. Run setup.py "
+                "again to answer the question.",
+            )
+
+    def confirm_copies(self, content_root: Path) -> None:
+        """Shows the change to dev-home.json that a question, the menu, or --configure chose. A
+        person then says whether to save it, while an agent's --configure was approved in chat.
+        The work writes it to that file alone, then commits and pushes it, so every copy
+        agrees."""
+        several = self.wanted_copies
+        if several is None:
+            return
+        found = read_dev_home_settings(content_root)
+        if found.layout in ("unreadable", "unknown"):
+            return
+        if several == found.answer and found.layout != "older":
+            return
+        path = content_root / DEV_HOME_SETTINGS
         new_text = dev_home_text(found.data, several)
         self.status("CHANGE", f"dev-home's copies: {path}")
         self.print_diff(found.text, new_text)
         if not self.should(path, "Write this, then commit and push it"):
             return
-        # An agent's --configure was approved in chat; a person answers here.
         if not self.assigned and not self.confirm(
             "          Save it, commit it, and push it to GitHub?"
         ):
             self.status(
                 "PROBLEM", f"{path} was left as it is. Run setup.py again to answer the question."
+            )
+            return
+        self.copies_change = (found.layout, found.text, new_text, several)
+
+    def write_copies(self, content_root: Path) -> None:
+        """Writes the change to dev-home.json that confirm_copies showed, as long as the file is
+        still as it was then, and commits and pushes it. The work runs this while it holds the
+        sync's lock, so the commit's sync doesn't wait for it."""
+        if self.copies_change is None:
+            return
+        layout_shown, text_shown, new_text, several = self.copies_change
+        path = content_root / DEV_HOME_SETTINGS
+        now = read_dev_home_settings(content_root)
+        if (now.layout, now.text) != (layout_shown, text_shown):
+            self.status(
+                "PROBLEM",
+                f"{path} changed after setup showed its change, perhaps through a sync from "
+                "another copy, so it was left as it is. Run setup.py again to answer the question.",
             )
             return
         try:
@@ -747,7 +846,7 @@ class Setup:
         try:
             sync = importlib.import_module(f"{__package__}.sync")
             message = f"dev-home: {'several active copies' if several else 'one active copy'}"
-            code = sync.commit_for_setup(content_root, DEV_HOME_SETTINGS, message)
+            code = sync.commit_for_setup(content_root, DEV_HOME_SETTINGS, message, holds_lock=True)
         except Exception as error:
             self.status("PROBLEM", f"Could not commit {path}: {describe(error)}")
             return
@@ -906,69 +1005,161 @@ class Setup:
             self.status("PROBLEM", f"{label}: could not link {PYTHON_LINK} to {folder}. {error}")
 
     # Settings changes. Each change is planned in full first, checked by reading the new text
-    # back, shown as a line diff, and written only after a yes, with a backup.
+    # back, shown as a line diff, and written only after a yes, with a backup. At a console, each
+    # is shown and asked about before the work starts, so the work never waits for an answer;
+    # the work plans each one again, and makes it while the file is as it was shown.
 
-    def repair_setting(
-        self,
-        subject: str,
-        path: Path,
-        need: str,
-        plan: Plan,
-        how_to: str,
-        snippet: str,
-        quiet_advice: str = QUIET_ADVICE,
-    ) -> None:
-        """Offers a planned settings change: shows the changed lines, asks, then writes the file
-        with a backup. When the change can't be made safely, the answer is no, or setup runs
-        with --quiet, it reports a problem and leaves the file alone. With --quiet, the problem
-        ends with quiet_advice."""
-        problem = f"{subject}: {path} needs {need}."
-        if plan.reason:
-            self.status("PROBLEM", problem)
-            if not self.quiet:
-                self.line(f"          Setup won't change this file itself: {plan.reason}.")
-                self.line("          " + how_to)
-                self.line(snippet, YELLOW)
-            return
-        if self.quiet:
-            self.status("PROBLEM", f"{problem} {quiet_advice}")
-            return
+    def offer_settings_changes(self, checks: list[SettingsCheck]) -> None:
+        """At a console, shows each settings change setup can make, and asks about it, before the
+        work. A preview asks nothing, and shows each one in the work instead."""
+        for check in checks:
+            if isinstance(check, SettingsChange) and not check.plan.reason:
+                yes = self.offer_setting(check)
+                self.approved[approval_key(check.path)] = (check.plan.file.text, yes)
 
-        self.status("CHANGE", problem)
+    def show_setting(self, change: SettingsChange, note: str = "") -> None:
+        """Shows a planned settings change: what it's for, then the changed lines."""
+        self.status("CHANGE", f"{change.subject}: {change.path} needs {change.need}.")
+        if note:
+            self.line("          " + note)
         self.line(
             "          Setup can make this change, and keeps a backup of the file first. Lines "
             "marked + are added, - removed:"
         )
-        if plan.note:
-            self.line("          " + plan.note)
-        self.print_diff(plan.file.text, plan.new_text or "")
+        if change.plan.note:
+            self.line("          " + change.plan.note)
+        self.print_diff(change.plan.file.text, change.plan.new_text or "")
 
-        if not self.should(path, "Change the lines shown, after asking, and keep a backup"):
+    def offer_setting(self, change: SettingsChange, note: str = "") -> bool:
+        """Shows a planned settings change, and asks whether to make it."""
+        self.show_setting(change, note)
+        return self.confirm("          Make this change?")
+
+    def repair_setting(self, change: SettingsChange) -> None:
+        """Makes a planned settings change after a yes, and writes the file with a backup. The yes
+        is the one given before the work while the file is still as it was then; otherwise setup
+        shows the change it needs now, and asks again. When the change can't be made safely, the
+        answer is no, or setup runs with --quiet, it reports a problem and leaves the file alone.
+        With --quiet, the problem ends with the change's quiet_advice."""
+        plan = change.plan
+        problem = f"{change.subject}: {change.path} needs {change.need}."
+        if plan.reason:
+            self.status("PROBLEM", problem)
+            if not self.quiet:
+                self.line(f"          Setup won't change this file itself: {plan.reason}.")
+                self.line("          " + change.how_to)
+                self.line(change.snippet, YELLOW)
             return
-        if not self.confirm("          Make this change?"):
+        if self.quiet:
+            self.status("PROBLEM", f"{problem} {change.quiet_advice}")
+            return
+        if self.what_if:
+            self.show_setting(change)
+            self.should(change.path, "Change the lines shown, after asking, and keep a backup")
+            return
+
+        shown = self.approved.get(approval_key(change.path))
+        if shown is not None and shown[0] == plan.file.text:
+            yes = shown[1]
+        else:
+            note = "" if shown is None else "The file changed after setup showed its change."
+            yes = self.offer_setting(change, note)
+        if not yes:
             self.status(
                 "PROBLEM",
-                f"{subject}: left unchanged. Make the change shown above by hand, or run setup.py "
-                "again and answer y.",
+                f"{change.subject}: left unchanged. Make the change shown above by hand, or run "
+                "setup.py again and answer y.",
             )
             return
         try:
-            now = read_settings_file(path)
+            now = read_settings_file(change.path)
             if now.reason or now.text != plan.file.text:
                 raise OSError(
                     "The file changed while setup was waiting for an answer, so it was left "
                     "alone. Run setup.py again."
                 )
-            backup = write_settings_file(path, plan.new_text or "", bom=plan.file.bom, backup=True)
+            backup = write_settings_file(
+                change.path, plan.new_text or "", bom=plan.file.bom, backup=True
+            )
             saved = f" Backup of the old file: {backup}" if backup else " (new file)"
-            self.status("SET", f"{subject}: changed {path}.{saved}")
+            self.status("SET", f"{change.subject}: changed {change.path}.{saved}")
         except (OSError, ValueError) as error:
-            self.status("PROBLEM", f"{subject}: could not write {path}. {error}")
+            self.status("PROBLEM", f"{change.subject}: could not write {change.path}. {error}")
 
-    # The run, in order
+    # The run, in order: where things are; dev-home; the questions not answered yet; at a
+    # console, the settings menu; the changes to confirm; then the work, which asks nothing and
+    # holds the sync's lock; and last, the settings files, which the lock doesn't cover, since
+    # no sync writes them, and a file that changed after setup showed its change is asked about
+    # again.
 
     def run(self, content_dir_option: str) -> None:
-        # 1. Where things are
+        settings, read, checked = self.read_settings()
+        saved_folder = settings.content_dir
+        # A PC's first setup: no dev-home folder saved yet, such as after settings are set aside.
+        first_setup = not saved_folder
+        # A setting moved or removed is saved, whether anything else changes or not.
+        save = bool(checked.moved or checked.removed)
+        if self.configure is not None:
+            try:
+                save = configure.change_settings(self, settings) or save
+            except configure.SettingError as error:
+                self.status("PROBLEM", f"{error} Nothing was changed.")
+                self.line(configure.USAGE)
+                raise CannotGoOnError from error
+            if self.just_showing:
+                raise CannotGoOnError
+
+        # 1. dev-home first: its folder, then, when it's missing, clone or create it. Nothing is
+        # saved before it's in place.
+        self.choose_dev_home_folder(settings, content_dir_option)
+        while True:
+            content_root = self.find_dev_home(settings)
+            # 2. The questions not answered yet.
+            save = self.ask_unanswered(settings, content_root, first_setup=first_setup) or save
+            # 3. At a console, the settings menu, so any setting can be changed.
+            if not self.can_ask:
+                break
+            folder = settings.content_dir
+            if configure.menu(self, settings):
+                self.changed_by_hand = save = True
+            if same_path(folder, settings.content_dir):
+                break
+            # Another dev-home folder: its checks again, and its own answer about copies.
+            self.wanted_copies = None
+            self.cloned = self.created = False
+        if settings.content_dir != saved_folder:
+            save = True
+
+        # 4. The changes to confirm, shown and asked about before the work.
+        tools = self.tool_folders(settings)
+        self.confirm_copies(content_root)
+        if self.can_ask and not self.what_if:
+            self.offer_settings_changes(self.settings_checks(content_root, tools))
+
+        # 5. The work.
+        with self.work_lock(content_root) as owned:
+            if not owned:
+                raise CannotGoOnError
+            if save:
+                if self.should(SETTINGS_PATH, "Save this PC's settings"):
+                    self.save_settings(settings, read, checked)
+                else:
+                    for sentence in cleanup(checked):
+                        self.line(f"What if: {sentence}")
+            self.set_up(settings, content_root, tools)
+
+        # 6. The tools' settings files. A missing setting is offered as a change: shown first,
+        # made only after a yes, and with a backup. See repair_setting.
+        for check in self.settings_checks(content_root, tools):
+            if isinstance(check, SettingsChange):
+                self.repair_setting(check)
+            else:
+                self.status(*check)
+
+    def read_settings(self) -> tuple[LocalSettings, dict[str, Any] | None, Checked]:
+        """Where things are: dev-home-tools' folder, the profile to set up, and this PC's
+        settings, checked. Returns them, the file as this run read it, which its save compares
+        with, and what the check moved or removed."""
         tools_problem = unsafe_reason(comparable(TOOLS_ROOT))
         if tools_problem:
             self.status(
@@ -1016,33 +1207,25 @@ class Setup:
             )
             raise CannotGoOnError
         declared = skill_preferences(settings.content_dir)
-        # Only a run that holds the sync's lock removes the answers of a skill that's gone.
+        # Only a run that holds the sync's lock from its start, a sync's setup, removes the answers
+        # of a skill that's gone.
         checked = check_settings(settings.data, declared, remove_gone_skills=self.sync_holds_lock)
         for problem in declared.problems + checked.problems:
             self.status("PROBLEM", problem)
-        save = False
         if checked.moved or checked.removed:
             settings.data = checked.data
             folder = get(settings.data, "devHome.folder")
             settings.content_dir = folder if isinstance(folder, str) else ""
             settings.claude_folders = folder_answers(get(settings.data, CLAUDE_FOLDERS))
             settings.codex_homes = folder_answers(get(settings.data, CODEX_HOMES))
-            save = True
-        if self.configure is not None:
-            try:
-                # A setting removed or moved above is saved too, whether this changes one or not.
-                save = configure.change_settings(self, settings) or save
-            except configure.SettingError as error:
-                self.status("PROBLEM", f"{error} Nothing was changed.")
-                self.line(configure.USAGE)
-                raise CannotGoOnError from error
-            if self.just_showing:
-                raise CannotGoOnError
+        return settings, read, checked
+
+    # dev-home first
+
+    def choose_dev_home_folder(self, settings: LocalSettings, content_dir_option: str) -> None:
+        """The dev-home folder: --content-dir's, the saved one, or the person's answer."""
         if content_dir_option:
-            wanted = forward(content_dir_option)
-            if settings.content_dir != wanted:
-                settings.content_dir = wanted
-                save = True
+            settings.content_dir = forward(content_dir_option)
         elif not settings.content_dir:
             default = forward(TOOLS_ROOT.parent / "dev-home")
             if self.can_ask:
@@ -1063,8 +1246,11 @@ class Setup:
                 )
                 raise CannotGoOnError
             settings.content_dir = forward(answer)
-            save = True
 
+    def find_dev_home(self, settings: LocalSettings) -> Path:
+        """dev-home's folder on this PC, once it's there: a folder that must look like a dev-home
+        when it has files, or, when it's missing or empty, one cloned or created there. Setup
+        stops when it can't be."""
         while True:
             # Checked as setup will use it, so a hand-edited C:/dev-home/.. counts as the drive
             # root it leads to.
@@ -1101,58 +1287,11 @@ class Setup:
                 self.status("PROBLEM", f"Stopped: {folder} doesn't look like a dev-home.")
                 raise CannotGoOnError
             settings.content_dir = forward(answer)
-            save = True
 
-        if self.can_ask and not setting_value(settings.data, AUTO_UPDATE)[1]:
-            updates = self.ask_auto_update(settings.data)
-            if updates is not MISSING:
-                put(settings.data, AUTO_UPDATE, updates)
-                save = True
-        # Each ~/.claude-<name> folder is another Claude account, run with CLAUDE_CONFIG_DIR.
-        # Setup asks about each one once, and keeps the answer, a no included.
-        unanswered = [
-            f for f in self.claude_folders() if not self.listed(f, list(settings.claude_folders))
-        ]
-        if self.can_ask:
-            for folder in unanswered:
-                settings.claude_folders["~/" + folder.name] = self.ask_claude_folder(folder, None)
-                save = True
-        elif unanswered:
-            which = (
-                f"the Claude Code folder {unanswered[0]}"
-                if len(unanswered) == 1
-                else "these Claude Code folders: " + ", ".join(str(f) for f in unanswered)
-            )
-            self.status(
-                "PROBLEM",
-                f"Setup hasn't asked yet whether to set up {which}. Run {by_hand('setup.py')} in "
-                "a terminal, and it asks.",
-            )
-
-        if save:
-            if self.should(SETTINGS_PATH, "Save this PC's settings"):
-                self.save_settings(settings, read, checked)
-            else:
-                for sentence in cleanup(checked):
-                    self.line(f"What if: {sentence}")
-
+        # Clone or create it when it's missing.
         content_root = Path(comparable(settings.content_dir))
-        values = {
-            "TOOLS_DIR": forward(TOOLS_ROOT),
-            "CONTENT_DIR": forward(content_root),
-            "SHARED_SKILL_SCRIPTS_DIR": forward(GENERATED_ROOT / "shared-skill-scripts"),
-            "PYTHON": forward(PYTHON_LINK / "python.exe"),
-        }
-        # The operating rules template and the person's global rules, each named once: setup
-        # reads them from here, and the notes in generated files point to them.
-        operating_template = TOOLS_ROOT / "templates" / "operating-rules" / "operating-rules.md"
-        global_rules_file = content_root / "global-rules" / "global-rules.md"
-
-        # 2. dev-home itself: clone or create it when it's missing, then set its repo-local git
-        # config.
-        missing = not is_in_use(content_root)
-        if missing:
-            self.initialize_content_repo(content_root, values)
+        if not is_in_use(content_root):
+            self.initialize_content_repo(content_root, template_values(content_root))
             if not (content_root / ".git").exists():
                 if self.what_if:
                     self.line(
@@ -1193,9 +1332,113 @@ class Setup:
         if missing_files:
             self.not_a_dev_home_problem(content_root, missing_files)
             raise CannotGoOnError
+        return content_root
 
-        # No signing prompts for agent commits, and pulls that merge rather than rebase, as
-        # sync.py does, because a rebase refuses to run while any file is uncommitted.
+    # The questions not answered yet
+
+    def ask_unanswered(
+        self, settings: LocalSettings, content_root: Path, *, first_setup: bool
+    ) -> bool:
+        """Asks each question whose answer isn't saved yet, and returns whether this PC's
+        settings changed. A quiet run asks nothing, and names what's unanswered instead."""
+        changed = False
+        if self.can_ask and not setting_value(settings.data, AUTO_UPDATE)[1]:
+            updates = self.ask_auto_update(settings.data)
+            if updates is not MISSING:
+                put(settings.data, AUTO_UPDATE, updates)
+                changed = True
+        # Each ~/.claude-<name> folder is another Claude account, run with CLAUDE_CONFIG_DIR.
+        # Setup asks about each one once, and keeps the answer, a no included.
+        unanswered = [
+            f for f in self.claude_folders() if not self.listed(f, list(settings.claude_folders))
+        ]
+        if self.can_ask:
+            for folder in unanswered:
+                settings.claude_folders["~/" + folder.name] = self.ask_claude_folder(folder, None)
+                changed = True
+        elif unanswered:
+            which = (
+                f"the Claude Code folder {unanswered[0]}"
+                if len(unanswered) == 1
+                else "these Claude Code folders: " + ", ".join(str(f) for f in unanswered)
+            )
+            self.status(
+                "PROBLEM",
+                f"Setup hasn't asked yet whether to set up {which}. Run {by_hand('setup.py')} in "
+                "a terminal, and it asks.",
+            )
+        self.ask_about_copies(settings, content_root, first_setup=first_setup)
+        return changed
+
+    def tool_folders(self, settings: LocalSettings) -> ToolFolders:
+        """Where setup sets up each tool, from the answers. A folder answered no is left alone,
+        the default ones included."""
+        declined = answered(settings.claude_folders, False)
+        codex_installed = (self.home / ".codex").exists() and not self.listed(
+            resolve_home(DEFAULT_FOLDERS[CODEX_HOMES], self.home),
+            answered(settings.codex_homes, False),
+        )
+        using_real_home = same_path(self.home, Path.home())
+        default_claude_dir = comparable(self.home / ".claude")
+        chosen = answered(settings.claude_folders, True)
+        if self.listed(default_claude_dir, declined):
+            candidates = chosen
+        else:
+            candidates = [default_claude_dir, *chosen]
+        # The Claude folder of the session running setup, which may be in no list. A test
+        # profile takes it only from inside itself, so the real one is never touched.
+        session_claude_dir = None
+        if os.environ.get("CLAUDE_CONFIG_DIR"):
+            session_claude_dir = comparable(
+                resolve_home(os.environ["CLAUDE_CONFIG_DIR"], self.home)
+            )
+            inside_home = os.path.normcase(session_claude_dir).startswith(
+                os.path.normcase(comparable(self.home)) + os.sep
+            )
+            if not (using_real_home or inside_home):
+                session_claude_dir = None
+        # A no stands even in a session that runs there.
+        if session_claude_dir and self.listed(session_claude_dir, declined):
+            session_claude_dir = None
+        if session_claude_dir:
+            candidates.append(session_claude_dir)
+        # A run without --quiet usually has no CLAUDE_CONFIG_DIR, so it sees that folder only
+        # once it's listed.
+        listed = [comparable(resolve_home(d, self.home)) for d in chosen]
+        unlisted_claude_dir = None
+        if (
+            session_claude_dir
+            and not same_path(session_claude_dir, default_claude_dir)
+            and not any(same_path(session_claude_dir, d) for d in listed)
+        ):
+            unlisted_claude_dir = session_claude_dir
+        claude_dirs: list[str] = []
+        for candidate in candidates:
+            if not candidate.strip():
+                continue
+            full = comparable(resolve_home(candidate, self.home))
+            # A folder answered yes that's gone, such as an account removed on purpose, keeps its
+            # answer, so it's set up again if it comes back. The settings menu shows it.
+            if not same_path(full, default_claude_dir) and not Path(full).exists():
+                continue
+            if not any(same_path(full, d) for d in claude_dirs):
+                claude_dirs.append(full)
+        return ToolFolders(claude_dirs, unlisted_claude_dir, codex_installed)
+
+    # The work, which asks nothing
+
+    def set_up(self, settings: LocalSettings, content_root: Path, tools: ToolFolders) -> None:
+        """Everything setup sets up besides this PC's settings and the tools' settings files, in
+        order: dev-home's git config and its dev-home.json, Python for the skills' scripts, the
+        generated files, the skills' links, and the always-on rules."""
+        values = template_values(content_root)
+        # The operating rules template and the person's global rules, each named once: setup
+        # reads them from here, and the notes in generated files point to them.
+        operating_template = TOOLS_ROOT / "templates" / "operating-rules" / "operating-rules.md"
+        global_rules_file = content_root / "global-rules" / "global-rules.md"
+
+        # 1. dev-home: no signing prompts for agent commits, and pulls that merge rather than
+        # rebase, as sync.py does, because a rebase refuses to run while any file is uncommitted.
         for key, value in (("commit.gpgsign", "false"), ("pull.rebase", "false")):
             current = run_git(content_root, "config", "--local", "--get", key)
             if first_line(current.out) == value:
@@ -1207,9 +1450,9 @@ class Setup:
                     self.status("PROBLEM", f"Could not set git config {key} in {content_root}.")
         # With signing off, so a commit needs no prompt, and before linking skills, so a merge's
         # new ones are linked in this run.
-        self.check_copies(content_root)
+        self.write_copies(content_root)
 
-        # 3. Python, for the skills' scripts. A test profile has its own AppData folder.
+        # 2. Python, for the skills' scripts. A test profile has its own AppData folder.
         if settings.test_home_dir:
             local_app_data = self.home / "AppData" / "Local"
         else:
@@ -1218,7 +1461,7 @@ class Setup:
             )
         self.sync_python_link(local_app_data, skip_registry=bool(settings.test_home_dir))
 
-        # 4. Generated files: the skills, the scripts they share, and the operating rules, with
+        # 3. Generated files: the skills, the scripts they share, and the operating rules, with
         # this PC's paths filled in, at the same paths they have under templates/. The file each
         # tool loads, a skill's SKILL.md or the operating rules, gets a note naming its
         # template, because an agent in another project only ever sees this copy, and an edit
@@ -1303,62 +1546,10 @@ class Setup:
         else:
             self.status("OK", label)
 
-        # 5. Skills, linked into each tool's personal skills folder: the dev-home-tools skills,
+        # 4. Skills, linked into each tool's personal skills folder: the dev-home-tools skills,
         # then the personal skills in dev-home.
-        # A folder answered no is left alone, the default ones included.
-        declined = answered(settings.claude_folders, False)
-        codex_installed = (self.home / ".codex").exists() and not self.listed(
-            resolve_home(DEFAULT_FOLDERS[CODEX_HOMES], self.home),
-            answered(settings.codex_homes, False),
-        )
-        using_real_home = same_path(self.home, Path.home())
-        default_claude_dir = comparable(self.home / ".claude")
-        chosen = answered(settings.claude_folders, True)
-        if self.listed(default_claude_dir, declined):
-            candidates = chosen
-        else:
-            candidates = [default_claude_dir, *chosen]
-        # The Claude folder of the session running setup, which may be in no list. A test
-        # profile takes it only from inside itself, so the real one is never touched.
-        session_claude_dir = None
-        if os.environ.get("CLAUDE_CONFIG_DIR"):
-            session_claude_dir = comparable(
-                resolve_home(os.environ["CLAUDE_CONFIG_DIR"], self.home)
-            )
-            inside_home = os.path.normcase(session_claude_dir).startswith(
-                os.path.normcase(comparable(self.home)) + os.sep
-            )
-            if not (using_real_home or inside_home):
-                session_claude_dir = None
-        # A no stands even in a session that runs there.
-        if session_claude_dir and self.listed(session_claude_dir, declined):
-            session_claude_dir = None
-        if session_claude_dir:
-            candidates.append(session_claude_dir)
-        # A run without --quiet usually has no CLAUDE_CONFIG_DIR, so it sees that folder only
-        # once it's listed.
-        listed = [comparable(resolve_home(d, self.home)) for d in chosen]
-        unlisted_claude_dir = None
-        if (
-            session_claude_dir
-            and not same_path(session_claude_dir, default_claude_dir)
-            and not any(same_path(session_claude_dir, d) for d in listed)
-        ):
-            unlisted_claude_dir = session_claude_dir
-        claude_dirs: list[str] = []
-        for candidate in candidates:
-            if not candidate.strip():
-                continue
-            full = comparable(resolve_home(candidate, self.home))
-            # A folder answered yes that's gone, such as an account removed on purpose, keeps its
-            # answer, so it's set up again if it comes back. The settings menu shows it.
-            if not same_path(full, default_claude_dir) and not Path(full).exists():
-                continue
-            if not any(same_path(full, d) for d in claude_dirs):
-                claude_dirs.append(full)
-
-        tool_skill_folders = [Path(d) / "skills" for d in claude_dirs]
-        if codex_installed:
+        tool_skill_folders = [Path(d) / "skills" for d in tools.claude_dirs]
+        if tools.codex_installed:
             tool_skill_folders.append(self.home / ".agents" / "skills")
 
         links: list[tuple[str, Path]] = [
@@ -1411,13 +1602,13 @@ class Setup:
                 except OSError as error:
                     self.status("PROBLEM", f"Could not remove the stale link {entry}. {error}")
 
-        # 6. Always-on rules: the operating rules from here, and the person's global rules from
+        # 5. Always-on rules: the operating rules from here, and the person's global rules from
         # dev-home. Claude Code loads every file in the rules folder of each Claude folder, where
         # each link is named dev-home- plus the folder it points to, since nothing there says
         # which repo a name belongs to. Codex reads one file, so setup writes the two joined.
         operating_rules = GENERATED_ROOT / "operating-rules"
         global_rules = global_rules_file.parent
-        for claude_dir in claude_dirs:
+        for claude_dir in tools.claude_dirs:
             claude_name = Path(claude_dir).name
             rules = Path(claude_dir) / "rules"
             self.sync_link(
@@ -1431,7 +1622,7 @@ class Setup:
                     global_rules,
                     f"Claude Code global rules in {claude_name}",
                 )
-        if codex_installed:
+        if tools.codex_installed:
             codex_note = generated.note(
                 f"{forward(operating_template)} and {forward(global_rules_file)}",
                 "Put rules of your own in the second file; changing the first changes "
@@ -1439,17 +1630,20 @@ class Setup:
             )
             self.sync_codex_rules(operating_template, global_rules_file, values, codex_note)
 
-        # 7. Settings. A missing setting is offered as a change: shown first, made only after a
-        # yes, and with a backup. See repair_setting.
+    def settings_checks(self, content_root: Path, tools: ToolFolders) -> list[SettingsCheck]:
+        """What each tool's settings file needs, planned from the file as it is now."""
         wanted_dirs = [comparable(content_root), comparable(TOOLS_ROOT)]
-        for claude_dir in claude_dirs:
-            self.check_claude_settings(Path(claude_dir), wanted_dirs, unlisted_claude_dir)
-        if codex_installed:
-            self.check_codex_config(comparable(content_root))
+        checks = [
+            self.check_claude_settings(Path(claude_dir), wanted_dirs, tools.unlisted_claude_dir)
+            for claude_dir in tools.claude_dirs
+        ]
+        if tools.codex_installed:
+            checks.append(self.check_codex_config(comparable(content_root)))
+        return checks
 
     def check_claude_settings(
         self, claude_dir: Path, wanted_dirs: list[str], unlisted_claude_dir: str | None
-    ) -> None:
+    ) -> SettingsCheck:
         claude_name = claude_dir.name
         path = claude_dir / "settings.json"
         present: list[str] = []
@@ -1457,27 +1651,24 @@ class Setup:
             try:
                 text = path.read_bytes().decode("utf-8-sig", errors="replace")
             except OSError as error:
-                self.status(
+                return (
                     "PROBLEM",
                     f"{path} could not be read, so its settings were not checked. {error}",
                 )
-                return
             folders = claude_settings.folders_allowed(text)
             if folders is None:
-                self.status(
+                return (
                     "PROBLEM",
                     f"{path} could not be read as JSON, so its settings were not checked.",
                 )
-                return
             present = [comparable(resolve_home(folder, self.home)) for folder in folders]
         missing = [d for d in wanted_dirs if not any(same_path(d, p) for p in present)]
         if not missing:
-            self.status(
+            return (
                 "OK",
                 f"Claude Code settings in {claude_name}: additionalDirectories includes dev-home "
                 "and dev-home-tools",
             )
-            return
         try:
             plan = claude_settings.plan(path, missing)
         except Exception as error:
@@ -1508,7 +1699,7 @@ class Setup:
             "            }\n"
             "          }"
         )
-        self.repair_setting(
+        return SettingsChange(
             f"Claude Code settings in {claude_name}",
             path,
             f"{' and '.join(missing)} in permissions.additionalDirectories",
@@ -1519,18 +1710,17 @@ class Setup:
             advice,
         )
 
-    def check_codex_config(self, content_root: str) -> None:
+    def check_codex_config(self, content_root: str) -> SettingsCheck:
         path = self.home / ".codex" / "config.toml"
         try:
             text = path.read_bytes().decode("utf-8-sig", errors="replace") if path.exists() else ""
         except OSError as error:
-            self.status(
-                "PROBLEM", f"{path} could not be read, so its settings were not checked. {error}"
+            return (
+                "PROBLEM",
+                f"{path} could not be read, so its settings were not checked. {error}",
             )
-            return
         if codex_config.is_configured(text, content_root, CODEX_DOC_BYTES):
-            self.status("OK", "Codex config: writable_roots and project_doc_max_bytes")
-            return
+            return ("OK", "Codex config: writable_roots and project_doc_max_bytes")
         try:
             plan = codex_config.plan(path, content_root, CODEX_DOC_BYTES)
         except Exception as error:
@@ -1540,7 +1730,7 @@ class Setup:
             "          [sandbox_workspace_write]\n"
             f"          writable_roots = ['{content_root}']"
         )
-        self.repair_setting(
+        return SettingsChange(
             "Codex config",
             path,
             f"dev-home in writable_roots, and project_doc_max_bytes of at least {CODEX_DOC_BYTES} "
@@ -1551,6 +1741,16 @@ class Setup:
             "under it:",
             snippet,
         )
+
+
+def template_values(content_root: Path) -> dict[str, str]:
+    """What setup fills in for each placeholder in the templates: this PC's paths."""
+    return {
+        "TOOLS_DIR": forward(TOOLS_ROOT),
+        "CONTENT_DIR": forward(content_root),
+        "SHARED_SKILL_SCRIPTS_DIR": forward(GENERATED_ROOT / "shared-skill-scripts"),
+        "PYTHON": forward(PYTHON_LINK / "python.exe"),
+    }
 
 
 def is_in_use(folder: Path) -> bool:

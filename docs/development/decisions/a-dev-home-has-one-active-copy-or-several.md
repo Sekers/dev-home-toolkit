@@ -21,6 +21,11 @@ root, says which, as `{ "multiMachine": false }` or `true`, and the commands act
   whether another copy will stay in use, with no default: the person types y or n, and Enter
   asks again. One set to true stays true, without a question. An older dev-home with no
   `dev-home.json` needs an answer at a console, and `--quiet` says so and changes nothing.
+  (Later changed by
+  [A run of setup by hand asks what's unanswered, then shows every setting](a-run-of-setup-by-hand-asks-whats-unanswered-then-shows-every-setting.md):
+  every PC's first setup asks, except for a dev-home setup has just created, and so does a clone
+  set to false, as "Is dev-home in active use anywhere besides this PC?", with the file's answer
+  as the default. Only a dev-home with no answer gets the question with no default.)
 - A missing or unreadable `dev-home.json` means fetching every time.
 - With one active copy, a sync that brings in commits this PC didn't make says so in one line,
   naming `/dev-home configure`. It never changes the setting itself: that's a commit every copy
