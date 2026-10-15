@@ -511,10 +511,12 @@ def test_a_profile_without_claude_code_or_codex_gets_neither(box: Sandbox) -> No
     assert sorted(entry.name for entry in profile.iterdir()) == [], str(result)
 
 
-def test_codex_answered_yes_sets_up_every_codex_home_found_later_too(box: Sandbox) -> None:
-    # Every home reads the same skills, so one answer covers them all, with no question for a new
-    # one. A ~/.codex-* folder counts once Codex has used it, and a test profile takes CODEX_HOME
-    # only from inside itself.
+def test_a_codex_home_found_later_gets_the_main_homes_answer(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    # Every home reads the same skills, so a new one gets ~/.codex's yes, with no question, and a
+    # line saying so, which stands for the save's own line. A ~/.codex-* folder counts once Codex
+    # has used it, and a test profile takes CODEX_HOME only from inside itself.
     second = box.profile / ".codex-second"
     plain = box.profile / ".codex-plain"
     other = box.profile / "codex-alt"
@@ -524,6 +526,7 @@ def test_codex_answered_yes_sets_up_every_codex_home_found_later_too(box: Sandbo
     plain.mkdir()
     try:
         result = setup(box, env={"CODEX_HOME": str(other)})
+        saved = json.loads(read(settings_kept))["codex"]
         # Each gets what ~/.codex gets: the rules, and an offer of the config.toml lines.
         assert read(second / "AGENTS.md") == read(box.profile / ".codex" / "AGENTS.md")
         assert read(other / "AGENTS.md") == read(box.profile / ".codex" / "AGENTS.md")
@@ -534,9 +537,24 @@ def test_codex_answered_yes_sets_up_every_codex_home_found_later_too(box: Sandbo
         )
         assert result.code == 1 and result.has_line(pattern), str(result)
         assert not result.has_line("hasn't asked"), str(result)
+        assert result.has_line(
+            r"^SET\s+dev-home is now set up for Codex in ~/\.codex-second and ~/codex-alt, to "
+            r"match ~/\.codex\. Codex only supports one set of skills for all your Codex homes, "
+            r"so they share one setting\.$"
+        ), str(result)
+        assert not result.has_line(r"^SET\s+This PC's settings"), str(result)
+        assert not list(settings_kept.parent.glob("local-settings.json.bak-*")), str(result)
+        assert saved == {
+            "homes": {
+                "~/.codex": {"setUp": True},
+                "~/.codex-second": {"setUp": True},
+                "~/codex-alt": {"setUp": True},
+            }
+        }, saved
         result = setup(box, env={"CODEX_HOME": str(outside)})
         assert not (outside / "AGENTS.md").exists(), str(result)
         assert not result.has_line("outside-codex"), str(result)
+        assert not result.has_line("dev-home is now"), str(result)
     finally:
         for folder in (second, plain, other, outside):
             shutil.rmtree(folder)
@@ -582,12 +600,13 @@ def test_codex_with_no_answer_keeps_its_rules_and_links_and_gets_nothing_new(
         r".*\.codex, .*\.codex-second as they are\. Run .*setup\.py in a terminal, and it asks\.$"
     )
     assert result.code == 1 and result.has_line(pattern), str(result)
-    # The session's own home, which a terminal usually can't see, is named on a line of its own.
+    # The session's own home, which a terminal usually can't see, is named on a line of its own,
+    # with the change that sets up Codex from the session.
     pattern = (
         r"^PROBLEM\s+Setup hasn't asked yet whether to set up Codex, so it leaves the Codex home "
-        r".*codex-alt, the session's own, in CODEX_HOME, as it is\. .* run .*setup\.py --configure "
-        r"'codex\.homes\+=~/codex-alt' so it can, then run .*setup\.py in a terminal, and it "
-        r"asks\.$"
+        r".*codex-alt, the session's own, in CODEX_HOME, as it is\. Setup in a terminal usually "
+        r"can't see it: to set up Codex, run .*setup\.py --configure "
+        r"'codex\.homes\+=~/codex-alt'\.$"
     )
     assert result.has_line(pattern), str(result)
     assert kept_rules == f"{MARKER}\nRules from an older run.\n", str(result)
@@ -596,25 +615,122 @@ def test_codex_with_no_answer_keeps_its_rules_and_links_and_gets_nothing_new(
     assert added is None, str(result)
 
 
-def test_an_answer_saved_in_a_codex_homes_entry_is_removed(
+def test_every_codex_home_gets_the_main_homes_answer_and_one_thats_gone_keeps_its_own(
     box: Sandbox, settings_kept: Path
 ) -> None:
-    # Codex once had an answer for each home. A home's entry holds none now, since every home
-    # follows Codex's one answer, so a sync deletes it, with a backup, and keeps the entry, which
-    # lists the home.
+    # Such as ~/.codex changed to no by hand, or the mixed answers an older setup saved: the main
+    # home, ~/.codex, decides, and the others follow, in the order codex.homes keeps, ~/.codex-*
+    # by name, then the rest by full path. A home that's gone keeps its answer, for if it comes
+    # back.
+    work = box.profile / ".codex-work"
+    elsewhere = box.root / "codex-test"
+    for folder in (work, elsewhere):
+        write_text(folder / "config.toml", "")
     saved = json.loads(read(settings_kept))
-    homes = {"~/.codex": {"setUp": True}, "~/.codex-off": {"setUp": False, "hiddenSkills": []}}
-    saved["codex"]["homes"] = homes
+    saved["codex"]["homes"] = {
+        forward(elsewhere): {"setUp": True},
+        "~/.codex-work": {"setUp": True},
+        "~/.codex-gone": {"setUp": True},
+        "~/.codex": {"setUp": False},
+    }
     write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
-    result = setup(box)
-    after = json.loads(read(settings_kept))
+    try:
+        result = setup(box)
+        after = json.loads(read(settings_kept))["codex"]["homes"]
+        work_rules = (work / "AGENTS.md").exists()
+    finally:
+        for folder in (work, elsewhere):
+            shutil.rmtree(folder)
     pattern = (
-        r"^SET\s+This PC's settings: .*\. Removed codex\.homes ~/\.codex: setUp, codex\.homes "
-        r"~/\.codex-off: setUp, codex\.homes ~/\.codex-off: hiddenSkills: nothing declares them "
-        "any more"
+        rf"^SET\s+dev-home is now turned off for Codex in ~/\.codex-work and "
+        rf"{re.escape(forward(elsewhere))}, to match ~/\.codex\. Codex only supports one set of "
+        r"skills for all your Codex homes, so they share one setting\.$"
     )
     assert result.code == 0 and result.has_line(pattern), str(result)
-    assert after["codex"] == {"setUp": True, "homes": {"~/.codex": {}, "~/.codex-off": {}}}
+    assert list(after.items()) == [
+        ("~/.codex", {"setUp": False}),
+        ("~/.codex-gone", {"setUp": True}),
+        ("~/.codex-work", {"setUp": False}),
+        (forward(elsewhere), {"setUp": False}),
+    ], after
+    assert not work_rules, str(result)
+    assert not list(settings_kept.parent.glob("local-settings.json.bak-*")), str(result)
+
+
+def test_a_codex_home_listed_without_an_answer_gets_it_in_its_own_entry(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    # Such as one written in full by hand, so the file never names a home twice.
+    work = box.profile / ".codex-work"
+    write_text(work / "config.toml", read(box.profile / ".codex" / "config.toml"))
+    saved = json.loads(read(settings_kept))
+    saved["codex"]["homes"][forward(work)] = {}
+    write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
+    try:
+        result = setup(box)
+        after = json.loads(read(settings_kept))["codex"]["homes"]
+    finally:
+        shutil.rmtree(work)
+    pattern = rf"^SET\s+dev-home is now set up for Codex in {re.escape(forward(work))}, to match "
+    assert result.code == 0 and result.has_line(pattern), str(result)
+    assert after == {"~/.codex": {"setUp": True}, forward(work): {"setUp": True}}, after
+
+
+def test_a_main_codex_home_with_no_answer_takes_the_next_homes(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    work = box.profile / ".codex-work"
+    write_text(work / "config.toml", "")
+    saved = json.loads(read(settings_kept))
+    saved["codex"]["homes"] = {"~/.codex-work": {"setUp": True}}
+    write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
+    try:
+        result = setup(box)
+        after = json.loads(read(settings_kept))["codex"]["homes"]
+    finally:
+        shutil.rmtree(work)
+    pattern = (
+        r"^SET\s+dev-home is now set up for Codex in ~/\.codex, to match ~/\.codex-work\. "
+        r"Codex only supports one set of skills"
+    )
+    assert result.has_line(pattern), str(result)
+    assert list(after) == ["~/.codex", "~/.codex-work"], after
+    assert all(entry == {"setUp": True} for entry in after.values()), after
+
+
+def test_codex_homes_out_of_order_are_put_back_in_order_without_a_word(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    # Only a hand edit leaves them out of order. Putting them back is no change to any setting, so
+    # it says nothing and keeps no backup, once it's sure only the order changes.
+    work = box.profile / ".codex-work"
+    write_text(work / "config.toml", read(box.profile / ".codex" / "config.toml"))
+    saved = json.loads(read(settings_kept))
+    saved["codex"]["homes"] = {"~/.codex-work": {"setUp": True}, "~/.codex": {"setUp": True}}
+    write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
+    # The same, with a key written twice, which reading the file drops, so a rewrite would too.
+    twice = read(settings_kept).replace(
+        '"~/.codex": {', '"~/.codex-work": {\n        "setUp": true\n      },\n      "~/.codex": {'
+    )
+    try:
+        result = setup(box)
+        after = json.loads(read(settings_kept))
+        write_text(settings_kept, twice)
+        refused = setup(box)
+        kept = read(settings_kept)
+    finally:
+        shutil.rmtree(work)
+    assert result.code == 0 and not result.has_line(r"^(SET|PROBLEM)"), str(result)
+    assert list(after["codex"]["homes"]) == ["~/.codex", "~/.codex-work"], after
+    saved["codex"]["homes"] = after["codex"]["homes"]
+    assert after == saved, after
+    assert not list(settings_kept.parent.glob("local-settings.json.bak-*")), str(result)
+    pattern = (
+        r"^PROBLEM\s+.*local-settings\.json lists Codex homes out of order, and putting them in "
+        r"order would change more than their order, so setup left the file as it is\."
+    )
+    assert refused.code == 1 and refused.has_line(pattern), str(refused)
+    assert kept == twice
 
 
 def test_a_claude_folder_with_a_no_is_left_alone_even_from_a_session_there(box: Sandbox) -> None:
@@ -640,7 +756,7 @@ def test_a_default_folder_with_a_no_is_left_alone(box: Sandbox) -> None:
     settings_text = read(settings_path)
     declined = json.loads(settings_text)
     declined["claudeCode"] = {"folders": {"~/.claude": {"setUp": False}}}
-    declined["codex"] = {"setUp": False}
+    declined["codex"] = {"homes": {"~/.codex": {"setUp": False}}}
     profile = box.root / "declined-profile"
     for folder in (".claude", ".codex"):
         (profile / folder).mkdir(parents=True)
@@ -1234,11 +1350,12 @@ def test_configure_alone_shows_the_settings_and_how_to_change_them(
     assert result.has_line(r"^\s+2\s+Install dev-home-tools updates automatically\s+no$"), str(
         result
     )
-    assert result.has_line(r"^\s+6\s+Codex, in every Codex home\s+yes: ~/\.codex$"), str(result)
-    assert result.has_line(r"^\s+codex\.setUp=true\|false\s"), str(result)
-    assert result.has_line(r"^\s+codex\.homes\+=<folder>\s+Add a Codex home setup can't"), str(
+    assert result.has_line(r"^\s+6\s+Codex homes to set up\s+~/\.codex: yes$"), str(result)
+    assert result.has_line(r"^\s+codex\.homes\+=<folder>\s+Set up a Codex home, such as"), str(
         result
     )
+    pattern = r"^\s+answer: a change to the main one, ~/\.codex when it's there,$"
+    assert result.has_line(pattern), str(result)
     assert result.has_line(r"^\s+7\s+Copies of dev-home in active use\s+several$"), str(result)
     assert result.has_line(r"^\s+multiMachine=true\|false\s"), str(result)
     # A skill names a preference by its label, so the agent finds it here, with its name.
@@ -1290,13 +1407,11 @@ def test_the_settings_definitions_declare_what_setup_needs(box: Sandbox) -> None
         "updates.installAutomatically",
         "updates.checkEveryHours",
         "devHome.checkEveryHours",
-        "codex.setUp",
     ]
-    # A tool's one answer for all its folders, which the menu shows with that tool's folders, and
-    # the folders of each tool, all in one shape.
-    assert settings.TOOL_SETTINGS == ("codex.setUp",)
+    # The folders of each tool, all in one shape, an entry for each with its answer. Only Codex's
+    # homes share one answer, which only setup's code knows.
     assert settings.FOLDER_SETTINGS == ("claudeCode.folders", "codex.homes")
-    assert settings.ANSWER_SETTINGS == ("claudeCode.folders",)
+    assert [tool.shared for tool in settings.TOOLS] == [False, True]
     for setting in declared.values():
         assert setting.label and setting.help, setting
         assert not setting.has_default or settings.is_valid(setting.type, setting.default), setting
@@ -1479,12 +1594,12 @@ def test_configure_adds_and_removes_a_claude_folder(box: Sandbox, settings_kept:
     }
 
 
-def test_configure_adds_and_takes_off_a_codex_home_by_its_path(
+def test_configure_adds_a_codex_home_that_matches_and_refuses_one_that_doesnt(
     box: Sandbox, settings_kept: Path
 ) -> None:
     # Such as one a session's CODEX_HOME names, which setup in a terminal can't see. A home added
-    # by its path needs no config.toml or auth.json yet, and gets what every home gets. Its entry
-    # has the shape of a Claude Code folder's, with no answer of its own.
+    # by its path needs no config.toml or auth.json yet, and gets what every home gets. Every home
+    # shares the main home's answer, so another home can't be changed on its own.
     added = box.profile / "codex-configured"
     added.mkdir()
     try:
@@ -1492,35 +1607,76 @@ def test_configure_adds_and_takes_off_a_codex_home_by_its_path(
         rules = (added / "AGENTS.md").is_file()
         listed = json.loads(read(settings_kept))["codex"]
         twice = setup_configure(box, "codex.homes+=~/codex-configured")
-        removed = setup_configure(box, "codex.homes-=~/codex-configured")
+        refused = setup_configure(box, "codex.homes-=~/codex-configured")
         saved = json.loads(read(settings_kept))["codex"]
         whole = setup_configure(box, "codex.homes=~/codex-configured")
         missing = setup_configure(box, "codex.homes+=~/codex-missing")
     finally:
         shutil.rmtree(added)
     assert result.has_line(r"^SET\s+This PC's settings"), str(result)
-    assert listed == {"setUp": True, "homes": {"~/codex-configured": {}}}
+    assert listed == {"homes": {"~/.codex": {"setUp": True}, "~/codex-configured": {"setUp": True}}}
     assert rules, str(result)
     assert twice.has_line(r"^OK\s+codex\.homes is already set that way"), str(twice)
-    assert removed.code == 0 and saved == {"setUp": True}, str(removed)
     pattern = (
-        r"^PROBLEM\s+codex\.homes changes one home at a time: codex\.homes\+=<folder> adds one, "
-        r"and codex\.homes-=<folder> takes one off\."
+        r"^PROBLEM\s+Every Codex home reads the same skills, so all of them share one answer, the "
+        r"main home's: ~/\.codex, which is set up\. To change them all, change it: "
+        r"codex\.homes-=~/\.codex\. Nothing was changed\.$"
+    )
+    assert refused.code == 1 and refused.has_line(pattern), str(refused)
+    assert saved == listed, str(refused)
+    pattern = (
+        r"^PROBLEM\s+codex\.homes changes one home at a time: codex\.homes\+=<folder> sets one "
+        r"up, and codex\.homes-=<folder> stops\."
     )
     assert whole.code == 1 and whole.has_line(pattern), str(whole)
     pattern = r"^PROBLEM\s+There is no Codex home at .*codex-missing\. Nothing was changed\.$"
     assert missing.code == 1 and missing.has_line(pattern), str(missing)
 
 
-def test_configure_answers_codex_for_every_home(box: Sandbox, settings_kept: Path) -> None:
-    off = setup_configure(box, "codex.setUp=false")
-    saved = json.loads(read(settings_kept))["codex"]
-    on = setup_configure(box, "codex.setUp=true")
-    no_default = setup_configure(box, "codex.setUp=default")
-    assert off.code == 0 and saved == {"setUp": False}, str(off)
-    assert on.code == 0 and json.loads(read(settings_kept))["codex"] == {"setUp": True}, str(on)
-    pattern = r"^PROBLEM\s+codex\.setUp has no default, so it can't be set to default\."
-    assert no_default.code == 1 and no_default.has_line(pattern), str(no_default)
+def test_configure_changes_every_codex_home_through_the_main_one(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    # Including one that's gone, which keeps its answer for if it comes back.
+    work = box.profile / ".codex-work"
+    write_text(work / "config.toml", "")
+    saved = json.loads(read(settings_kept))
+    saved["codex"]["homes"] = {
+        "~/.codex": {"setUp": True},
+        "~/.codex-gone": {"setUp": True},
+        "~/.codex-work": {"setUp": True},
+    }
+    write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
+    try:
+        off = setup_configure(box, "codex.homes-=~/.codex")
+        homes = json.loads(read(settings_kept))["codex"]["homes"]
+        work_rules = (work / "AGENTS.md").exists()
+    finally:
+        shutil.rmtree(work)
+    assert off.code == 0 and off.has_line(r"^SET\s+This PC's settings"), str(off)
+    assert homes == {
+        "~/.codex": {"setUp": False},
+        "~/.codex-gone": {"setUp": False},
+        "~/.codex-work": {"setUp": False},
+    }, homes
+    assert not work_rules, str(off)
+
+
+def test_configure_answers_codex_for_every_home_while_none_has_an_answer(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    # Such as from a session whose CODEX_HOME setup in a terminal can't see.
+    work = box.profile / ".codex-work"
+    write_text(work / "config.toml", read(box.profile / ".codex" / "config.toml"))
+    saved = json.loads(read(settings_kept))
+    del saved["codex"]
+    write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
+    try:
+        on = setup_configure(box, "codex.homes+=~/.codex-work")
+        homes = json.loads(read(settings_kept))["codex"]["homes"]
+    finally:
+        shutil.rmtree(work)
+    assert on.code == 0, str(on)
+    assert homes == {"~/.codex": {"setUp": True}, "~/.codex-work": {"setUp": True}}, homes
 
 
 def test_configure_switches_copies_then_commits_and_pushes_it(box: Sandbox) -> None:

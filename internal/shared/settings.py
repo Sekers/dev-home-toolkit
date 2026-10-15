@@ -10,9 +10,12 @@ docs/development/settings.md has the rules."""
 
 import copy
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from .paths import comparable, resolve_home, same_path
 
 # dev-home-tools' folder: this file is in internal/shared/, two folders below it.
 TOOLS_ROOT = Path(__file__).parent.parent.parent
@@ -96,27 +99,23 @@ BY_PATH = {setting.path: setting for setting in SETTINGS}
 # say: for dev-home itself, and for dev-home-tools' updates.
 DEFAULT_HOURS = {s.path: s.default for s in SETTINGS if s.type == "hours" and s.has_default}
 AUTO_UPDATE = "updates.installAutomatically"
-# Each tool's folders setup knows of by an entry, in the same shape for both tools, such as
-# {"~/.claude": {"setUp": true}}. A Claude Code folder's entry holds its own answer, setUp.
+# Each tool's folders setup knows of, an entry for each with its answer, setUp, in the same shape
+# for both tools, such as {"~/.claude": {"setUp": true}}.
 CLAUDE_FOLDERS = "claudeCode.folders"
-# A Codex home's entry holds no answer of its own yet: every home reads the same skills, from
-# ~/.agents/skills, so every home follows one answer for them all, codex.setUp, and an entry only
-# lists a home setup can't find by itself, as {}. Once Codex reads skills per home, an entry can
-# take a setUp of its own, as a Claude Code folder's does, with codex.setUp as the answer for a home
-# without one, so nothing saved here needs converting.
 CODEX_HOMES = "codex.homes"
-CODEX_SETUP = "codex.setUp"
 
 
 @dataclass(frozen=True)
 class Tool:
-    """A tool setup sets up in its folders, as each tool's docs call one, with an entry at setting
-    for each folder it knows of: Claude Code in each Claude Code folder whose entry answers yes,
-    and Codex in every Codex home, once its one answer for them all, saved at answer, is yes. An
-    entry holds an answer of its own only when answered_each says so. default is the folder in the
-    profile that the tool makes when it first runs; an extra one is named after it, such as
-    ~/.claude-second, one for each account, and counts only when it holds one of marks, if the tool
-    has any. variable names the folder a session of the tool uses."""
+    """A tool setup sets up in each of its folders, as each tool's docs call one, answered yes in
+    its entry at setting. default is the folder in the profile that the tool makes when it first
+    runs; an extra one is named after it, such as ~/.claude-second, one for each account, and
+    counts only when it holds one of marks, if the tool has any. variable names the folder a
+    session of the tool uses.
+
+    shared says every folder reads the same skills, as every Codex home reads ~/.agents/skills,
+    so every folder's entry holds the same answer: the main folder's (see folder_rank). Only
+    setup's code knows this, so once a tool reads skills per folder, nothing saved changes."""
 
     name: str
     folder: str
@@ -125,8 +124,7 @@ class Tool:
     default: str
     variable: str
     marks: tuple[str, ...] = ()
-    answer: str = ""
-    answered_each: bool = True
+    shared: bool = False
 
 
 CLAUDE_CODE = Tool(
@@ -141,19 +139,42 @@ CODEX = Tool(
     ".codex",
     "CODEX_HOME",
     ("config.toml", "auth.json"),
-    answer=CODEX_SETUP,
-    answered_each=False,
+    shared=True,
 )
 TOOLS = (CLAUDE_CODE, CODEX)
 # Each tool's folders, which setting-definitions.json can't declare, since a folder's name can hold
 # a dot.
 FOLDER_SETTINGS = tuple(tool.setting for tool in TOOLS)
 FOLDERS_FOR = {tool.setting: tool for tool in TOOLS}
-# The folders whose entries hold an answer of their own.
-ANSWER_SETTINGS = tuple(tool.setting for tool in TOOLS if tool.answered_each)
-# A tool's one answer for all its folders, which setting-definitions.json declares, and the menu
-# shows with that tool's folders.
-TOOL_SETTINGS = tuple(tool.answer for tool in TOOLS if tool.answer)
+
+
+def folder_rank(tool: Tool, folder: str | Path, home: Path) -> tuple[int, str]:
+    """Where a folder of a shared tool comes, in its entries and in choosing the main one: the
+    default one, such as ~/.codex, first, then each other one in the profile named after it, by
+    name, then every other folder, by its full path. folder may start with ~."""
+    full = comparable(resolve_home(str(folder), home))
+    name = Path(full).name.lower()
+    if same_path(Path(full).parent, home):
+        if name == tool.default:
+            return 0, ""
+        if name.startswith(tool.default + "-"):
+            return 1, name
+    return 2, os.path.normcase(full)
+
+
+def order_folders(data: dict[str, Any], home: Path) -> bool:
+    """Puts each shared tool's entries in data in order (see folder_rank), and returns whether
+    their order changed."""
+    moved = False
+    for tool in TOOLS:
+        entries = get(data, tool.setting)
+        if not tool.shared or not isinstance(entries, dict):
+            continue
+        ordered = sorted(entries, key=lambda entry: folder_rank(tool, entry, home))
+        if ordered != list(entries):
+            put(data, tool.setting, {entry: entries[entry] for entry in ordered})
+            moved = True
+    return moved
 
 
 def get(data: object, path: str, default: object = None) -> Any:
@@ -489,9 +510,8 @@ def check_settings(
                 remove(value, name, path)
 
     def check_folders(path: str, value: object, tool: Tool) -> None:
-        """A tool's folders, each with an entry, which holds setUp only for a tool whose folders
-        each have an answer of their own."""
-        unset = "not answered yet" if tool.answered_each else "not listed"
+        """A tool's folders, each with an entry, which holds its answer, setUp."""
+        unset = "not answered yet"
         if not isinstance(value, dict):
             wrong(path, value, f"a JSON object of {tool.folder}s", "none")
             return
@@ -501,7 +521,7 @@ def check_settings(
                 wrong(where, entry, "a JSON object", unset)
                 continue
             for entry_key, answer in list(entry.items()):
-                if entry_key != "setUp" or not tool.answered_each:
+                if entry_key != "setUp":
                     remove(entry, entry_key, f"{where}: {entry_key}")
                 elif not isinstance(answer, bool):
                     wrong(f"{where}: setUp", answer, "true or false", unset)
@@ -562,20 +582,24 @@ def check_settings(
 @dataclass
 class LocalSettings:
     """The settings setup asks for, with defaults for anything missing. folders holds, for each
-    tool whose folders each have an answer (ANSWER_SETTINGS), each folder with an answer, as
-    written, so setup asks about it only once. data holds everything the file had, so a save keeps
-    the keys setup doesn't know, and each setting in the form it was saved in: setting_value reads
-    one, such as whether automatic updates are answered yet. found says the file had settings in it.
-    test_home_dir is only ever in a test sandbox's file, which the tests write; setup never adds
-    it."""
+    tool, each folder with an answer, as written, so setup asks about it only once. data holds
+    everything the file had, so a save keeps the keys setup doesn't know, and each setting in the
+    form it was saved in: setting_value reads one, such as whether automatic updates are answered
+    yet. found says the file had settings in it. test_home_dir is only ever in a test sandbox's
+    file, which the tests write; setup never adds it."""
 
     content_dir: str = ""
     folders: dict[str, dict[str, bool]] = field(
-        default_factory=lambda: {path: {} for path in ANSWER_SETTINGS}
+        default_factory=lambda: {path: {} for path in FOLDER_SETTINGS}
     )
     test_home_dir: str = ""
     data: dict[str, Any] = field(default_factory=dict)
     found: bool = False
+
+    @property
+    def home(self) -> Path:
+        """The profile folder setup sets up: yours, unless testHomeDir names another."""
+        return Path(comparable(self.test_home_dir)) if self.test_home_dir else Path.home()
 
 
 def answered(folders: dict[str, bool], answer: bool) -> list[str]:
@@ -604,7 +628,7 @@ def load_local_settings() -> LocalSettings | None:
     folder = get(data, "devHome.folder")
     if isinstance(folder, str):
         settings.content_dir = folder
-    settings.folders = {path: folder_answers(get(data, path)) for path in ANSWER_SETTINGS}
+    settings.folders = {path: folder_answers(get(data, path)) for path in FOLDER_SETTINGS}
     if isinstance(data.get("testHomeDir"), str):
         settings.test_home_dir = data["testHomeDir"]
     return settings
@@ -642,13 +666,15 @@ def merge_answers(data: dict[str, Any], path: str, answers: dict[str, bool]) -> 
 
 def local_settings_data(settings: LocalSettings) -> dict[str, Any]:
     """What the file holds for the settings, with schemaVersion first, keeping every other key the
-    file had where it was. testHomeDir is kept when the file has it, and never added."""
+    file had where it was, apart from a shared tool's folders, which go in order (see
+    order_folders). testHomeDir is kept when the file has it, and never added."""
     data = copy.deepcopy(settings.data)
     data.pop("schemaVersion", None)
     if settings.content_dir:
         put(data, "devHome.folder", settings.content_dir)
-    for path in ANSWER_SETTINGS:
+    for path in FOLDER_SETTINGS:
         merge_answers(data, path, settings.folders[path])
+    order_folders(data, settings.home)
     if settings.test_home_dir:
         data["testHomeDir"] = settings.test_home_dir
     return {"schemaVersion": SCHEMA_VERSION, **data}
@@ -656,6 +682,21 @@ def local_settings_data(settings: LocalSettings) -> dict[str, Any]:
 
 def settings_text(data: dict[str, Any]) -> str:
     return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+
+
+def same_apart_from_order(old_text: str, new_text: str) -> bool:
+    """Whether two settings files hold the same keys and values, whatever their order, counting
+    a key written twice, which reading the file would drop, as a difference."""
+
+    def unordered(pairs: list[tuple[str, Any]]) -> list[tuple[str, str]]:
+        return sorted((key, json.dumps(value, sort_keys=True)) for key, value in pairs)
+
+    try:
+        old = json.loads(old_text, object_pairs_hook=unordered)
+        new = json.loads(new_text, object_pairs_hook=unordered)
+    except ValueError:
+        return False
+    return bool(old == new)
 
 
 def local_settings_text(settings: LocalSettings) -> str:

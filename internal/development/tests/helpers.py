@@ -246,7 +246,7 @@ def new_sandbox(name: str, *, tools_repo: bool = False) -> Sandbox:
         "devHome": {"folder": box.content.as_posix()},
         "updates": {"installAutomatically": False},
         "claudeCode": {"folders": {"~/.claude": {"setUp": True}}},
-        "codex": {"setUp": True},
+        "codex": {"homes": {"~/.codex": {"setUp": True}}},
         "testHomeDir": box.profile.as_posix(),
     }
     write_text(box.tools / "local-settings.json", json.dumps(settings, indent=2) + "\n")

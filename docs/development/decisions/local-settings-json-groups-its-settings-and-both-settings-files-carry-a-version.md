@@ -18,8 +18,8 @@ path, as in git config and Codex's `-c`:
   a dot in its name, so folders keep `claudeCode.folders+=<folder>` and `-=<folder>`. (Later
   changed by
   [Codex is set up in every Codex home, or in none](codex-is-set-up-in-every-codex-home-or-in-none.md):
-  Codex has one answer for every home, `codex.setUp`, and an entry in `codex.homes` holds no
-  answer of its own; it lists a home setup can't find by itself.)
+  every Codex home has the same answer, the main home's, which setup keeps in every home's
+  entry.)
 - A setting is written only once it's answered, and then it stays, so a later change of default
   never changes a PC that answered. `testHomeDir` stays at the top, as before.
 - `schemaVersion` says which layout the file has, and goes up only when a setting is renamed or

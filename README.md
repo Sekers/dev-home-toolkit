@@ -114,7 +114,7 @@ first, and setup saves none of your answers until it's in place:
 | Clone your existing dev-home (c), create a new private one (n), or stop (s)? | Only when the dev-home folder doesn't exist yet. On your first PC, `n` creates a private repo on GitHub from the files in `templates/dev-home-starter/`. On every later PC, `c` clones it. Either way, it then asks for the repo's name; Enter accepts `dev-home`. |
 | Pull updates automatically? | Enter, or `d`, follows the default, yes: new versions of this repo install as soon as a sync finds them. `n` tells you about them instead, to install yourself, and `y` keeps yes even if a later version changes the default. See [Updates](docs/reference/scripts.md#updates). |
 | Set up Claude Code in `<folder>` with dev-home's skills and rules? | Asked once for each Claude Code folder it finds: `~\.claude`, once Claude Code has made it, and each `~\.claude-<name>`, one per extra Claude account you run with `CLAUDE_CONFIG_DIR`, including one made after your first run. Several are asked about together: Enter sets them all up, `n` none, and `e` asks about each, where Enter means yes. A no is kept, so it isn't asked again. Setup sets up no folder before you answer: when a quiet run finds one it hasn't asked about, it leaves it as it is, and the agent tells you to run setup in a terminal to answer. |
-| Set up Codex in every Codex home with dev-home's skills and rules? | Asked once, for all the Codex homes it finds: `~\.codex`, once Codex has made it, and each `~\.codex-<name>` that Codex has used, one per extra home you run with `CODEX_HOME`. Every Codex home reads the same skills, so it's all of them or none, homes made later included. Enter means yes. Until you answer, setup leaves Codex as it is. |
+| Set up Codex in every Codex home with dev-home's skills and rules? | Asked once, for all the Codex homes it finds: `~\.codex`, once Codex has made it, and each `~\.codex-<name>` that Codex has used, one per extra home you run with `CODEX_HOME`. Every Codex home reads the same skills, so it's all of them or none: a home made later gets the same answer, and the sync that gives it says so. Enter means yes. Until you answer, setup leaves Codex as it is. |
 | Is dev-home in active use anywhere besides this PC? | Asked on each PC's first setup, since adding a PC is when the answer most often changes, with your dev-home's answer as the default; and whenever your dev-home has no answer yet, or you've just cloned one set to a single copy. Not asked when setup has just created your dev-home. Type `y` if another PC, virtual machine, or cloud session uses it too, and each command then checks GitHub first; or `n` if this PC is the only one, such as one replacing a PC you've retired, and syncs then check GitHub only every few hours. With no answer yet, there's no default. Setup shows the change, and after a `y` to saving it, commits and pushes `dev-home.json`, so every copy agrees. |
 
 Then it shows every setting, as `--configure` does (see below): change any, or press Enter to go
@@ -181,9 +181,10 @@ one's name is its path, which `--configure` takes too:
 - `claudeCode.folders` holds each Claude Code folder with its answer, such as
   `"~/.claude": {"setUp": true}`. Taking a folder out makes setup ask about it again, and leave it
   as it is until you answer.
-- `codex.setUp` is your one answer for every Codex home, `true` or `false`. `codex.homes` lists
-  the Codex homes setup can't find by itself, such as one outside your profile folder, each with
-  an empty entry, such as `"~/codex-work": {}`: `--configure 'codex.homes+=<folder>'` adds one.
+- `codex.homes` holds each Codex home the same way, but every Codex home reads the same skills,
+  so they all share one answer, the main home's: `~/.codex` when it's there. A sync gives any
+  other home that answer, and says so, such as a new home, or one whose answer you changed by
+  hand. Setup keeps the homes in order, with the main one first.
 - `schemaVersion` says which layout the file has. Leave it as it is: setup sets aside a file in
   an older layout and asks its questions again.
 

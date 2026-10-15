@@ -384,8 +384,10 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_codex(
         "~/.claude-second": {"setUp": True},
         "~/.claude-third": {"setUp": False},
     }
-    # One answer, so every home gets the rules and the config.toml lines.
-    assert written["codex"] == {"setUp": True}
+    # One answer, so every home gets it, and the rules and the config.toml lines.
+    assert written["codex"] == {
+        "homes": {"~/.codex": {"setUp": True}, "~/.codex-work": {"setUp": True}}
+    }
     assert work_rules, out
     assert work_config["sandbox_workspace_write"]["writable_roots"] == [str(box.content)]
     assert written["testHomeDir"] == saved["testHomeDir"]
@@ -742,7 +744,7 @@ def test_at_a_console_settings_in_the_older_layout_are_set_aside_and_asked_again
         "devHome": {"folder": content},
         "updates": {"installAutomatically": False},
         "claudeCode": {"folders": {"~/.claude": {"setUp": True}}},
-        "codex": {"setUp": True},
+        "codex": {"homes": {"~/.codex": {"setUp": True}}},
     }, written
 
 
@@ -1106,7 +1108,7 @@ def test_the_menu_goes_through_every_setting_with_its_answer_as_the_default(
     assert saved["devHome"]["folder"] == content, saved
     assert saved["updates"]["installAutomatically"] is False, saved
     assert saved["claudeCode"]["folders"] == {"~/.claude": {"setUp": True}}, saved
-    assert saved["codex"] == {"setUp": True}, saved
+    assert saved["codex"] == {"homes": {"~/.codex": {"setUp": True}}}, saved
     assert any(re.search(folder_question(box.profile / ".claude"), p) for p in person.asked)
     assert any(re.search(CODEX, p) for p in person.asked), person.asked
 
@@ -1114,18 +1116,50 @@ def test_the_menu_goes_through_every_setting_with_its_answer_as_the_default(
 def test_the_menu_answers_codex_once_for_every_home(
     box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    person.answers.update({MENU: ["6", ""], CODEX: "n"})
+    # A home that's gone is offered for removal first, as a Claude Code folder is.
+    gone = box.profile / ".codex-gone"
+    start = json.loads(backups_removed.read_text(encoding="utf-8"))
+    start["codex"]["homes"]["~/.codex-gone"] = {"setUp": True}
+    write_text(backups_removed, json.dumps(start, indent=2) + "\n")
+    remove = rf"^{re.escape(str(gone))} no longer exists\. Remove it from the settings\? \[y/N\]: $"
+    person.answers.update({MENU: ["6", ""], remove: "y", CODEX: "n"})
     try:
         returned = setup_here(box, "--configure")
         out = capsys.readouterr().out
         saved = json.loads(backups_removed.read_text(encoding="utf-8"))
     finally:
         on = json.loads(backups_removed.read_text(encoding="utf-8"))
-        on["codex"] = {"setUp": True}
+        on["codex"] = {"homes": {"~/.codex": {"setUp": True}}}
         write_text(backups_removed, json.dumps(on, indent=2) + "\n")
     assert returned == 0, out
-    assert re.search(r"^\s+6\s+Codex, in every Codex home\s+yes: ~/\.codex$", out, re.M), out
-    assert saved["codex"] == {"setUp": False}, saved
+    row = r"^\s+6\s+Codex homes to set up\s+~/\.codex: yes, ~/\.codex-gone: yes \(not found\)$"
+    assert re.search(row, out, re.M), out
+    asked = [p for p in person.asked if re.search(remove, p) or re.search(CODEX, p)]
+    assert len(asked) == 2 and re.search(remove, asked[0]), person.asked
+    assert saved["codex"] == {"homes": {"~/.codex": {"setUp": False}}}, saved
+
+
+def test_a_no_in_the_menu_replaces_the_answer_a_new_codex_home_got_from_the_main_one(
+    box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # So the line saying the new home was set up to match never shows.
+    work = box.profile / ".codex-work"
+    write_text(work / "config.toml", (box.profile / ".codex" / "config.toml").read_text("utf-8"))
+    person.answers.update({MENU: ["6", ""], CODEX: "n"})
+    try:
+        returned = setup_here(box, "--configure")
+        out = capsys.readouterr().out
+        saved = json.loads(backups_removed.read_text(encoding="utf-8"))
+    finally:
+        shutil.rmtree(work)
+        on = json.loads(backups_removed.read_text(encoding="utf-8"))
+        on["codex"] = {"homes": {"~/.codex": {"setUp": True}}}
+        write_text(backups_removed, json.dumps(on, indent=2) + "\n")
+    assert returned == 0, out
+    assert "dev-home is now" not in out, out
+    assert saved["codex"] == {
+        "homes": {"~/.codex": {"setUp": False}, "~/.codex-work": {"setUp": False}}
+    }, saved
 
 
 def test_enter_in_the_menu_keeps_a_setting_that_follows_its_default(

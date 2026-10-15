@@ -29,8 +29,7 @@ from .settings import (
     AUTO_UPDATE,
     BY_PATH,
     CLAUDE_CODE,
-    CODEX_HOMES,
-    CODEX_SETUP,
+    CODEX,
     DEFAULT_HOURS,
     DEV_HOME_SETTINGS,
     FOLDER_SETTINGS,
@@ -38,20 +37,18 @@ from .settings import (
     SETTINGS,
     SETTINGS_PATH,
     STATE,
-    TOOL_SETTINGS,
     TOOLS,
     TOOLS_ROOT,
     LocalSettings,
     Setting,
     Tool,
     find_skill,
+    folder_rank,
     get,
-    listed_entries,
     local_settings_text,
     put,
     read_dev_home_settings,
     read_value,
-    remove_path,
     setting_value,
     skill_preferences,
     value_text,
@@ -89,30 +86,22 @@ def usage() -> str:
     """How to change one setting, with every setting's name; the help of dev-home-tools' own comes
     from setting-definitions.json."""
     entries = [
-        (f"{setting.path}={PLACEHOLDERS[setting.type]}", setting.help)
-        for setting in SETTINGS
-        if setting.path not in TOOL_SETTINGS
+        (f"{setting.path}={PLACEHOLDERS[setting.type]}", setting.help) for setting in SETTINGS
     ]
     for tool in TOOLS:
-        if tool.answered_each:
-            entries += [
-                (
-                    f"{tool.setting}+=<folder>",
-                    f"Set up a {tool.name} {tool.folder}, such as ~/{tool.default} or "
-                    f"~/{tool.default}-second.",
-                ),
-                (f"{tool.setting}-=<folder>", "Stop setting one up."),
-            ]
-            continue
-        setting = BY_PATH[tool.answer]
+        shared = (
+            f" Every {tool.name} {tool.folder} reads the same skills, so all of them share one "
+            f"answer: a change to the main one, ~/{tool.default} when it's there, changes them all."
+            if tool.shared
+            else ""
+        )
         entries += [
-            (f"{setting.path}={PLACEHOLDERS[setting.type]}", setting.help),
             (
                 f"{tool.setting}+=<folder>",
-                f"Add a {tool.name} {tool.folder} setup can't find by itself, such as one outside "
-                f"your profile folder that a session's {tool.variable} names.",
+                f"Set up a {tool.name} {tool.folder}, such as ~/{tool.default} or "
+                f"~/{tool.default}-second.{shared}",
             ),
-            (f"{tool.setting}-=<folder>", "Take one off that list."),
+            (f"{tool.setting}-=<folder>", "Stop setting one up."),
         ]
     entries += [
         ("skills.<skill>.preferences.<name>=true|false", "A preference a skill declares."),
@@ -205,27 +194,15 @@ def value_shown(setting: Setting, saved: object) -> str:
     return shown
 
 
-def entry_for(run: "Setup", folders: dict[str, bool], folder: str | Path) -> str | None:
-    """The entry in a tool's folders, as written, that names this folder, if any."""
-    return next(
-        (
-            entry
-            for entry in folders
-            if entry.strip() and same_path(resolve_home(entry, run.home), folder)
-        ),
-        None,
-    )
-
-
 def folder_answers(
     run: "Setup", settings: LocalSettings, tool: Tool
 ) -> list[tuple[str, bool | None]]:
     """Each of a tool's folders setup knows of, as written in the settings, with its answer: each
-    folder setup finds, then any other folder with an answer."""
+    one there (see known_folders), then any other folder with an answer."""
     saved = settings.folders[tool.setting]
     answers: list[tuple[str, bool | None]] = []
-    for folder in run.found_folders(tool):
-        entry = entry_for(run, saved, folder)
+    for folder in run.known_folders(tool, settings):
+        entry = run.entry_named(folder, saved)
         answers.append((entry or run.folder_entry(folder), None if entry is None else saved[entry]))
     for entry, answer in saved.items():
         full = resolve_home(entry, run.home)
@@ -245,25 +222,6 @@ def folders_text(run: "Setup", settings: LocalSettings, tool: Tool) -> str:
     return folders or "none found"
 
 
-def codex_text(run: "Setup", settings: LocalSettings) -> str:
-    """Codex's one answer for every Codex home, as the menu shows it: the answer, then each home
-    it covers, those listed by path that are gone included."""
-    setting = BY_PATH[CODEX_SETUP]
-    saved = get(settings.data, setting.path, MISSING)
-    value, answered, usable = read_value(saved, setting)
-    shown = value_text(setting, value) if answered else "not asked yet"
-    if not usable:
-        shown += f" (the file says {json.dumps(saved)}, which setup can't use)"
-    folders = [run.folder_entry(folder) for folder in run.codex_homes(settings)]
-    added = listed_entries(get(settings.data, CODEX_HOMES))
-    folders += [
-        f"{entry} (not found)"
-        for entry in added
-        if not Path(resolve_home(entry, run.home)).is_dir()
-    ]
-    return f"{shown}: {', '.join(folders) or 'none found'}"
-
-
 def overview(run: "Setup", settings: LocalSettings) -> list[str]:
     """Every setting and its value, numbered as the menu numbers them."""
     answer, found = copies_answer(settings)
@@ -280,12 +238,9 @@ def overview(run: "Setup", settings: LocalSettings) -> list[str]:
     this_pc = [
         (setting.label, values.get(setting.path) or setting_text(settings, setting.path))
         for setting in SETTINGS
-        if setting.path not in TOOL_SETTINGS
     ]
     this_pc += [
         (f"{tool.name} {tool.folder}s to set up", folders_text(run, settings, tool))
-        if tool.answered_each
-        else (BY_PATH[tool.answer].label, codex_text(run, settings))
         for tool in TOOLS
     ]
     shared = [("Copies of dev-home in active use", copies)]
@@ -330,8 +285,8 @@ def menu(run: "Setup", settings: LocalSettings) -> bool:
     }
     # Numbered as overview numbers the rows: dev-home-tools' own settings in the order
     # setting-definitions.json has them, then each tool's folders, then the shared setting.
-    order = [changers[setting.path] for setting in SETTINGS if setting.path not in TOOL_SETTINGS]
-    order += [change_claude_folders, change_codex, change_copies]
+    order = [changers[setting.path] for setting in SETTINGS]
+    order += [change_claude_folders, change_codex_homes, change_copies]
     steps = {str(number): step for number, step in enumerate(order, 1)}
     changed = False
     while True:
@@ -424,32 +379,41 @@ def set_folder(settings: LocalSettings, run: "Setup", tool: Tool, entry: str, ye
     """Saves the answer for one of a tool's folders, in the entry that already names it when
     there is one."""
     saved = settings.folders[tool.setting]
-    found = entry_for(run, saved, resolve_home(entry, run.home))
+    found = run.entry_named(resolve_home(entry, run.home), saved)
     saved[found or entry] = yes
 
 
-def set_listed(settings: LocalSettings, run: "Setup", tool: Tool, entry: str, add: bool) -> None:
-    """Lists one of a tool's folders, for a tool whose folders hold no answer of their own, by an
-    entry with nothing in it, as written, unless an entry there names it already; or takes every
-    entry that names it off."""
-    current = get(settings.data, tool.setting)
-    folders = dict(current) if isinstance(current, dict) else {}
-    full = resolve_home(entry, run.home)
-    listed = [
-        name for name in folders if name.strip() and same_path(resolve_home(name, run.home), full)
-    ]
-    if add and not listed:
-        folders[entry] = {}
-    elif not add:
-        for name in listed:
-            del folders[name]
-    if folders:
-        put(settings.data, tool.setting, folders)
-    elif current is not None:
-        remove_path(settings.data, tool.setting)
+def set_shared(settings: LocalSettings, run: "Setup", tool: Tool, entry: str, yes: bool) -> None:
+    """Saves the answer for one of a shared tool's folders. For the main folder, or while no
+    folder has an answer, it goes to every folder. For another folder, it must match the answer
+    they share: one that doesn't is refused, raising SettingError, since every folder reads the
+    same skills."""
+    full = Path(comparable(resolve_home(entry, run.home)))
+    folders = run.known_folders(tool, settings)
+    if full.is_dir() and not any(same_path(full, folder) for folder in folders):
+        folders = sorted([*folders, full], key=lambda f: folder_rank(tool, f, run.home))
+    answer, _ = run.shared_answer(tool, settings, folders)
+    if answer is None or (folders and same_path(full, folders[0])):
+        run.answer_every_folder(tool, settings, yes)
+        set_folder(settings, run, tool, entry, yes)
+    elif answer is yes:
+        set_folder(settings, run, tool, entry, yes)
+    else:
+        main = run.entry_named(folders[0], settings.folders[tool.setting]) or run.folder_entry(
+            folders[0]
+        )
+        done = "set up" if answer else "not set up"
+        operator = "-=" if yes is False else "+="
+        raise SettingError(
+            f"Every {tool.name} {tool.folder} reads the same skills, so all of them share one "
+            f"answer, the main {tool.folder}'s: {main}, which is {done}. To change them all, "
+            f"change it: {tool.setting}{operator}{main}."
+        )
 
 
 def change_folders(run: "Setup", settings: LocalSettings, tool: Tool) -> bool:
+    """Asks about each of a tool's folders, after offering to remove each one that's gone; for a
+    shared tool, one question, whose answer goes to every folder."""
     answers = folder_answers(run, settings, tool)
     if not answers:
         run.line(f"Setup found no {tool.name} {tool.folder}s.")
@@ -460,32 +424,33 @@ def change_folders(run: "Setup", settings: LocalSettings, tool: Tool) -> bool:
         if not folder.is_dir():
             # A folder that's gone keeps its answer, in case it comes back, until it's removed.
             if run.choose(f"{folder} no longer exists. Remove it from the settings?", False):
-                del settings.folders[tool.setting][entry]
+                settings.folders[tool.setting].pop(entry, None)
                 changed = True
+            continue
+        if tool.shared:
             continue
         answer = run.ask_folder(tool, folder, current)
         if answer is not None and answer != current:
             set_folder(settings, run, tool, entry, answer)
             changed = True
-    return changed
+    folders = run.known_folders(tool, settings)
+    if not tool.shared or not folders:
+        return changed
+    current, _ = run.shared_answer(tool, settings, folders)
+    answer = run.ask_codex(folders, current)
+    saved = settings.folders[tool.setting].values()
+    if answer is None or (answer is current and all(value is answer for value in saved)):
+        return changed
+    run.answer_every_folder(tool, settings, answer)
+    return True
 
 
 def change_claude_folders(run: "Setup", settings: LocalSettings) -> bool:
     return change_folders(run, settings, CLAUDE_CODE)
 
 
-def change_codex(run: "Setup", settings: LocalSettings) -> bool:
-    """Whether to set up Codex, in every Codex home."""
-    homes = run.codex_homes(settings)
-    current, answered, _ = setting_value(settings.data, CODEX_SETUP)
-    if not homes and not answered:
-        run.line("Setup found no Codex home.")
-        return False
-    answer = run.ask_codex(homes, current if answered else None)
-    if answer is None or get(settings.data, CODEX_SETUP) is answer:
-        return False
-    put(settings.data, CODEX_SETUP, answer)
-    return True
+def change_codex_homes(run: "Setup", settings: LocalSettings) -> bool:
+    return change_folders(run, settings, CODEX)
 
 
 def change_copies(run: "Setup", settings: LocalSettings) -> bool:
@@ -528,11 +493,9 @@ def assign(run: "Setup", settings: LocalSettings, text: str) -> bool:
         raise SettingError(f"There is no setting named {name}.")
     tool = TOOL_FOR.get(name)
     if tool is not None and operator == "=":
-        does = "sets one up" if tool.answered_each else "adds one"
-        stops = "stops" if tool.answered_each else "takes one off"
         raise SettingError(
-            f"{name} changes one {tool.folder} at a time: {name}+=<folder> {does}, and "
-            f"{name}-=<folder> {stops}."
+            f"{name} changes one {tool.folder} at a time: {name}+=<folder> sets one up, and "
+            f"{name}-=<folder> stops."
         )
     if tool is None and operator != "=":
         raise SettingError(f"{name} is set with =, as in {name}=<value>.")
@@ -542,11 +505,11 @@ def assign(run: "Setup", settings: LocalSettings, text: str) -> bool:
         if setting is None or not setting.has_default:
             raise SettingError(f"{name} has no default, so it can't be set to default.")
         put(settings.data, setting.path, {STATE: "default"})
-    elif name in (AUTO_UPDATE, CODEX_SETUP, "multiMachine") or name.startswith("skills."):
+    elif name in (AUTO_UPDATE, "multiMachine") or name.startswith("skills."):
         if value.lower() not in ("true", "false"):
             raise SettingError(f"{name} is true or false, not {value}.")
         yes = value.lower() == "true"
-        if name in (AUTO_UPDATE, CODEX_SETUP):
+        if name == AUTO_UPDATE:
             put(settings.data, name, yes)
         elif name.startswith("skills."):
             put(settings.data, declared_setting(settings, name).path, yes)
@@ -576,10 +539,10 @@ def assign(run: "Setup", settings: LocalSettings, text: str) -> bool:
         full = Path(resolve_home(value, run.home))
         if operator == "+=" and not full.is_dir():
             raise SettingError(f"There is no {kind} at {full}.")
-        if tool.answered_each:
-            set_folder(settings, run, tool, value, operator == "+=")
+        if tool.shared:
+            set_shared(settings, run, tool, value, operator == "+=")
         else:
-            set_listed(settings, run, tool, value, operator == "+=")
+            set_folder(settings, run, tool, value, operator == "+=")
     old_text, new_text = local_settings_text(before), local_settings_text(settings)
     if old_text == new_text:
         status_line("OK", f"{name} is already set that way, so nothing changed.")

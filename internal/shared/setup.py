@@ -18,7 +18,8 @@ A run goes in this order, so the questions come first and the work after:
 2. The questions not answered yet: whether to pull updates automatically, whether to set up each
    Claude Code folder it finds, whether to set up Codex, in every Codex home, and how many copies
    of dev-home are in active use. Each is asked whenever its answer isn't saved yet, not only on
-   the first run. A no is saved too, so it's asked about once.
+   the first run. A no is saved too, so it's asked about once. Every run, quiet ones included,
+   also gives each Codex home the main home's answer, saying so.
 3. At a console, the settings menu that --configure shows, so any setting can be changed.
 4. The changes to confirm: to dev-home.json, and to Claude Code's and Codex's settings files.
 5. The work, which asks nothing, and holds the sync's lock, so a sync in another session waits
@@ -63,12 +64,17 @@ local-settings.json. Setup offers each Claude Code folder it finds, in a list, e
 has answered for isn't set up: setup adds no links there and removes none, and a quiet run names
 it. A folder answered no is left alone, and one answered yes that no longer exists is skipped.
 
-Codex has one answer for every Codex home, codex.setUp, since every home reads the same skills,
-from ~/.agents/skills: setup sets up all of them, or none. A yes gets each home its rules and
-settings, and the skills linked into ~/.agents/skills. The homes are ~/.codex, once Codex has
-made it; each ~/.codex-<name> that holds a config.toml or an auth.json; the folder in CODEX_HOME;
-and each listed by its path in codex.homes, for a home setup can't find by itself. Until
-Codex is answered, setup adds no links and removes none, and a quiet run names its homes.
+Codex homes are saved the same way, under codex.homes, but every home reads the same skills, from
+~/.agents/skills, so every home has the same answer: setup sets up all of them, or none, and asks
+one question for them all. The homes are ~/.codex, once Codex has made it; each ~/.codex-<name>
+that holds a config.toml or an auth.json; the folder in CODEX_HOME; and each other one with an
+entry. The main home is ~/.codex when it's there, otherwise the first ~/.codex-<name> there by
+name, otherwise the first other home there by full path; codex.homes keeps its entries in that
+order too. A home whose answer differs from the main home's, or that has none, such as a new one,
+gets the main home's answer, with a line saying so; when the main home has none, the next home
+there in that order that has one gives it. A yes gets each home its
+rules and settings, and the skills linked into ~/.agents/skills. Until Codex is answered, setup
+adds no links and removes none, and a quiet run names its homes.
 
 Each link to a folder is a junction on Windows, which needs no Developer Mode, and a symbolic link
 elsewhere.
@@ -114,11 +120,12 @@ The sync runs main(["--quiet"]) inside its own process, so keep main's name and 
 import contextlib
 import copy
 import importlib
+import json
 import os
 import re
 import stat
 import subprocess
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -130,14 +137,12 @@ from .output import GREEN, RED, YELLOW, color, describe, first_line, status_line
 from .paths import comparable, forward, is_inside, resolve_home, same_path, unsafe_reason
 from .programs import SYNC_HOLDS_LOCK, by_hand, find_program
 from .settings import (
-    ANSWER_SETTINGS,
     AUTO_UPDATE,
     BY_PATH,
     CLAUDE_CODE,
     CODEX,
-    CODEX_HOMES,
-    CODEX_SETUP,
     DEV_HOME_SETTINGS,
+    FOLDER_SETTINGS,
     MISSING,
     SCHEMA_VERSION,
     SETTINGS_PATH,
@@ -151,14 +156,17 @@ from .settings import (
     check_settings,
     dev_home_text,
     folder_answers,
+    folder_rank,
     get,
     layout,
     listed_entries,
     load_local_settings,
     local_settings_data,
     local_settings_text,
+    order_folders,
     put,
     read_dev_home_settings,
+    same_apart_from_order,
     saved_answer,
     setting_value,
     settings_text,
@@ -215,8 +223,8 @@ SettingsCheck = tuple[str, str] | SettingsChange
 
 @dataclass(frozen=True)
 class ToolFolders:
-    """Where setup sets up each tool, by full path: each Claude Code folder answered yes, and each
-    Codex home, once Codex is answered yes."""
+    """Where setup sets up each tool, by full path: each Claude Code folder and Codex home answered
+    yes."""
 
     claude_dirs: list[str]
     codex_homes: list[str]
@@ -278,6 +286,12 @@ class Setup:
         self.unknown_placeholders: list[str] = []
         self.unplaced_notes: list[str] = []
         self.generated_changes = 0
+        # The line saying which of a shared tool's folders got the main folder's answer, by the
+        # tool's setting, printed once the settings are saved, unless a person answers for the
+        # tool's folders first.
+        self.matched: dict[str, str] = {}
+        # What the profile folder holds, listed once a run (see profile_folders).
+        self.profile_entries: list[Path] | None = None
         # Set once this run clones dev-home, which then may have another copy still in use, or
         # creates one, which nothing else can be using yet.
         self.cloned = False
@@ -468,23 +482,60 @@ class Setup:
 
     def save_settings(
         self, settings: LocalSettings, read: dict[str, Any] | None, checked: Checked
-    ) -> None:
+    ) -> bool:
         """Saves this PC's settings, and says so in one line, which names any setting this run
         moved or removed. The file is backed up first when a person changed a setting, through
         the menu or --configure, or a setting was removed. The work that runs this holds the
-        sync's lock, so a sync's own save can't come in between."""
+        sync's lock, so a sync's own save can't come in between. Returns whether it saved."""
         backup = self.changed_by_hand or self.assigned or bool(checked.removed)
         try:
             kept = self.write_settings(settings, read, backup=backup)
         except OSError as error:
             self.status("PROBLEM", f"Could not save this PC's settings in {SETTINGS_PATH}. {error}")
-            return
+            return False
         if kept is None:
-            return
+            return False
         notes = "".join(f". {sentence}" for sentence in cleanup(checked))
         if backup:
             notes += f". Backup of the old file: {kept}" if kept else " (new file)"
         self.status("SET", f"This PC's settings: {SETTINGS_PATH}{notes}")
+        return True
+
+    def save_matched(self, settings: LocalSettings, read: dict[str, Any] | None) -> bool:
+        """Saves the answers a shared tool's folders got from its main folder, the only change
+        this run makes to this PC's settings, with no backup, since nobody changed a setting: the
+        lines saying which folders got it stand for the save's own line. Returns whether it
+        saved."""
+        try:
+            return self.write_settings(settings, read, backup=False) is not None
+        except OSError as error:
+            self.status("PROBLEM", f"Could not save this PC's settings in {SETTINGS_PATH}. {error}")
+            return False
+
+    def put_in_order(self) -> None:
+        """Puts a shared tool's folders back in order in this PC's settings, after a hand edit,
+        with no backup and no line, once it's sure only their order changes."""
+        try:
+            text = SETTINGS_PATH.read_text(encoding="utf-8-sig")
+            data = json.loads(text)
+        except (OSError, ValueError):
+            # Changed since this run read it: the next run puts it in order.
+            return
+        if not isinstance(data, dict) or not order_folders(data, self.home):
+            return
+        ordered = settings_text(data)
+        if not same_apart_from_order(text, ordered):
+            self.status(
+                "PROBLEM",
+                f"{SETTINGS_PATH} lists Codex homes out of order, and putting them in order would "
+                "change more than their order, so setup left the file as it is. Look for a key "
+                "written twice, and fix it there.",
+            )
+            return
+        try:
+            write_settings_file(SETTINGS_PATH, ordered, bom=False, backup=False)
+        except OSError as error:
+            self.status("PROBLEM", f"Could not save this PC's settings in {SETTINGS_PATH}. {error}")
 
     def write_settings(
         self, settings: LocalSettings, read: dict[str, Any] | None, *, backup: bool
@@ -511,6 +562,7 @@ class Setup:
                 return None
             merged = copy.deepcopy(now.data)
             apply_changes(merged, read or {}, wanted)
+            order_folders(merged, self.home)
             text = settings_text(merged)
         else:
             text = settings_text(wanted)
@@ -535,14 +587,15 @@ class Setup:
         default one to offer."""
         default = self.home / tool.default
         found = [default] if default.is_dir() else []
-        try:
-            entries = list(self.home.iterdir())
-        except OSError:
-            return found
+        if self.profile_entries is None:
+            try:
+                self.profile_entries = list(self.home.iterdir())
+            except OSError:
+                return found
         # The name first, so only a folder with the right name costs a look on disk.
         return found + sorted(
             f
-            for f in entries
+            for f in self.profile_entries
             if f.name.lower().startswith(tool.default + "-")
             and f.is_dir()
             and (not tool.marks or any((f / mark).is_file() for mark in tool.marks))
@@ -563,22 +616,91 @@ class Setup:
             return None
         return folder
 
-    def added_homes(self, settings: LocalSettings) -> list[Path]:
-        """Each Codex home listed by its path in codex.homes that's there."""
-        homes = [
-            Path(comparable(resolve_home(entry, self.home)))
-            for entry in listed_entries(get(settings.data, CODEX_HOMES))
-        ]
-        return [home for home in homes if home.is_dir()]
+    def known_folders(self, tool: Tool, settings: LocalSettings) -> list[Path]:
+        """Each of a tool's folders setup knows of that's there, each once: those it finds (see
+        found_folders), then the others with an entry. A shared tool's come in order, the main one
+        first (see folder_rank)."""
+        folders = self.found_folders(tool)
+        for entry in listed_entries(get(settings.data, tool.setting)):
+            folder = Path(comparable(resolve_home(entry, self.home)))
+            if folder.is_dir() and not any(same_path(folder, f) for f in folders):
+                folders.append(folder)
+        if tool.shared:
+            folders.sort(key=lambda folder: folder_rank(tool, folder, self.home))
+        return folders
 
-    def codex_homes(self, settings: LocalSettings) -> list[Path]:
-        """Every Codex home setup knows of that's there, each once: those it finds (see
-        found_folders), then those listed by their paths."""
-        homes = self.found_folders(CODEX)
-        for home in self.added_homes(settings):
-            if not any(same_path(home, found) for found in homes):
-                homes.append(home)
-        return homes
+    def entry_named(self, folder: str | Path, entries: Iterable[str]) -> str | None:
+        """The first of the entries, as written, such as those with an answer, that names this
+        folder, if any."""
+        return next(
+            (
+                entry
+                for entry in entries
+                if entry.strip() and same_path(resolve_home(entry, self.home), folder)
+            ),
+            None,
+        )
+
+    def entry_for(self, tool: Tool, settings: LocalSettings, folder: Path) -> str:
+        """The entry to write a folder's answer in: the one that names it already, with an answer
+        or not, as written, or a new one, as setup writes folders (see folder_entry)."""
+        entries = [
+            *settings.folders[tool.setting],
+            *listed_entries(get(settings.data, tool.setting)),
+        ]
+        return self.entry_named(folder, entries) or self.folder_entry(folder)
+
+    def shared_answer(
+        self, tool: Tool, settings: LocalSettings, folders: Sequence[Path] | None = None
+    ) -> tuple[bool | None, Path | None]:
+        """A shared tool's answer for all its folders, and the folder that gives it: the first
+        of the folders there, in order (see known_folders), that has an answer, which is the main
+        folder unless it has none. None, None when none has one."""
+        answers = settings.folders[tool.setting]
+        for folder in self.known_folders(tool, settings) if folders is None else folders:
+            entry = self.entry_named(folder, answers)
+            if entry is not None:
+                return answers[entry], folder
+        return None, None
+
+    def answer_every_folder(self, tool: Tool, settings: LocalSettings, answer: bool) -> None:
+        """Gives a shared tool's answer, from a person, to every one of its folders: each entry,
+        those for folders that are gone included, and each folder there without one. That replaces
+        any answer the folders got from the main one in this run, so its line goes."""
+        self.matched.pop(tool.setting, None)
+        answers = settings.folders[tool.setting]
+        for entry in answers:
+            answers[entry] = answer
+        for folder in self.known_folders(tool, settings):
+            if self.entry_named(folder, answers) is None:
+                answers[self.entry_for(tool, settings, folder)] = answer
+
+    def match_shared_answer(self, tool: Tool, settings: LocalSettings) -> bool:
+        """Gives each of a shared tool's folders that's there the shared answer (see
+        shared_answer), when its own differs or it has none, such as a new folder, or one whose
+        answer was changed by hand, and keeps a line saying so for after the save. Returns whether
+        an answer changed."""
+        folders = self.known_folders(tool, settings)
+        answer, source = self.shared_answer(tool, settings, folders)
+        if answer is None or source is None:
+            return False
+        answers = settings.folders[tool.setting]
+        changed: list[str] = []
+        for folder in folders:
+            entry = self.entry_named(folder, answers)
+            if entry is None or answers[entry] is not answer:
+                entry = entry or self.entry_for(tool, settings, folder)
+                answers[entry] = answer
+                changed.append(entry)
+        if not changed:
+            return False
+        done = "set up" if answer else "turned off"
+        self.matched[tool.setting] = (
+            f"dev-home is now {done} for {tool.name} in {and_list(changed)}, to match "
+            f"{self.entry_named(source, answers)}. {tool.name} only supports one set of skills for "
+            f"all your {tool.name} {tool.folder}s, so they share one setting."
+        )
+        return True
 
     def folder_entry(self, folder: Path) -> str:
         """How a folder is written in local-settings.json: from ~ when it's in the profile folder,
@@ -1226,12 +1348,22 @@ class Setup:
         with self.work_lock(content_root) as owned:
             if not owned:
                 raise CannotGoOnError
+            saved = False
             if save:
                 if self.should(SETTINGS_PATH, "Save this PC's settings"):
-                    self.save_settings(settings, read, checked)
+                    saved = self.save_settings(settings, read, checked)
                 else:
                     for sentence in cleanup(checked):
                         self.line(f"What if: {sentence}")
+            elif self.matched and not self.what_if:
+                saved = self.save_matched(settings, read)
+            elif order_folders(copy.deepcopy(settings.data), self.home) and not self.what_if:
+                self.put_in_order()
+            for matched in self.matched.values():
+                if self.what_if:
+                    self.line(f"What if: {matched}")
+                elif saved:
+                    self.status("SET", matched)
             self.set_up(settings, content_root, tools)
 
         # 6. The tools' settings files. A missing setting is offered as a change: shown first,
@@ -1303,7 +1435,7 @@ class Setup:
             folder = get(settings.data, "devHome.folder")
             settings.content_dir = folder if isinstance(folder, str) else ""
             settings.folders = {
-                path: folder_answers(get(settings.data, path)) for path in ANSWER_SETTINGS
+                path: folder_answers(get(settings.data, path)) for path in FOLDER_SETTINGS
             }
         return settings, read, checked
 
@@ -1434,120 +1566,79 @@ class Setup:
             if updates is not MISSING:
                 put(settings.data, AUTO_UPDATE, updates)
                 changed = True
-        changed = self.ask_about_folders(CLAUDE_CODE, settings) or changed
-        changed = self.ask_about_codex(settings) or changed
+        for tool in (CLAUDE_CODE, CODEX):
+            changed = self.ask_about_folders(tool, settings) or changed
         self.ask_about_copies(settings, content_root, first_setup=first_setup)
         return changed
 
     def ask_about_folders(self, tool: Tool, settings: LocalSettings) -> bool:
-        """Asks about each of a tool's folders that setup finds with no answer yet, in the shared
-        prompt for optional lists, a list of the tool's own, each one recommended, and keeps every
-        answer, a no included, so it's asked about once. A folder nobody has answered for isn't
-        set up: setup adds no links there and removes none. A quiet run names those folders
-        instead. Returns whether an answer came."""
+        """Asks about each of a tool's folders that setup knows of with no answer yet, and keeps
+        every answer, a no included, so it's asked about once: in the shared prompt for optional
+        lists, a list of the tool's own, each one recommended, or for a shared tool, one question
+        for them all, whose answer goes to every folder. A shared tool's folders already answered
+        give theirs to the others instead (see match_shared_answer). A folder nobody has answered
+        for isn't set up: setup adds no links there and removes none. A quiet run names those
+        folders instead. Returns whether an answer came."""
         answers = settings.folders[tool.setting]
-        unanswered = [f for f in self.found_folders(tool) if not self.listed(f, list(answers))]
+        known = self.known_folders(tool, settings)
+        if tool.shared and self.match_shared_answer(tool, settings):
+            return False
+        unanswered = [f for f in known if self.entry_named(f, answers) is None]
         if not unanswered:
             return False
-        kind = f"{tool.name} {tool.folder}"
         if self.can_ask:
-            answer = self.choose_from_list(
-                f"{kind}s setup hasn't asked about yet, one for each {tool.account} account:",
-                f"Set up {tool.name} in them with dev-home's skills and rules?",
-                [console.ListItem(str(f), True, folder_question(tool, f)) for f in unanswered],
-            )
-            if answer is not None:
-                for folder in unanswered:
-                    answers[self.folder_entry(folder)] = answer.answers[str(folder)]
-                return True
-            which = " and ".join(str(f) for f in unanswered)
-            self.status(
-                "PROBLEM",
-                f"No answer came about {which}, so setup left them as they are. Run setup.py "
-                "again to answer.",
-            )
+            if tool.shared:
+                shared = self.ask_codex(known, None)
+                if shared is not None:
+                    self.answer_every_folder(tool, settings, shared)
+                    return True
+                which = f"{tool.name}, so setup left it as it is"
+            else:
+                answer = self.choose_from_list(
+                    f"{tool.name} {tool.folder}s setup hasn't asked about yet, one for each "
+                    f"{tool.account} account:",
+                    f"Set up {tool.name} in them with dev-home's skills and rules?",
+                    [console.ListItem(str(f), True, folder_question(tool, f)) for f in unanswered],
+                )
+                if answer is not None:
+                    for folder in unanswered:
+                        entry = self.entry_for(tool, settings, folder)
+                        answers[entry] = answer.answers[str(folder)]
+                    return True
+                which = (
+                    " and ".join(str(f) for f in unanswered) + ", so setup left them as they are"
+                )
+            self.status("PROBLEM", f"No answer came about {which}. Run setup.py again to answer.")
             return False
         # The session's own folder, when it's in the profile folder under another name or outside
         # it, comes only from the tool's variable, which a terminal usually doesn't have.
-        found = self.profile_folders(tool)
-        for folder in unanswered:
-            if not any(same_path(folder, f) for f in found):
-                self.status(
-                    "PROBLEM",
-                    f"Setup hasn't asked yet whether to set up the {kind} {folder}, the session's "
-                    f"own, in {tool.variable}, so it leaves it as it is. Setup in a terminal "
-                    f"usually can't see it: to set it up, run {by_hand('setup.py')} --configure "
-                    f"'{tool.setting}+={self.folder_entry(folder)}'.",
-                )
-        asked_in_terminal = [f for f in unanswered if any(same_path(f, g) for g in found)]
-        if asked_in_terminal:
-            which = (
-                f"the {kind} {asked_in_terminal[0]}, so it leaves it as it is"
-                if len(asked_in_terminal) == 1
-                else f"these {kind}s: "
-                + ", ".join(str(f) for f in asked_in_terminal)
-                + ", so it leaves them as they are"
-            )
+        visible = self.profile_folders(tool) + [
+            f for f in known if self.listed(f, listed_entries(get(settings.data, tool.setting)))
+        ]
+        unseen = [f for f in unanswered if not any(same_path(f, v) for v in visible)]
+        # A shared tool's yes covers every folder.
+        set_up = f"set up {tool.name}" if tool.shared else "set it up"
+        for folder in unseen:
             self.status(
                 "PROBLEM",
-                f"Setup hasn't asked yet whether to set up {which}. Run {by_hand('setup.py')} in "
+                f"Setup hasn't asked yet {unasked_text(tool, [folder], session=True)}. Setup in a "
+                f"terminal usually can't see it: to {set_up}, run {by_hand('setup.py')} "
+                f"--configure '{tool.setting}+={self.folder_entry(folder)}'.",
+            )
+        seen = [f for f in unanswered if f not in unseen]
+        if seen:
+            self.status(
+                "PROBLEM",
+                f"Setup hasn't asked yet {unasked_text(tool, seen)}. Run {by_hand('setup.py')} in "
                 "a terminal, and it asks.",
             )
         return False
 
-    def ask_about_codex(self, settings: LocalSettings) -> bool:
-        """Asks whether to set up Codex, in every Codex home, once setup finds one and Codex isn't
-        answered yet, and keeps the answer, a no included, so it's asked about once. Until it's
-        answered, setup adds no links and removes none. A quiet run names the homes instead.
-        Returns whether an answer came."""
-        if setting_value(settings.data, CODEX_SETUP)[1]:
-            return False
-        homes = self.codex_homes(settings)
-        if not homes:
-            return False
-        if self.can_ask:
-            answer = self.ask_codex(homes, None)
-            if answer is not None:
-                put(settings.data, CODEX_SETUP, answer)
-                return True
-            self.status(
-                "PROBLEM",
-                "No answer came about Codex, so setup left it as it is. Run setup.py again to "
-                "answer.",
-            )
-            return False
-        # A home only the session's own CODEX_HOME names, which a terminal usually doesn't have.
-        visible = self.profile_folders(CODEX) + self.added_homes(settings)
-        unseen = [home for home in homes if not any(same_path(home, v) for v in visible)]
-        for home in unseen:
-            self.status(
-                "PROBLEM",
-                f"Setup hasn't asked yet whether to set up Codex, so it leaves the Codex home "
-                f"{home}, the session's own, in {CODEX.variable}, as it is. Setup in a terminal "
-                f"usually can't see it: run {by_hand('setup.py')} --configure "
-                f"'{CODEX_HOMES}+={self.folder_entry(home)}' so it can, then run "
-                f"{by_hand('setup.py')} in a terminal, and it asks.",
-            )
-        seen = [home for home in homes if home not in unseen]
-        if seen:
-            which = (
-                f"the Codex home {seen[0]} as it is"
-                if len(seen) == 1
-                else f"the Codex homes {folder_list(seen)} as they are"
-            )
-            self.status(
-                "PROBLEM",
-                f"Setup hasn't asked yet whether to set up Codex, so it leaves {which}. Run "
-                f"{by_hand('setup.py')} in a terminal, and it asks.",
-            )
-        return False
-
     def tool_folders(self, settings: LocalSettings) -> ToolFolders:
-        """Where setup sets up each tool, from the answers: each Claude Code folder answered yes,
-        and every Codex home, once Codex is answered yes."""
+        """Where setup sets up each tool, from the answers: each Claude Code folder and Codex home
+        answered yes."""
         claude_dirs = [full for _, full in self.folders_answered(CLAUDE_CODE, settings, True)]
-        codex_on = setting_value(settings.data, CODEX_SETUP)[0] is True
-        codex_homes = [comparable(home) for home in self.codex_homes(settings)] if codex_on else []
+        codex_homes = [full for _, full in self.folders_answered(CODEX, settings, True)]
         return ToolFolders(claude_dirs, codex_homes)
 
     def folders_answered(
@@ -1867,6 +1958,35 @@ CODEX_QUESTION = "Set up Codex in every Codex home with dev-home's skills and ru
 
 def folder_list(folders: Sequence[Path]) -> str:
     return ", ".join(str(folder) for folder in folders)
+
+
+def and_list(items: Sequence[str]) -> str:
+    """Items in a sentence: a, a and b, or a, b, and c."""
+    if len(items) < 3:
+        return " and ".join(items)
+    return ", ".join(items[:-1]) + ", and " + items[-1]
+
+
+def unasked_text(tool: Tool, folders: Sequence[Path], *, session: bool = False) -> str:
+    """What setup hasn't asked about a tool's folders, and that it leaves them as they are, as
+    in "Setup hasn't asked yet <this>". session marks the one folder as the session's own."""
+    if tool.shared:
+        own = f", the session's own, in {tool.variable}," if session else ""
+        which = (
+            f"the {tool.name} {tool.folder} {folders[0]}{own} as it is"
+            if len(folders) == 1
+            else f"the {tool.name} {tool.folder}s {folder_list(folders)} as they are"
+        )
+        return f"whether to set up {tool.name}, so it leaves {which}"
+    kind = f"{tool.name} {tool.folder}"
+    if session:
+        return (
+            f"whether to set up the {kind} {folders[0]}, the session's own, in {tool.variable}, "
+            "so it leaves it as it is"
+        )
+    if len(folders) == 1:
+        return f"whether to set up the {kind} {folders[0]}, so it leaves it as it is"
+    return f"whether to set up these {kind}s: {folder_list(folders)}, so it leaves them as they are"
 
 
 def skill_templates() -> list[Path]:

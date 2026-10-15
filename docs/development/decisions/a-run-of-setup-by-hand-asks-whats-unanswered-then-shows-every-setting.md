@@ -35,7 +35,7 @@ to overlook. Every folder's `setUp` is written once it's answered.
 
 Codex gets one question for every Codex home it finds, recommended: `~/.codex` once Codex has
 made it, each `~/.codex-*` folder that holds a `config.toml` or an `auth.json`, the folder in
-`CODEX_HOME`, and each listed by its path in `codex.homes`
+`CODEX_HOME`, and each other home with an entry in `codex.homes`
 ([Codex is set up in every Codex home, or in none](codex-is-set-up-in-every-codex-home-or-in-none.md)).
 Until it's answered, setup adds no links and removes none, as for a folder.
 
