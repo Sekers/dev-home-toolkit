@@ -299,6 +299,20 @@ def test_asks_for_the_dev_home_folder_when_none_is_saved(
     assert re.search(r"^SET\s+This PC's settings", out, re.MULTILINE), out
 
 
+# The question about each Claude Code folder, and about all of them at once.
+FOLDERS = (
+    r"^Set up Claude Code in them with dev-home's skills and rules\? a for all, n for none, or e "
+    r"to ask for each \[A/n/e\]: $"
+)
+
+
+def folder_question(folder: Path, hint: str = r"\[Y/n\]") -> str:
+    return (
+        rf"^Set up Claude Code in {re.escape(str(folder))} with dev-home's skills and rules\? "
+        rf"{hint}: $"
+    )
+
+
 def test_a_first_run_asks_about_updates_and_each_claude_folder(
     box: Sandbox,
     settings: Path,
@@ -307,7 +321,8 @@ def test_a_first_run_asks_about_updates_and_each_claude_folder(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     # A first run has no local-settings.json yet. Here it must keep testHomeDir, so the run gets
-    # settings with no answers instead.
+    # settings with no answers instead. Every folder setup finds is in one list, ~/.claude
+    # included, each recommended.
     code = shared_module(box, "setup")
     saved = json.loads(settings.read_text(encoding="utf-8"))
     first_run = shared_module(box, "settings").LocalSettings(
@@ -321,8 +336,10 @@ def test_a_first_run_asks_about_updates_and_each_claude_folder(
     person.answers.update(
         {
             UPDATES: "y",
-            r"\.claude-second, for another Claude account\? \[y/N\]: $": "yes",
-            r"\.claude-third, for another Claude account\? \[y/N\]: $": "n",
+            FOLDERS: "e",
+            folder_question(box.profile / ".claude"): "",
+            folder_question(second): "yes",
+            folder_question(third): "n",
             # A yes to the settings change the new folder needs.
             r"Make this change\? \[y/N\]: $": "y",
         }
@@ -340,10 +357,12 @@ def test_a_first_run_asks_about_updates_and_each_claude_folder(
         shutil.rmtree(second)
         shutil.rmtree(third)
     assert returned == 0, out
-    assert any(".claude-third, for another Claude account?" in asked for asked in person.asked)
+    assert any(re.search(FOLDERS, asked) for asked in person.asked), person.asked
+    assert re.search(r"^Claude Code folders setup hasn't asked about yet", out, re.M), out
     assert written["updates"]["installAutomatically"] is True
     # The no is kept, so the folder isn't asked about again.
     assert written["claudeCode"]["folders"] == {
+        "~/.claude": {"setUp": True},
         "~/.claude-second": {"setUp": True},
         "~/.claude-third": {"setUp": False},
     }
@@ -353,6 +372,33 @@ def test_a_first_run_asks_about_updates_and_each_claude_folder(
     assert re.search(
         r"^SET\s+Claude Code settings in \.claude-second: changed .* \(new file\)", out, re.M
     ), out
+
+
+def test_enter_at_the_list_of_claude_folders_sets_them_all_up(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Each is recommended, so a first setup is still one Enter.
+    saved = json.loads(settings.read_text(encoding="utf-8"))
+    del saved["claudeCode"]
+    write_text(settings, json.dumps(saved, indent=2) + "\n")
+    extra = box.profile / ".claude-extra"
+    write_text(extra / "settings.json", "{}\n")
+    person.answers.update({FOLDERS: "", r"Make this change\? \[y/N\]: $": "n"})
+    try:
+        setup_here(box)
+        out = capsys.readouterr().out
+        written = json.loads(settings.read_text(encoding="utf-8"))
+        linked = link_target(extra / "skills" / "handoff")
+    finally:
+        for folder in (extra / "skills", extra / "rules"):
+            for link in folder.iterdir() if folder.is_dir() else []:
+                remove_link(link)
+        shutil.rmtree(extra)
+    assert written["claudeCode"]["folders"] == {
+        "~/.claude": {"setUp": True},
+        "~/.claude-extra": {"setUp": True},
+    }, out
+    assert linked == box.generated / "skills" / "handoff", out
 
 
 def test_asks_each_question_whose_answer_isnt_saved_yet_then_never_again(
@@ -365,12 +411,8 @@ def test_asks_each_question_whose_answer_isnt_saved_yet_then_never_again(
     write_text(settings, json.dumps(saved, indent=2) + "\n")
     later = box.profile / ".claude-later"
     later.mkdir()
-    person.answers.update(
-        {
-            UPDATES: "n",
-            r"\.claude-later, for another Claude account\? \[y/N\]: $": "n",
-        }
-    )
+    # A list of one asks only its folder's question.
+    person.answers.update({UPDATES: "n", folder_question(later): "n"})
     try:
         returned = setup_here(box)
         written = json.loads(settings.read_text(encoding="utf-8"))
@@ -385,7 +427,10 @@ def test_asks_each_question_whose_answer_isnt_saved_yet_then_never_again(
     assert len(asked) == 3 and re.search(MENU, asked[-1]), asked
     assert questions == asked[:2], person.asked
     assert written["updates"]["installAutomatically"] is False
-    assert written["claudeCode"]["folders"] == {"~/.claude-later": {"setUp": False}}
+    assert written["claudeCode"]["folders"] == {
+        "~/.claude": {"setUp": True},
+        "~/.claude-later": {"setUp": False},
+    }
 
 
 def test_enter_at_the_first_updates_question_follows_the_default(
@@ -653,6 +698,7 @@ def test_at_a_console_settings_in_the_older_layout_are_set_aside_and_asked_again
             SET_ASIDE: "",
             r"^Your dev-home folder \[.*\]: $": content,
             UPDATES: "n",
+            folder_question(box.profile / ".claude"): "",
         }
     )
     try:
@@ -672,6 +718,7 @@ def test_at_a_console_settings_in_the_older_layout_are_set_aside_and_asked_again
         "testHomeDir": saved["testHomeDir"],
         "devHome": {"folder": content},
         "updates": {"installAutomatically": False},
+        "claudeCode": {"folders": {"~/.claude": {"setUp": True}}},
     }, written
 
 
@@ -1020,6 +1067,7 @@ def test_the_menu_goes_through_every_setting_with_its_answer_as_the_default(
             UPDATES: "",
             UPDATE_HOURS: ["six", "6"],
             CONTENT_HOURS: "",
+            folder_question(box.profile / ".claude"): "",
             ELSEWHERE_YES: "",
         }
     )
@@ -1032,7 +1080,8 @@ def test_the_menu_goes_through_every_setting_with_its_answer_as_the_default(
     assert "checkEveryHours" not in saved["devHome"], saved
     assert saved["devHome"]["folder"] == content, saved
     assert saved["updates"]["installAutomatically"] is False, saved
-    assert "There are no ~/.claude-* folders to set up." in out, out
+    assert saved["claudeCode"]["folders"] == {"~/.claude": {"setUp": True}}, saved
+    assert any(re.search(folder_question(box.profile / ".claude"), p) for p in person.asked)
 
 
 def test_enter_in_the_menu_keeps_a_setting_that_follows_its_default(

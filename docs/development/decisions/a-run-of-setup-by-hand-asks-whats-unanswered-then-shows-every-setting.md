@@ -26,6 +26,13 @@ the same order, its work holding the lock too, unless a sync that runs it holds 
 Setup also detects which tools a PC has, Claude Code when `~/.claude` exists and Codex when
 `~/.codex` does, instead of always setting up `~/.claude`.
 
+Every Claude Code folder setup finds is asked about, `~/.claude` included, in the shared prompt
+for optional lists, each one recommended, so a first setup is still one Enter. Setup never sets up
+a folder without an answer, the session's own included: it adds no links there and removes none,
+so a folder linked before setup asked about it keeps working until a run by hand answers. A quiet
+run names each folder nobody has answered for, on every run, since a missed work account is easy
+to overlook. Every folder's `setUp` is written once it's answered.
+
 **Why:** running setup by hand is a normal way to use dev-home-tools, so it should offer every
 setting, not only the unanswered ones. Questions first and the work after is what people expect
 from a setup program, and keeps every question in one place as the lists grow. dev-home comes
@@ -42,6 +49,13 @@ about one that changed would otherwise hold the lock while a question waits. A c
 `dev-home.json` isn't asked about again: it's committed while the lock is held, where a question
 would hold up every sync, and only a sync bringing in another copy's change can change it, which
 is rare.
+
+Asking about every folder, the default one included, means dev-home-tools does nothing the person
+may not want: an extra account is often kept apart on purpose, such as a work one; the
+`~/.claude-*` match also catches folders that aren't accounts, such as a backup; and someone who
+doesn't want their default account set up sees the choice. It's one rule for every folder. A
+folder linked before setup asked about it gets no special case: only PCs set up before this
+change are in that state, and one run by hand answers.
 
 This changes three other decisions: the menu from
 [setup.py --configure changes every setting](setup-py-configure-changes-every-setting.md) becomes
@@ -63,5 +77,16 @@ held the lock only while it saved, now runs inside the work's lock.
 - The settings files' diffs before the menu: a change made in the menu could make them wrong.
 - Holding the lock for the settings files too: asking again about a changed file would hold up
   every sync until the person answered.
+- A sync setting up a folder it finds right away, then asking to confirm: it would link dev-home
+  into a backup copy or a work account before the person says anything.
+- An off switch on the default folders: hidden from the people who need it, and two rules.
+- Leaving it to the tools' own switches for skills: the always-on rules would still load.
+- A separate dev-home per account: a different need, and a much bigger change, since one dev-home
+  per PC is filled into the generated files.
+- Writing `setUp: true` for the default folders without asking: the file would claim choices
+  nobody made, quiet runs would have to write it, and a tool uninstalled later would leave a stale
+  entry.
+- Treating a folder already linked as set up until it's answered: code kept for a state no new
+  install reaches.
 
 **Look again if:** a question comes to depend on work that setup does after the questions.

@@ -413,10 +413,9 @@ def remove_claude_folder(folder: Path) -> None:
     shutil.rmtree(folder)
 
 
-def test_the_claude_folder_in_claude_config_dir(box: Sandbox) -> None:
-    # A test profile takes it only from inside itself. One with no answer is set up anyway, so
-    # the session's account keeps working, with advice that works from a terminal, where that
-    # variable usually isn't set.
+def test_a_claude_folder_nobody_has_answered_for_isnt_set_up(box: Sandbox) -> None:
+    # Not even the session's own: setup sets up only a folder answered yes. A test profile takes
+    # the folder in CLAUDE_CONFIG_DIR only from inside itself.
     session = box.profile / ".claude-second"
     other = box.profile / "claude-alt"
     outside = box.root / "outside-claude"
@@ -426,38 +425,37 @@ def test_the_claude_folder_in_claude_config_dir(box: Sandbox) -> None:
     settings_text = read(settings_path)
     unasked = (
         r"^PROBLEM\s+Setup hasn't asked yet whether to set up the Claude Code folder "
-        r".*\.claude-second\. Run "
+        r".*\.claude-second, so it leaves it as it is\. Run .*setup\.py in a terminal, and it asks"
     )
     try:
         result = setup(box, env={"CLAUDE_CONFIG_DIR": str(outside)})
         assert not (outside / "skills").exists(), str(result)
-        # Every quiet run names a ~/.claude-* folder nobody has answered for.
+        assert not result.has_line("outside-claude"), str(result)
+        # Every quiet run names a folder setup finds that nobody has answered for.
         assert result.code == 1 and result.has_line(unasked), str(result)
         result = setup(box, env={"CLAUDE_CONFIG_DIR": str(session)})
-        assert link_target(session / "skills" / "handoff") == box.generated / "skills" / "handoff"
-        pattern = (
-            r"^PROBLEM\s+Claude Code settings in \.claude-second: .* setup hasn't asked yet "
-            r"whether to set it up\. Run setup\.py without --quiet: it asks about the folder"
-        )
-        assert result.code == 1 and result.has_line(pattern), str(result)
-        assert not result.has_line("claudeCode.folders"), str(result)
-        # A folder setup doesn't offer is added by hand, through --configure.
+        assert not (session / "skills").exists(), str(result)
+        assert result.code == 1 and result.has_line(unasked), str(result)
+        # A terminal usually has no CLAUDE_CONFIG_DIR, so a folder only it names is set up
+        # through --configure.
         result = setup(box, env={"CLAUDE_CONFIG_DIR": str(other)})
+        assert not (other / "skills").exists(), str(result)
         pattern = (
-            r"^PROBLEM\s+Claude Code settings in claude-alt: .* Run setup\.py --configure "
-            r"'claudeCode\.folders\+=~/claude-alt', then setup\.py without --quiet, and it offers"
+            r"^PROBLEM\s+Setup hasn't asked yet whether to set up the Claude Code folder "
+            r".*claude-alt, the session's own, in CLAUDE_CONFIG_DIR, so it leaves it as it is\. "
+            r".* to set it up, run .*setup\.py --configure 'claudeCode\.folders\+=~/claude-alt'\.$"
         )
         assert result.code == 1 and result.has_line(pattern), str(result)
         listed = json.loads(settings_text)
-        listed["claudeCode"] = {"folders": {"~/.claude-second": {"setUp": True}}}
+        listed["claudeCode"]["folders"]["~/.claude-second"] = {"setUp": True}
         write_text(settings_path, json.dumps(listed, indent=2) + "\n")
-        result = setup(box, env={"CLAUDE_CONFIG_DIR": str(session)})
+        result = setup(box)
+        assert link_target(session / "skills" / "handoff") == box.generated / "skills" / "handoff"
         pattern = (
             r"^PROBLEM\s+Claude Code settings in \.claude-second: .* Run setup\.py without "
             "--quiet, and it offers"
         )
         assert result.code == 1 and result.has_line(pattern), str(result)
-        assert not result.has_line("claudeCode.folders"), str(result)
         assert not result.has_line("hasn't asked"), str(result)
     finally:
         write_text(settings_path, settings_text)
@@ -466,13 +464,59 @@ def test_the_claude_folder_in_claude_config_dir(box: Sandbox) -> None:
         shutil.rmtree(outside)
 
 
+def test_a_claude_folder_with_links_but_no_answer_keeps_them_and_gets_no_new_ones(
+    box: Sandbox,
+) -> None:
+    # Such as ~/.claude on a PC set up before every folder was asked about: its links keep
+    # working, since a sync rewrites what they point to, until a run by hand answers.
+    settings_path = box.tools / "local-settings.json"
+    settings_text = read(settings_path)
+    unanswered = json.loads(settings_text)
+    del unanswered["claudeCode"]
+    write_text(settings_path, json.dumps(unanswered, indent=2) + "\n")
+    new_skill = box.content / "skills" / "unanswered-folder"
+    write_text(new_skill / "SKILL.md", "---\nname: unanswered-folder\ndescription: A test.\n---\n")
+    skills = box.profile / ".claude" / "skills"
+    try:
+        result = setup(box)
+        kept = link_target(skills / "handoff")
+        added = link_target(skills / "unanswered-folder")
+    finally:
+        write_text(settings_path, settings_text)
+        shutil.rmtree(new_skill)
+    pattern = (
+        r"^PROBLEM\s+Setup hasn't asked yet whether to set up the Claude Code folder .*\.claude, "
+    )
+    assert result.code == 1 and result.has_line(pattern), str(result)
+    assert kept == box.generated / "skills" / "handoff", str(result)
+    assert added is None, str(result)
+
+
+def test_a_profile_without_claude_code_gets_no_claude_folder(box: Sandbox) -> None:
+    # Claude Code makes ~/.claude when it first runs, which is how setup knows it's there.
+    settings_path = box.tools / "local-settings.json"
+    settings_text = read(settings_path)
+    profile = box.root / "no-claude-profile"
+    profile.mkdir()
+    other = json.loads(settings_text)
+    del other["claudeCode"]
+    other["testHomeDir"] = profile.as_posix()
+    write_text(settings_path, json.dumps(other, indent=2) + "\n")
+    try:
+        result = setup(box)
+    finally:
+        write_text(settings_path, settings_text)
+    assert result.code == 0, str(result)
+    assert not (profile / ".claude").exists(), str(result)
+
+
 def test_a_claude_folder_with_a_no_is_left_alone_even_from_a_session_there(box: Sandbox) -> None:
     session = box.profile / ".claude-declined"
     write_text(session / "settings.json", "{}\n")
     settings_path = box.tools / "local-settings.json"
     settings_text = read(settings_path)
     declined = json.loads(settings_text)
-    declined["claudeCode"] = {"folders": {"~/.claude-declined": {"setUp": False}}}
+    declined["claudeCode"]["folders"]["~/.claude-declined"] = {"setUp": False}
     write_text(settings_path, json.dumps(declined, indent=2) + "\n")
     try:
         result = setup(box, env={"CLAUDE_CONFIG_DIR": str(session)})
@@ -509,7 +553,7 @@ def test_a_folder_answered_yes_that_is_gone_is_skipped_without_a_word(box: Sandb
     settings_path = box.tools / "local-settings.json"
     settings_text = read(settings_path)
     gone = json.loads(settings_text)
-    gone["claudeCode"] = {"folders": {"~/.claude-gone": {"setUp": True}}}
+    gone["claudeCode"]["folders"]["~/.claude-gone"] = {"setUp": True}
     write_text(settings_path, json.dumps(gone, indent=2) + "\n")
     try:
         result = setup(box)
@@ -736,24 +780,28 @@ def test_removes_settings_nothing_declares_and_leaves_auto_update_out_until_answ
     del edited["updates"]
     edited["somethingNewer"] = {"kept": True}
     edited["devHome"]["typo"] = 1
-    edited["claudeCode"] = {"folders": {"~/.claude-x": {"setUp": False, "later": 1}}}
+    edited["claudeCode"]["folders"]["~/.claude-x"] = {"setUp": False, "later": 1}
     write_text(settings_kept, json.dumps(edited, indent=2) + "\n")
     edited_text = read(settings_kept)
     previewed = setup(box, "--what-if")
     assert read(settings_kept) == edited_text
-    assert previewed.has_line(r"^What if: Removed devHome\.typo, somethingNewer, "), str(previewed)
+    assert previewed.has_line(r"^What if: Removed devHome\.typo, claudeCode\.folders "), str(
+        previewed
+    )
     result = setup(box)
     saved = json.loads(read(settings_kept))
     assert saved["devHome"]["folder"] == edited["devHome"]["folder"], saved
     assert saved["testHomeDir"] == forward(box.profile), saved
     assert "somethingNewer" not in saved and "typo" not in saved["devHome"], saved
-    assert saved["claudeCode"] == {"folders": {"~/.claude-x": {"setUp": False}}}, saved
+    assert saved["claudeCode"] == {
+        "folders": {"~/.claude": {"setUp": True}, "~/.claude-x": {"setUp": False}}
+    }, saved
     assert "updates" not in saved, saved
     # One line names what went, and a backup keeps it.
     pattern = (
-        r"^SET\s+This PC's settings: .*\. Removed devHome\.typo, somethingNewer, "
-        r"claudeCode\.folders ~/\.claude-x: later: nothing declares them any more\. Backup of "
-        r"the old file: "
+        r"^SET\s+This PC's settings: .*\. Removed devHome\.typo, claudeCode\.folders "
+        r"~/\.claude-x: later, somethingNewer: nothing declares them any more\. Backup of the old "
+        r"file: "
     )
     assert result.has_line(pattern), str(result)
     backups = list(settings_kept.parent.glob("local-settings.json.bak-*"))
@@ -1304,10 +1352,13 @@ def test_configure_adds_and_removes_a_claude_folder(box: Sandbox, settings_kept:
     finally:
         remove_claude_folder(added)
     assert result.has_line(r"^SET\s+This PC's settings"), str(result)
-    assert listed == {"~/.claude-configured": {"setUp": True}}
+    assert listed == {"~/.claude": {"setUp": True}, "~/.claude-configured": {"setUp": True}}
     assert linked == box.generated / "skills" / "handoff"
     assert removed.code == 0, str(removed)
-    assert saved["claudeCode"]["folders"] == {"~/.claude-configured": {"setUp": False}}
+    assert saved["claudeCode"]["folders"] == {
+        "~/.claude": {"setUp": True},
+        "~/.claude-configured": {"setUp": False},
+    }
 
 
 def test_configure_switches_copies_then_commits_and_pushes_it(box: Sandbox) -> None:

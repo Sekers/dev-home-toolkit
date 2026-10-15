@@ -84,7 +84,7 @@ def usage() -> str:
     entries += [
         (
             f"{CLAUDE_FOLDERS}+=<folder>",
-            "Set up another Claude Code folder, such as ~/.claude-second.",
+            "Set up a Claude Code folder, such as ~/.claude or ~/.claude-second.",
         ),
         (f"{CLAUDE_FOLDERS}-=<folder>", "Stop setting one up."),
         ("skills.<skill>.preferences.<name>=true|false", "A preference a skill declares."),
@@ -190,13 +190,16 @@ def entry_for(run: "Setup", folders: dict[str, bool], folder: str | Path) -> str
 
 
 def folder_answers(run: "Setup", settings: LocalSettings) -> list[tuple[str, bool | None]]:
-    """Each Claude folder setup knows of, as written in the settings, with its answer: each
-    ~/.claude-* folder found, then any other folder with an answer, the default one included."""
+    """Each Claude Code folder setup knows of, as written in the settings, with its answer: each
+    folder setup finds, then any other folder with an answer."""
     answers: list[tuple[str, bool | None]] = []
     for folder in run.claude_folders():
         entry = entry_for(run, settings.claude_folders, folder)
         answers.append(
-            ("~/" + folder.name, None if entry is None else settings.claude_folders[entry])
+            (
+                entry or run.folder_entry(folder),
+                None if entry is None else settings.claude_folders[entry],
+            )
         )
     for entry, answer in settings.claude_folders.items():
         full = resolve_home(entry, run.home)
@@ -370,7 +373,7 @@ def set_folder(settings: LocalSettings, run: "Setup", entry: str, yes: bool) -> 
 def change_claude_folders(run: "Setup", settings: LocalSettings) -> bool:
     answers = folder_answers(run, settings)
     if not answers:
-        run.line("There are no ~/.claude-* folders to set up.")
+        run.line("Setup found no Claude Code folders.")
         return False
     changed = False
     for entry, current in answers:
@@ -382,7 +385,7 @@ def change_claude_folders(run: "Setup", settings: LocalSettings) -> bool:
                 changed = True
             continue
         answer = run.ask_claude_folder(folder, current)
-        if answer != current:
+        if answer is not None and answer != current:
             set_folder(settings, run, entry, answer)
             changed = True
     return changed

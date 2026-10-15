@@ -15,7 +15,11 @@ give" in
 - A quiet run never asks, so it names each `~/.claude-*` folder with no answer, in a line the
   agent passes on. A folder with no answer that the session runs in (`CLAUDE_CONFIG_DIR`) is
   still set up, so that account keeps working, and its settings line says that setup without
-  `--quiet` asks about it. A folder with a no is left alone, even from a session there.
+  `--quiet` asks about it. A folder with a no is left alone, even from a session there. (Later
+  changed by
+  [A run of setup by hand asks what's unanswered, then shows every setting](a-run-of-setup-by-hand-asks-whats-unanswered-then-shows-every-setting.md):
+  every Claude Code folder setup finds is asked about, `~/.claude` included, and one with no
+  answer isn't set up, the session's own included.)
 - A save keeps every key in `local-settings.json` that setup doesn't know. (Later changed by
   [Settings record answers, not just values](settings-record-answers-not-just-values.md): one
   nothing declares is removed.)
