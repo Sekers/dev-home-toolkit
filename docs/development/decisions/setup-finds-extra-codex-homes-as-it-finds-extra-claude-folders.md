@@ -4,7 +4,9 @@
 `auth.json`, and the folder `CODEX_HOME` names when setup runs from a Codex session. It asks once
 about each, and saves the answers in `codex.homes` in `local-settings.json`. A yes gets that
 home what `~/.codex` gets: the always-on rules in its `AGENTS.md`, and dev-home in its
-`config.toml`. A home elsewhere can be added by its path.
+`config.toml`. A no gets dev-home's skills hidden there
+([A Codex home answered no gets dev-home's skills hidden](a-codex-home-answered-no-gets-dev-homes-skills-hidden.md)).
+A home elsewhere can be added by its path.
 
 **Why:** Codex reads its folder from `CODEX_HOME`, which can point anywhere, and each home has its
 own `config.toml`, `AGENTS.md`, and sign-in. Every home on a PC shares `~/.agents/skills` (Codex's

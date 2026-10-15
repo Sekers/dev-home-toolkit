@@ -11,6 +11,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tomllib
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
@@ -321,6 +322,14 @@ def home_question(home: Path, hint: str = r"\[Y/n\]") -> str:
     return rf"^Set up Codex in {re.escape(str(home))} with dev-home's skills and rules\? {hint}: $"
 
 
+def skill_file(box: Sandbox, name: str) -> str:
+    """A skill's SKILL.md, as setup names it in a [[skills.config]] entry: the generated copy of
+    one of dev-home-tools' skills, or one of the person's own in dev-home."""
+    own = box.content / "skills" / name
+    folder = own if own.is_dir() else box.generated / "skills" / name
+    return (folder / "SKILL.md").as_posix()
+
+
 def test_a_first_run_asks_about_updates_each_claude_folder_and_each_codex_home(
     box: Sandbox,
     settings: Path,
@@ -367,6 +376,7 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_each_codex_home(
         allowed = json.loads((second / "settings.json").read_text(encoding="utf-8"))
         linked = link_target(second / "skills" / "handoff")
         work_rules = (work / "AGENTS.md").exists()
+        work_config = tomllib.loads((work / "config.toml").read_text(encoding="utf-8"))
     finally:
         for folder in (second / "skills", second / "rules"):
             for link in folder.iterdir() if folder.is_dir() else []:
@@ -386,11 +396,15 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_each_codex_home(
         "~/.claude-second": {"setUp": True},
         "~/.claude-third": {"setUp": False},
     }
+    # A home answered no gets no rules, and dev-home's skills, which it sees through
+    # ~/.agents/skills, are hidden there, with a record of the entries setup wrote.
+    hidden = [skill_file(box, name) for name in ("dev-home", "handoff", "knowledge", "mine")]
     assert written["codex"]["homes"] == {
         "~/.codex": {"setUp": True},
-        "~/.codex-work": {"setUp": False},
+        "~/.codex-work": {"setUp": False, "hiddenSkills": hidden},
     }
     assert not work_rules, out
+    assert work_config == {"skills": {"config": [{"path": p, "enabled": False} for p in hidden]}}
     assert written["testHomeDir"] == saved["testHomeDir"]
     assert linked == box.generated / "skills" / "handoff"
     assert len(allowed["permissions"]["additionalDirectories"]) == 2
@@ -1221,6 +1235,121 @@ def test_a_yes_to_a_codex_config_change_writes_its_toml(
 
 
 MAKE_CHANGE = r"Make this change\? \[y/N\]: $"
+
+
+def skill_entries(path: Path) -> list[str]:
+    """The path of each [[skills.config]] entry in a Codex home's config.toml."""
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    return [entry["path"] for entry in data.get("skills", {}).get("config", [])]
+
+
+def home_record(settings: Path, entry: str) -> dict[str, Any]:
+    homes = json.loads(settings.read_text(encoding="utf-8"))["codex"]["homes"]
+    found: dict[str, Any] = homes[entry]
+    return found
+
+
+def test_a_codex_home_answered_no_gets_each_of_dev_homes_skills_hidden_once(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Every Codex home reads ~/.agents/skills, so in one answered no, setup hides dev-home's
+    # skills with Codex's own switch, and records the entries it wrote. Codex's /skills menu
+    # deletes an entry to turn a skill back on, and the record keeps setup from hiding it again.
+    home = box.profile / ".codex-off"
+    config = home / "config.toml"
+    knowledge = skill_file(box, "knowledge")
+    # An entry the person wrote, which setup never touches.
+    own_entry = f"[[skills.config]]\npath = '{Path(knowledge)}'\nenabled = false\n"
+    write_text(config, f'model = "x"\n\n{own_entry}')
+    saved = json.loads(settings.read_text(encoding="utf-8"))
+    saved["codex"]["homes"]["~/.codex-off"] = {"setUp": False}
+    write_text(settings, json.dumps(saved, indent=2) + "\n")
+    later = box.content / "skills" / "later"
+    person.answers[MAKE_CHANGE] = "y"
+    try:
+        first = setup_here(box)
+        first_out = capsys.readouterr().out
+        hidden = [skill_file(box, n) for n in ("dev-home", "handoff", "mine")]
+        assert first == 0, first_out
+        assert skill_entries(config) == [str(Path(knowledge)), *hidden], first_out
+        assert home_record(settings, "~/.codex-off") == {"setUp": False, "hiddenSkills": hidden}
+        assert config.read_text(encoding="utf-8").startswith(f'model = "x"\n\n{own_entry}\n')
+
+        # The person turns handoff back on in Codex, and writes a new skill of their own.
+        text = config.read_text(encoding="utf-8")
+        handoff = skill_file(box, "handoff")
+        write_text(
+            config,
+            text.replace(f'\n[[skills.config]]\npath = "{handoff}"\nenabled = false\n', ""),
+        )
+        write_text(later / "SKILL.md", "---\nname: later\ndescription: A test.\n---\n")
+        second = setup_here(box)
+        second_out = capsys.readouterr().out
+        assert second == 0, second_out
+        newer = [*hidden, skill_file(box, "later")]
+        assert skill_entries(config) == [
+            str(Path(knowledge)),
+            skill_file(box, "dev-home"),
+            skill_file(box, "mine"),
+            skill_file(box, "later"),
+        ], second_out
+        assert home_record(settings, "~/.codex-off")["hiddenSkills"] == newer
+        assert re.search(r"needs dev-home's skills later hidden, since this home is", second_out)
+
+        # The new skill is deleted, so its entry goes, and so does its record.
+        gone = skill_file(box, "later")
+        shutil.rmtree(later)
+        third = setup_here(box)
+        third_out = capsys.readouterr().out
+        assert third == 0, third_out
+        assert gone not in skill_entries(config), third_out
+        assert home_record(settings, "~/.codex-off")["hiddenSkills"] == hidden
+        assert re.search(r"needs the \[\[skills\.config\]\] entries setup wrote for ", third_out)
+
+        # Answered yes, the home gets its config.toml lines, and setup's entries go, so the
+        # skills show again. The person's own entry stays.
+        saved = json.loads(settings.read_text(encoding="utf-8"))
+        saved["codex"]["homes"]["~/.codex-off"]["setUp"] = True
+        write_text(settings, json.dumps(saved, indent=2) + "\n")
+        fourth = setup_here(box)
+        fourth_out = capsys.readouterr().out
+        assert fourth == 0, fourth_out
+        assert skill_entries(config) == [str(Path(knowledge))], fourth_out
+        assert home_record(settings, "~/.codex-off") == {"setUp": True}, fourth_out
+        assert "writable_roots" in config.read_text(encoding="utf-8")
+        assert (home / "AGENTS.md").is_file()
+        # And with nothing left to do, nothing is offered.
+        assert setup_here(box) == 0
+        assert not re.search(r"^CHANGE\s+Codex", capsys.readouterr().out, re.M)
+    finally:
+        shutil.rmtree(home)
+        if later.exists():
+            shutil.rmtree(later)
+        setup_here(box)
+        capsys.readouterr()
+
+
+def test_a_no_to_hiding_dev_homes_skills_records_nothing(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Only an entry that's written is recorded, so the next run by hand offers it again.
+    home = box.profile / ".codex-off"
+    write_text(home / "config.toml", "")
+    saved = json.loads(settings.read_text(encoding="utf-8"))
+    saved["codex"]["homes"]["~/.codex-off"] = {"setUp": False}
+    write_text(settings, json.dumps(saved, indent=2) + "\n")
+    person.answers[MAKE_CHANGE] = "n"
+    try:
+        returned = setup_here(box)
+        out = capsys.readouterr().out
+        kept = (home / "config.toml").read_text(encoding="utf-8")
+        record = home_record(settings, "~/.codex-off")
+    finally:
+        shutil.rmtree(home)
+    assert returned == 1, out
+    assert kept == ""
+    assert record == {"setUp": False}, out
+    assert re.search(r"^PROBLEM\s+Codex config in \.codex-off: left unchanged", out, re.M), out
 
 
 def test_a_file_that_changes_after_its_change_is_shown_is_shown_again(

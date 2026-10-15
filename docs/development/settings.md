@@ -42,6 +42,10 @@ AGENTS.md's rules apply too.
 - Save `local-settings.json` only through setup's save, which holds the sync's lock while it
   reads the file again and applies only that run's changes.
 - Make a backup only when a person changes a setting, or answers are deleted.
+- A record of setup's own changes, such as `hiddenSkills` in a Codex home's entry (see
+  [A Codex home answered no gets dev-home's skills hidden](decisions/a-codex-home-answered-no-gets-dev-homes-skills-hidden.md)),
+  isn't a setting: nothing declares it, setup writes it only once the change it records is made,
+  and the checks look only at its form.
 
 ## Changing a setting later
 

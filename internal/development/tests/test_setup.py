@@ -556,6 +556,56 @@ def test_a_codex_home_nobody_has_answered_for_isnt_set_up(box: Sandbox) -> None:
             shutil.rmtree(folder)
 
 
+def test_a_sync_says_nothing_about_hiding_skills_in_a_codex_home_answered_no(
+    box: Sandbox,
+) -> None:
+    # Hiding them is cosmetic, and only a run by hand can offer it, so no sync mentions it.
+    home = box.profile / ".codex-off"
+    write_text(home / "config.toml", "")
+    settings_path = box.tools / "local-settings.json"
+    settings_text = read(settings_path)
+    declined = json.loads(settings_text)
+    declined["codex"]["homes"]["~/.codex-off"] = {"setUp": False}
+    write_text(settings_path, json.dumps(declined, indent=2) + "\n")
+    try:
+        result = setup(box)
+        config = read(home / "config.toml")
+    finally:
+        write_text(settings_path, settings_text)
+        shutil.rmtree(home)
+    assert result.code == 0, str(result)
+    assert not result.has_line("codex-off"), str(result)
+    assert config == ""
+
+
+def test_a_sync_reports_the_entries_left_in_a_codex_home_answered_yes(box: Sandbox) -> None:
+    # Such as one answered no, then yes through --configure, whose run, like a sync's, changes no
+    # settings file: the entries setup wrote while it was no still hide dev-home's skills there.
+    home = box.profile / ".codex-back"
+    handoff = (box.generated / "skills" / "handoff" / "SKILL.md").as_posix()
+    entry = f'\n[[skills.config]]\npath = "{handoff}"\nenabled = false\n'
+    configured = read(box.profile / ".codex" / "config.toml")
+    write_text(home / "config.toml", configured + entry)
+    settings_path = box.tools / "local-settings.json"
+    settings_text = read(settings_path)
+    back = json.loads(settings_text)
+    back["codex"]["homes"]["~/.codex-back"] = {"setUp": True, "hiddenSkills": [handoff]}
+    write_text(settings_path, json.dumps(back, indent=2) + "\n")
+    try:
+        result = setup(box)
+        kept = read(home / "config.toml")
+    finally:
+        write_text(settings_path, settings_text)
+        shutil.rmtree(home)
+    pattern = (
+        r"^PROBLEM\s+Codex config in \.codex-back: .*config\.toml needs the \[\[skills\.config\]\] "
+        r"entries setup wrote while this home was answered no, for handoff, removed\. Run "
+        r"setup\.py without --quiet, and it offers"
+    )
+    assert result.code == 1 and result.has_line(pattern), str(result)
+    assert kept == configured + entry
+
+
 def test_codex_homes_with_no_answer_keep_their_rules_and_links_and_get_nothing_new(
     box: Sandbox,
 ) -> None:
@@ -1453,17 +1503,27 @@ def test_configure_adds_and_removes_a_codex_home(box: Sandbox, settings_kept: Pa
         listed = json.loads(read(settings_kept))["codex"]["homes"]
         removed = setup_configure(box, "codex.homes-=~/codex-configured")
         saved = json.loads(read(settings_kept))
+        config = (added / "config.toml").exists()
+        again = setup(box)
         whole = setup_configure(box, "codex.homes=~/codex-configured")
     finally:
         shutil.rmtree(added)
     assert result.has_line(r"^SET\s+This PC's settings"), str(result)
     assert listed == {"~/.codex": {"setUp": True}, "~/codex-configured": {"setUp": True}}
     assert rules, str(result)
-    assert removed.code == 0, str(removed)
     assert saved["codex"]["homes"] == {
         "~/.codex": {"setUp": True},
         "~/codex-configured": {"setUp": False},
     }
+    # Hiding dev-home's skills there changes its config.toml, which only a run by hand does, so
+    # the run that answers no says so, and no sync after it does.
+    pattern = (
+        r"^PROBLEM\s+To hide dev-home's skills in the Codex home .*codex-configured, answered no, "
+        r"run .*setup\.py in a terminal: it shows the change to its config\.toml and asks\.$"
+    )
+    assert removed.code == 1 and removed.has_line(pattern), str(removed)
+    assert not config, str(removed)
+    assert again.code == 0, str(again)
     pattern = r"^PROBLEM\s+codex\.homes changes one home at a time: codex\.homes\+=<folder> sets"
     assert whole.code == 1 and whole.has_line(pattern), str(whole)
 
@@ -1776,6 +1836,47 @@ def test_codex_config_keeps_everything_else_as_toml_reads_it(box: Sandbox) -> No
     # And the check catches a change to anything else.
     other = plan.new_text.replace("network_access = true", "network_access = false")
     assert not codex.same_apart_from_change(old, other, ROOT, 65536)
+
+
+SKILL = "C:/Users/you/dev-home-tools/internal/.generated/skills/handoff/SKILL.md"
+OWN_SKILL = "C:/Users/you/dev-home/skills/mine/SKILL.md"
+
+
+def skill_entry(path: str, newline: str = "\n") -> str:
+    return newline.join(["[[skills.config]]", f'path = "{path}"', "enabled = false", ""])
+
+
+def test_codex_config_adds_and_removes_skill_entries_as_whole_lines(box: Sandbox) -> None:
+    # An entry goes with the blank line above it, and a new one goes at the end, after one.
+    codex = shared_module(box, "codex_config")
+    old = '# mine\nmodel = "x"\n\n' + skill_entry(OWN_SKILL) + '\n[mcp_servers.x]\ncommand = "y"\n'
+    new, reason = codex.edit_skills(old, "\n", [SKILL], [OWN_SKILL])
+    assert reason == "", reason
+    assert new == '# mine\nmodel = "x"\n\n[mcp_servers.x]\ncommand = "y"\n\n' + skill_entry(SKILL)
+
+
+def test_codex_config_removes_an_entry_by_any_spelling_of_its_path(box: Sandbox) -> None:
+    # Codex writes the path it resolved, with backslashes, and keeps the file's line breaks.
+    codex = shared_module(box, "codex_config")
+    written = OWN_SKILL.replace("/", "\\\\").upper()
+    old = 'model = "x"\r\n\r\n' + skill_entry(written, "\r\n") + "\r\n" + skill_entry(SKILL, "\r\n")
+    new, reason = codex.edit_skills(old, "\r\n", [], [OWN_SKILL])
+    assert reason == "", reason
+    assert new == 'model = "x"\r\n\r\n' + skill_entry(SKILL, "\r\n")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        '[skills]\nconfig = [{ path = "x", enabled = false }]\n',
+        "skills.config = []\n",
+        '[skills.config]\npath = "x"\nenabled = false\n',
+    ],
+    ids=["an inline list", "a dotted key", "a table, not a list of them"],
+)
+def test_codex_config_refuses_skill_entries_in_another_form(box: Sandbox, text: str) -> None:
+    new, reason = shared_module(box, "codex_config").edit_skills(text, "\n", [SKILL], [])
+    assert new is None and "in a form setup does not edit" in reason, reason
 
 
 def test_claude_settings_refuses_half_a_character(box: Sandbox) -> None:

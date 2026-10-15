@@ -128,6 +128,11 @@ CODEX = Tool(
 )
 TOOLS = (CLAUDE_CODE, CODEX)
 FOLDER_SETTINGS = tuple(tool.setting for tool in TOOLS)
+# In a Codex home's entry, the SKILL.md path of each [[skills.config]] entry setup wrote there to
+# hide one of dev-home's skills, while the home is answered no. It's setup's record of its own
+# changes, not an answer, so a skill turned back on through Codex's menu, which deletes the entry,
+# isn't hidden again.
+HIDDEN_SKILLS = "hiddenSkills"
 
 
 def get(data: object, path: str, default: object = None) -> Any:
@@ -467,7 +472,10 @@ def check_settings(
                     wrong(where, entry, "a JSON object", "not answered yet")
                     continue
                 for entry_key, answer in list(entry.items()):
-                    if entry_key != "setUp":
+                    if entry_key == HIDDEN_SKILLS and path == CODEX_HOMES:
+                        if not is_path_list(answer):
+                            wrong(f"{where}: {entry_key}", answer, "a list of paths", "none")
+                    elif entry_key != "setUp":
                         remove(entry, entry_key, f"{where}: {entry_key}")
                     elif not isinstance(answer, bool):
                         wrong(f"{where}: setUp", answer, "true or false", "not answered yet")
@@ -549,6 +557,49 @@ class LocalSettings:
 def answered(folders: dict[str, bool], answer: bool) -> list[str]:
     """The folders with that answer, as written."""
     return [folder for folder, setup in folders.items() if setup is answer]
+
+
+def is_path_list(value: object) -> bool:
+    return isinstance(value, list) and all(isinstance(p, str) and p.strip() for p in value)
+
+
+def home_entry(data: dict[str, Any], entry: str) -> dict[str, Any] | None:
+    """A Codex home's entry in codex.homes, by its name as written, which may hold a dot."""
+    homes = get(data, CODEX_HOMES)
+    found = homes.get(entry) if isinstance(homes, dict) else None
+    return found if isinstance(found, dict) else None
+
+
+def hidden_skills(data: dict[str, Any], entry: str) -> list[str]:
+    """The SKILL.md paths of the [[skills.config]] entries setup wrote in a Codex home, as its entry
+    records them, or none when it records none it can use."""
+    found = home_entry(data, entry)
+    paths = found.get(HIDDEN_SKILLS) if found is not None else None
+    return list(paths) if isinstance(paths, list) and is_path_list(paths) else []
+
+
+def set_hidden_skills(data: dict[str, Any], entry: str, paths: list[str]) -> None:
+    """Records the SKILL.md paths of the [[skills.config]] entries setup wrote in a Codex home, in
+    its entry, which is made when it's missing. With none, the record goes, and so does an entry
+    or group it leaves empty."""
+    found = home_entry(data, entry)
+    if found is None:
+        if not paths:
+            return
+        homes = get(data, CODEX_HOMES)
+        if not isinstance(homes, dict):
+            put(data, CODEX_HOMES, {})
+            homes = get(data, CODEX_HOMES)
+        found = homes[entry] = {}
+    if paths:
+        found[HIDDEN_SKILLS] = list(paths)
+        return
+    found.pop(HIDDEN_SKILLS, None)
+    if not found:
+        homes = get(data, CODEX_HOMES)
+        del homes[entry]
+        if not homes:
+            remove_path(data, CODEX_HOMES)
 
 
 def load_local_settings() -> LocalSettings | None:

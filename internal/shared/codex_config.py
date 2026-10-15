@@ -1,13 +1,19 @@
 """Codex's config.toml: whether it lets Codex write to dev-home and read long AGENTS.md files, and
-planning the change that does both. Python can read TOML but not write it, and a rewrite would
-lose the person's comments and layout, so the change is made as whole-line insertions and edits
-by a reader that follows only the TOML it needs, and refuses anything else."""
+planning the change that does both; and the [[skills.config]] entries that hide a skill in that
+Codex home, which setup adds and removes. Python can read TOML but not write it, and a rewrite
+would lose the person's comments and layout, so each change is made as whole-line insertions,
+edits, and removals by a reader that follows only the TOML it needs, and refuses anything else."""
 
+import copy
+import json
 import re
 import tomllib
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
+from .paths import same_path
 from .settings_files import Plan, read_settings_file, to_lines
 
 MULTI_LINE_STRING = re.compile(r"'''|\"\"\"")
@@ -395,3 +401,137 @@ def same_apart_from_change(
     if not new_sandbox and "sandbox_workspace_write" not in old:
         del new["sandbox_workspace_write"]
     return old == new
+
+
+# [[skills.config]]: each entry names a skill by its SKILL.md path, or by its name, and turns it on
+# or off in this Codex home. Codex's own /skills menu adds one with enabled = false to turn a skill
+# off, and deletes it to turn the skill back on (Codex's source, rust-v0.162.1). It matches a path
+# after resolving links, so a skill reached through a junction is named by any path to its file.
+SKILLS_CONFIG = "skills.config"
+
+
+def skill_entry_paths(text: str) -> list[str] | None:
+    """The path each [[skills.config]] entry names, in order, leaving out any that names a skill
+    by its name instead, or None when the text isn't TOML that names them in a form setup reads."""
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return None
+    entries = config_entries(data)
+    if entries is None:
+        return None
+    return [entry["path"] for entry in entries if isinstance(entry.get("path"), str)]
+
+
+def config_entries(data: dict[str, Any]) -> list[dict[str, Any]] | None:
+    """The [[skills.config]] entries as TOML reads them, none when there are none, or None when
+    skills or its config isn't in the form Codex reads."""
+    skills = data.get("skills", {})
+    if not isinstance(skills, dict):
+        return None
+    entries = skills.get("config", [])
+    if not isinstance(entries, list) or not all(isinstance(entry, dict) for entry in entries):
+        return None
+    return entries
+
+
+def without_empty_skills(data: dict[str, Any]) -> dict[str, Any]:
+    """The settings without an empty skills.config, or a skills table it leaves empty, which mean
+    the same to Codex as none."""
+    skills = data.get("skills")
+    if isinstance(skills, dict):
+        if skills.get("config") == []:
+            del skills["config"]
+        if not skills:
+            del data["skills"]
+    return data
+
+
+def edit_skills(
+    text: str, newline: str, hide: Sequence[str], unhide: Sequence[str]
+) -> tuple[str | None, str]:
+    """The text with a [[skills.config]] entry that hides each SKILL.md in hide added at the end,
+    and every entry whose path is one in unhide removed, with the blank line above it, leaving every
+    other line as it was. Returns the new text and "", or None and why setup won't make the change.
+    The new text is read again to confirm that it holds the same settings as before, apart from
+    exactly those entries."""
+    if MULTI_LINE_STRING.search(text):
+        return None, "it has multi-line strings, which setup does not edit"
+    try:
+        before = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as error:
+        return None, f"it is not valid TOML ({error})"
+    lines = to_lines(text)
+    layout = read_layout(lines)
+    if layout.reason:
+        return None, layout.reason
+    entries = config_entries(before)
+    if entries is None:
+        return None, "it sets skills or skills.config in a form setup does not edit"
+
+    # Each entry in the form Codex writes, one [[skills.config]] table each, and nothing else that
+    # sets skills.config, so the tables and the entries TOML reads match one for one, in order.
+    def spelled_as_config(name: str) -> bool:
+        plain = re.sub(r"[\s\"']", "", name).lower()
+        return plain == SKILLS_CONFIG or plain.startswith(SKILLS_CONFIG + ".")
+
+    tables = [h for h in layout.headers if h.is_array and h.name == SKILLS_CONFIG]
+    other_tables = [h for h in layout.headers if spelled_as_config(h.name) and h not in tables]
+    other_keys = [
+        key
+        for key in layout.keys
+        if (key.table == "" and names_key("skills", key))
+        or (key.table == "skills" and names_key("config", key))
+    ]
+    if other_tables or other_keys or len(tables) != len(entries):
+        return None, "it sets skills.config in a form setup does not edit"
+
+    removed: set[int] = set()
+    gone: list[int] = []
+    for index, (header, entry) in enumerate(zip(tables, entries, strict=True)):
+        path = entry.get("path")
+        if not (isinstance(path, str) and any(same_path(path, p) for p in unhide)):
+            continue
+        gone.append(index)
+        after_header = [h.line for h in layout.headers if h.line > header.line]
+        next_line = min(after_header, default=len(lines))
+        ends = [k.end for k in layout.keys if header.line < k.start < next_line]
+        start, end = header.line, max(ends, default=header.line)
+        removed.update(range(start, end + 1))
+        if start > 0 and not lines[start - 1].strip():
+            removed.add(start - 1)
+        elif start == 0 and end + 1 < len(lines) and not lines[end + 1].strip():
+            removed.add(end + 1)
+
+    # Each line kept keeps its own line break, so it stays byte for byte as it was.
+    breaks = re.findall(r"\r?\n", text)
+    out: list[str] = []
+    last = ""
+    for index, line in enumerate(lines):
+        if index in removed:
+            continue
+        out.append(line + (breaks[index] if index < len(breaks) else ""))
+        last = line
+    for path in hide:
+        if out and not out[-1].endswith("\n"):
+            out.append(newline)
+        if out and last.strip():
+            out.append(newline)
+        block = ["[[skills.config]]", f"path = {json.dumps(path)}", "enabled = false"]
+        out.extend(line + newline for line in block)
+        last = block[-1]
+    new_text = "".join(out)
+
+    # Check: the new text must read as the old one did, with those entries gone and the new ones
+    # last.
+    expected = copy.deepcopy(before)
+    kept = [entry for index, entry in enumerate(entries) if index not in gone]
+    kept += [{"path": path, "enabled": False} for path in hide]
+    expected.setdefault("skills", {})["config"] = kept
+    try:
+        after = tomllib.loads(new_text)
+    except tomllib.TOMLDecodeError:
+        return None, "a check of the planned change failed"
+    if without_empty_skills(after) != without_empty_skills(expected):
+        return None, "a check of the planned change failed (read as TOML)"
+    return new_text, ""

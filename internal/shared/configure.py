@@ -504,6 +504,10 @@ def assign(run: "Setup", settings: LocalSettings, text: str) -> bool:
         if operator == "+=" and not full.is_dir():
             raise SettingError(f"There is no {kind} at {full}.")
         set_folder(settings, run, tool, value, operator == "+=")
+        if tool is CODEX and operator == "-=":
+            # Hiding dev-home's skills there changes its config.toml, which only a run by hand
+            # does, so this run says so.
+            run.declined_home = full
     old_text, new_text = local_settings_text(before), local_settings_text(settings)
     if old_text == new_text:
         status_line("OK", f"{name} is already set that way, so nothing changed.")

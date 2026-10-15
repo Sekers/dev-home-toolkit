@@ -19,6 +19,9 @@
    the rules. Then, with the lock let go, the settings files. Each is read again first; if it
    changed since its diff was shown, setup shows the new diff and asks again. `dev-home.json` is
    read again too, and left as it is, with a `PROBLEM`, if it changed since its change was shown.
+   Last, holding the lock again, the record of the entries setup wrote to hide dev-home's skills
+   in Codex homes answered no, which is saved only once they're written
+   ([A Codex home answered no gets dev-home's skills hidden](a-codex-home-answered-no-gets-dev-homes-skills-hidden.md)).
 
 A run with no console, such as a quiet one, asks nothing and shows no menu, and does the rest in
 the same order, its work holding the lock too, unless a sync that runs it holds the lock already.
@@ -39,7 +42,8 @@ Codex homes work the same way, in a list of their own, since
 `auth.json`, and the folder in `CODEX_HOME`, each recommended. A home answered yes gets the
 always-on rules in its `AGENTS.md`, and dev-home in its `config.toml`. Every home reads
 `~/.agents/skills`, so setup links the skills there once any home is answered yes; with none, it
-adds no links there and removes none.
+adds no links there and removes none. A home answered no gets the skills hidden
+([A Codex home answered no gets dev-home's skills hidden](a-codex-home-answered-no-gets-dev-homes-skills-hidden.md)).
 
 **Why:** running setup by hand is a normal way to use dev-home-tools, so it should offer every
 setting, not only the unanswered ones. Questions first and the work after is what people expect
