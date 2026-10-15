@@ -33,6 +33,14 @@ so a folder linked before setup asked about it keeps working until a run by hand
 run names each folder nobody has answered for, on every run, since a missed work account is easy
 to overlook. Every folder's `setUp` is written once it's answered.
 
+Codex homes work the same way, in a list of their own, since
+[Offers use the same answers](offers-use-the-same-answers.md) never mixes types in one list:
+`~/.codex` once Codex has made it, each `~/.codex-*` folder that holds a `config.toml` or an
+`auth.json`, and the folder in `CODEX_HOME`, each recommended. A home answered yes gets the
+always-on rules in its `AGENTS.md`, and dev-home in its `config.toml`. Every home reads
+`~/.agents/skills`, so setup links the skills there once any home is answered yes; with none, it
+adds no links there and removes none.
+
 **Why:** running setup by hand is a normal way to use dev-home-tools, so it should offer every
 setting, not only the unanswered ones. Questions first and the work after is what people expect
 from a setup program, and keeps every question in one place as the lists grow. dev-home comes
@@ -53,9 +61,9 @@ is rare.
 Asking about every folder, the default one included, means dev-home-tools does nothing the person
 may not want: an extra account is often kept apart on purpose, such as a work one; the
 `~/.claude-*` match also catches folders that aren't accounts, such as a backup; and someone who
-doesn't want their default account set up sees the choice. It's one rule for every folder. A
-folder linked before setup asked about it gets no special case: only PCs set up before this
-change are in that state, and one run by hand answers.
+doesn't want their default account set up sees the choice. It's one rule for every folder, and
+for both tools. A folder linked before setup asked about it gets no special case, `~/.codex`
+included: only PCs set up before this change are in that state, and one run by hand answers.
 
 This changes three other decisions: the menu from
 [setup.py --configure changes every setting](setup-py-configure-changes-every-setting.md) becomes

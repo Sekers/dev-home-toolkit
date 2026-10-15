@@ -114,6 +114,7 @@ first, and setup saves none of your answers until it's in place:
 | Clone your existing dev-home (c), create a new private one (n), or stop (s)? | Only when the dev-home folder doesn't exist yet. On your first PC, `n` creates a private repo on GitHub from the files in `templates/dev-home-starter/`. On every later PC, `c` clones it. Either way, it then asks for the repo's name; Enter accepts `dev-home`. |
 | Pull updates automatically? | Enter, or `d`, follows the default, yes: new versions of this repo install as soon as a sync finds them. `n` tells you about them instead, to install yourself, and `y` keeps yes even if a later version changes the default. See [Updates](docs/reference/scripts.md#updates). |
 | Set up Claude Code in `<folder>` with dev-home's skills and rules? | Asked once for each Claude Code folder it finds: `~\.claude`, once Claude Code has made it, and each `~\.claude-<name>`, one per extra Claude account you run with `CLAUDE_CONFIG_DIR`, including one made after your first run. Several are asked about together: Enter sets them all up, `n` none, and `e` asks about each, where Enter means yes. A no is kept, so it isn't asked again. Setup sets up no folder before you answer: when a quiet run finds one it hasn't asked about, it leaves it as it is, and the agent tells you to run setup in a terminal to answer. |
+| Set up Codex in `<home>` with dev-home's skills and rules? | The same for each Codex home it finds, in a list of their own: `~\.codex`, once Codex has made it, and each `~\.codex-<name>` that Codex has used, one per extra home you run with `CODEX_HOME`. |
 | Is dev-home in active use anywhere besides this PC? | Asked on each PC's first setup, since adding a PC is when the answer most often changes, with your dev-home's answer as the default; and whenever your dev-home has no answer yet, or you've just cloned one set to a single copy. Not asked when setup has just created your dev-home. Type `y` if another PC, virtual machine, or cloud session uses it too, and each command then checks GitHub first; or `n` if this PC is the only one, such as one replacing a PC you've retired, and syncs then check GitHub only every few hours. With no answer yet, there's no default. Setup shows the change, and after a `y` to saving it, commits and pushes `dev-home.json`, so every copy agrees. |
 
 Then it shows every setting, as `--configure` does (see below): change any, or press Enter to go
@@ -178,7 +179,8 @@ one's name is its path, which `--configure` takes too:
   a later version of dev-home-tools changes it, where a value you write stays as you wrote it.
   `--configure '<name>=default'` writes it for you.
 - `claudeCode.folders` holds each Claude Code folder with its answer, such as
-  `"~/.claude": {"setUp": true}`. Taking a folder out makes setup ask about it again, and leave it
+  `"~/.claude": {"setUp": true}`, and `codex.homes` each Codex home, such as
+  `"~/.codex": {"setUp": true}`. Taking a folder out makes setup ask about it again, and leave it
   as it is until you answer.
 - `schemaVersion` says which layout the file has. Leave it as it is: setup sets aside a file in
   an older layout and asks its questions again.
@@ -227,9 +229,9 @@ A typical day with the included skills:
     rules, and setup never touches it. But only Claude Code reads it, and only for that account
     on that PC. Move anything you want everywhere into your global rules, and take it out of
     `CLAUDE.md` so Claude doesn't read it twice.
-  - **Already have your own `~\.codex\AGENTS.md`?** Setup needs that file for the joined rules,
-    so it leaves yours alone and reports it. Move what you want to keep into your global rules,
-    delete the file, and run setup again.
+  - **Already have your own `~\.codex\AGENTS.md`, or one in another Codex home?** Setup needs
+    that file for the joined rules, so it leaves yours alone and reports it. Move what you want to
+    keep into your global rules, delete the file, and run setup again.
 - **Skills.** Create `skills/<name>/SKILL.md` in your dev-home, with standard frontmatter only:
   `name` (the same as the folder), `description`, and optionally `allowed-tools`. Run
   `py C:\Programming\dev-home-tools\setup.py --quiet` to link it, and commit it (ask an agent,
@@ -291,8 +293,8 @@ Everything beyond getting started is in the `docs/` folder:
 - **Never run `Remove-Item -Recurse`** on `~\.claude`, `~\.claude-*`, or `~\.agents`. It follows
   the links into your dev-home and deletes what's there. Remove a single link with
   `cmd /c rmdir <link>`.
-- **Edit your global rules in dev-home,** in `global-rules/global-rules.md`, never in
-  `~\.codex\AGENTS.md`, which setup rewrites.
+- **Edit your global rules in dev-home,** in `global-rules/global-rules.md`, never in a Codex
+  home's `AGENTS.md`, such as `~\.codex\AGENTS.md`, which setup rewrites.
 
 ## Troubleshooting
 

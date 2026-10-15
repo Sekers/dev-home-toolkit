@@ -313,7 +313,15 @@ def folder_question(folder: Path, hint: str = r"\[Y/n\]") -> str:
     )
 
 
-def test_a_first_run_asks_about_updates_and_each_claude_folder(
+# The same for Codex homes, which come in a list of their own.
+HOMES = FOLDERS.replace("Claude Code", "Codex")
+
+
+def home_question(home: Path, hint: str = r"\[Y/n\]") -> str:
+    return rf"^Set up Codex in {re.escape(str(home))} with dev-home's skills and rules\? {hint}: $"
+
+
+def test_a_first_run_asks_about_updates_each_claude_folder_and_each_codex_home(
     box: Sandbox,
     settings: Path,
     person: Person,
@@ -321,8 +329,9 @@ def test_a_first_run_asks_about_updates_and_each_claude_folder(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     # A first run has no local-settings.json yet. Here it must keep testHomeDir, so the run gets
-    # settings with no answers instead. Every folder setup finds is in one list, ~/.claude
-    # included, each recommended.
+    # settings with no answers instead. Every Claude Code folder setup finds is in one list,
+    # ~/.claude included, and every Codex home in another, ~/.codex included, each recommended.
+    # A ~/.codex-* folder counts only with Codex's settings or sign-in in it.
     code = shared_module(box, "setup")
     saved = json.loads(settings.read_text(encoding="utf-8"))
     first_run = shared_module(box, "settings").LocalSettings(
@@ -333,6 +342,10 @@ def test_a_first_run_asks_about_updates_and_each_claude_folder(
     third = box.profile / ".claude-third"
     second.mkdir()
     third.mkdir()
+    work = box.profile / ".codex-work"
+    plain = box.profile / ".codex-plain"
+    write_text(work / "auth.json", "{}\n")
+    plain.mkdir()
     person.answers.update(
         {
             UPDATES: "y",
@@ -340,6 +353,9 @@ def test_a_first_run_asks_about_updates_and_each_claude_folder(
             folder_question(box.profile / ".claude"): "",
             folder_question(second): "yes",
             folder_question(third): "n",
+            HOMES: "e",
+            home_question(box.profile / ".codex"): "",
+            home_question(work): "n",
             # A yes to the settings change the new folder needs.
             r"Make this change\? \[y/N\]: $": "y",
         }
@@ -350,15 +366,19 @@ def test_a_first_run_asks_about_updates_and_each_claude_folder(
         written = json.loads(settings.read_text(encoding="utf-8"))
         allowed = json.loads((second / "settings.json").read_text(encoding="utf-8"))
         linked = link_target(second / "skills" / "handoff")
+        work_rules = (work / "AGENTS.md").exists()
     finally:
         for folder in (second / "skills", second / "rules"):
             for link in folder.iterdir() if folder.is_dir() else []:
                 remove_link(link)
-        shutil.rmtree(second)
-        shutil.rmtree(third)
+        for folder in (second, third, work, plain):
+            shutil.rmtree(folder)
     assert returned == 0, out
     assert any(re.search(FOLDERS, asked) for asked in person.asked), person.asked
+    assert any(re.search(HOMES, asked) for asked in person.asked), person.asked
     assert re.search(r"^Claude Code folders setup hasn't asked about yet", out, re.M), out
+    assert re.search(r"^Codex homes setup hasn't asked about yet", out, re.M), out
+    assert ".codex-plain" not in out, out
     assert written["updates"]["installAutomatically"] is True
     # The no is kept, so the folder isn't asked about again.
     assert written["claudeCode"]["folders"] == {
@@ -366,6 +386,11 @@ def test_a_first_run_asks_about_updates_and_each_claude_folder(
         "~/.claude-second": {"setUp": True},
         "~/.claude-third": {"setUp": False},
     }
+    assert written["codex"]["homes"] == {
+        "~/.codex": {"setUp": True},
+        "~/.codex-work": {"setUp": False},
+    }
+    assert not work_rules, out
     assert written["testHomeDir"] == saved["testHomeDir"]
     assert linked == box.generated / "skills" / "handoff"
     assert len(allowed["permissions"]["additionalDirectories"]) == 2
@@ -699,6 +724,7 @@ def test_at_a_console_settings_in_the_older_layout_are_set_aside_and_asked_again
             r"^Your dev-home folder \[.*\]: $": content,
             UPDATES: "n",
             folder_question(box.profile / ".claude"): "",
+            home_question(box.profile / ".codex"): "",
         }
     )
     try:
@@ -719,6 +745,7 @@ def test_at_a_console_settings_in_the_older_layout_are_set_aside_and_asked_again
         "devHome": {"folder": content},
         "updates": {"installAutomatically": False},
         "claudeCode": {"folders": {"~/.claude": {"setUp": True}}},
+        "codex": {"homes": {"~/.codex": {"setUp": True}}},
     }, written
 
 
@@ -1049,7 +1076,7 @@ def test_the_menu_changes_the_setting_picked_and_keeps_a_backup(
     out = capsys.readouterr().out
     assert returned == 0, out
     assert "dev-home-tools settings" in out and "Shared by every copy of dev-home" in out, out
-    assert "Type a number from 1 to 6, or a, or press Enter to go on." in out, out
+    assert "Type a number from 1 to 7, or a, or press Enter to go on." in out, out
     saved = json.loads(backups_removed.read_text(encoding="utf-8"))
     assert saved["updates"]["installAutomatically"] is True, saved
     assert re.search(r"^SET\s+This PC's settings: .* Backup of the old file: ", out, re.M), out
@@ -1115,7 +1142,7 @@ def test_the_menu_keeps_several_copies_unless_the_others_are_retired(
 ) -> None:
     person.answers.update(
         {
-            MENU: ["6", ""],
+            MENU: ["7", ""],
             ELSEWHERE_YES: "n",
             RETIRED: "n",
         }
@@ -1188,7 +1215,9 @@ def test_a_yes_to_a_codex_config_change_writes_its_toml(
     assert returned == 0, out
     assert changed.startswith('model = "x"\nproject_doc_max_bytes = 65536\n'), changed
     assert f"writable_roots = ['{box.content}']" in changed, changed
-    assert re.search(r"^SET\s+Codex config: changed .* Backup of the old file: ", out, re.M), out
+    assert re.search(
+        r"^SET\s+Codex config in \.codex: changed .* Backup of the old file: ", out, re.M
+    ), out
 
 
 MAKE_CHANGE = r"Make this change\? \[y/N\]: $"

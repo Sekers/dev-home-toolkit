@@ -28,16 +28,20 @@ from .paths import comparable, forward, is_inside, resolve_home, same_path, unsa
 from .settings import (
     AUTO_UPDATE,
     BY_PATH,
-    CLAUDE_FOLDERS,
+    CLAUDE_CODE,
+    CODEX,
     DEFAULT_HOURS,
     DEV_HOME_SETTINGS,
+    FOLDER_SETTINGS,
     MISSING,
     SETTINGS,
     SETTINGS_PATH,
     STATE,
+    TOOLS,
     TOOLS_ROOT,
     LocalSettings,
     Setting,
+    Tool,
     find_skill,
     get,
     local_settings_text,
@@ -52,7 +56,9 @@ from .settings import (
 if TYPE_CHECKING:
     from .setup import Setup
 
-NAMES = (*(setting.path for setting in SETTINGS), CLAUDE_FOLDERS, "multiMachine")
+NAMES = (*(setting.path for setting in SETTINGS), *FOLDER_SETTINGS, "multiMachine")
+# Each tool by the name of its folders' setting.
+TOOL_FOR = {tool.setting: tool for tool in TOOLS}
 # A name is a path, which may hold dots and, in a skill's name, hyphens. The shortest name that
 # leaves an operator after it, so claudeCode.folders-=<folder> reads as -=.
 ASSIGNMENT = re.compile(r"([A-Za-z][\w.-]*?)(\+=|-=|=)(.*)", re.DOTALL)
@@ -81,12 +87,16 @@ def usage() -> str:
     entries = [
         (f"{setting.path}={PLACEHOLDERS[setting.type]}", setting.help) for setting in SETTINGS
     ]
+    for tool in TOOLS:
+        entries += [
+            (
+                f"{tool.setting}+=<folder>",
+                f"Set up a {tool.name} {tool.folder}, such as ~/{tool.default} or "
+                f"~/{tool.default}-second.",
+            ),
+            (f"{tool.setting}-=<folder>", "Stop setting one up."),
+        ]
     entries += [
-        (
-            f"{CLAUDE_FOLDERS}+=<folder>",
-            "Set up a Claude Code folder, such as ~/.claude or ~/.claude-second.",
-        ),
-        (f"{CLAUDE_FOLDERS}-=<folder>", "Stop setting one up."),
         ("skills.<skill>.preferences.<name>=true|false", "A preference a skill declares."),
         (
             "multiMachine=true|false",
@@ -189,33 +199,36 @@ def entry_for(run: "Setup", folders: dict[str, bool], folder: str | Path) -> str
     )
 
 
-def folder_answers(run: "Setup", settings: LocalSettings) -> list[tuple[str, bool | None]]:
-    """Each Claude Code folder setup knows of, as written in the settings, with its answer: each
+def folder_answers(
+    run: "Setup", settings: LocalSettings, tool: Tool
+) -> list[tuple[str, bool | None]]:
+    """Each of a tool's folders setup knows of, as written in the settings, with its answer: each
     folder setup finds, then any other folder with an answer."""
+    saved = settings.folders[tool.setting]
     answers: list[tuple[str, bool | None]] = []
-    for folder in run.claude_folders():
-        entry = entry_for(run, settings.claude_folders, folder)
-        answers.append(
-            (
-                entry or run.folder_entry(folder),
-                None if entry is None else settings.claude_folders[entry],
-            )
-        )
-    for entry, answer in settings.claude_folders.items():
+    for folder in run.found_folders(tool):
+        entry = entry_for(run, saved, folder)
+        answers.append((entry or run.folder_entry(folder), None if entry is None else saved[entry]))
+    for entry, answer in saved.items():
         full = resolve_home(entry, run.home)
         if not any(same_path(full, resolve_home(name, run.home)) for name, _ in answers):
             answers.append((entry, answer))
     return answers
 
 
-def overview(run: "Setup", settings: LocalSettings) -> list[str]:
-    """Every setting and its value, numbered as the menu numbers them."""
+def folders_text(run: "Setup", settings: LocalSettings, tool: Tool) -> str:
+    """A tool's folders as the menu shows them, each with its answer."""
     words = {True: "yes", False: "no", None: "not asked yet"}
     folders = ", ".join(
         f"{name}: {words[answer]}"
         + ("" if Path(resolve_home(name, run.home)).is_dir() else " (not found)")
-        for name, answer in folder_answers(run, settings)
+        for name, answer in folder_answers(run, settings, tool)
     )
+    return folders or "none found"
+
+
+def overview(run: "Setup", settings: LocalSettings) -> list[str]:
+    """Every setting and its value, numbered as the menu numbers them."""
     answer, found = copies_answer(settings)
     if run.wanted_copies is not None:
         copies = "several" if run.wanted_copies else "one"
@@ -231,7 +244,10 @@ def overview(run: "Setup", settings: LocalSettings) -> list[str]:
         (setting.label, values.get(setting.path) or setting_text(settings, setting.path))
         for setting in SETTINGS
     ]
-    this_pc.append(("Claude Code folders to set up", folders or "none found"))
+    this_pc += [
+        (f"{tool.name} {tool.folder}s to set up", folders_text(run, settings, tool))
+        for tool in TOOLS
+    ]
     shared = [("Copies of dev-home in active use", copies)]
     width = max(len(label) for label, _ in this_pc + shared) + 2
 
@@ -273,9 +289,9 @@ def menu(run: "Setup", settings: LocalSettings) -> bool:
         "devHome.checkEveryHours": change_content_hours,
     }
     # Numbered as overview numbers the rows: dev-home-tools' own settings in the order
-    # setting-definitions.json has them, then the folders, then the shared setting.
+    # setting-definitions.json has them, then each tool's folders, then the shared setting.
     order = [changers[setting.path] for setting in SETTINGS]
-    order += [change_claude_folders, change_copies]
+    order += [change_claude_folders, change_codex_homes, change_copies]
     steps = {str(number): step for number, step in enumerate(order, 1)}
     changed = False
     while True:
@@ -364,16 +380,18 @@ def change_content_hours(run: "Setup", settings: LocalSettings) -> bool:
     )
 
 
-def set_folder(settings: LocalSettings, run: "Setup", entry: str, yes: bool) -> None:
-    """Saves a Claude folder's answer, in the entry that already names it when there is one."""
-    found = entry_for(run, settings.claude_folders, resolve_home(entry, run.home))
-    settings.claude_folders[found or entry] = yes
+def set_folder(settings: LocalSettings, run: "Setup", tool: Tool, entry: str, yes: bool) -> None:
+    """Saves the answer for one of a tool's folders, in the entry that already names it when
+    there is one."""
+    saved = settings.folders[tool.setting]
+    found = entry_for(run, saved, resolve_home(entry, run.home))
+    saved[found or entry] = yes
 
 
-def change_claude_folders(run: "Setup", settings: LocalSettings) -> bool:
-    answers = folder_answers(run, settings)
+def change_folders(run: "Setup", settings: LocalSettings, tool: Tool) -> bool:
+    answers = folder_answers(run, settings, tool)
     if not answers:
-        run.line("Setup found no Claude Code folders.")
+        run.line(f"Setup found no {tool.name} {tool.folder}s.")
         return False
     changed = False
     for entry, current in answers:
@@ -381,14 +399,22 @@ def change_claude_folders(run: "Setup", settings: LocalSettings) -> bool:
         if not folder.is_dir():
             # A folder that's gone keeps its answer, in case it comes back, until it's removed.
             if run.choose(f"{folder} no longer exists. Remove it from the settings?", False):
-                del settings.claude_folders[entry]
+                del settings.folders[tool.setting][entry]
                 changed = True
             continue
-        answer = run.ask_claude_folder(folder, current)
+        answer = run.ask_folder(tool, folder, current)
         if answer is not None and answer != current:
-            set_folder(settings, run, entry, answer)
+            set_folder(settings, run, tool, entry, answer)
             changed = True
     return changed
+
+
+def change_claude_folders(run: "Setup", settings: LocalSettings) -> bool:
+    return change_folders(run, settings, CLAUDE_CODE)
+
+
+def change_codex_homes(run: "Setup", settings: LocalSettings) -> bool:
+    return change_folders(run, settings, CODEX)
 
 
 def change_copies(run: "Setup", settings: LocalSettings) -> bool:
@@ -429,15 +455,16 @@ def assign(run: "Setup", settings: LocalSettings, text: str) -> bool:
     name, operator, value = match.group(1), match.group(2), match.group(3).strip()
     if name not in NAMES and not name.startswith("skills."):
         raise SettingError(f"There is no setting named {name}.")
-    if name == CLAUDE_FOLDERS and operator == "=":
+    tool = TOOL_FOR.get(name)
+    if tool is not None and operator == "=":
         raise SettingError(
-            f"{CLAUDE_FOLDERS} changes one folder at a time: {CLAUDE_FOLDERS}+=<folder> sets one "
-            f"up, and {CLAUDE_FOLDERS}-=<folder> stops."
+            f"{name} changes one {tool.folder} at a time: {name}+=<folder> sets one up, and "
+            f"{name}-=<folder> stops."
         )
-    if name != CLAUDE_FOLDERS and operator != "=":
+    if tool is None and operator != "=":
         raise SettingError(f"{name} is set with =, as in {name}=<value>.")
     before = copy.deepcopy(settings)
-    if value == "default" and name != CLAUDE_FOLDERS:
+    if value == "default" and tool is None:
         setting = None if name == "multiMachine" else declared_setting(settings, name)
         if setting is None or not setting.has_default:
             raise SettingError(f"{name} has no default, so it can't be set to default.")
@@ -469,12 +496,14 @@ def assign(run: "Setup", settings: LocalSettings, text: str) -> bool:
     elif name == "devHome.folder":
         settings.content_dir = checked_dev_home(value)
     else:
+        assert tool is not None
+        kind = f"{tool.name} {tool.folder}"
         if not value:
-            raise SettingError("Name the Claude Code folder, such as ~/.claude-second.")
+            raise SettingError(f"Name the {kind}, such as ~/{tool.default}-second.")
         full = Path(resolve_home(value, run.home))
         if operator == "+=" and not full.is_dir():
-            raise SettingError(f"There is no Claude Code folder at {full}.")
-        set_folder(settings, run, value, operator == "+=")
+            raise SettingError(f"There is no {kind} at {full}.")
+        set_folder(settings, run, tool, value, operator == "+=")
     old_text, new_text = local_settings_text(before), local_settings_text(settings)
     if old_text == new_text:
         status_line("OK", f"{name} is already set that way, so nothing changed.")

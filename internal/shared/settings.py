@@ -96,11 +96,38 @@ BY_PATH = {setting.path: setting for setting in SETTINGS}
 # say: for dev-home itself, and for dev-home-tools' updates.
 DEFAULT_HOURS = {s.path: s.default for s in SETTINGS if s.type == "hours" and s.has_default}
 AUTO_UPDATE = "updates.installAutomatically"
-# The folders each tool is set up in, each with its own answer, setUp, and the one setup sets up
-# whenever it exists, unless it's answered no.
+# The folders each tool is set up in, each with its own answer, setUp.
 CLAUDE_FOLDERS = "claudeCode.folders"
 CODEX_HOMES = "codex.homes"
-DEFAULT_FOLDERS = {CLAUDE_FOLDERS: "~/.claude", CODEX_HOMES: "~/.codex"}
+
+
+@dataclass(frozen=True)
+class Tool:
+    """A tool setup sets up in each of its folders answered yes, whose answers are saved at
+    setting: Claude Code in each Claude Code folder, and Codex in each Codex home, as each tool's
+    docs call one. default is the folder in the profile that the tool makes when it first runs;
+    an extra one is named after it, such as ~/.claude-second, one for each account, and counts
+    only when it holds one of marks, if the tool has any. variable names the folder a session of
+    the tool uses."""
+
+    name: str
+    folder: str
+    account: str
+    setting: str
+    default: str
+    variable: str
+    marks: tuple[str, ...] = ()
+
+
+CLAUDE_CODE = Tool(
+    "Claude Code", "folder", "Claude", CLAUDE_FOLDERS, ".claude", "CLAUDE_CONFIG_DIR"
+)
+# A ~/.codex-* folder Codex has used holds its settings or its sign-in.
+CODEX = Tool(
+    "Codex", "home", "Codex", CODEX_HOMES, ".codex", "CODEX_HOME", ("config.toml", "auth.json")
+)
+TOOLS = (CLAUDE_CODE, CODEX)
+FOLDER_SETTINGS = tuple(tool.setting for tool in TOOLS)
 
 
 def get(data: object, path: str, default: object = None) -> Any:
@@ -428,7 +455,7 @@ def check_settings(
     def check_folders(key: str, value: dict[str, Any]) -> None:
         for name, inner in list(value.items()):
             path = f"{key}.{name}"
-            if path not in (CLAUDE_FOLDERS, CODEX_HOMES):
+            if path not in FOLDER_SETTINGS:
                 remove(value, name, path)
                 continue
             if not isinstance(inner, dict):
@@ -444,11 +471,6 @@ def check_settings(
                         remove(entry, entry_key, f"{where}: {entry_key}")
                     elif not isinstance(answer, bool):
                         wrong(f"{where}: setUp", answer, "true or false", "not answered yet")
-                if path == CODEX_HOMES and folder != DEFAULT_FOLDERS[CODEX_HOMES]:
-                    problems.append(
-                        f"{file} has {where}, but setup sets up only "
-                        f"{DEFAULT_FOLDERS[CODEX_HOMES]} for now, so it's left alone."
-                    )
 
     def check_skills(value: dict[str, Any]) -> None:
         for skill, inner in list(value.items()):
@@ -507,16 +529,18 @@ def check_settings(
 
 @dataclass
 class LocalSettings:
-    """The settings setup asks for, with defaults for anything missing. claude_folders and
-    codex_homes hold each folder with an answer, as written, so setup asks about it only once.
-    data holds everything the file had, so a save keeps the keys setup doesn't know, and each
-    setting in the form it was saved in: setting_value reads one, such as whether automatic
-    updates are answered yet. found says the file had settings in it. test_home_dir is only ever
-    in a test sandbox's file, which the tests write; setup never adds it."""
+    """The settings setup asks for, with defaults for anything missing. folders holds, for each
+    tool's folders (CLAUDE_FOLDERS and CODEX_HOMES), each folder with an answer, as written, so
+    setup asks about it only once. data holds everything the file had, so a save keeps the keys
+    setup doesn't know, and each setting in the form it was saved in: setting_value reads one, such
+    as whether automatic updates are answered yet. found says the file had settings in it.
+    test_home_dir is only ever in a test sandbox's file, which the tests write; setup never adds
+    it."""
 
     content_dir: str = ""
-    claude_folders: dict[str, bool] = field(default_factory=dict)
-    codex_homes: dict[str, bool] = field(default_factory=dict)
+    folders: dict[str, dict[str, bool]] = field(
+        default_factory=lambda: {path: {} for path in FOLDER_SETTINGS}
+    )
     test_home_dir: str = ""
     data: dict[str, Any] = field(default_factory=dict)
     found: bool = False
@@ -548,8 +572,7 @@ def load_local_settings() -> LocalSettings | None:
     folder = get(data, "devHome.folder")
     if isinstance(folder, str):
         settings.content_dir = folder
-    settings.claude_folders = folder_answers(get(data, CLAUDE_FOLDERS))
-    settings.codex_homes = folder_answers(get(data, CODEX_HOMES))
+    settings.folders = {path: folder_answers(get(data, path)) for path in FOLDER_SETTINGS}
     if isinstance(data.get("testHomeDir"), str):
         settings.test_home_dir = data["testHomeDir"]
     return settings
@@ -592,8 +615,8 @@ def local_settings_data(settings: LocalSettings) -> dict[str, Any]:
     data.pop("schemaVersion", None)
     if settings.content_dir:
         put(data, "devHome.folder", settings.content_dir)
-    merge_answers(data, CLAUDE_FOLDERS, settings.claude_folders)
-    merge_answers(data, CODEX_HOMES, settings.codex_homes)
+    for path in FOLDER_SETTINGS:
+        merge_answers(data, path, settings.folders[path])
     if settings.test_home_dir:
         data["testHomeDir"] = settings.test_home_dir
     return {"schemaVersion": SCHEMA_VERSION, **data}

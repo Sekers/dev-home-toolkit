@@ -39,7 +39,8 @@ path, as in git config and Codex's `-c`:
   folders aren't, except the one the session runs in. A `false` is kept wherever it's written.
   (Later changed by
   [A run of setup by hand asks what's unanswered, then shows every setting](a-run-of-setup-by-hand-asks-whats-unanswered-then-shows-every-setting.md):
-  a Claude Code folder with no answer isn't set up, `~/.claude` and the session's own included.)
+  a Claude Code folder or Codex home with no answer isn't set up, `~/.claude`, `~/.codex`, and
+  the session's own included.)
   A folder answered yes that no longer exists is skipped without a word and keeps its answer, and
   the settings menu shows it as not found.
 - A skill declares its preferences in a `dev-home-skill.json` in its folder:

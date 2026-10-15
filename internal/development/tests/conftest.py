@@ -17,10 +17,11 @@ from helpers import SANDBOX_ROOT, link_target
 def scripts_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """Some tests run the scripts' code in this process, so it gets what script_env gives the
     scripts' own processes: git stops looking for a repo at the sandboxes, and the session
-    running the tests can't hand its own Claude folder to setup."""
+    running the tests can't hand its own Claude folder or Codex home to setup."""
     monkeypatch.setenv("GIT_CEILING_DIRECTORIES", SANDBOX_ROOT.as_posix())
     monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
     monkeypatch.delenv("CLAUDE_CODE_ENTRYPOINT", raising=False)
+    monkeypatch.delenv("CODEX_HOME", raising=False)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -34,7 +35,8 @@ def real_profile_untouched() -> Iterator[None]:
 
 def into_sandboxes(home: Path) -> list[str]:
     """What in the profile points into a sandbox: links to skills and rules, the folders Claude
-    Code and Codex may use, and Codex's always-on rules."""
+    Code and Codex may use, and Codex's always-on rules, in every Claude Code folder and Codex
+    home."""
     sandboxes = str(SANDBOX_ROOT.resolve()).replace("\\", "/").lower()
 
     def inside(text: str) -> bool:
@@ -43,6 +45,9 @@ def into_sandboxes(home: Path) -> list[str]:
     claude_dirs = [folder for folder in home.glob(".claude*") if folder.is_dir()]
     if os.environ.get("CLAUDE_CONFIG_DIR"):
         claude_dirs.append(Path(os.environ["CLAUDE_CONFIG_DIR"]).expanduser())
+    codex_homes = [folder for folder in home.glob(".codex*") if folder.is_dir()]
+    if os.environ.get("CODEX_HOME"):
+        codex_homes.append(Path(os.environ["CODEX_HOME"]).expanduser())
     link_folders = [home / ".agents" / "skills"]
     for claude in claude_dirs:
         link_folders += [claude / "skills", claude / "rules"]
@@ -60,13 +65,14 @@ def into_sandboxes(home: Path) -> list[str]:
         allowed = setting(json.loads, settings, "permissions", "additionalDirectories")
         if any(isinstance(folder, str) and inside(folder) for folder in allowed):
             hits.append(str(settings))
-    config = home / ".codex" / "config.toml"
-    roots = setting(tomllib.loads, config, "sandbox_workspace_write", "writable_roots")
-    if any(isinstance(root, str) and inside(root) for root in roots):
-        hits.append(str(config))
-    rules = home / ".codex" / "AGENTS.md"
-    if rules.is_file() and inside(read(rules)):
-        hits.append(str(rules))
+    for codex in codex_homes:
+        config = codex / "config.toml"
+        roots = setting(tomllib.loads, config, "sandbox_workspace_write", "writable_roots")
+        if any(isinstance(root, str) and inside(root) for root in roots):
+            hits.append(str(config))
+        rules = codex / "AGENTS.md"
+        if rules.is_file() and inside(read(rules)):
+            hits.append(str(rules))
     return hits
 
 

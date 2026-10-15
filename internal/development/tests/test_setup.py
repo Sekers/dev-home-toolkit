@@ -492,14 +492,15 @@ def test_a_claude_folder_with_links_but_no_answer_keeps_them_and_gets_no_new_one
     assert added is None, str(result)
 
 
-def test_a_profile_without_claude_code_gets_no_claude_folder(box: Sandbox) -> None:
-    # Claude Code makes ~/.claude when it first runs, which is how setup knows it's there.
+def test_a_profile_without_claude_code_or_codex_gets_neither(box: Sandbox) -> None:
+    # Each tool makes its folder, ~/.claude or ~/.codex, when it first runs, which is how setup
+    # knows it's there.
     settings_path = box.tools / "local-settings.json"
     settings_text = read(settings_path)
-    profile = box.root / "no-claude-profile"
+    profile = box.root / "no-tools-profile"
     profile.mkdir()
     other = json.loads(settings_text)
-    del other["claudeCode"]
+    del other["claudeCode"], other["codex"]
     other["testHomeDir"] = profile.as_posix()
     write_text(settings_path, json.dumps(other, indent=2) + "\n")
     try:
@@ -507,7 +508,86 @@ def test_a_profile_without_claude_code_gets_no_claude_folder(box: Sandbox) -> No
     finally:
         write_text(settings_path, settings_text)
     assert result.code == 0, str(result)
-    assert not (profile / ".claude").exists(), str(result)
+    assert sorted(entry.name for entry in profile.iterdir()) == [], str(result)
+
+
+def test_a_codex_home_nobody_has_answered_for_isnt_set_up(box: Sandbox) -> None:
+    # Not even the session's own, in CODEX_HOME. A ~/.codex-* folder counts once Codex has
+    # used it, and a test profile takes CODEX_HOME only from inside itself.
+    second = box.profile / ".codex-second"
+    other = box.profile / "codex-alt"
+    outside = box.root / "outside-codex"
+    for folder in (second, other, outside):
+        write_text(folder / "config.toml", "")
+    settings_path = box.tools / "local-settings.json"
+    settings_text = read(settings_path)
+    unasked = (
+        r"^PROBLEM\s+Setup hasn't asked yet whether to set up the Codex home .*\.codex-second, so "
+        r"it leaves it as it is\. Run .*setup\.py in a terminal, and it asks"
+    )
+    try:
+        result = setup(box, env={"CODEX_HOME": str(outside)})
+        assert not (second / "AGENTS.md").exists(), str(result)
+        assert not result.has_line("outside-codex"), str(result)
+        assert result.code == 1 and result.has_line(unasked), str(result)
+        result = setup(box, env={"CODEX_HOME": str(other)})
+        assert not (other / "AGENTS.md").exists(), str(result)
+        pattern = (
+            r"^PROBLEM\s+Setup hasn't asked yet whether to set up the Codex home .*codex-alt, the "
+            r"session's own, in CODEX_HOME, so it leaves it as it is\. .* to set it up, run "
+            r".*setup\.py --configure 'codex\.homes\+=~/codex-alt'\.$"
+        )
+        assert result.code == 1 and result.has_line(pattern), str(result)
+        listed = json.loads(settings_text)
+        listed["codex"]["homes"]["~/.codex-second"] = {"setUp": True}
+        write_text(settings_path, json.dumps(listed, indent=2) + "\n")
+        result = setup(box)
+        # A yes gets what ~/.codex gets: the rules, and an offer of the config.toml lines.
+        assert read(second / "AGENTS.md") == read(box.profile / ".codex" / "AGENTS.md")
+        pattern = (
+            r"^PROBLEM\s+Codex config in \.codex-second: .* Run setup\.py without --quiet, and it "
+            "offers"
+        )
+        assert result.code == 1 and result.has_line(pattern), str(result)
+        assert not result.has_line("hasn't asked"), str(result)
+    finally:
+        write_text(settings_path, settings_text)
+        for folder in (second, other, outside):
+            shutil.rmtree(folder)
+
+
+def test_codex_homes_with_no_answer_keep_their_rules_and_links_and_get_nothing_new(
+    box: Sandbox,
+) -> None:
+    # Such as ~/.codex on a PC set up before every home was asked about: its rules file stays as
+    # it is, and with no home answered yes, ~/.agents/skills keeps its links and gets no new one.
+    settings_path = box.tools / "local-settings.json"
+    settings_text = read(settings_path)
+    unanswered = json.loads(settings_text)
+    del unanswered["codex"]
+    write_text(settings_path, json.dumps(unanswered, indent=2) + "\n")
+    rules = box.profile / ".codex" / "AGENTS.md"
+    rules_bytes = rules.read_bytes()
+    write_text(rules, f"{MARKER}\nRules from an older run.\n")
+    new_skill = box.content / "skills" / "unanswered-home"
+    write_text(new_skill / "SKILL.md", "---\nname: unanswered-home\ndescription: A test.\n---\n")
+    skills = box.profile / ".agents" / "skills"
+    try:
+        result = setup(box)
+        kept_rules = read(rules)
+        kept = link_target(skills / "handoff")
+        added = link_target(skills / "unanswered-home")
+    finally:
+        write_text(settings_path, settings_text)
+        rules.write_bytes(rules_bytes)
+        shutil.rmtree(new_skill)
+        if link_target(box.profile / ".claude" / "skills" / "unanswered-home") is not None:
+            remove_link(box.profile / ".claude" / "skills" / "unanswered-home")
+    pattern = r"^PROBLEM\s+Setup hasn't asked yet whether to set up the Codex home .*\.codex, "
+    assert result.code == 1 and result.has_line(pattern), str(result)
+    assert kept_rules == f"{MARKER}\nRules from an older run.\n", str(result)
+    assert kept == box.generated / "skills" / "handoff", str(result)
+    assert added is None, str(result)
 
 
 def test_a_claude_folder_with_a_no_is_left_alone_even_from_a_session_there(box: Sandbox) -> None:
@@ -1127,7 +1207,8 @@ def test_configure_alone_shows_the_settings_and_how_to_change_them(
     assert result.has_line(r"^\s+2\s+Install dev-home-tools updates automatically\s+no$"), str(
         result
     )
-    assert result.has_line(r"^\s+6\s+Copies of dev-home in active use\s+several$"), str(result)
+    assert result.has_line(r"^\s+6\s+Codex homes to set up\s+~/\.codex: yes$"), str(result)
+    assert result.has_line(r"^\s+7\s+Copies of dev-home in active use\s+several$"), str(result)
     assert result.has_line(r"^\s+multiMachine=true\|false\s"), str(result)
     # A skill names a preference by its label, so the agent finds it here, with its name.
     pattern = (
@@ -1359,6 +1440,32 @@ def test_configure_adds_and_removes_a_claude_folder(box: Sandbox, settings_kept:
         "~/.claude": {"setUp": True},
         "~/.claude-configured": {"setUp": False},
     }
+
+
+def test_configure_adds_and_removes_a_codex_home(box: Sandbox, settings_kept: Path) -> None:
+    # Such as one a session's CODEX_HOME names, which setup in a terminal can't see. A home named
+    # by hand needs no config.toml or auth.json yet.
+    added = box.profile / "codex-configured"
+    added.mkdir()
+    try:
+        result = setup_configure(box, "codex.homes+=~/codex-configured")
+        rules = (added / "AGENTS.md").is_file()
+        listed = json.loads(read(settings_kept))["codex"]["homes"]
+        removed = setup_configure(box, "codex.homes-=~/codex-configured")
+        saved = json.loads(read(settings_kept))
+        whole = setup_configure(box, "codex.homes=~/codex-configured")
+    finally:
+        shutil.rmtree(added)
+    assert result.has_line(r"^SET\s+This PC's settings"), str(result)
+    assert listed == {"~/.codex": {"setUp": True}, "~/codex-configured": {"setUp": True}}
+    assert rules, str(result)
+    assert removed.code == 0, str(removed)
+    assert saved["codex"]["homes"] == {
+        "~/.codex": {"setUp": True},
+        "~/codex-configured": {"setUp": False},
+    }
+    pattern = r"^PROBLEM\s+codex\.homes changes one home at a time: codex\.homes\+=<folder> sets"
+    assert whole.code == 1 and whole.has_line(pattern), str(whole)
 
 
 def test_configure_switches_copies_then_commits_and_pushes_it(box: Sandbox) -> None:

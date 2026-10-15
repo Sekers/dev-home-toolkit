@@ -16,9 +16,9 @@ A run goes in this order, so the questions come first and the work after:
    repo's own git config, so it never works on a folder without them, such as a project's repo
    named by mistake. When dev-home can't be put in place, setup stops, and saves nothing.
 2. The questions not answered yet: whether to pull updates automatically, whether to set up each
-   Claude Code folder it finds, and how many copies of dev-home are in active use. Each is asked
-   whenever its answer isn't saved yet, not only on the first run. A no to a Claude Code folder is
-   saved too, so it's asked about once.
+   Claude Code folder and each Codex home it finds, and how many copies of dev-home are in active
+   use. Each is asked whenever its answer isn't saved yet, not only on the first run. A no to a
+   folder is saved too, so it's asked about once.
 3. At a console, the settings menu that --configure shows, so any setting can be changed.
 4. The changes to confirm: to dev-home.json, and to Claude Code's and Codex's settings files.
 5. The work, which asks nothing, and holds the sync's lock, so a sync in another session waits
@@ -56,14 +56,16 @@ what to add by hand instead.
 Run it by hand once per PC. After that, each sync runs it with --quiet, so changes to the
 skills, and skills added on another PC, reach this one.
 
-Claude Code gets the links in each folder answered yes under claudeCode.folders in
-local-settings.json. Setup offers each one it finds, in one list, each recommended: ~/.claude,
-once Claude Code has made it; each ~/.claude-* folder, one per extra Claude account; and the
-folder in CLAUDE_CONFIG_DIR. It saves a no there too. A folder nobody has answered for isn't set
-up: setup adds no links there and removes none, and a quiet run names it. Codex gets the links
-when it's installed, unless ~/.codex is answered no. A folder answered no is left alone, and one
-answered yes that no longer exists is skipped. Each link to a folder is a junction on Windows,
-which needs no Developer Mode, and a symbolic link elsewhere.
+Claude Code gets the links and rules in each folder answered yes under claudeCode.folders in
+local-settings.json, and Codex its rules and settings in each home answered yes under
+codex.homes, with the skills linked into ~/.agents/skills, which every Codex home reads. Setup
+offers each tool's folders it finds, in a list for each tool, each recommended: the default one,
+~/.claude or ~/.codex, once the tool has made it; each extra one, one per account, such as
+~/.claude-<name>, or a ~/.codex-<name> that holds a config.toml or an auth.json; and the folder in
+CLAUDE_CONFIG_DIR or CODEX_HOME. It saves a no there too. A folder nobody has answered for isn't
+set up: setup adds no links there and removes none, and a quiet run names it. A folder answered
+no is left alone, and one answered yes that no longer exists is skipped. Each link to a folder is
+a junction on Windows, which needs no Developer Mode, and a symbolic link elsewhere.
 
 The skills run their scripts with Python 3.12 or later, as internal/.python/python.exe in
 dev-home-tools' folder: a junction setup makes to the folder of a Python it finds, so the
@@ -124,10 +126,10 @@ from .programs import SYNC_HOLDS_LOCK, by_hand, find_program
 from .settings import (
     AUTO_UPDATE,
     BY_PATH,
-    CLAUDE_FOLDERS,
-    CODEX_HOMES,
-    DEFAULT_FOLDERS,
+    CLAUDE_CODE,
+    CODEX,
     DEV_HOME_SETTINGS,
+    FOLDER_SETTINGS,
     MISSING,
     SCHEMA_VERSION,
     SETTINGS_PATH,
@@ -135,6 +137,7 @@ from .settings import (
     Checked,
     LocalSettings,
     Setting,
+    Tool,
     answered,
     apply_changes,
     check_settings,
@@ -203,10 +206,10 @@ SettingsCheck = tuple[str, str] | SettingsChange
 
 @dataclass(frozen=True)
 class ToolFolders:
-    """Where setup sets up each tool: each Claude Code folder, and whether Codex is set up."""
+    """Where setup sets up each tool: each Claude Code folder, and each Codex home."""
 
     claude_dirs: list[str]
-    codex_installed: bool
+    codex_homes: list[str]
 
 
 def approval_key(path: Path) -> str:
@@ -331,10 +334,10 @@ class Setup:
         self.line("so you can look at them first and pull them with update.py.")
         return self.choose_or_default("Pull updates automatically?", BY_PATH[AUTO_UPDATE], data)
 
-    def ask_claude_folder(self, folder: Path, current: bool | None) -> bool | None:
-        """Whether to set up a Claude Code folder. Enter keeps its answer, and takes yes for one
+    def ask_folder(self, tool: Tool, folder: Path, current: bool | None) -> bool | None:
+        """Whether to set up one of a tool's folders. Enter keeps its answer, and takes yes for one
         with no answer yet. None when no answer came."""
-        return self.choose(claude_folder_question(folder), True if current is None else current)
+        return self.choose(folder_question(tool, folder), True if current is None else current)
 
     def ask_copies(self, current: bool | None) -> bool | None:
         """Whether dev-home is in active use anywhere besides this PC. With no answer yet, there's
@@ -492,37 +495,43 @@ class Setup:
             text = settings_text(wanted)
         return write_settings_file(SETTINGS_PATH, text, bom=False, backup=backup)
 
-    # Claude folders
+    # The tools' folders: Claude Code folders and Codex homes
 
-    def claude_folders(self) -> list[Path]:
-        """Each Claude Code folder setup finds, to offer: those in the profile folder (see
-        profile_claude_folders), then the session's own (see session_claude_folder)."""
-        found = self.profile_claude_folders()
-        session = self.session_claude_folder()
+    def found_folders(self, tool: Tool) -> list[Path]:
+        """Each of a tool's folders setup finds, to offer: those in the profile folder (see
+        profile_folders), then the session's own (see session_folder)."""
+        found = self.profile_folders(tool)
+        session = self.session_folder(tool)
         if session is not None and not any(same_path(session, folder) for folder in found):
             found.append(session)
         return found
 
-    def profile_claude_folders(self) -> list[Path]:
-        """The Claude Code folders in the profile folder: ~/.claude, once Claude Code has made it,
-        which is how setup knows Claude Code is on this PC, then each ~/.claude-<name> folder,
-        another Claude account, run with CLAUDE_CONFIG_DIR. A profile folder that can't be listed
-        has only ~/.claude to offer."""
-        default = self.home / ".claude"
+    def profile_folders(self, tool: Tool) -> list[Path]:
+        """A tool's folders in the profile folder: its default one, such as ~/.claude, once the
+        tool has made it, which is how setup knows the tool is on this PC, then each extra one,
+        such as ~/.claude-<name>, for another account, which the tool's variable, such as
+        CLAUDE_CONFIG_DIR, points a session to. A profile folder that can't be listed has only the
+        default one to offer."""
+        default = self.home / tool.default
         found = [default] if default.is_dir() else []
         try:
             entries = list(self.home.iterdir())
         except OSError:
             return found
+        # The name first, so only a folder with the right name costs a look on disk.
         return found + sorted(
-            f for f in entries if f.is_dir() and f.name.lower().startswith(".claude-")
+            f
+            for f in entries
+            if f.name.lower().startswith(tool.default + "-")
+            and f.is_dir()
+            and (not tool.marks or any((f / mark).is_file() for mark in tool.marks))
         )
 
-    def session_claude_folder(self) -> Path | None:
-        """The Claude Code folder in CLAUDE_CONFIG_DIR, when that's set and the folder exists: the
-        one the session running setup uses. A test profile takes it only from inside itself, so
-        the real one is never touched."""
-        value = os.environ.get("CLAUDE_CONFIG_DIR")
+    def session_folder(self, tool: Tool) -> Path | None:
+        """The folder in the tool's variable, such as CLAUDE_CONFIG_DIR, when that's set and the
+        folder exists: the one the session running setup uses. A test profile takes it only from
+        inside itself, so the real one is never touched."""
+        value = os.environ.get(tool.variable)
         if not value:
             return None
         folder = Path(comparable(resolve_home(value, self.home)))
@@ -942,14 +951,19 @@ class Setup:
         )
 
     def sync_codex_rules(
-        self, operating_template: Path, global_path: Path, values: dict[str, str], note_text: str
+        self,
+        home: Path,
+        operating_template: Path,
+        global_path: Path,
+        values: dict[str, str],
+        note_text: str,
     ) -> None:
-        """Codex reads a single always-on file, so setup writes the operating rules and the
-        person's global rules into it, joined, under one note naming both. The operating rules
-        come from their template rather than Claude Code's generated copy, which has a note of
-        its own. It replaces only a file it wrote, or a link whose target is gone."""
-        path = self.home / ".codex" / "AGENTS.md"
-        label = "Codex always-on rules"
+        """Codex reads a single always-on file in each home, so setup writes the operating rules
+        and the person's global rules into it, joined, under one note naming both. The operating
+        rules come from their template rather than Claude Code's generated copy, which has a note
+        of its own. It replaces only a file it wrote, or a link whose target is gone."""
+        path = home / "AGENTS.md"
+        label = f"Codex always-on rules in {home.name}"
         parts = [
             note_text,
             generated.render(operating_template, values).data.decode("utf-8").rstrip("\n"),
@@ -1250,8 +1264,9 @@ class Setup:
             settings.data = checked.data
             folder = get(settings.data, "devHome.folder")
             settings.content_dir = folder if isinstance(folder, str) else ""
-            settings.claude_folders = folder_answers(get(settings.data, CLAUDE_FOLDERS))
-            settings.codex_homes = folder_answers(get(settings.data, CODEX_HOMES))
+            settings.folders = {
+                path: folder_answers(get(settings.data, path)) for path in FOLDER_SETTINGS
+            }
         return settings, read, checked
 
     # dev-home first
@@ -1381,30 +1396,32 @@ class Setup:
             if updates is not MISSING:
                 put(settings.data, AUTO_UPDATE, updates)
                 changed = True
-        changed = self.ask_about_claude_folders(settings) or changed
+        # A list for each tool: one list never mixes two kinds of item.
+        for tool in (CLAUDE_CODE, CODEX):
+            changed = self.ask_about_folders(tool, settings) or changed
         self.ask_about_copies(settings, content_root, first_setup=first_setup)
         return changed
 
-    def ask_about_claude_folders(self, settings: LocalSettings) -> bool:
-        """Asks about each Claude Code folder setup finds with no answer yet, in the shared prompt
-        for optional lists, each one recommended, and keeps every answer, a no included, so it's
-        asked about once. A folder nobody has answered for isn't set up: setup adds no links there
-        and removes none. A quiet run names those folders instead. Returns whether an answer
-        came."""
-        unanswered = [
-            f for f in self.claude_folders() if not self.listed(f, list(settings.claude_folders))
-        ]
+    def ask_about_folders(self, tool: Tool, settings: LocalSettings) -> bool:
+        """Asks about each of a tool's folders that setup finds with no answer yet, in the shared
+        prompt for optional lists, a list of the tool's own, each one recommended, and keeps every
+        answer, a no included, so it's asked about once. A folder nobody has answered for isn't
+        set up: setup adds no links there and removes none. A quiet run names those folders
+        instead. Returns whether an answer came."""
+        answers = settings.folders[tool.setting]
+        unanswered = [f for f in self.found_folders(tool) if not self.listed(f, list(answers))]
         if not unanswered:
             return False
+        kind = f"{tool.name} {tool.folder}"
         if self.can_ask:
             answer = self.choose_from_list(
-                "Claude Code folders setup hasn't asked about yet, one for each Claude account:",
-                "Set up Claude Code in them with dev-home's skills and rules?",
-                [console.ListItem(str(f), True, claude_folder_question(f)) for f in unanswered],
+                f"{kind}s setup hasn't asked about yet, one for each {tool.account} account:",
+                f"Set up {tool.name} in them with dev-home's skills and rules?",
+                [console.ListItem(str(f), True, folder_question(tool, f)) for f in unanswered],
             )
             if answer is not None:
                 for folder in unanswered:
-                    settings.claude_folders[self.folder_entry(folder)] = answer.answers[str(folder)]
+                    answers[self.folder_entry(folder)] = answer.answers[str(folder)]
                 return True
             which = " and ".join(str(f) for f in unanswered)
             self.status(
@@ -1414,24 +1431,23 @@ class Setup:
             )
             return False
         # The session's own folder, when it's in the profile folder under another name or outside
-        # it, comes only from CLAUDE_CONFIG_DIR, which a terminal usually doesn't have.
-        found = self.profile_claude_folders()
+        # it, comes only from the tool's variable, which a terminal usually doesn't have.
+        found = self.profile_folders(tool)
         for folder in unanswered:
             if not any(same_path(folder, f) for f in found):
                 self.status(
                     "PROBLEM",
-                    f"Setup hasn't asked yet whether to set up the Claude Code folder {folder}, "
-                    "the session's own, in CLAUDE_CONFIG_DIR, so it leaves it as it is. Setup in a "
-                    "terminal usually can't see it: to set it up, run "
-                    f"{by_hand('setup.py')} --configure "
-                    f"'{CLAUDE_FOLDERS}+={self.folder_entry(folder)}'.",
+                    f"Setup hasn't asked yet whether to set up the {kind} {folder}, the session's "
+                    f"own, in {tool.variable}, so it leaves it as it is. Setup in a terminal "
+                    f"usually can't see it: to set it up, run {by_hand('setup.py')} --configure "
+                    f"'{tool.setting}+={self.folder_entry(folder)}'.",
                 )
         asked_in_terminal = [f for f in unanswered if any(same_path(f, g) for g in found)]
         if asked_in_terminal:
             which = (
-                f"the Claude Code folder {asked_in_terminal[0]}, so it leaves it as it is"
+                f"the {kind} {asked_in_terminal[0]}, so it leaves it as it is"
                 if len(asked_in_terminal) == 1
-                else "these Claude Code folders: "
+                else f"these {kind}s: "
                 + ", ".join(str(f) for f in asked_in_terminal)
                 + ", so it leaves them as they are"
             )
@@ -1443,14 +1459,17 @@ class Setup:
         return False
 
     def tool_folders(self, settings: LocalSettings) -> ToolFolders:
-        """Where setup sets up each tool, from the answers: each Claude Code folder answered yes,
-        and Codex when it's installed, unless its home is answered no."""
-        codex_installed = (self.home / ".codex").exists() and not self.listed(
-            resolve_home(DEFAULT_FOLDERS[CODEX_HOMES], self.home),
-            answered(settings.codex_homes, False),
+        """Where setup sets up each tool, from the answers: each Claude Code folder and each Codex
+        home answered yes."""
+        return ToolFolders(
+            self.folders_to_set_up(CLAUDE_CODE, settings),
+            self.folders_to_set_up(CODEX, settings),
         )
-        claude_dirs: list[str] = []
-        for entry in answered(settings.claude_folders, True):
+
+    def folders_to_set_up(self, tool: Tool, settings: LocalSettings) -> list[str]:
+        """Each of a tool's folders answered yes that's there, each once."""
+        folders: list[str] = []
+        for entry in answered(settings.folders[tool.setting], True):
             if not entry.strip():
                 continue
             full = comparable(resolve_home(entry, self.home))
@@ -1458,9 +1477,9 @@ class Setup:
             # answer, so it's set up again if it comes back. The settings menu shows it.
             if not Path(full).exists():
                 continue
-            if not any(same_path(full, d) for d in claude_dirs):
-                claude_dirs.append(full)
-        return ToolFolders(claude_dirs, codex_installed)
+            if not any(same_path(full, d) for d in folders):
+                folders.append(full)
+        return folders
 
     # The work, which asks nothing
 
@@ -1584,9 +1603,9 @@ class Setup:
             self.status("OK", label)
 
         # 4. Skills, linked into each tool's personal skills folder: the dev-home-tools skills,
-        # then the personal skills in dev-home.
+        # then the personal skills in dev-home. Every Codex home reads ~/.agents/skills.
         tool_skill_folders = [Path(d) / "skills" for d in tools.claude_dirs]
-        if tools.codex_installed:
+        if tools.codex_homes:
             tool_skill_folders.append(self.home / ".agents" / "skills")
 
         links: list[tuple[str, Path]] = [
@@ -1642,7 +1661,8 @@ class Setup:
         # 5. Always-on rules: the operating rules from here, and the person's global rules from
         # dev-home. Claude Code loads every file in the rules folder of each Claude folder, where
         # each link is named dev-home- plus the folder it points to, since nothing there says
-        # which repo a name belongs to. Codex reads one file, so setup writes the two joined.
+        # which repo a name belongs to. Codex reads one file in each home, so setup writes the
+        # two joined there.
         operating_rules = GENERATED_ROOT / "operating-rules"
         global_rules = global_rules_file.parent
         for claude_dir in tools.claude_dirs:
@@ -1659,13 +1679,15 @@ class Setup:
                     global_rules,
                     f"Claude Code global rules in {claude_name}",
                 )
-        if tools.codex_installed:
-            codex_note = generated.note(
-                f"{forward(operating_template)} and {forward(global_rules_file)}",
-                "Put rules of your own in the second file; changing the first changes "
-                "dev-home-tools itself.",
+        codex_note = generated.note(
+            f"{forward(operating_template)} and {forward(global_rules_file)}",
+            "Put rules of your own in the second file; changing the first changes "
+            "dev-home-tools itself.",
+        )
+        for home in tools.codex_homes:
+            self.sync_codex_rules(
+                Path(home), operating_template, global_rules_file, values, codex_note
             )
-            self.sync_codex_rules(operating_template, global_rules_file, values, codex_note)
 
     def settings_checks(self, content_root: Path, tools: ToolFolders) -> list[SettingsCheck]:
         """What each tool's settings file needs, planned from the file as it is now."""
@@ -1674,8 +1696,10 @@ class Setup:
             self.check_claude_settings(Path(claude_dir), wanted_dirs)
             for claude_dir in tools.claude_dirs
         ]
-        if tools.codex_installed:
-            checks.append(self.check_codex_config(comparable(content_root)))
+        checks += [
+            self.check_codex_config(Path(home), comparable(content_root))
+            for home in tools.codex_homes
+        ]
         return checks
 
     def check_claude_settings(self, claude_dir: Path, wanted_dirs: list[str]) -> SettingsCheck:
@@ -1726,8 +1750,8 @@ class Setup:
             snippet,
         )
 
-    def check_codex_config(self, content_root: str) -> SettingsCheck:
-        path = self.home / ".codex" / "config.toml"
+    def check_codex_config(self, home: Path, content_root: str) -> SettingsCheck:
+        path = home / "config.toml"
         try:
             text = path.read_bytes().decode("utf-8-sig", errors="replace") if path.exists() else ""
         except OSError as error:
@@ -1735,8 +1759,9 @@ class Setup:
                 "PROBLEM",
                 f"{path} could not be read, so its settings were not checked. {error}",
             )
+        subject = f"Codex config in {home.name}"
         if codex_config.is_configured(text, content_root, CODEX_DOC_BYTES):
-            return ("OK", "Codex config: writable_roots and project_doc_max_bytes")
+            return ("OK", f"{subject}: writable_roots and project_doc_max_bytes")
         try:
             plan = codex_config.plan(path, content_root, CODEX_DOC_BYTES)
         except Exception as error:
@@ -1747,7 +1772,7 @@ class Setup:
             f"          writable_roots = ['{content_root}']"
         )
         return SettingsChange(
-            "Codex config",
+            subject,
             path,
             f"dev-home in writable_roots, and project_doc_max_bytes of at least {CODEX_DOC_BYTES} "
             "(Codex stops reading AGENTS.md files at 32 KiB by default)",
@@ -1759,8 +1784,8 @@ class Setup:
         )
 
 
-def claude_folder_question(folder: Path) -> str:
-    return f"Set up Claude Code in {folder} with dev-home's skills and rules?"
+def folder_question(tool: Tool, folder: Path) -> str:
+    return f"Set up {tool.name} in {folder} with dev-home's skills and rules?"
 
 
 def template_values(content_root: Path) -> dict[str, str]:

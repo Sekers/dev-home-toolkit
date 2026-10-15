@@ -182,13 +182,13 @@ def remove_link(link: Path) -> None:
 
 def script_env(sandbox: Sandbox, changes: Mapping[str, str | None] | None = None) -> dict[str, str]:
     """The environment a sandbox's scripts run in. Git stops looking for a repo at the sandbox,
-    which is inside this one. CLAUDE_CODE_ENTRYPOINT and CLAUDE_CONFIG_DIR, which the session
-    running the tests may have set, are left out: a test that wants a Claude folder from
-    CLAUDE_CONFIG_DIR passes one in changes."""
+    which is inside this one. CLAUDE_CODE_ENTRYPOINT, CLAUDE_CONFIG_DIR, and CODEX_HOME, which
+    the session running the tests may have set, are left out: a test that wants a Claude folder
+    from CLAUDE_CONFIG_DIR, or a Codex home from CODEX_HOME, passes one in changes."""
     env = {
         key: value
         for key, value in os.environ.items()
-        if key not in ("CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CONFIG_DIR")
+        if key not in ("CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CONFIG_DIR", "CODEX_HOME")
     }
     env["GIT_CEILING_DIRECTORIES"] = sandbox.root.as_posix()
     for key, value in (changes or {}).items():
@@ -246,6 +246,7 @@ def new_sandbox(name: str, *, tools_repo: bool = False) -> Sandbox:
         "devHome": {"folder": box.content.as_posix()},
         "updates": {"installAutomatically": False},
         "claudeCode": {"folders": {"~/.claude": {"setUp": True}}},
+        "codex": {"homes": {"~/.codex": {"setUp": True}}},
         "testHomeDir": box.profile.as_posix(),
     }
     write_text(box.tools / "local-settings.json", json.dumps(settings, indent=2) + "\n")

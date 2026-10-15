@@ -18,8 +18,8 @@ give" in
   `--quiet` asks about it. A folder with a no is left alone, even from a session there. (Later
   changed by
   [A run of setup by hand asks what's unanswered, then shows every setting](a-run-of-setup-by-hand-asks-whats-unanswered-then-shows-every-setting.md):
-  every Claude Code folder setup finds is asked about, `~/.claude` included, and one with no
-  answer isn't set up, the session's own included.)
+  every Claude Code folder and Codex home setup finds is asked about, `~/.claude` and `~/.codex`
+  included, and one with no answer isn't set up, the session's own included.)
 - A save keeps every key in `local-settings.json` that setup doesn't know. (Later changed by
   [Settings record answers, not just values](settings-record-answers-not-just-values.md): one
   nothing declares is removed.)
