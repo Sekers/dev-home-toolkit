@@ -27,10 +27,7 @@ rust-v0.161.0:
   `[[skills.config]]` entries to that Codex home's `config.toml`, and reads none from a project.
 - So dev-home-tools adds what the tools lack, a choice of what a PC has at all, and leaves showing
   and hiding to them. The two answer different questions, so they can't disagree, and
-  dev-home-tools never writes the tools' switches. (Later narrowed by
-  [A Codex home answered no gets dev-home's skills hidden](a-codex-home-answered-no-gets-dev-homes-skills-hidden.md):
-  in a Codex home answered no, setup writes Codex's switch for each skill it links, recording the
-  entries it wrote.)
+  dev-home-tools never writes the tools' switches.
 - Some planned skills suit only some setups, such as one for each work tracker, and some can't
   work everywhere: ones that use Claude Code-only features, need a program such as `gh`, or work
   on one OS. Only an install step keeps those off a PC.

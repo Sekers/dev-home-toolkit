@@ -24,6 +24,12 @@
       "default": 12,
       "label": "Check GitHub for dev-home's changes",
       "help": "How often a sync checks GitHub for dev-home's changes, with one active copy, and for a plain /knowledge. 0 checks every time."
+    },
+    "codex.setUp": {
+      "type": "yes-no",
+      "asked": true,
+      "label": "Codex, in every Codex home",
+      "help": "Whether setup sets up Codex with dev-home's skills and rules in every Codex home on this PC, homes found later included. Every home reads the same skills, so it's all of them or none. Until it's answered, setup leaves Codex as it is."
     }
   }
 }

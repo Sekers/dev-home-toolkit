@@ -56,4 +56,4 @@ Research a decision rests on has its own page in `../research/`.
 - [Settings record answers, not just values](settings-record-answers-not-just-values.md)
 - [The tests check the scripts that only report in two ways](the-tests-check-the-scripts-that-only-report-in-two-ways.md)
 - [dev-home-tools updates install themselves unless you say no](dev-home-tools-updates-install-themselves-unless-you-say-no.md)
-- [A Codex home answered no gets dev-home's skills hidden](a-codex-home-answered-no-gets-dev-homes-skills-hidden.md)
+- [Codex is set up in every Codex home, or in none](codex-is-set-up-in-every-codex-home-or-in-none.md)

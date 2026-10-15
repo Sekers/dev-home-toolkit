@@ -1,18 +1,17 @@
 # Setup finds extra Codex homes as it finds extra Claude folders
 
 **Decision:** setup finds each `~/.codex-*` folder that holds a Codex `config.toml` or
-`auth.json`, and the folder `CODEX_HOME` names when setup runs from a Codex session. It asks once
-about each, and saves the answers in `codex.homes` in `local-settings.json`. A yes gets that
-home what `~/.codex` gets: the always-on rules in its `AGENTS.md`, and dev-home in its
-`config.toml`. A no gets dev-home's skills hidden there
-([A Codex home answered no gets dev-home's skills hidden](a-codex-home-answered-no-gets-dev-homes-skills-hidden.md)).
-A home elsewhere can be added by its path.
+`auth.json`, and the folder `CODEX_HOME` names when setup runs from a Codex session. Codex's one
+answer covers each
+([Codex is set up in every Codex home, or in none](codex-is-set-up-in-every-codex-home-or-in-none.md)),
+and a yes gets it what `~/.codex` gets: the always-on rules in its `AGENTS.md`, and dev-home in
+its `config.toml`. A home elsewhere can be added by its path, as an entry in `codex.homes`.
 
 **Why:** Codex reads its folder from `CODEX_HOME`, which can point anywhere, and each home has its
 own `config.toml`, `AGENTS.md`, and sign-in. Every home on a PC shares `~/.agents/skills` (Codex's
 source at rust-v0.161.0), so a second home already sees dev-home-tools' skills, but without the
 rules they depend on, and with dev-home's writes blocked by Codex's sandbox. Half set up is worse
-than not set up. Finding and asking the same way as for Claude folders keeps one rule for both,
+than not set up. Finding them the same way as Claude folders keeps one rule for both,
 and listing `~/.codex-*` costs about what listing `~/.claude-*` does.
 
 **Options set aside:** adding homes by path only (most people would never learn the option

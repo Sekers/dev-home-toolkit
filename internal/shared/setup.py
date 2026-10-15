@@ -16,9 +16,9 @@ A run goes in this order, so the questions come first and the work after:
    repo's own git config, so it never works on a folder without them, such as a project's repo
    named by mistake. When dev-home can't be put in place, setup stops, and saves nothing.
 2. The questions not answered yet: whether to pull updates automatically, whether to set up each
-   Claude Code folder and each Codex home it finds, and how many copies of dev-home are in active
-   use. Each is asked whenever its answer isn't saved yet, not only on the first run. A no to a
-   folder is saved too, so it's asked about once.
+   Claude Code folder it finds, whether to set up Codex, in every Codex home, and how many copies
+   of dev-home are in active use. Each is asked whenever its answer isn't saved yet, not only on
+   the first run. A no is saved too, so it's asked about once.
 3. At a console, the settings menu that --configure shows, so any setting can be changed.
 4. The changes to confirm: to dev-home.json, and to Claude Code's and Codex's settings files.
 5. The work, which asks nothing, and holds the sync's lock, so a sync in another session waits
@@ -57,21 +57,21 @@ Run it by hand once per PC. After that, each sync runs it with --quiet, so chang
 skills, and skills added on another PC, reach this one.
 
 Claude Code gets the links and rules in each folder answered yes under claudeCode.folders in
-local-settings.json, and Codex its rules and settings in each home answered yes under
-codex.homes, with the skills linked into ~/.agents/skills, which every Codex home reads. Setup
-offers each tool's folders it finds, in a list for each tool, each recommended: the default one,
-~/.claude or ~/.codex, once the tool has made it; each extra one, one per account, such as
-~/.claude-<name>, or a ~/.codex-<name> that holds a config.toml or an auth.json; and the folder in
-CLAUDE_CONFIG_DIR or CODEX_HOME. It saves a no there too. A folder nobody has answered for isn't
-set up: setup adds no links there and removes none, and a quiet run names it. A folder answered
-no is left alone, and one answered yes that no longer exists is skipped. Each link to a folder is
-a junction on Windows, which needs no Developer Mode, and a symbolic link elsewhere.
+local-settings.json. Setup offers each Claude Code folder it finds, in a list, each recommended:
+~/.claude, once Claude Code has made it; each extra one, one per account, such as
+~/.claude-<name>; and the folder in CLAUDE_CONFIG_DIR. It saves a no there too. A folder nobody
+has answered for isn't set up: setup adds no links there and removes none, and a quiet run names
+it. A folder answered no is left alone, and one answered yes that no longer exists is skipped.
 
-The one change in a Codex home answered no: while any home is set up, a run by hand offers to
-hide dev-home's skills there, with a [[skills.config]] entry for each in its config.toml, which
-is Codex's own switch, and records the entries it writes in that home's entry, hiddenSkills, so
-a skill turned back on through Codex's menu, which deletes its entry, stays on. It touches only
-entries it recorded, and offers to remove them once the home is answered yes.
+Codex has one answer for every Codex home, codex.setUp, since every home reads the same skills,
+from ~/.agents/skills: setup sets up all of them, or none. A yes gets each home its rules and
+settings, and the skills linked into ~/.agents/skills. The homes are ~/.codex, once Codex has
+made it; each ~/.codex-<name> that holds a config.toml or an auth.json; the folder in CODEX_HOME;
+and each listed by its path in codex.homes, for a home setup can't find by itself. Until
+Codex is answered, setup adds no links and removes none, and a quiet run names its homes.
+
+Each link to a folder is a junction on Windows, which needs no Developer Mode, and a symbolic link
+elsewhere.
 
 The skills run their scripts with Python 3.12 or later, as internal/.python/python.exe in
 dev-home-tools' folder: a junction setup makes to the folder of a Python it finds, so the
@@ -114,7 +114,6 @@ The sync runs main(["--quiet"]) inside its own process, so keep main's name and 
 import contextlib
 import copy
 import importlib
-import json
 import os
 import re
 import stat
@@ -131,12 +130,14 @@ from .output import GREEN, RED, YELLOW, color, describe, first_line, status_line
 from .paths import comparable, forward, is_inside, resolve_home, same_path, unsafe_reason
 from .programs import SYNC_HOLDS_LOCK, by_hand, find_program
 from .settings import (
+    ANSWER_SETTINGS,
     AUTO_UPDATE,
     BY_PATH,
     CLAUDE_CODE,
     CODEX,
+    CODEX_HOMES,
+    CODEX_SETUP,
     DEV_HOME_SETTINGS,
-    FOLDER_SETTINGS,
     MISSING,
     SCHEMA_VERSION,
     SETTINGS_PATH,
@@ -151,20 +152,18 @@ from .settings import (
     dev_home_text,
     folder_answers,
     get,
-    hidden_skills,
     layout,
+    listed_entries,
     load_local_settings,
     local_settings_data,
     local_settings_text,
     put,
     read_dev_home_settings,
     saved_answer,
-    set_hidden_skills,
     setting_value,
     settings_text,
     skill_preferences,
 )
-from .settings import read_settings as read_saved_settings
 from .settings_files import (
     Plan,
     SettingsFile,
@@ -216,13 +215,11 @@ SettingsCheck = tuple[str, str] | SettingsChange
 
 @dataclass(frozen=True)
 class ToolFolders:
-    """Where setup sets up each tool: each Claude Code folder, and each Codex home, by its entry in
-    codex.homes and its full path. codex_declined has each Codex home answered no, where setup
-    hides dev-home's skills while any home is set up."""
+    """Where setup sets up each tool, by full path: each Claude Code folder answered yes, and each
+    Codex home, once Codex is answered yes."""
 
     claude_dirs: list[str]
-    codex_homes: list[tuple[str, str]]
-    codex_declined: list[tuple[str, str]]
+    codex_homes: list[str]
 
 
 def approval_key(path: Path) -> str:
@@ -277,12 +274,6 @@ class Setup:
         self.changed_by_hand = False
         # Set when --configure only shows the settings, so the run ends with no summary.
         self.just_showing = False
-        # The Codex home --configure has just answered no, if any: the one Codex home a quiet run
-        # tells about hiding dev-home's skills in.
-        self.declined_home: Path | None = None
-        # For each Codex home answered no, by its entry, the SKILL.md paths of the
-        # [[skills.config]] entries setup planned to add, which it records once they're written.
-        self.planned_hides: dict[str, list[str]] = {}
         self.problems: list[str] = []
         self.unknown_placeholders: list[str] = []
         self.unplaced_notes: list[str] = []
@@ -357,6 +348,17 @@ class Setup:
         """Whether to set up one of a tool's folders. Enter keeps its answer, and takes yes for one
         with no answer yet. None when no answer came."""
         return self.choose(folder_question(tool, folder), True if current is None else current)
+
+    def ask_codex(self, homes: Sequence[Path], current: bool | None) -> bool | None:
+        """Whether to set up Codex, in every Codex home, which all read the same skills. Enter
+        keeps its answer, and takes yes with no answer yet. None when no answer came."""
+        found = folder_list(homes) or "none found yet"
+        self.line(f"Codex homes on this PC, one for each Codex account: {found}")
+        self.line(
+            "Every Codex home reads the same skills, so setup sets up all of them, homes found "
+            "later included, or none."
+        )
+        return self.choose(CODEX_QUESTION, True if current is None else current)
 
     def ask_copies(self, current: bool | None) -> bool | None:
         """Whether dev-home is in active use anywhere besides this PC. With no answer yet, there's
@@ -560,6 +562,23 @@ class Setup:
         if not (same_path(self.home, Path.home()) or inside_home) or not folder.is_dir():
             return None
         return folder
+
+    def added_homes(self, settings: LocalSettings) -> list[Path]:
+        """Each Codex home listed by its path in codex.homes that's there."""
+        homes = [
+            Path(comparable(resolve_home(entry, self.home)))
+            for entry in listed_entries(get(settings.data, CODEX_HOMES))
+        ]
+        return [home for home in homes if home.is_dir()]
+
+    def codex_homes(self, settings: LocalSettings) -> list[Path]:
+        """Every Codex home setup knows of that's there, each once: those it finds (see
+        found_folders), then those listed by their paths."""
+        homes = self.found_folders(CODEX)
+        for home in self.added_homes(settings):
+            if not any(same_path(home, found) for found in homes):
+                homes.append(home)
+        return homes
 
     def folder_entry(self, folder: Path) -> str:
         """How a folder is written in local-settings.json: from ~ when it's in the profile folder,
@@ -1201,7 +1220,7 @@ class Setup:
         tools = self.tool_folders(settings)
         self.confirm_copies(content_root)
         if self.can_ask and not self.what_if:
-            self.offer_settings_changes(self.settings_checks(settings, content_root, tools))
+            self.offer_settings_changes(self.settings_checks(content_root, tools))
 
         # 5. The work.
         with self.work_lock(content_root) as owned:
@@ -1216,15 +1235,12 @@ class Setup:
             self.set_up(settings, content_root, tools)
 
         # 6. The tools' settings files. A missing setting is offered as a change: shown first,
-        # made only after a yes, and with a backup. See repair_setting. Then the record of the
-        # entries setup has written to hide dev-home's skills in Codex homes, as they now are,
-        # saved holding the lock again.
-        for check in self.settings_checks(settings, content_root, tools):
+        # made only after a yes, and with a backup. See repair_setting.
+        for check in self.settings_checks(content_root, tools):
             if isinstance(check, SettingsChange):
                 self.repair_setting(check)
             else:
                 self.status(*check)
-        self.record_hidden_skills(settings, content_root, tools)
 
     def read_settings(self) -> tuple[LocalSettings, dict[str, Any] | None, Checked]:
         """Where things are: dev-home-tools' folder, the profile to set up, and this PC's
@@ -1287,7 +1303,7 @@ class Setup:
             folder = get(settings.data, "devHome.folder")
             settings.content_dir = folder if isinstance(folder, str) else ""
             settings.folders = {
-                path: folder_answers(get(settings.data, path)) for path in FOLDER_SETTINGS
+                path: folder_answers(get(settings.data, path)) for path in ANSWER_SETTINGS
             }
         return settings, read, checked
 
@@ -1418,9 +1434,8 @@ class Setup:
             if updates is not MISSING:
                 put(settings.data, AUTO_UPDATE, updates)
                 changed = True
-        # A list for each tool: one list never mixes two kinds of item.
-        for tool in (CLAUDE_CODE, CODEX):
-            changed = self.ask_about_folders(tool, settings) or changed
+        changed = self.ask_about_folders(CLAUDE_CODE, settings) or changed
+        changed = self.ask_about_codex(settings) or changed
         self.ask_about_copies(settings, content_root, first_setup=first_setup)
         return changed
 
@@ -1480,17 +1495,60 @@ class Setup:
             )
         return False
 
+    def ask_about_codex(self, settings: LocalSettings) -> bool:
+        """Asks whether to set up Codex, in every Codex home, once setup finds one and Codex isn't
+        answered yet, and keeps the answer, a no included, so it's asked about once. Until it's
+        answered, setup adds no links and removes none. A quiet run names the homes instead.
+        Returns whether an answer came."""
+        if setting_value(settings.data, CODEX_SETUP)[1]:
+            return False
+        homes = self.codex_homes(settings)
+        if not homes:
+            return False
+        if self.can_ask:
+            answer = self.ask_codex(homes, None)
+            if answer is not None:
+                put(settings.data, CODEX_SETUP, answer)
+                return True
+            self.status(
+                "PROBLEM",
+                "No answer came about Codex, so setup left it as it is. Run setup.py again to "
+                "answer.",
+            )
+            return False
+        # A home only the session's own CODEX_HOME names, which a terminal usually doesn't have.
+        visible = self.profile_folders(CODEX) + self.added_homes(settings)
+        unseen = [home for home in homes if not any(same_path(home, v) for v in visible)]
+        for home in unseen:
+            self.status(
+                "PROBLEM",
+                f"Setup hasn't asked yet whether to set up Codex, so it leaves the Codex home "
+                f"{home}, the session's own, in {CODEX.variable}, as it is. Setup in a terminal "
+                f"usually can't see it: run {by_hand('setup.py')} --configure "
+                f"'{CODEX_HOMES}+={self.folder_entry(home)}' so it can, then run "
+                f"{by_hand('setup.py')} in a terminal, and it asks.",
+            )
+        seen = [home for home in homes if home not in unseen]
+        if seen:
+            which = (
+                f"the Codex home {seen[0]} as it is"
+                if len(seen) == 1
+                else f"the Codex homes {folder_list(seen)} as they are"
+            )
+            self.status(
+                "PROBLEM",
+                f"Setup hasn't asked yet whether to set up Codex, so it leaves {which}. Run "
+                f"{by_hand('setup.py')} in a terminal, and it asks.",
+            )
+        return False
+
     def tool_folders(self, settings: LocalSettings) -> ToolFolders:
-        """Where setup sets up each tool, from the answers: each Claude Code folder and each Codex
-        home answered yes, and each Codex home answered no."""
-        codex_homes = self.folders_answered(CODEX, settings, True)
-        declined = [
-            (entry, full)
-            for entry, full in self.folders_answered(CODEX, settings, False)
-            if not any(same_path(full, home) for _, home in codex_homes)
-        ]
+        """Where setup sets up each tool, from the answers: each Claude Code folder answered yes,
+        and every Codex home, once Codex is answered yes."""
         claude_dirs = [full for _, full in self.folders_answered(CLAUDE_CODE, settings, True)]
-        return ToolFolders(claude_dirs, codex_homes, declined)
+        codex_on = setting_value(settings.data, CODEX_SETUP)[0] is True
+        codex_homes = [comparable(home) for home in self.codex_homes(settings)] if codex_on else []
+        return ToolFolders(claude_dirs, codex_homes)
 
     def folders_answered(
         self, tool: Tool, settings: LocalSettings, answer: bool
@@ -1697,40 +1755,23 @@ class Setup:
             "Put rules of your own in the second file; changing the first changes "
             "dev-home-tools itself.",
         )
-        for _, home in tools.codex_homes:
+        for home in tools.codex_homes:
             self.sync_codex_rules(
                 Path(home), operating_template, global_rules_file, values, codex_note
             )
 
-    def settings_checks(
-        self, settings: LocalSettings, content_root: Path, tools: ToolFolders
-    ) -> list[SettingsCheck]:
+    def settings_checks(self, content_root: Path, tools: ToolFolders) -> list[SettingsCheck]:
         """What each tool's settings file needs, planned from the file as it is now: each Claude
-        Code folder's and each Codex home's set up, and, while any Codex home is set up, so that
-        dev-home's skills are in ~/.agents/skills, each Codex home's answered no (see
-        check_declined_home)."""
-        self.planned_hides = {}
+        Code folder's and each Codex home's set up."""
         wanted_dirs = [comparable(content_root), comparable(TOOLS_ROOT)]
         checks = [
             self.check_claude_settings(Path(claude_dir), wanted_dirs)
             for claude_dir in tools.claude_dirs
         ]
         checks += [
-            self.check_codex_config(
-                Path(home), comparable(content_root), hidden_skills(settings.data, entry)
-            )
-            for entry, home in tools.codex_homes
+            self.check_codex_config(Path(home), comparable(content_root))
+            for home in tools.codex_homes
         ]
-        # Hiding the skills, which is cosmetic, is checked only where it can be offered, by a run
-        # that isn't quiet, and where a person has just answered no, through --configure.
-        if tools.codex_homes and tools.codex_declined and (not self.quiet or self.declined_home):
-            skills = [forward(target / "SKILL.md") for _, target in skill_links(content_root)[0]]
-            for entry, home in tools.codex_declined:
-                check = self.check_declined_home(
-                    entry, Path(home), skills, hidden_skills(settings.data, entry)
-                )
-                if check is not None:
-                    checks.append(check)
         return checks
 
     def check_claude_settings(self, claude_dir: Path, wanted_dirs: list[str]) -> SettingsCheck:
@@ -1781,11 +1822,9 @@ class Setup:
             snippet,
         )
 
-    def check_codex_config(self, home: Path, content_root: str, hidden: list[str]) -> SettingsCheck:
-        """What a Codex home answered yes needs in its config.toml: dev-home in writable_roots,
-        and project_doc_max_bytes big enough; and, for a home answered no before, none of the
-        [[skills.config]] entries setup wrote then (hidden), which still hide dev-home's skills
-        there."""
+    def check_codex_config(self, home: Path, content_root: str) -> SettingsCheck:
+        """What a Codex home needs in its config.toml: dev-home in writable_roots, and
+        project_doc_max_bytes big enough."""
         path = home / "config.toml"
         try:
             text = path.read_bytes().decode("utf-8-sig", errors="replace") if path.exists() else ""
@@ -1795,178 +1834,39 @@ class Setup:
                 f"{path} could not be read, so its settings were not checked. {error}",
             )
         subject = f"Codex config in {home.name}"
-        configured = codex_config.is_configured(text, content_root, CODEX_DOC_BYTES)
-        entries = (codex_config.skill_entry_paths(text) or []) if hidden else []
-        unhide = [p for p in hidden if any(same_path(p, entry) for entry in entries)]
-        if configured and not unhide:
+        if codex_config.is_configured(text, content_root, CODEX_DOC_BYTES):
             return ("OK", f"{subject}: writable_roots and project_doc_max_bytes")
-        parts: list[tuple[str, str, str]] = []
-        if configured:
-            file = read_settings_file(path)
-            plan = Plan(file, new_text=file.text, reason=file.reason)
-        else:
-            try:
-                plan = codex_config.plan(path, content_root, CODEX_DOC_BYTES)
-            except Exception as error:
-                plan = Plan(
-                    SettingsFile(), reason=f"planning the change failed ({describe(error)})"
-                )
-            parts.append(
-                (
-                    f"dev-home in writable_roots, and project_doc_max_bytes of at least "
-                    f"{CODEX_DOC_BYTES} (Codex stops reading AGENTS.md files at 32 KiB by default)",
-                    "Merge this into the file. project_doc_max_bytes goes above the first "
-                    "[section]. If the file already has [sandbox_workspace_write], add only the "
-                    "writable_roots line under it:",
-                    f"          project_doc_max_bytes = {CODEX_DOC_BYTES}\n\n"
-                    "          [sandbox_workspace_write]\n"
-                    f"          writable_roots = ['{content_root}']",
-                )
-            )
-        if unhide:
-            plan = with_skill_entries(plan, [], unhide)
-            parts.append(unhide_part(unhide, "while this home was answered no"))
-        return settings_change(subject, path, plan, parts)
-
-    def check_declined_home(
-        self, entry: str, home: Path, skills: list[str], hidden: list[str]
-    ) -> SettingsCheck | None:
-        """What a Codex home answered no needs in its config.toml, while dev-home's skills are in
-        ~/.agents/skills, which every home reads: a [[skills.config]] entry that hides each of
-        them, with its SKILL.md path in skills, written once, so a skill turned back on through
-        Codex's menu, which deletes its entry, stays on; and none of the entries setup wrote
-        (hidden) for a skill that's gone, or now at another path. An entry setup didn't write is
-        never touched. A quiet run is told only about the home just answered no through
-        --configure, and only that a run of setup by hand hides the skills. None when nothing's
-        needed."""
-        path = home / "config.toml"
         try:
-            text = path.read_bytes().decode("utf-8-sig", errors="replace") if path.exists() else ""
-        except OSError as error:
-            return (
-                "PROBLEM",
-                f"{path} could not be read, so its settings were not checked. {error}",
-            )
-        entries = codex_config.skill_entry_paths(text) or []
-
-        def present(skill: str) -> bool:
-            return any(same_path(skill, entry) for entry in entries)
-
-        hide = [p for p in skills if not any(same_path(p, h) for h in hidden) and not present(p)]
-        gone = [p for p in hidden if not any(same_path(p, s) for s in skills) and present(p)]
-        self.planned_hides[entry] = hide
-        if not hide and not gone:
-            return None
-        if self.quiet:
-            if not hide or self.declined_home is None or not same_path(home, self.declined_home):
-                return None
-            return (
-                "PROBLEM",
-                f"To hide dev-home's skills in the Codex home {home}, answered no, run "
-                f"{by_hand('setup.py')} in a terminal: it shows the change to its config.toml and "
-                "asks.",
-            )
-        file = read_settings_file(path)
-        plan = with_skill_entries(Plan(file, new_text=file.text, reason=file.reason), hide, gone)
-        parts: list[tuple[str, str, str]] = []
-        if hide:
-            blocks = "\n\n".join(
-                f"          [[skills.config]]\n          path = {json.dumps(p)}\n"
-                "          enabled = false"
-                for p in hide
-            )
-            parts.append(
-                (
-                    f"dev-home's skills {skill_names(hide)} hidden, since this home is answered no",
-                    "Add this at the end of the file:",
-                    blocks,
-                )
-            )
-        if gone:
-            parts.append(unhide_part(gone, "for skills that are gone, or have moved"))
-        return settings_change(f"Codex config in {home.name}", path, plan, parts)
-
-    def record_hidden_skills(
-        self, settings: LocalSettings, content_root: Path, tools: ToolFolders
-    ) -> None:
-        """After the settings files are written: records in each Codex home's entry the
-        [[skills.config]] entries setup has written there, as they now are. A home answered no
-        keeps each skill it recorded that's still one of dev-home's, whether its entry is there or
-        was deleted to turn the skill back on, and each entry still there; and it gains each entry
-        this run planned and that's now there, so one whose write was declined or failed isn't
-        recorded. A home answered yes keeps only the entries still there, for setup to offer to
-        remove again. Only a run that isn't quiet changes the record, since only it can offer
-        the changes; and only while any home is set up, since only then are the skills hidden."""
-        if self.quiet or self.what_if or not tools.codex_homes:
-            return
-        skills = (
-            [forward(target / "SKILL.md") for _, target in skill_links(content_root)[0]]
-            if tools.codex_declined
-            else []
+            plan = codex_config.plan(path, content_root, CODEX_DOC_BYTES)
+        except Exception as error:
+            plan = Plan(SettingsFile(), reason=f"planning the change failed ({describe(error)})")
+        snippet = (
+            f"          project_doc_max_bytes = {CODEX_DOC_BYTES}\n\n"
+            "          [sandbox_workspace_write]\n"
+            f"          writable_roots = ['{content_root}']"
         )
-        records: dict[str, list[str]] = {}
-        homes = [(e, h, True) for e, h in tools.codex_homes]
-        homes += [(e, h, False) for e, h in tools.codex_declined]
-        for entry, home, set_up in homes:
-            recorded = hidden_skills(settings.data, entry)
-            planned = [] if set_up else self.planned_hides.get(entry, [])
-            if not recorded and not planned:
-                continue
-            path = Path(home) / "config.toml"
-            try:
-                text = path.read_text(encoding="utf-8-sig") if path.exists() else ""
-            except (OSError, ValueError):
-                continue
-            entries = codex_config.skill_entry_paths(text)
-            if entries is None:
-                continue
-
-            def present(skill: str, found: list[str] = entries) -> bool:
-                return any(same_path(skill, e) for e in found)
-
-            if set_up:
-                kept = [p for p in recorded if present(p)]
-            else:
-                kept = [p for p in recorded if present(p) or any(same_path(p, s) for s in skills)]
-                kept += [p for p in planned if present(p)]
-            if kept != recorded:
-                records[entry] = kept
-        if records:
-            self.save_hidden_skills(content_root, records)
-
-    def save_hidden_skills(self, content_root: Path, records: dict[str, list[str]]) -> None:
-        """Saves the record of the [[skills.config]] entries setup wrote, for each Codex home's
-        entry, holding the sync's lock, as setup's save of this PC's other settings does, and
-        changing only these records in the file as it is by then."""
-        with self.work_lock(content_root) as owned:
-            if not owned:
-                return
-            data = read_saved_settings()
-            if data is None or layout(data, SCHEMA_VERSION):
-                self.status(
-                    "PROBLEM",
-                    f"Which skills setup hid in each Codex home wasn't saved: {SETTINGS_PATH} "
-                    "changed while setup ran, and can't be read now. Run setup.py again.",
-                )
-                return
-            for entry, paths in records.items():
-                set_hidden_skills(data, entry, paths)
-            try:
-                write_settings_file(SETTINGS_PATH, settings_text(data), bom=False, backup=False)
-            except OSError as error:
-                self.status(
-                    "PROBLEM", f"Could not save this PC's settings in {SETTINGS_PATH}. {error}"
-                )
-                return
-        self.status(
-            "SET",
-            f"This PC's settings: {SETTINGS_PATH}, with the skills setup has hidden in each Codex "
-            "home answered no",
+        return SettingsChange(
+            subject,
+            path,
+            f"dev-home in writable_roots, and project_doc_max_bytes of at least {CODEX_DOC_BYTES} "
+            "(Codex stops reading AGENTS.md files at 32 KiB by default)",
+            plan,
+            "Merge this into the file. project_doc_max_bytes goes above the first [section]. If "
+            "the file already has [sandbox_workspace_write], add only the writable_roots line "
+            "under it:",
+            snippet,
         )
 
 
 def folder_question(tool: Tool, folder: Path) -> str:
     return f"Set up {tool.name} in {folder} with dev-home's skills and rules?"
+
+
+CODEX_QUESTION = "Set up Codex in every Codex home with dev-home's skills and rules?"
+
+
+def folder_list(folders: Sequence[Path]) -> str:
+    return ", ".join(str(folder) for folder in folders)
 
 
 def skill_templates() -> list[Path]:
@@ -1995,52 +1895,6 @@ def skill_links(content_root: Path) -> tuple[list[tuple[str, Path]], list[str]]:
                 continue
             links.append((folder.name, folder))
     return links, same_names
-
-
-def skill_names(paths: Sequence[str]) -> str:
-    """The skills whose SKILL.md paths these are, by their folders' names, such as "handoff and
-    knowledge"."""
-    names = [Path(path).parent.name for path in paths]
-    if len(names) <= 2:
-        return " and ".join(names)
-    return ", ".join(names[:-1]) + ", and " + names[-1]
-
-
-def with_skill_entries(plan: Plan, hide: list[str], unhide: list[str]) -> Plan:
-    """A planned change to a Codex home's config.toml that also adds a [[skills.config]] entry
-    hiding each SKILL.md in hide, and removes the entries for those in unhide, so the file gets one
-    diff, one yes, and one backup for everything setup changes in it."""
-    if plan.reason:
-        return plan
-    text = plan.new_text if plan.new_text is not None else plan.file.text
-    try:
-        new_text, reason = codex_config.edit_skills(text, plan.file.newline, hide, unhide)
-    except Exception as error:
-        return Plan(plan.file, reason=f"planning the change failed ({describe(error)})")
-    return Plan(plan.file, new_text=new_text, reason=reason or None, note=plan.note)
-
-
-def unhide_part(paths: list[str], since: str) -> tuple[str, str, str]:
-    """What a config.toml needs for the [[skills.config]] entries setup wrote that have to go, as
-    a part of a settings change (see settings_change)."""
-    return (
-        f"the [[skills.config]] entries setup wrote {since}, for {skill_names(paths)}, removed",
-        "Remove the [[skills.config]] entry with each of these paths:",
-        "\n".join(f"          {path}" for path in paths),
-    )
-
-
-def settings_change(
-    subject: str, path: Path, plan: Plan, parts: list[tuple[str, str, str]]
-) -> SettingsChange:
-    """One change to a settings file that needs several things: each part says what it needs,
-    how to make it by hand, and the lines to use."""
-    need = "; ".join(part[0] for part in parts)
-    how_to = parts[0][1]
-    snippet = parts[0][2]
-    for _, more, lines in parts[1:]:
-        snippet += f"\n\n          Then: {more}\n{lines}"
-    return SettingsChange(subject, path, need, plan, how_to, snippet)
 
 
 def template_values(content_root: Path) -> dict[str, str]:

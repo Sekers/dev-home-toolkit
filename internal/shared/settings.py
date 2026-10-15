@@ -96,19 +96,27 @@ BY_PATH = {setting.path: setting for setting in SETTINGS}
 # say: for dev-home itself, and for dev-home-tools' updates.
 DEFAULT_HOURS = {s.path: s.default for s in SETTINGS if s.type == "hours" and s.has_default}
 AUTO_UPDATE = "updates.installAutomatically"
-# The folders each tool is set up in, each with its own answer, setUp.
+# Each tool's folders setup knows of by an entry, in the same shape for both tools, such as
+# {"~/.claude": {"setUp": true}}. A Claude Code folder's entry holds its own answer, setUp.
 CLAUDE_FOLDERS = "claudeCode.folders"
+# A Codex home's entry holds no answer of its own yet: every home reads the same skills, from
+# ~/.agents/skills, so every home follows one answer for them all, codex.setUp, and an entry only
+# lists a home setup can't find by itself, as {}. Once Codex reads skills per home, an entry can
+# take a setUp of its own, as a Claude Code folder's does, with codex.setUp as the answer for a home
+# without one, so nothing saved here needs converting.
 CODEX_HOMES = "codex.homes"
+CODEX_SETUP = "codex.setUp"
 
 
 @dataclass(frozen=True)
 class Tool:
-    """A tool setup sets up in each of its folders answered yes, whose answers are saved at
-    setting: Claude Code in each Claude Code folder, and Codex in each Codex home, as each tool's
-    docs call one. default is the folder in the profile that the tool makes when it first runs;
-    an extra one is named after it, such as ~/.claude-second, one for each account, and counts
-    only when it holds one of marks, if the tool has any. variable names the folder a session of
-    the tool uses."""
+    """A tool setup sets up in its folders, as each tool's docs call one, with an entry at setting
+    for each folder it knows of: Claude Code in each Claude Code folder whose entry answers yes,
+    and Codex in every Codex home, once its one answer for them all, saved at answer, is yes. An
+    entry holds an answer of its own only when answered_each says so. default is the folder in the
+    profile that the tool makes when it first runs; an extra one is named after it, such as
+    ~/.claude-second, one for each account, and counts only when it holds one of marks, if the tool
+    has any. variable names the folder a session of the tool uses."""
 
     name: str
     folder: str
@@ -117,6 +125,8 @@ class Tool:
     default: str
     variable: str
     marks: tuple[str, ...] = ()
+    answer: str = ""
+    answered_each: bool = True
 
 
 CLAUDE_CODE = Tool(
@@ -124,15 +134,26 @@ CLAUDE_CODE = Tool(
 )
 # A ~/.codex-* folder Codex has used holds its settings or its sign-in.
 CODEX = Tool(
-    "Codex", "home", "Codex", CODEX_HOMES, ".codex", "CODEX_HOME", ("config.toml", "auth.json")
+    "Codex",
+    "home",
+    "Codex",
+    CODEX_HOMES,
+    ".codex",
+    "CODEX_HOME",
+    ("config.toml", "auth.json"),
+    answer=CODEX_SETUP,
+    answered_each=False,
 )
 TOOLS = (CLAUDE_CODE, CODEX)
+# Each tool's folders, which setting-definitions.json can't declare, since a folder's name can hold
+# a dot.
 FOLDER_SETTINGS = tuple(tool.setting for tool in TOOLS)
-# In a Codex home's entry, the SKILL.md path of each [[skills.config]] entry setup wrote there to
-# hide one of dev-home's skills, while the home is answered no. It's setup's record of its own
-# changes, not an answer, so a skill turned back on through Codex's menu, which deletes the entry,
-# isn't hidden again.
-HIDDEN_SKILLS = "hiddenSkills"
+FOLDERS_FOR = {tool.setting: tool for tool in TOOLS}
+# The folders whose entries hold an answer of their own.
+ANSWER_SETTINGS = tuple(tool.setting for tool in TOOLS if tool.answered_each)
+# A tool's one answer for all its folders, which setting-definitions.json declares, and the menu
+# shows with that tool's folders.
+TOOL_SETTINGS = tuple(tool.answer for tool in TOOLS if tool.answer)
 
 
 def get(data: object, path: str, default: object = None) -> Any:
@@ -249,6 +270,13 @@ def folder_answers(value: object) -> dict[str, bool]:
         for folder, entry in value.items()
         if folder.strip() and isinstance(entry, dict) and isinstance(entry.get("setUp"), bool)
     }
+
+
+def listed_entries(value: object) -> list[str]:
+    """Each folder with an entry in a tool's folders, as written, with an answer or not."""
+    if not isinstance(value, dict):
+        return []
+    return [folder for folder, entry in value.items() if folder.strip() and isinstance(entry, dict)]
 
 
 @dataclass(frozen=True)
@@ -452,33 +480,31 @@ def check_settings(
         for name, inner in list(value.items()):
             path = f"{key}.{name}"
             setting = BY_PATH.get(path)
-            if setting is None:
-                remove(value, name, path)
-            else:
+            tool = FOLDERS_FOR.get(path)
+            if setting is not None:
                 check_value(path, inner, setting)
-
-    def check_folders(key: str, value: dict[str, Any]) -> None:
-        for name, inner in list(value.items()):
-            path = f"{key}.{name}"
-            if path not in FOLDER_SETTINGS:
+            elif tool is not None:
+                check_folders(path, inner, tool)
+            else:
                 remove(value, name, path)
+
+    def check_folders(path: str, value: object, tool: Tool) -> None:
+        """A tool's folders, each with an entry, which holds setUp only for a tool whose folders
+        each have an answer of their own."""
+        unset = "not answered yet" if tool.answered_each else "not listed"
+        if not isinstance(value, dict):
+            wrong(path, value, f"a JSON object of {tool.folder}s", "none")
+            return
+        for folder, entry in value.items():
+            where = f"{path} {folder}"
+            if not isinstance(entry, dict):
+                wrong(where, entry, "a JSON object", unset)
                 continue
-            if not isinstance(inner, dict):
-                wrong(path, inner, "a JSON object of folders", "none answered")
-                continue
-            for folder, entry in inner.items():
-                where = f"{path} {folder}"
-                if not isinstance(entry, dict):
-                    wrong(where, entry, "a JSON object", "not answered yet")
-                    continue
-                for entry_key, answer in list(entry.items()):
-                    if entry_key == HIDDEN_SKILLS and path == CODEX_HOMES:
-                        if not is_path_list(answer):
-                            wrong(f"{where}: {entry_key}", answer, "a list of paths", "none")
-                    elif entry_key != "setUp":
-                        remove(entry, entry_key, f"{where}: {entry_key}")
-                    elif not isinstance(answer, bool):
-                        wrong(f"{where}: setUp", answer, "true or false", "not answered yet")
+            for entry_key, answer in list(entry.items()):
+                if entry_key != "setUp" or not tool.answered_each:
+                    remove(entry, entry_key, f"{where}: {entry_key}")
+                elif not isinstance(answer, bool):
+                    wrong(f"{where}: setUp", answer, "true or false", unset)
 
     def check_skills(value: dict[str, Any]) -> None:
         for skill, inner in list(value.items()):
@@ -511,22 +537,20 @@ def check_settings(
                         else:
                             check_value(f"{where}.{key}", answer, known.setting)
 
-    groups = {path.split(".")[0] for path in BY_PATH}
+    groups = {path.split(".")[0] for path in (*BY_PATH, *FOLDER_SETTINGS)}
     for key, value in list(data.items()):
         if key == "schemaVersion":
             continue
         if key == "testHomeDir":
             if not isinstance(value, str):
                 wrong(key, value, "a folder", "not set")
-        elif key in groups | {"claudeCode", "codex", "skills"}:
+        elif key in groups | {"skills"}:
             if not isinstance(value, dict):
                 wrong(key, value, "a JSON object of settings", "none set")
-            elif key in groups:
-                check_group(key, value)
             elif key == "skills":
                 check_skills(value)
             else:
-                check_folders(key, value)
+                check_group(key, value)
             # A group left empty goes too, or the save would write it back.
             if isinstance(value, dict) and not value:
                 del data[key]
@@ -538,16 +562,16 @@ def check_settings(
 @dataclass
 class LocalSettings:
     """The settings setup asks for, with defaults for anything missing. folders holds, for each
-    tool's folders (CLAUDE_FOLDERS and CODEX_HOMES), each folder with an answer, as written, so
-    setup asks about it only once. data holds everything the file had, so a save keeps the keys
-    setup doesn't know, and each setting in the form it was saved in: setting_value reads one, such
-    as whether automatic updates are answered yet. found says the file had settings in it.
+    tool whose folders each have an answer (ANSWER_SETTINGS), each folder with an answer, as
+    written, so setup asks about it only once. data holds everything the file had, so a save keeps
+    the keys setup doesn't know, and each setting in the form it was saved in: setting_value reads
+    one, such as whether automatic updates are answered yet. found says the file had settings in it.
     test_home_dir is only ever in a test sandbox's file, which the tests write; setup never adds
     it."""
 
     content_dir: str = ""
     folders: dict[str, dict[str, bool]] = field(
-        default_factory=lambda: {path: {} for path in FOLDER_SETTINGS}
+        default_factory=lambda: {path: {} for path in ANSWER_SETTINGS}
     )
     test_home_dir: str = ""
     data: dict[str, Any] = field(default_factory=dict)
@@ -557,49 +581,6 @@ class LocalSettings:
 def answered(folders: dict[str, bool], answer: bool) -> list[str]:
     """The folders with that answer, as written."""
     return [folder for folder, setup in folders.items() if setup is answer]
-
-
-def is_path_list(value: object) -> bool:
-    return isinstance(value, list) and all(isinstance(p, str) and p.strip() for p in value)
-
-
-def home_entry(data: dict[str, Any], entry: str) -> dict[str, Any] | None:
-    """A Codex home's entry in codex.homes, by its name as written, which may hold a dot."""
-    homes = get(data, CODEX_HOMES)
-    found = homes.get(entry) if isinstance(homes, dict) else None
-    return found if isinstance(found, dict) else None
-
-
-def hidden_skills(data: dict[str, Any], entry: str) -> list[str]:
-    """The SKILL.md paths of the [[skills.config]] entries setup wrote in a Codex home, as its entry
-    records them, or none when it records none it can use."""
-    found = home_entry(data, entry)
-    paths = found.get(HIDDEN_SKILLS) if found is not None else None
-    return list(paths) if isinstance(paths, list) and is_path_list(paths) else []
-
-
-def set_hidden_skills(data: dict[str, Any], entry: str, paths: list[str]) -> None:
-    """Records the SKILL.md paths of the [[skills.config]] entries setup wrote in a Codex home, in
-    its entry, which is made when it's missing. With none, the record goes, and so does an entry
-    or group it leaves empty."""
-    found = home_entry(data, entry)
-    if found is None:
-        if not paths:
-            return
-        homes = get(data, CODEX_HOMES)
-        if not isinstance(homes, dict):
-            put(data, CODEX_HOMES, {})
-            homes = get(data, CODEX_HOMES)
-        found = homes[entry] = {}
-    if paths:
-        found[HIDDEN_SKILLS] = list(paths)
-        return
-    found.pop(HIDDEN_SKILLS, None)
-    if not found:
-        homes = get(data, CODEX_HOMES)
-        del homes[entry]
-        if not homes:
-            remove_path(data, CODEX_HOMES)
 
 
 def load_local_settings() -> LocalSettings | None:
@@ -623,7 +604,7 @@ def load_local_settings() -> LocalSettings | None:
     folder = get(data, "devHome.folder")
     if isinstance(folder, str):
         settings.content_dir = folder
-    settings.folders = {path: folder_answers(get(data, path)) for path in FOLDER_SETTINGS}
+    settings.folders = {path: folder_answers(get(data, path)) for path in ANSWER_SETTINGS}
     if isinstance(data.get("testHomeDir"), str):
         settings.test_home_dir = data["testHomeDir"]
     return settings
@@ -666,7 +647,7 @@ def local_settings_data(settings: LocalSettings) -> dict[str, Any]:
     data.pop("schemaVersion", None)
     if settings.content_dir:
         put(data, "devHome.folder", settings.content_dir)
-    for path in FOLDER_SETTINGS:
+    for path in ANSWER_SETTINGS:
         merge_answers(data, path, settings.folders[path])
     if settings.test_home_dir:
         data["testHomeDir"] = settings.test_home_dir

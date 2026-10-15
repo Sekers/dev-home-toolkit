@@ -28,8 +28,8 @@ folder link as a directory junction, which needs no admin rights and no Develope
     junction, or when the `python.exe` the junction leads to is gone; other runs just check that
     it's there.
   - `local-settings.json`: this PC's answers to setup's questions: where your dev-home is,
-    whether to install updates automatically, which Claude Code folders and Codex homes to set
-    up, and which not to, and the skills' preferences. The scripts read it to find your dev-home.
+    whether to install updates automatically, which Claude Code folders to set up, and which not
+    to, whether to set up Codex, and the skills' preferences. The scripts read it to find your dev-home.
     Setup removes a setting nothing declares any more, such as one misspelled in a hand edit,
     and says so, after a backup of the file. It never overwrites a file it can't read as JSON,
     or one with a `schemaVersion` it doesn't know. One in an older layout, from before its settings were grouped, it offers to set
@@ -42,9 +42,10 @@ folder link as a directory junction, which needs no admin rights and no Develope
   - After your yes, `settings.json` gets your dev-home and dev-home-tools folders in
     `permissions.additionalDirectories`, so Claude Code can use them from any project.
   - Your own `CLAUDE.md` there is never touched.
-- **For Codex,** in each Codex home you said yes to (`~\.codex`, and any extra ones):
-  - Links in `~\.agents\skills\`, which every Codex home reads, once you've said yes to any.
-  - `AGENTS.md` in the home, such as `~\.codex\AGENTS.md`: the operating rules and your global
+- **For Codex,** once you've said yes to it, in every Codex home (`~\.codex`, and any extra
+  ones). Every home reads the same skills, so it's all of them or none:
+  - Links in `~\.agents\skills\`, which every Codex home reads.
+  - `AGENTS.md` in each home, such as `~\.codex\AGENTS.md`: the operating rules and your global
     rules joined into one file, because Codex reads only one always-on file. Setup rewrites it
     whenever it runs, but never replaces an `AGENTS.md` it didn't write.
   - After your yes, `config.toml` gets dev-home in `[sandbox_workspace_write]` `writable_roots`,
@@ -53,13 +54,6 @@ folder link as a directory junction, which needs no admin rights and no Develope
     `AGENTS.md` files and stops reading at 32 KiB by default. The global file comes first, so
     the cut would fall on the project's own instructions, without a warning. Twice the default
     leaves room.
-- **In each Codex home you said no to,** once you've said yes to another: every home reads
-  `~\.agents\skills\`, so setup shows a change to that home's `config.toml`, and after your yes
-  to it, the file gets a `[[skills.config]]` entry with `enabled = false` for each of dev-home's
-  skills, which hides it there, as Codex's own `/skills` menu does. Setup writes each entry once, and records it in that home's entry in
-  `local-settings.json`, so a skill you turn back on in Codex's menu stays on. It never touches
-  an entry it didn't write, and when you change the home to yes, it offers to remove its own.
-  Syncs never change these: a new skill shows there until you run setup in a terminal.
 - **In your dev-home's own git config:** commit signing off, and pulls that merge rather than
   rebase. With signing off, a commit never stops in the middle of a sync to ask for your signing
   passphrase. Your project repos keep signing as usual. Setup does this only in a folder that

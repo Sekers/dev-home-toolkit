@@ -314,23 +314,11 @@ def folder_question(folder: Path, hint: str = r"\[Y/n\]") -> str:
     )
 
 
-# The same for Codex homes, which come in a list of their own.
-HOMES = FOLDERS.replace("Claude Code", "Codex")
+# The one question for Codex, which covers every Codex home, since they all read the same skills.
+CODEX = r"^Set up Codex in every Codex home with dev-home's skills and rules\? \[Y/n\]: $"
 
 
-def home_question(home: Path, hint: str = r"\[Y/n\]") -> str:
-    return rf"^Set up Codex in {re.escape(str(home))} with dev-home's skills and rules\? {hint}: $"
-
-
-def skill_file(box: Sandbox, name: str) -> str:
-    """A skill's SKILL.md, as setup names it in a [[skills.config]] entry: the generated copy of
-    one of dev-home-tools' skills, or one of the person's own in dev-home."""
-    own = box.content / "skills" / name
-    folder = own if own.is_dir() else box.generated / "skills" / name
-    return (folder / "SKILL.md").as_posix()
-
-
-def test_a_first_run_asks_about_updates_each_claude_folder_and_each_codex_home(
+def test_a_first_run_asks_about_updates_each_claude_folder_and_codex(
     box: Sandbox,
     settings: Path,
     person: Person,
@@ -339,8 +327,8 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_each_codex_home(
 ) -> None:
     # A first run has no local-settings.json yet. Here it must keep testHomeDir, so the run gets
     # settings with no answers instead. Every Claude Code folder setup finds is in one list,
-    # ~/.claude included, and every Codex home in another, ~/.codex included, each recommended.
-    # A ~/.codex-* folder counts only with Codex's settings or sign-in in it.
+    # ~/.claude included, each recommended, and Codex gets one question for every Codex home,
+    # ~/.codex included. A ~/.codex-* folder counts only with Codex's settings or sign-in in it.
     code = shared_module(box, "setup")
     saved = json.loads(settings.read_text(encoding="utf-8"))
     first_run = shared_module(box, "settings").LocalSettings(
@@ -362,10 +350,8 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_each_codex_home(
             folder_question(box.profile / ".claude"): "",
             folder_question(second): "yes",
             folder_question(third): "n",
-            HOMES: "e",
-            home_question(box.profile / ".codex"): "",
-            home_question(work): "n",
-            # A yes to the settings change the new folder needs.
+            CODEX: "",
+            # A yes to the settings changes the new folder and the new home need.
             r"Make this change\? \[y/N\]: $": "y",
         }
     )
@@ -385,9 +371,11 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_each_codex_home(
             shutil.rmtree(folder)
     assert returned == 0, out
     assert any(re.search(FOLDERS, asked) for asked in person.asked), person.asked
-    assert any(re.search(HOMES, asked) for asked in person.asked), person.asked
+    assert sum(1 for asked in person.asked if re.search(CODEX, asked)) == 1, person.asked
     assert re.search(r"^Claude Code folders setup hasn't asked about yet", out, re.M), out
-    assert re.search(r"^Codex homes setup hasn't asked about yet", out, re.M), out
+    homes = f"{box.profile / '.codex'}, {work}"
+    pattern = rf"^Codex homes on this PC, one for each Codex account: {re.escape(homes)}$"
+    assert re.search(pattern, out, re.M), out
     assert ".codex-plain" not in out, out
     assert written["updates"]["installAutomatically"] is True
     # The no is kept, so the folder isn't asked about again.
@@ -396,15 +384,10 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_each_codex_home(
         "~/.claude-second": {"setUp": True},
         "~/.claude-third": {"setUp": False},
     }
-    # A home answered no gets no rules, and dev-home's skills, which it sees through
-    # ~/.agents/skills, are hidden there, with a record of the entries setup wrote.
-    hidden = [skill_file(box, name) for name in ("dev-home", "handoff", "knowledge", "mine")]
-    assert written["codex"]["homes"] == {
-        "~/.codex": {"setUp": True},
-        "~/.codex-work": {"setUp": False, "hiddenSkills": hidden},
-    }
-    assert not work_rules, out
-    assert work_config == {"skills": {"config": [{"path": p, "enabled": False} for p in hidden]}}
+    # One answer, so every home gets the rules and the config.toml lines.
+    assert written["codex"] == {"setUp": True}
+    assert work_rules, out
+    assert work_config["sandbox_workspace_write"]["writable_roots"] == [str(box.content)]
     assert written["testHomeDir"] == saved["testHomeDir"]
     assert linked == box.generated / "skills" / "handoff"
     assert len(allowed["permissions"]["additionalDirectories"]) == 2
@@ -738,7 +721,7 @@ def test_at_a_console_settings_in_the_older_layout_are_set_aside_and_asked_again
             r"^Your dev-home folder \[.*\]: $": content,
             UPDATES: "n",
             folder_question(box.profile / ".claude"): "",
-            home_question(box.profile / ".codex"): "",
+            CODEX: "",
         }
     )
     try:
@@ -759,7 +742,7 @@ def test_at_a_console_settings_in_the_older_layout_are_set_aside_and_asked_again
         "devHome": {"folder": content},
         "updates": {"installAutomatically": False},
         "claudeCode": {"folders": {"~/.claude": {"setUp": True}}},
-        "codex": {"homes": {"~/.codex": {"setUp": True}}},
+        "codex": {"setUp": True},
     }, written
 
 
@@ -1109,6 +1092,7 @@ def test_the_menu_goes_through_every_setting_with_its_answer_as_the_default(
             UPDATE_HOURS: ["six", "6"],
             CONTENT_HOURS: "",
             folder_question(box.profile / ".claude"): "",
+            CODEX: "",
             ELSEWHERE_YES: "",
         }
     )
@@ -1122,7 +1106,26 @@ def test_the_menu_goes_through_every_setting_with_its_answer_as_the_default(
     assert saved["devHome"]["folder"] == content, saved
     assert saved["updates"]["installAutomatically"] is False, saved
     assert saved["claudeCode"]["folders"] == {"~/.claude": {"setUp": True}}, saved
+    assert saved["codex"] == {"setUp": True}, saved
     assert any(re.search(folder_question(box.profile / ".claude"), p) for p in person.asked)
+    assert any(re.search(CODEX, p) for p in person.asked), person.asked
+
+
+def test_the_menu_answers_codex_once_for_every_home(
+    box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    person.answers.update({MENU: ["6", ""], CODEX: "n"})
+    try:
+        returned = setup_here(box, "--configure")
+        out = capsys.readouterr().out
+        saved = json.loads(backups_removed.read_text(encoding="utf-8"))
+    finally:
+        on = json.loads(backups_removed.read_text(encoding="utf-8"))
+        on["codex"] = {"setUp": True}
+        write_text(backups_removed, json.dumps(on, indent=2) + "\n")
+    assert returned == 0, out
+    assert re.search(r"^\s+6\s+Codex, in every Codex home\s+yes: ~/\.codex$", out, re.M), out
+    assert saved["codex"] == {"setUp": False}, saved
 
 
 def test_enter_in_the_menu_keeps_a_setting_that_follows_its_default(
@@ -1235,121 +1238,6 @@ def test_a_yes_to_a_codex_config_change_writes_its_toml(
 
 
 MAKE_CHANGE = r"Make this change\? \[y/N\]: $"
-
-
-def skill_entries(path: Path) -> list[str]:
-    """The path of each [[skills.config]] entry in a Codex home's config.toml."""
-    data = tomllib.loads(path.read_text(encoding="utf-8"))
-    return [entry["path"] for entry in data.get("skills", {}).get("config", [])]
-
-
-def home_record(settings: Path, entry: str) -> dict[str, Any]:
-    homes = json.loads(settings.read_text(encoding="utf-8"))["codex"]["homes"]
-    found: dict[str, Any] = homes[entry]
-    return found
-
-
-def test_a_codex_home_answered_no_gets_each_of_dev_homes_skills_hidden_once(
-    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
-) -> None:
-    # Every Codex home reads ~/.agents/skills, so in one answered no, setup hides dev-home's
-    # skills with Codex's own switch, and records the entries it wrote. Codex's /skills menu
-    # deletes an entry to turn a skill back on, and the record keeps setup from hiding it again.
-    home = box.profile / ".codex-off"
-    config = home / "config.toml"
-    knowledge = skill_file(box, "knowledge")
-    # An entry the person wrote, which setup never touches.
-    own_entry = f"[[skills.config]]\npath = '{Path(knowledge)}'\nenabled = false\n"
-    write_text(config, f'model = "x"\n\n{own_entry}')
-    saved = json.loads(settings.read_text(encoding="utf-8"))
-    saved["codex"]["homes"]["~/.codex-off"] = {"setUp": False}
-    write_text(settings, json.dumps(saved, indent=2) + "\n")
-    later = box.content / "skills" / "later"
-    person.answers[MAKE_CHANGE] = "y"
-    try:
-        first = setup_here(box)
-        first_out = capsys.readouterr().out
-        hidden = [skill_file(box, n) for n in ("dev-home", "handoff", "mine")]
-        assert first == 0, first_out
-        assert skill_entries(config) == [str(Path(knowledge)), *hidden], first_out
-        assert home_record(settings, "~/.codex-off") == {"setUp": False, "hiddenSkills": hidden}
-        assert config.read_text(encoding="utf-8").startswith(f'model = "x"\n\n{own_entry}\n')
-
-        # The person turns handoff back on in Codex, and writes a new skill of their own.
-        text = config.read_text(encoding="utf-8")
-        handoff = skill_file(box, "handoff")
-        write_text(
-            config,
-            text.replace(f'\n[[skills.config]]\npath = "{handoff}"\nenabled = false\n', ""),
-        )
-        write_text(later / "SKILL.md", "---\nname: later\ndescription: A test.\n---\n")
-        second = setup_here(box)
-        second_out = capsys.readouterr().out
-        assert second == 0, second_out
-        newer = [*hidden, skill_file(box, "later")]
-        assert skill_entries(config) == [
-            str(Path(knowledge)),
-            skill_file(box, "dev-home"),
-            skill_file(box, "mine"),
-            skill_file(box, "later"),
-        ], second_out
-        assert home_record(settings, "~/.codex-off")["hiddenSkills"] == newer
-        assert re.search(r"needs dev-home's skills later hidden, since this home is", second_out)
-
-        # The new skill is deleted, so its entry goes, and so does its record.
-        gone = skill_file(box, "later")
-        shutil.rmtree(later)
-        third = setup_here(box)
-        third_out = capsys.readouterr().out
-        assert third == 0, third_out
-        assert gone not in skill_entries(config), third_out
-        assert home_record(settings, "~/.codex-off")["hiddenSkills"] == hidden
-        assert re.search(r"needs the \[\[skills\.config\]\] entries setup wrote for ", third_out)
-
-        # Answered yes, the home gets its config.toml lines, and setup's entries go, so the
-        # skills show again. The person's own entry stays.
-        saved = json.loads(settings.read_text(encoding="utf-8"))
-        saved["codex"]["homes"]["~/.codex-off"]["setUp"] = True
-        write_text(settings, json.dumps(saved, indent=2) + "\n")
-        fourth = setup_here(box)
-        fourth_out = capsys.readouterr().out
-        assert fourth == 0, fourth_out
-        assert skill_entries(config) == [str(Path(knowledge))], fourth_out
-        assert home_record(settings, "~/.codex-off") == {"setUp": True}, fourth_out
-        assert "writable_roots" in config.read_text(encoding="utf-8")
-        assert (home / "AGENTS.md").is_file()
-        # And with nothing left to do, nothing is offered.
-        assert setup_here(box) == 0
-        assert not re.search(r"^CHANGE\s+Codex", capsys.readouterr().out, re.M)
-    finally:
-        shutil.rmtree(home)
-        if later.exists():
-            shutil.rmtree(later)
-        setup_here(box)
-        capsys.readouterr()
-
-
-def test_a_no_to_hiding_dev_homes_skills_records_nothing(
-    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
-) -> None:
-    # Only an entry that's written is recorded, so the next run by hand offers it again.
-    home = box.profile / ".codex-off"
-    write_text(home / "config.toml", "")
-    saved = json.loads(settings.read_text(encoding="utf-8"))
-    saved["codex"]["homes"]["~/.codex-off"] = {"setUp": False}
-    write_text(settings, json.dumps(saved, indent=2) + "\n")
-    person.answers[MAKE_CHANGE] = "n"
-    try:
-        returned = setup_here(box)
-        out = capsys.readouterr().out
-        kept = (home / "config.toml").read_text(encoding="utf-8")
-        record = home_record(settings, "~/.codex-off")
-    finally:
-        shutil.rmtree(home)
-    assert returned == 1, out
-    assert kept == ""
-    assert record == {"setUp": False}, out
-    assert re.search(r"^PROBLEM\s+Codex config in \.codex-off: left unchanged", out, re.M), out
 
 
 def test_a_file_that_changes_after_its_change_is_shown_is_shown_again(

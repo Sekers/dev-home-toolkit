@@ -18,10 +18,17 @@ AGENTS.md's rules apply too.
   such question reads the same: `y, n, or d for the default (<its default>)`, with the capital
   letter showing what Enter gives, such as `[y/n/D]`.
 - Decide what Enter does at its question when nothing is answered yet, apart from its default:
-  for a setting with a default, Enter means default; a folder's question takes Enter as yes,
-  though a folder nobody has answered for isn't set up; and `multiMachine`'s question has no
-  Enter answer, since either wrong answer costs something. Once a question is answered, Enter
-  always keeps the saved answer.
+  for a setting with a default, Enter means default; a folder's question, and Codex's, takes
+  Enter as yes, though a folder nobody has answered for isn't set up; and `multiMachine`'s
+  question has no Enter answer, since either wrong answer costs something. Once a question is
+  answered, Enter always keeps the saved answer.
+- A tool setup sets up, such as Claude Code or Codex, keeps its folders in one shape: an entry for
+  each folder by its path, in the tool's group, named in the tool's own words, such as
+  `claudeCode.folders` or `codex.homes`. When each folder reads skills of its own, its entry holds
+  its own answer, `setUp`. When every folder reads the same skills, as Codex's homes do, the tool
+  has one answer for them all instead, such as `codex.setUp`, and an entry only lists a folder
+  setup can't find by itself
+  ([Codex is set up in every Codex home, or in none](decisions/codex-is-set-up-in-every-codex-home-or-in-none.md)).
 - A setting is per PC, in `local-settings.json`, unless it describes dev-home itself, which every
   copy shares in `dev-home.json`. A skill's preferences are always per PC.
 - A skill's preference reaches end users who never run setup by hand through the feature it
@@ -42,10 +49,6 @@ AGENTS.md's rules apply too.
 - Save `local-settings.json` only through setup's save, which holds the sync's lock while it
   reads the file again and applies only that run's changes.
 - Make a backup only when a person changes a setting, or answers are deleted.
-- A record of setup's own changes, such as `hiddenSkills` in a Codex home's entry (see
-  [A Codex home answered no gets dev-home's skills hidden](decisions/a-codex-home-answered-no-gets-dev-homes-skills-hidden.md)),
-  isn't a setting: nothing declares it, setup writes it only once the change it records is made,
-  and the checks look only at its form.
 
 ## Changing a setting later
 

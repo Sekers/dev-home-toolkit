@@ -4,7 +4,7 @@
 
 1. dev-home first: its folder, then, when it's missing, clone or create it, with the repo's name,
    after checking that `gh` is there and signed in. If that fails, setup stops and saves nothing.
-2. The questions not answered yet: extra Claude folders and Codex homes, automatic updates, the
+2. The questions not answered yet: extra Claude folders and Codex, automatic updates, the
    copies question, skills, and recommended settings. The copies question is always asked on a
    PC's first setup, with `dev-home.json`'s answer as the default, since adding a PC is when that
    answer most often changes, except for a dev-home setup has just created, which nothing else
@@ -19,9 +19,6 @@
    the rules. Then, with the lock let go, the settings files. Each is read again first; if it
    changed since its diff was shown, setup shows the new diff and asks again. `dev-home.json` is
    read again too, and left as it is, with a `PROBLEM`, if it changed since its change was shown.
-   Last, holding the lock again, the record of the entries setup wrote to hide dev-home's skills
-   in Codex homes answered no, which is saved only once they're written
-   ([A Codex home answered no gets dev-home's skills hidden](a-codex-home-answered-no-gets-dev-homes-skills-hidden.md)).
 
 A run with no console, such as a quiet one, asks nothing and shows no menu, and does the rest in
 the same order, its work holding the lock too, unless a sync that runs it holds the lock already.
@@ -36,14 +33,11 @@ so a folder linked before setup asked about it keeps working until a run by hand
 run names each folder nobody has answered for, on every run, since a missed work account is easy
 to overlook. Every folder's `setUp` is written once it's answered.
 
-Codex homes work the same way, in a list of their own, since
-[Offers use the same answers](offers-use-the-same-answers.md) never mixes types in one list:
-`~/.codex` once Codex has made it, each `~/.codex-*` folder that holds a `config.toml` or an
-`auth.json`, and the folder in `CODEX_HOME`, each recommended. A home answered yes gets the
-always-on rules in its `AGENTS.md`, and dev-home in its `config.toml`. Every home reads
-`~/.agents/skills`, so setup links the skills there once any home is answered yes; with none, it
-adds no links there and removes none. A home answered no gets the skills hidden
-([A Codex home answered no gets dev-home's skills hidden](a-codex-home-answered-no-gets-dev-homes-skills-hidden.md)).
+Codex gets one question for every Codex home it finds, recommended: `~/.codex` once Codex has
+made it, each `~/.codex-*` folder that holds a `config.toml` or an `auth.json`, the folder in
+`CODEX_HOME`, and each listed by its path in `codex.homes`
+([Codex is set up in every Codex home, or in none](codex-is-set-up-in-every-codex-home-or-in-none.md)).
+Until it's answered, setup adds no links and removes none, as for a folder.
 
 **Why:** running setup by hand is a normal way to use dev-home-tools, so it should offer every
 setting, not only the unanswered ones. Questions first and the work after is what people expect
