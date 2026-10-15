@@ -1594,6 +1594,37 @@ def test_configure_adds_and_removes_a_claude_folder(box: Sandbox, settings_kept:
     }
 
 
+def test_configure_writes_a_typed_folder_as_setup_writes_folders(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    # A folder may be typed any way that names it, from where the command runs: it's saved from ~
+    # in the profile folder, in full elsewhere, and in the entry that names it already, if any.
+    configured = read(box.profile / ".claude" / "settings.json")
+    added = box.profile / ".claude-typed"
+    write_text(added / "settings.json", configured)
+    elsewhere = box.root / "claude-elsewhere"
+    write_text(elsewhere / "settings.json", configured)
+    try:
+        relative = run_python(
+            box, "setup.py", "--configure", "claudeCode.folders+=.claude-typed", cwd=box.profile
+        )
+        listed = json.loads(read(settings_kept))["claudeCode"]["folders"]
+        full = setup_configure(box, f"claudeCode.folders+={elsewhere}")
+        named = setup_configure(box, f"claudeCode.folders-={box.profile / '.claude'}")
+        saved = json.loads(read(settings_kept))["claudeCode"]["folders"]
+    finally:
+        remove_claude_folder(added)
+        remove_claude_folder(elsewhere)
+    assert relative.code == 0, str(relative)
+    assert listed == {"~/.claude": {"setUp": True}, "~/.claude-typed": {"setUp": True}}, listed
+    assert full.code == 0 and named.code == 0, str(named)
+    assert saved == {
+        "~/.claude": {"setUp": False},
+        "~/.claude-typed": {"setUp": True},
+        forward(elsewhere): {"setUp": True},
+    }, saved
+
+
 def test_configure_adds_a_codex_home_that_matches_and_refuses_one_that_doesnt(
     box: Sandbox, settings_kept: Path
 ) -> None:

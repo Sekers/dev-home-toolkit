@@ -375,29 +375,26 @@ def change_content_hours(run: "Setup", settings: LocalSettings) -> bool:
     )
 
 
-def set_folder(settings: LocalSettings, run: "Setup", tool: Tool, entry: str, yes: bool) -> None:
-    """Saves the answer for one of a tool's folders, in the entry that already names it when
-    there is one."""
-    saved = settings.folders[tool.setting]
-    found = run.entry_named(resolve_home(entry, run.home), saved)
-    saved[found or entry] = yes
+def set_folder(settings: LocalSettings, run: "Setup", tool: Tool, full: Path, yes: bool) -> None:
+    """Saves the answer for one of a tool's folders, by its full path, in the entry that already
+    names it when there is one, and otherwise in a new one, written as setup writes folders."""
+    settings.folders[tool.setting][run.entry_for(tool, settings, full)] = yes
 
 
-def set_shared(settings: LocalSettings, run: "Setup", tool: Tool, entry: str, yes: bool) -> None:
-    """Saves the answer for one of a shared tool's folders. For the main folder, or while no
-    folder has an answer, it goes to every folder. For another folder, it must match the answer
-    they share: one that doesn't is refused, raising SettingError, since every folder reads the
-    same skills."""
-    full = Path(comparable(resolve_home(entry, run.home)))
+def set_shared(settings: LocalSettings, run: "Setup", tool: Tool, full: Path, yes: bool) -> None:
+    """Saves the answer for one of a shared tool's folders, by its full path. For the main
+    folder, or while no folder has an answer, it goes to every folder. For another folder, it must
+    match the answer they share: one that doesn't is refused, raising SettingError, since every
+    folder reads the same skills."""
     folders = run.known_folders(tool, settings)
     if full.is_dir() and not any(same_path(full, folder) for folder in folders):
         folders = sorted([*folders, full], key=lambda f: folder_rank(tool, f, run.home))
     answer, _ = run.shared_answer(tool, settings, folders)
     if answer is None or (folders and same_path(full, folders[0])):
         run.answer_every_folder(tool, settings, yes)
-        set_folder(settings, run, tool, entry, yes)
+        set_folder(settings, run, tool, full, yes)
     elif answer is yes:
-        set_folder(settings, run, tool, entry, yes)
+        set_folder(settings, run, tool, full, yes)
     else:
         main = run.entry_named(folders[0], settings.folders[tool.setting]) or run.folder_entry(
             folders[0]
@@ -431,7 +428,7 @@ def change_folders(run: "Setup", settings: LocalSettings, tool: Tool) -> bool:
             continue
         answer = run.ask_folder(tool, folder, current)
         if answer is not None and answer != current:
-            set_folder(settings, run, tool, entry, answer)
+            set_folder(settings, run, tool, Path(comparable(folder)), answer)
             changed = True
     folders = run.known_folders(tool, settings)
     if not tool.shared or not folders:
@@ -536,13 +533,14 @@ def assign(run: "Setup", settings: LocalSettings, text: str) -> bool:
         kind = f"{tool.name} {tool.folder}"
         if not value:
             raise SettingError(f"Name the {kind}, such as ~/{tool.default}-second.")
-        full = Path(resolve_home(value, run.home))
+        # A folder as typed, such as ..\.claude-second, means one from where the command runs.
+        full = Path(comparable(resolve_home(value, run.home)))
         if operator == "+=" and not full.is_dir():
             raise SettingError(f"There is no {kind} at {full}.")
         if tool.shared:
-            set_shared(settings, run, tool, value, operator == "+=")
+            set_shared(settings, run, tool, full, operator == "+=")
         else:
-            set_folder(settings, run, tool, value, operator == "+=")
+            set_folder(settings, run, tool, full, operator == "+=")
     old_text, new_text = local_settings_text(before), local_settings_text(settings)
     if old_text == new_text:
         status_line("OK", f"{name} is already set that way, so nothing changed.")
