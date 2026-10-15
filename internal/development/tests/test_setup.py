@@ -2003,6 +2003,18 @@ def test_codex_config_refuses_what_it_cant_change_safely(
     assert plan.reason and reason in plan.reason, plan.reason
 
 
+def test_setup_links_the_skills_of_the_list_it_generated_them_from(box: Sandbox) -> None:
+    # One listing of templates/skills serves both, so a skill added or removed between two
+    # listings can't be linked without its generated copy, or generated without its link.
+    code = shared_module(box, "setup")
+    handoff = box.tools / "templates" / "skills" / "handoff"
+    links, same_names = code.skill_links(box.content, [handoff])
+    names = [name for name, _ in links]
+    assert links[0] == ("handoff", code.GENERATED_ROOT / "skills" / "handoff"), links
+    assert "knowledge" not in names and "dev-home" not in names, names
+    assert same_names == [], same_names
+
+
 def test_codex_config_keeps_everything_else_as_toml_reads_it(box: Sandbox) -> None:
     codex = shared_module(box, "codex_config")
     old = (

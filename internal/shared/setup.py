@@ -1782,7 +1782,7 @@ class Setup:
         if tools.codex_homes:
             tool_skill_folders.append(self.home / ".agents" / "skills")
 
-        links, same_names = skill_links(content_root)
+        links, same_names = skill_links(content_root, skill_sources)
         for name in same_names:
             self.status(
                 "PROBLEM",
@@ -1998,12 +1998,14 @@ def skill_templates() -> list[Path]:
     )
 
 
-def skill_links(content_root: Path) -> tuple[list[tuple[str, Path]], list[str]]:
+def skill_links(
+    content_root: Path, skill_sources: Sequence[Path]
+) -> tuple[list[tuple[str, Path]], list[str]]:
     """Each skill setup links into the tools, by its name and the folder its link points to:
-    dev-home-tools' skills, generated with this PC's paths, then the person's own in dev-home.
-    Also the name of each of the person's own that has the same name as one of dev-home-tools',
-    which isn't linked."""
-    links = [(skill.name, GENERATED_ROOT / "skills" / skill.name) for skill in skill_templates()]
+    dev-home-tools' skills, generated with this PC's paths from skill_sources, the same list the
+    generated files come from, then the person's own in dev-home. Also the name of each of the
+    person's own that has the same name as one of dev-home-tools', which isn't linked."""
+    links = [(skill.name, GENERATED_ROOT / "skills" / skill.name) for skill in skill_sources]
     same_names: list[str] = []
     personal_skills = content_root / "skills"
     if personal_skills.exists():
