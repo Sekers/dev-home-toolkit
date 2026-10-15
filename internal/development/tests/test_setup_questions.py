@@ -1145,6 +1145,49 @@ def test_the_menu_answers_codex_once_for_every_home(
     assert saved["codex"] == {"homes": {"~/.codex": {"setUp": False}}}, saved
 
 
+def test_no_answer_about_codex_leaves_every_home_as_it_is(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Such as a console closed at the question: nothing is saved, so the next run asks again.
+    unanswered = json.loads(settings.read_text(encoding="utf-8"))
+    del unanswered["codex"]
+    write_text(settings, json.dumps(unanswered, indent=2) + "\n")
+    person.answers[MENU] = ""
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    saved = json.loads(settings.read_text(encoding="utf-8"))
+    assert returned == 1, out
+    assert any(re.search(CODEX, asked) for asked in person.asked), person.asked
+    pattern = (
+        r"^PROBLEM\s+No answer came about Codex, so setup left it as it is\. Run setup\.py again "
+        r"to answer\.$"
+    )
+    assert re.search(pattern, out, re.M), out
+    assert "codex" not in saved, saved
+
+
+def test_the_menu_says_when_setup_finds_no_codex_home(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A profile Codex has never run in, with no home listed, has nothing to ask about.
+    profile = box.root / "no-codex-profile"
+    profile.mkdir()
+    other = json.loads(settings.read_text(encoding="utf-8"))
+    del other["codex"]
+    other["testHomeDir"] = profile.as_posix()
+    write_text(settings, json.dumps(other, indent=2) + "\n")
+    person.answers[MENU] = ["6", ""]
+    try:
+        returned = setup_here(box, "--configure")
+        out = capsys.readouterr().out
+    finally:
+        shutil.rmtree(profile)
+    assert returned == 0, out
+    assert re.search(r"^\s+6\s+Codex homes to set up\s+none found$", out, re.M), out
+    assert re.search(r"^Setup found no Codex homes\.$", out, re.M), out
+    assert not any(re.search(CODEX, asked) for asked in person.asked), person.asked
+
+
 def test_a_no_in_the_menu_replaces_the_answer_a_new_codex_home_got_from_the_main_one(
     box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
