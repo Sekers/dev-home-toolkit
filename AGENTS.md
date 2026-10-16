@@ -41,7 +41,7 @@ them in everything you write here, code comments and commit messages included:
 ## The two repos
 
 "dev-home" always means a person's private repo, and "dev-home-tools" always means this one.
-Never leave it to the reader to guess which: name the repo whenever both could fit.
+In files and in chat, name the repo with any word that fits both, such as commits, update, or sync.
 
 | What | dev-home-tools (this repo, public) | dev-home (each person's, private) |
 | --- | --- | --- |
