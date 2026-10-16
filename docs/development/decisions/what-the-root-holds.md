@@ -10,6 +10,8 @@ settings, the tests, and what the tools write: `.venv`, caches, and the test san
 
 - `.gitattributes` and `.gitignore`: git applies them to the whole repo only from the root.
 - `AGENTS.md` and `CLAUDE.md`: Codex and Claude Code read them from the root.
+- `CHANGELOG.md`: Keep a Changelog names it so and puts it in the root, where people and tools
+  look for one.
 - `LICENSE`: GitHub's docs put it in the root.
 - `README.md`: GitHub's front page, and where people look first. GitHub would also show one from
   `docs/` or `.github/`, so this one is convention.

@@ -51,7 +51,7 @@ In files and in chat, name the repo with any word that fits both, such as commit
 | Only here | `setup.py`, `sync.py`, `update.py`, `templates/dev-home-starter/`, `internal/`, `docs/` | `handoffs/`, `knowledge/`, `dev-home.json` (settings every copy shares, which setup writes and commits) |
 
 - The root holds only what must be there, and the scripts a person runs by hand:
-  `.gitattributes`, `.gitignore`, `AGENTS.md`, `CLAUDE.md`, `LICENSE`, `README.md`,
+  `.gitattributes`, `.gitignore`, `AGENTS.md`, `CHANGELOG.md`, `CLAUDE.md`, `LICENSE`, `README.md`,
   `setup.py`, `sync.py`, `update.py`, and the folders `templates/`, `internal/`, and
   `docs/`. Setup adds `local-settings.json` on each PC, and beside it a dated backup each time
   `--configure` changes it or setup sets aside a file in an older layout, such as
