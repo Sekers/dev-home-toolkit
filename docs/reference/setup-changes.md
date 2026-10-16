@@ -56,6 +56,18 @@ folder link as a directory junction, which needs no admin rights and no Develope
     `AGENTS.md` files and stops reading at 32 KiB by default. The global file comes first, so
     the cut would fall on the project's own instructions, without a warning. Twice the default
     leaves room.
+- **If you say no later,** to a Claude Code folder or to Codex, setup removes what it set up
+  there, naming each as it goes:
+  - In a Claude Code folder: its links in `skills\` and `rules\`, and your dev-home and
+    dev-home-tools folders in `settings.json`'s `permissions.additionalDirectories`, with a backup.
+  - For Codex: the `AGENTS.md` it wrote in each home, its links in `~\.agents\skills\`, and your
+    dev-home in each `config.toml`'s `writable_roots`, with a backup.
+    `project_doc_max_bytes` stays, since it gives Codex no access.
+
+  Your own files, links, and settings there stay, though an entry you added yourself for the same
+  folder goes too; the backup keeps it. Other AI tools that read those skills folders lose
+  dev-home's skills too: GitHub Copilot, Gemini CLI, and Cursor read `~\.agents\skills\`, and
+  Cursor also reads `~\.claude\skills\`.
 - **In your dev-home's own git config:** commit signing off, and pulls that merge rather than
   rebase. With signing off, a commit never stops in the middle of a sync to ask for your signing
   passphrase. Your project repos keep signing as usual. Setup does this only in a folder that

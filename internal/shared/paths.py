@@ -36,6 +36,13 @@ def same_path(first: str | Path, second: str | Path) -> bool:
     return os.path.normcase(comparable(first)) == os.path.normcase(comparable(second))
 
 
+def real_path(path: str | Path) -> str:
+    """The path with every link on the way followed, junctions included, in a form two of which
+    compare with ==. Two paths same_path tells apart can still lead to the same folder, such as a
+    folder and a junction to it."""
+    return os.path.normcase(comparable(os.path.realpath(without_long_prefix(str(path)))))
+
+
 def is_inside(path: str | Path, folder: str | Path) -> bool:
     """Whether path is folder itself or somewhere in it, not just a path that starts the same
     way, such as C:/dev-home-old for C:/dev-home."""

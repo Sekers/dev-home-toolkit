@@ -15,8 +15,10 @@ AGENTS.md's rules apply too.
 - Pick its kind from the four in the decision. The help of a setting with no default says what
   happens until it's answered.
 - Ask about a yes-or-no setting with a default through setup's `choose_or_default`, so every
-  such question reads the same: `y, n, or d for the default (<its default>)`, with the capital
-  letter showing what Enter gives, such as `[y/n/D]`.
+  such question reads the same: `'y', 'n', or 'd' for the default (<its default>)`, with the
+  capital letter showing what Enter gives, such as `[y/n/D]`. Any key or answer a prompt names
+  goes through `console.key`
+  ([Keys and answers in setup's prompts stand apart](decisions/keys-and-answers-in-setups-prompts-stand-apart.md)).
 - Decide what Enter does at its question when nothing is answered yet, apart from its default:
   for a setting with a default, Enter means default; a folder's question, and Codex's, takes
   Enter as yes, though a folder nobody has answered for isn't set up; and `multiMachine`'s

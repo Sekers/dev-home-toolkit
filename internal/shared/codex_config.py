@@ -1,7 +1,8 @@
-"""Codex's config.toml: whether it lets Codex write to dev-home and read long AGENTS.md files, and
-planning the change that does both. Python can read TOML but not write it, and a rewrite would
-lose the person's comments and layout, so the change is made as whole-line insertions and edits
-by a reader that follows only the TOML it needs, and refuses anything else."""
+"""Codex's config.toml: whether it lets Codex write to dev-home and read long AGENTS.md files,
+planning the change that does both, and planning the one that takes dev-home back out. Python can
+read TOML but not write it, and a rewrite would lose the person's comments and layout, so each
+change is made as whole-line insertions, edits, and removals by a reader that follows only the
+TOML it needs, and refuses anything else."""
 
 import re
 import tomllib
@@ -11,6 +12,9 @@ from pathlib import Path
 from .settings_files import Plan, read_settings_file, to_lines
 
 MULTI_LINE_STRING = re.compile(r"'''|\"\"\"")
+# A string in a masked line, whose insides masked_line has turned to underscores.
+MASKED_STRING = re.compile(r"'[^']*'|\"[^\"]*\"")
+SANDBOX = "sandbox_workspace_write"
 
 
 @dataclass(frozen=True)
@@ -368,6 +372,216 @@ def plan(path: Path, writable_root: str, min_doc_bytes: int) -> Plan:
         return result
     result.new_text = new_text
     return result
+
+
+def has_comment(line: str) -> bool:
+    """Whether a line ends in a comment. masked_line cuts it off and keeps every other position,
+    so the masked line is shorter."""
+    return len((masked_line(line) or "").rstrip()) != len(line.rstrip())
+
+
+def is_root(text: str, writable_root: str) -> bool:
+    """Whether a TOML string, quotes included, is writable_root, written with single or doubled
+    slashes of either kind. path_pattern leaves out the slashes a path starts with, such as
+    /home/you/dev-home's, so they're matched here."""
+    pattern = r"['\"][\\/]{0,2}" + path_pattern(writable_root)
+    return re.fullmatch(pattern, text, re.IGNORECASE) is not None
+
+
+def mentions_root(text: str, writable_root: str) -> bool:
+    """Whether a writable_roots anywhere in the text holds writable_root, in whatever form or
+    table, a form setup won't edit included, so a removal can say so rather than miss it.
+    Comments don't count, unless the reader can't follow the file, when it falls back to a plain
+    text search."""
+    pattern = path_pattern(writable_root)
+    lines = to_lines(text)
+    layout = None if MULTI_LINE_STRING.search(text) else read_layout(lines)
+    if layout is None or layout.reason:
+        found = re.search(r"writable_roots\s*=\s*\[[^\]]*" + pattern, text, re.IGNORECASE)
+        return found is not None
+    return any(
+        re.search(rf"writable_roots|{SANDBOX}", key.name, re.IGNORECASE)
+        and re.search(pattern, value_text(lines, key), re.IGNORECASE)
+        for key in layout.keys
+    )
+
+
+def list_items(line: str, masked: str, start: int, end: int) -> list[str] | None:
+    """The strings between start and end in a line, quotes included, or None when anything else
+    is there but commas and spaces."""
+    part = masked[start:end]
+    items: list[str] = []
+    rest: list[str] = []
+    position = 0
+    for match in MASKED_STRING.finditer(part):
+        rest.append(part[position : match.start()])
+        items.append(line[start + match.start() : start + match.end()])
+        position = match.end()
+    rest.append(part[position:])
+    if re.search(r"[^\s,]", "".join(rest)):
+        return None
+    return items
+
+
+def plan_removal(path: Path, writable_root: str) -> Plan:
+    """Plans taking writable_root out of [sandbox_workspace_write] writable_roots, after a no to
+    Codex, as whole-line edits and removals, leaving every other line as it was. Every comment
+    stays: the writable_roots line goes once its list is empty, and the table once nothing else
+    is in it, on it, or right above it, not even a comment. Python's own TOML reader then checks
+    that nothing else changed."""
+    file = read_settings_file(path)
+    result = Plan(file, reason=file.reason)
+    if result.reason:
+        return result
+    if MULTI_LINE_STRING.search(file.text):
+        result.reason = "it has multi-line strings, which setup does not edit"
+        return result
+    lines = to_lines(file.text)
+    layout = read_layout(lines)
+    if layout.reason:
+        result.reason = layout.reason
+        return result
+    tables = [header for header in layout.headers if header.name == SANDBOX]
+    roots = [
+        key for key in layout.keys if key.table == SANDBOX and names_key("writable_roots", key)
+    ]
+    if (
+        len(tables) != 1
+        or tables[0].is_array
+        or len(roots) != 1
+        or roots[0].name != "writable_roots"
+    ):
+        result.reason = "its writable_roots line is in a form setup does not edit"
+        return result
+    key = roots[0]
+    changes: dict[int, str] = {}
+    removed: set[int] = set()
+
+    if key.start == key.end:
+        # One line: keep the other entries, or remove the line when none is left.
+        masked = masked_line(lines[key.start]) or ""
+        found = re.search(r"=\s*\[(.*)\]\s*$", masked)
+        items = None if found is None else list_items(lines[key.start], masked, *found.span(1))
+        if found is None or items is None:
+            result.reason = "its writable_roots is not a list of paths"
+            return result
+        kept = [item for item in items if not is_root(item, writable_root)]
+        if len(kept) == len(items):
+            result.reason = "a check of the planned change failed (dev-home is not in it)"
+            return result
+        line = lines[key.start]
+        # A line with a comment stays, as an empty list, so the comment does too.
+        if kept or has_comment(line):
+            changes[key.start] = line[: found.start(1)] + ", ".join(kept) + line[found.end(1) :]
+        else:
+            removed.add(key.start)
+    else:
+        # Several lines: one entry on each, between "writable_roots = [" and "]".
+        start_code = masked_line(lines[key.start]) or ""
+        end_code = (masked_line(lines[key.end]) or "").strip()
+        if not re.search(r"=\s*\[\s*$", start_code) or end_code != "]":
+            result.reason = "its writable_roots spans several lines in a form setup does not edit"
+            return result
+        left = 0
+        commented = False
+        for index in range(key.start + 1, key.end):
+            masked = masked_line(lines[index]) or ""
+            if not masked.strip():
+                commented = commented or bool(lines[index].strip())
+                continue
+            items = list_items(lines[index], masked, 0, len(masked))
+            if items is None or len(items) != 1:
+                result.reason = (
+                    "its writable_roots spans several lines in a form setup does not edit"
+                )
+                return result
+            if not is_root(items[0], writable_root):
+                left += 1
+            elif has_comment(lines[index]):
+                # The comment stays, on a line of its own, as it would on one line.
+                line = lines[index]
+                changes[index] = leading_space(line) + line[len(masked) :].strip()
+                commented = True
+            else:
+                removed.add(index)
+        if not removed and not changes:
+            result.reason = "a check of the planned change failed (dev-home is not in it)"
+            return result
+        ends = (lines[key.start], lines[key.end])
+        if left == 0 and not commented and not any(has_comment(line) for line in ends):
+            removed.update(range(key.start, key.end + 1))
+
+    # The table goes too once nothing is left in it, with the blank lines in it, and with the
+    # blank lines above it when it ends the file. A comment on its header, or right above it,
+    # keeps it, as one in it does.
+    table = tables[0]
+    following = [header.line for header in layout.headers if header.line > table.line]
+    table_end = following[0] if following else len(lines)
+    others = [k for k in layout.keys if k.table == SANDBOX and k is not key]
+    body = [i for i in range(table.line + 1, table_end) if i not in removed]
+    noted_above = table.line > 0 and lines[table.line - 1].lstrip().startswith("#")
+    if (
+        key.start in removed
+        and not others
+        and not has_comment(lines[table.line])
+        and not noted_above
+        and not any(lines[i].strip() for i in body)
+    ):
+        removed.add(table.line)
+        removed.update(body)
+        if not following:
+            above = table.line - 1
+            while above >= 0 and not lines[above].strip():
+                removed.add(above)
+                above -= 1
+
+    # Build the new text. Each line kept keeps its own line break, so it stays byte for byte as
+    # it was.
+    breaks = re.findall(r"\r?\n", file.text)
+    out: list[str] = []
+    for index, line in enumerate(lines):
+        if index in removed:
+            continue
+        line_break = breaks[index] if index < len(breaks) else ""
+        out.append(changes.get(index, line) + line_break)
+    new_text = "".join(out)
+
+    after = read_layout(to_lines(new_text))
+    if after.reason or not same_apart_from_removal(file.text, new_text, writable_root):
+        result.reason = "a check of the planned change failed (read as TOML)"
+        return result
+    result.new_text = new_text
+    return result
+
+
+def same_apart_from_removal(old_text: str, new_text: str, writable_root: str) -> bool:
+    """Reads both versions with Python's own TOML reader: the new one must hold writable_roots
+    without writable_root, or none once nothing is left, and everything else exactly as the old
+    one did."""
+    try:
+        old = tomllib.loads(old_text)
+        new = tomllib.loads(new_text)
+    except tomllib.TOMLDecodeError:
+        return False
+    old_sandbox = old.get(SANDBOX)
+    new_sandbox = new.get(SANDBOX, {})
+    if not isinstance(old_sandbox, dict) or not isinstance(new_sandbox, dict):
+        return False
+    old_roots = old_sandbox.pop("writable_roots", None)
+    new_roots = new_sandbox.pop("writable_roots", [])
+    if not isinstance(old_roots, list):
+        return False
+    kept = [
+        root
+        for root in old_roots
+        if not (isinstance(root, str) and is_root(f"'{root}'", writable_root))
+    ]
+    if len(kept) == len(old_roots) or new_roots != kept:
+        return False
+    for data in (old, new):
+        if data.get(SANDBOX) == {}:
+            del data[SANDBOX]
+    return old == new
 
 
 def same_apart_from_change(

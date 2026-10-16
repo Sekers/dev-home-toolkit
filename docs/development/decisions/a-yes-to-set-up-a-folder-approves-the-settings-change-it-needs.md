@@ -6,7 +6,9 @@ in `permissions.additionalDirectories` in Claude Code's `settings.json`, and dev
 `writable_roots`, with `project_doc_max_bytes`, in Codex's `config.toml`. The question says so
 first, including the access it grants. Every run, quiet ones included, makes the change when it's
 missing, with a dated backup and a `SET` line naming the file, so an entry that goes missing comes
-back, as a deleted skill link does. Setup keeps no record of what it added. A file setup can't
+back, as a deleted skill link does. Setup keeps no record of what it added. (Later extended by
+[Setup removes what it set up in a folder answered no](setup-removes-what-it-set-up-in-a-folder-answered-no.md):
+a no to the folder approves taking the change back out, the same way.) A file setup can't
 safely edit, such as one with comments, still gets a `PROBLEM` line, and a run by hand prints
 what to add. Optional settings, such as recommended ones, keep a question of their own. Since
 syncs now write these files, setup makes the changes while it holds the sync's lock.

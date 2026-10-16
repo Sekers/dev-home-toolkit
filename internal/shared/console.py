@@ -8,6 +8,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TextIO
 
+from .output import GREEN, color
+
 # How wide lines of text get at the console, wrapped at spaces.
 LINE_WIDTH = 100
 
@@ -43,6 +45,15 @@ def is_console_stream(stream: TextIO | None) -> bool:
     return os.isatty(fd)
 
 
+def key(text: str) -> str:
+    """What to type, such as a or yes, set apart from the words around it: in single quotes, and
+    green at a console that shows color, as the menu's numbers are. A capital letter already
+    marks what Enter gives, and brackets the hint, such as [Y/n], so neither can mark a key; and
+    color alone is lost with NO_COLOR, in copied text, and to people who can't tell green
+    apart."""
+    return color(f"'{text}'", GREEN)
+
+
 def ask(question: str, default: str = "") -> str | None:
     """The answer to a question, or default when the answer is blank. None when input ends
     without one."""
@@ -74,11 +85,14 @@ def choose_or_default(question: str, default: bool, enter: bool | str) -> bool |
     Enter never turns a choice into following the default unnoticed. None when input ends
     without an answer."""
     letters = {True: "y", False: "n", DEFAULT: "d"}
-    hint = "/".join(letter.upper() if key == enter else letter for key, letter in letters.items())
+    hint = "/".join(
+        letter.upper() if value == enter else letter for value, letter in letters.items()
+    )
     words = "yes" if default else "no"
+    offered = f"{key('y')}, {key('n')}, or {key('d')} for the default ({words})"
     while True:
         try:
-            answer = input(f"{question} y, n, or d for the default ({words}) [{hint}]: ")
+            answer = input(f"{question} {offered} [{hint}]: ")
         except EOFError:
             return None
         text = answer.strip().lower()
@@ -90,7 +104,7 @@ def choose_or_default(question: str, default: bool, enter: bool | str) -> bool |
             return DEFAULT
         if not text:
             return enter
-        print("Type y, n, or d.", flush=True)
+        print(f"Type {key('y')}, {key('n')}, or {key('d')}.", flush=True)
 
 
 def choose(question: str, default: bool | None = None) -> bool | None:
@@ -110,7 +124,7 @@ def choose(question: str, default: bool | None = None) -> bool | None:
         if not answer.strip() and default is not None:
             return default
         # Without this, the same question coming back looks as if the answer went unseen.
-        print("Type y or n.", flush=True)
+        print(f"Type {key('y')} or {key('n')}.", flush=True)
 
 
 # The answers to a list of optional items, as choose_from_list returns them.
@@ -144,8 +158,8 @@ def choose_from_list(
     intro: str, question: str, items: Sequence[ListItem], details: str = ""
 ) -> ListAnswer | None:
     """One prompt for a list of optional items, with details, if any, between the list and the
-    question, such as what a yes does: a for all, r for the recommended ones (what
-    Enter gives), n for none, or e to ask for each, whose question defaults to that item's
+    question, such as what a yes does: 'a' for all, 'r' for the recommended ones (what
+    Enter gives), 'n' for none, or 'e' to ask for each, whose question defaults to that item's
     recommendation. An answer that would do the same as All recommended is left out, and its
     letter means All recommended: with every item recommended, a, and with none, n. So a letter
     and Enter, shown as the same, never give two answers that a caller could save differently.
@@ -186,20 +200,22 @@ def choose_from_list(
         letters = {"a": ALL, "r": RECOMMENDED, "n": NONE, "e": EACH}
     else:
         letters = {"a": ALL, "n": RECOMMENDED, "e": EACH}
-    words = {"a": "a for all", "r": "r for the recommended ones", "n": "n for none"}
-    offered = [words[letter] for letter in letters if letter != "e"]
+    words = {"a": "for all", "r": "for the recommended ones", "n": "for none"}
+    offered = [f"{key(letter)} {words[letter]}" for letter in letters if letter != "e"]
     enter = next(letter for letter, choice in letters.items() if choice == RECOMMENDED)
     hint = "/".join(letter.upper() if letter == enter else letter for letter in letters)
+    each = f"{key('e')} to ask for each"
     choice = None
     while choice is None:
         try:
-            typed = input(f"{question} {', '.join(offered)}, or e to ask for each [{hint}]: ")
+            typed = input(f"{question} {', '.join(offered)}, or {each} [{hint}]: ")
         except EOFError:
             return None
         text = typed.strip().lower() or enter
         choice = letters.get(text)
         if choice is None:
-            print(f"Type {', '.join(list(letters)[:-1])}, or e.", flush=True)
+            others = ", ".join(key(letter) for letter in list(letters)[:-1])
+            print(f"Type {others}, or {key('e')}.", flush=True)
     if choice == EACH:
         answers: dict[str, bool] = {}
         for item in items:

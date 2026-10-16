@@ -21,7 +21,9 @@ give" in
   every Claude Code folder setup finds is asked about, `~/.claude` included, and Codex gets one
   question for every Codex home, `~/.codex` included
   ([Codex is set up in every Codex home, or in none](codex-is-set-up-in-every-codex-home-or-in-none.md));
-  one with no answer isn't set up, the session's own included.)
+  one with no answer isn't set up, the session's own included. And by
+  [Setup removes what it set up in a folder answered no](setup-removes-what-it-set-up-in-a-folder-answered-no.md):
+  setup removes the links it made in a folder with a no.)
 - A save keeps every key in `local-settings.json` that setup doesn't know. (Later changed by
   [Settings record answers, not just values](settings-record-answers-not-just-values.md): one
   nothing declares is removed.)

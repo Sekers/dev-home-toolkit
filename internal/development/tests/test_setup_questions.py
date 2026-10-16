@@ -23,6 +23,7 @@ from helpers import (
     check_in_sandbox,
     git,
     link_target,
+    profile_kept,
     remove_link,
     run_python,
     sandbox_for,
@@ -34,7 +35,10 @@ from helpers import (
 pytestmark = pytest.mark.xdist_group("setup-questions")
 
 # The question about installing updates, whatever Enter gives.
-UPDATES = r"^Pull updates automatically\? y, n, or d for the default \(yes\) \[[yY]/[nN]/[dD]\]: $"
+UPDATES = (
+    r"^Pull updates automatically\? 'y', 'n', or 'd' for the default \(yes\) "
+    r"\[[yY]/[nN]/[dD]\]: $"
+)
 
 
 @pytest.fixture(scope="module")
@@ -191,13 +195,13 @@ def test_a_list_all_recommended_offers_all_none_or_each_and_enter_takes_all(
     person.answers[r"^Add them\?"] = ["", "a", "all", "a", "n"]
     enter = choose_from_list(box, True, True)
     assert capsys.readouterr().out == "These items are new:\n  one\n  two\n"
-    assert person.asked == ["Add them? a for all, n for none, or e to ask for each [A/n/e]: "]
+    assert person.asked == ["Add them? 'a' for all, 'n' for none, or 'e' to ask for each [A/n/e]: "]
     assert (enter.choice, enter.answers) == ("recommended", {"one": True, "two": True})
     # a is All recommended here, as Enter is, so the two can never be saved differently.
     assert choose_from_list(box, True, True).choice == "recommended"
     # Only the letters count.
     assert choose_from_list(box, True, True).choice == "recommended"
-    assert "Type a, n, or e." in capsys.readouterr().out
+    assert "Type 'a', 'n', or 'e'." in capsys.readouterr().out
     none = choose_from_list(box, True, True)
     assert (none.choice, none.answers) == ("none", {"one": False, "two": False})
 
@@ -215,8 +219,8 @@ def test_a_mixed_list_marks_each_item_and_enter_takes_the_recommended_ones(
         "  three    recommended\n"
     )
     assert person.asked == [
-        "Add them? a for all, r for the recommended ones, n for none, or e to ask for each "
-        "[a/R/n/e]: "
+        "Add them? 'a' for all, 'r' for the recommended ones, 'n' for none, or 'e' to ask for "
+        "each [a/R/n/e]: "
     ]
     assert (enter.choice, enter.answers) == (
         "recommended",
@@ -227,10 +231,21 @@ def test_a_mixed_list_marks_each_item_and_enter_takes_the_recommended_ones(
     assert choose_from_list(box, True, False, True).choice == "recommended"
 
 
+@pytest.mark.parametrize("colored", [True, False], ids=["with color", "without color"])
+def test_a_key_to_type_stands_apart_from_the_words_around_it(
+    box: Sandbox, monkeypatch: pytest.MonkeyPatch, colored: bool
+) -> None:
+    # In quotes always, so it still stands apart with NO_COLOR or in copied text, and green too
+    # at a console that shows color.
+    monkeypatch.setattr(shared_module(box, "output"), "use_color", lambda: colored)
+    key = shared_module(box, "console").key("a")
+    assert key == ("\x1b[32m'a'\x1b[0m" if colored else "'a'")
+
+
 def test_a_list_with_nothing_recommended_takes_enter_as_none(box: Sandbox, person: Person) -> None:
     person.answers[r"^Add them\?"] = ["", "n", "a"]
     enter = choose_from_list(box, False, False)
-    assert person.asked == ["Add them? a for all, n for none, or e to ask for each [a/N/e]: "]
+    assert person.asked == ["Add them? 'a' for all, 'n' for none, or 'e' to ask for each [a/N/e]: "]
     assert (enter.choice, enter.answers) == ("recommended", {"one": False, "two": False})
     assert choose_from_list(box, False, False).choice == "recommended"
     every = choose_from_list(box, False, False)
@@ -302,8 +317,8 @@ def test_asks_for_the_dev_home_folder_when_none_is_saved(
 
 # The question about each Claude Code folder, and about all of them at once.
 FOLDERS = (
-    r"^Set up Claude Code in them with dev-home's skills and rules\? a for all, n for none, or e "
-    r"to ask for each \[A/n/e\]: $"
+    r"^Set up Claude Code in them with dev-home's skills and rules\? 'a' for all, 'n' for none, "
+    r"or 'e' to ask for each \[A/n/e\]: $"
 )
 
 
@@ -403,18 +418,20 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_codex(
     # The list, then what a yes does, then the question; and for Codex, the homes first.
     words = " ".join(out.split())
     claude = (
-        f"{box.profile / '.claude-third'} A yes sets up dev-home's skills and rules in each. It "
-        "also adds your dev-home and dev-home-tools folders to permissions.additionalDirectories "
-        "in each folder's settings.json, so Claude Code can use them from any project. Setup "
-        "backs up each file first."
+        f"{box.profile / '.claude-third'} A 'yes' sets up dev-home's skills and rules in each. "
+        "It also adds your dev-home and dev-home-tools folders to "
+        "permissions.additionalDirectories in each folder's settings.json, so Claude Code can use "
+        "them from any project. A 'no' removes all of that, if it's there. Setup backs up each "
+        "file first."
     )
     assert claude in words, out
     codex = (
         f"Codex homes: {homes} Every Codex home reads the same skills, so they share one answer. "
-        "A yes sets up dev-home's skills and rules in each home. In each home's config.toml, it "
-        "also adds your dev-home folder to writable_roots, so Codex can write there from any "
+        "A 'yes' sets up dev-home's skills and rules in each home. In each home's config.toml, "
+        "it also adds your dev-home folder to writable_roots, so Codex can write there from any "
         "project, and sets project_doc_max_bytes to 65536, so Codex reads all of your rules. "
-        "Setup backs up each file first."
+        "A 'no' removes all of that but project_doc_max_bytes, if it's there. Setup backs up "
+        "each file first."
     )
     assert codex in words, out
     assert not any(re.search(r"change\?", asked) for asked in person.asked), person.asked
@@ -473,7 +490,8 @@ def test_asks_each_question_whose_answer_isnt_saved_yet_then_never_again(
     assert len(asked) == 3 and re.search(MENU, asked[-1]), asked
     assert questions == asked[:2], person.asked
     assert re.search(rf"^Claude Code folder: {re.escape(str(later))}$", out, re.M), out
-    assert "A yes sets up dev-home's skills and rules there." in out, out
+    assert "A 'yes' sets up dev-home's skills and rules there." in out, out
+    assert "A 'no' removes all of that, if it's there." in " ".join(out.split()), out
     assert written["updates"]["installAutomatically"] is False
     assert written["claudeCode"]["folders"] == {
         "~/.claude": {"setUp": True},
@@ -553,7 +571,7 @@ def test_the_updates_question_takes_yes_no_or_default_and_enter_keeps_a_saved_an
     asked = [prompt for prompt in person.asked if re.search(UPDATES, prompt)]
     assert asked and all(prompt.endswith(f"(yes) {hint}: ") for prompt in asked), asked
     assert result["updates"]["installAutomatically"] == written, result
-    assert ("Type y, n, or d." in out) == isinstance(answer, list), out
+    assert ("Type 'y', 'n', or 'd'." in out) == isinstance(answer, list), out
 
 
 def test_a_yes_replaces_a_value_of_the_wrong_kind_that_equals_it_in_python(
@@ -895,7 +913,7 @@ def test_asks_how_many_copies_with_no_default_then_commits_and_pushes_the_answer
     out = capsys.readouterr().out
     assert returned == 0, out
     assert sum(1 for asked in person.asked if re.search(ELSEWHERE, asked)) == 2, person.asked
-    assert re.search(r"^Type y or n\.$", out, re.M), out
+    assert re.search(r"^Type 'y' or 'n'\.$", out, re.M), out
     assert json.loads((home / "dev-home.json").read_text(encoding="utf-8")) == {
         "schemaVersion": 1,
         "multiMachine": True,
@@ -1078,7 +1096,7 @@ def test_a_copies_answer_that_cant_be_saved_leaves_dev_home_as_it_is(
 
 # --configure's menu at a console.
 
-MENU = r"^Number to change, a to go through them all, or Enter to go on: $"
+MENU = r"^Number to change, 'a' to go through them all, or Enter to go on: $"
 UPDATE_HOURS = r"^Check GitHub for dev-home-tools updates every how many hours .*\[24\]: $"
 CONTENT_HOURS = r"^Check GitHub for dev-home's changes every how many hours .*\[12\]: $"
 
@@ -1098,7 +1116,7 @@ def test_the_menu_changes_the_setting_picked_and_keeps_a_backup(
     out = capsys.readouterr().out
     assert returned == 0, out
     assert "dev-home-tools settings" in out and "Shared by every copy of dev-home" in out, out
-    assert "Type a number from 1 to 7, or a, or press Enter to go on." in out, out
+    assert "Type a number from 1 to 7, or 'a', or press Enter to go on." in out, out
     saved = json.loads(backups_removed.read_text(encoding="utf-8"))
     assert saved["updates"]["installAutomatically"] is True, saved
     assert re.search(r"^SET\s+This PC's settings: .* Backup of the old file: ", out, re.M), out
@@ -1141,19 +1159,16 @@ def test_the_menu_answers_codex_once_for_every_home(
 ) -> None:
     # A home that's gone is offered for removal first, as a Claude Code folder is.
     gone = box.profile / ".codex-gone"
-    start = json.loads(backups_removed.read_text(encoding="utf-8"))
-    start["codex"]["homes"]["~/.codex-gone"] = {"setUp": True}
-    write_text(backups_removed, json.dumps(start, indent=2) + "\n")
-    remove = rf"^{re.escape(str(gone))} no longer exists\. Remove it from the settings\? \[y/N\]: $"
-    person.answers.update({MENU: ["6", ""], remove: "y", CODEX: "n"})
-    try:
+    with profile_kept(box):
+        start = json.loads(backups_removed.read_text(encoding="utf-8"))
+        start["codex"]["homes"]["~/.codex-gone"] = {"setUp": True}
+        write_text(backups_removed, json.dumps(start, indent=2) + "\n")
+        remove = rf"^{re.escape(str(gone))} no longer exists\. Remove it from the settings\? "
+        remove += r"\[y/N\]: $"
+        person.answers.update({MENU: ["6", ""], remove: "y", CODEX: "n"})
         returned = setup_here(box, "--configure")
         out = capsys.readouterr().out
         saved = json.loads(backups_removed.read_text(encoding="utf-8"))
-    finally:
-        on = json.loads(backups_removed.read_text(encoding="utf-8"))
-        on["codex"] = {"homes": {"~/.codex": {"setUp": True}}}
-        write_text(backups_removed, json.dumps(on, indent=2) + "\n")
     assert returned == 0, out
     row = r"^\s+6\s+Codex homes to set up\s+~/\.codex: yes, ~/\.codex-gone: yes \(not found\)$"
     assert re.search(row, out, re.M), out
@@ -1212,15 +1227,13 @@ def test_a_no_in_the_menu_replaces_the_answer_a_new_codex_home_got_from_the_main
     work = box.profile / ".codex-work"
     write_text(work / "config.toml", (box.profile / ".codex" / "config.toml").read_text("utf-8"))
     person.answers.update({MENU: ["6", ""], CODEX: "n"})
-    try:
-        returned = setup_here(box, "--configure")
-        out = capsys.readouterr().out
-        saved = json.loads(backups_removed.read_text(encoding="utf-8"))
-    finally:
-        shutil.rmtree(work)
-        on = json.loads(backups_removed.read_text(encoding="utf-8"))
-        on["codex"] = {"homes": {"~/.codex": {"setUp": True}}}
-        write_text(backups_removed, json.dumps(on, indent=2) + "\n")
+    with profile_kept(box):
+        try:
+            returned = setup_here(box, "--configure")
+            out = capsys.readouterr().out
+            saved = json.loads(backups_removed.read_text(encoding="utf-8"))
+        finally:
+            shutil.rmtree(work)
     assert returned == 0, out
     assert "dev-home is now" not in out, out
     assert saved["codex"] == {

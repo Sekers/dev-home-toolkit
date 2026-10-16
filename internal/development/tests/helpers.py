@@ -383,6 +383,31 @@ def run_python(
     return run(box, argv, cwd=cwd or box.root, env=env, answer=answer)
 
 
+@contextlib.contextmanager
+def profile_kept(box: Sandbox) -> Iterator[None]:
+    """For a test that answers no for ~/.claude or Codex in the sandbox's own profile, which
+    removes what setup set up there: afterwards, puts local-settings.json and both tools'
+    settings files back as they were, removes the backups the test left beside them, and runs
+    setup, which sets the profile up again for the tests after it."""
+    files = [
+        box.tools / "local-settings.json",
+        box.profile / ".claude" / "settings.json",
+        box.profile / ".codex" / "config.toml",
+    ]
+    before = {path: path.read_bytes() for path in files if path.exists()}
+    backups = {backup for path in files for backup in path.parent.glob(f"{path.name}.bak-*")}
+    try:
+        yield
+    finally:
+        for path, data in before.items():
+            path.write_bytes(data)
+        for path in files:
+            for backup in path.parent.glob(f"{path.name}.bak-*"):
+                if backup not in backups:
+                    backup.unlink()
+        run_python(box, "setup.py", "--quiet")
+
+
 def start_python(box: Sandbox, script: str, *args: str) -> subprocess.Popen[bytes]:
     """Starts one of the sandbox copy's Python scripts in its root without waiting for it, as
     run_python runs it, with its output and errors together."""

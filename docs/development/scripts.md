@@ -36,15 +36,26 @@ points here; its rules apply too.
 - The entry points in the root stay short: they check the Python version, load
   `internal/shared/` by its path, and run the module of their own name (a test checks).
   [What the root holds](decisions/what-the-root-holds.md) says why the code isn't in the root.
-- Safe to re-run. setup.py never overwrites or deletes anything except its own generated files,
-  links whose target is gone, links it made to skills that no longer exist, the
-  `internal/.python/` junction once the `python.exe` it leads to is gone, and settings files the
-  person said yes to changing. A change to Claude Code's or Codex's settings file is the one
-  change a folder setup sets up needs there, and the yes to setting up that folder approves it:
-  the question says what the yes changes, including the access it grants, so every run, quiet
-  ones included, makes the change when it's missing, with a dated backup and a `SET` line
+- Safe to re-run. setup.py overwrites or deletes only these:
+  - its own generated files
+  - links whose target is gone
+  - links it made to skills that no longer exist
+  - in a Claude Code folder or Codex home the person said no to setting up: the links it made
+    there, and the rules file it wrote there, each listed in its output as it goes
+  - the links it made in `~/.agents/skills`, once the person has said no to Codex
+  - the `internal/.python/` junction, once the `python.exe` it leads to is gone
+  - settings files the person said yes to changing
+  - the settings file of a Claude Code folder or Codex home the person said no to setting up,
+    to take out the access a yes there adds
+
+  [Setup removes what it set up in a folder answered no](decisions/setup-removes-what-it-set-up-in-a-folder-answered-no.md)
+  says which links and entries count as setup's. A change to Claude Code's or Codex's settings
+  file is the one change a folder setup sets up needs there, and the yes to setting up that folder
+  approves it: the question says what the yes changes, including the access it grants, so every
+  run, quiet ones included, makes the change when it's missing, with a dated backup and a `SET`
+  line
   ([A yes to set up a folder approves the settings change it needs](decisions/a-yes-to-set-up-a-folder-approves-the-settings-change-it-needs.md)).
-  Any other settings change is shown as a diff first and waits for a typed yes. Setup never
+  A no to the folder approves taking that access back out, the same way. Any other settings change is shown as a diff first and waits for a typed yes. Setup never
   changes a file it can't fully parse, or a read-only one. The exception to the backup is
   dev-home's `dev-home.json`, whose history is in git: setup commits and pushes it through the
   sync's `commit_for_setup`, which skips the update check and setup, since setup is already

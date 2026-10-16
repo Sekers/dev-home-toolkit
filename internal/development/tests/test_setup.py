@@ -25,6 +25,7 @@ from helpers import (
     link_target,
     make_junction,
     new_sandbox,
+    profile_kept,
     remove_link,
     remove_sandbox,
     run_command,
@@ -403,7 +404,7 @@ def test_a_sync_puts_back_the_settings_a_folder_answered_yes_needs(box: Sandbox)
 
 def test_a_sync_reports_a_settings_change_it_cant_make_safely(box: Sandbox) -> None:
     # Setup won't edit a file with comments, so it says what's missing, and that a run in a
-    # terminal shows what to add by hand.
+    # terminal shows what to change by hand.
     claude = box.profile / ".claude" / "settings.json"
     before = claude.read_bytes()
     write_text(claude, '{\n  // mine\n  "model": "x"\n}\n')
@@ -415,7 +416,7 @@ def test_a_sync_reports_a_settings_change_it_cant_make_safely(box: Sandbox) -> N
     pattern = (
         r"^PROBLEM\s+Claude Code settings in \.claude: .*settings\.json needs .* in "
         r"permissions\.additionalDirectories\. Setup won't change this file itself: .*\. Run "
-        r".*setup\.py in a terminal to see what to add by hand\.$"
+        r".*setup\.py in a terminal to see what to change by hand\.$"
     )
     assert result.code == 1 and result.has_line(pattern), str(result)
     assert kept == '{\n  // mine\n  "model": "x"\n}\n'
@@ -671,21 +672,22 @@ def test_every_codex_home_gets_the_main_homes_answer_and_one_thats_gone_keeps_it
     elsewhere = box.root / "codex-test"
     for folder in (work, elsewhere):
         write_text(folder / "config.toml", "")
-    saved = json.loads(read(settings_kept))
-    saved["codex"]["homes"] = {
-        forward(elsewhere): {"setUp": True},
-        "~/.codex-work": {"setUp": True},
-        "~/.codex-gone": {"setUp": True},
-        "~/.codex": {"setUp": False},
-    }
-    write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
-    try:
-        result = setup(box)
-        after = json.loads(read(settings_kept))["codex"]["homes"]
-        work_rules = (work / "AGENTS.md").exists()
-    finally:
-        for folder in (work, elsewhere):
-            shutil.rmtree(folder)
+    with profile_kept(box):
+        saved = json.loads(read(settings_kept))
+        saved["codex"]["homes"] = {
+            forward(elsewhere): {"setUp": True},
+            "~/.codex-work": {"setUp": True},
+            "~/.codex-gone": {"setUp": True},
+            "~/.codex": {"setUp": False},
+        }
+        write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
+        try:
+            result = setup(box)
+            after = json.loads(read(settings_kept))["codex"]["homes"]
+            work_rules = (work / "AGENTS.md").exists()
+        finally:
+            for folder in (work, elsewhere):
+                shutil.rmtree(folder)
     pattern = (
         rf"^SET\s+dev-home is now turned off for Codex in ~/\.codex-work and "
         rf"{re.escape(forward(elsewhere))}, to match ~/\.codex\. Codex only supports one set of "
@@ -795,8 +797,9 @@ def test_a_claude_folder_with_a_no_is_left_alone_even_from_a_session_there(box: 
     assert not result.has_line("claude-declined"), str(result)
 
 
-def test_a_default_folder_with_a_no_is_left_alone(box: Sandbox) -> None:
-    # A test profile of its own, since a no leaves the links an earlier yes made.
+def test_a_default_folder_with_a_no_is_not_set_up(box: Sandbox) -> None:
+    # A test profile of its own, since a no removes the links an earlier yes made, which the
+    # tests after this one use.
     settings_path = box.tools / "local-settings.json"
     settings_text = read(settings_path)
     declined = json.loads(settings_text)
@@ -815,6 +818,250 @@ def test_a_default_folder_with_a_no_is_left_alone(box: Sandbox) -> None:
     assert not (profile / ".claude" / "skills").exists(), str(result)
     assert not (profile / ".codex" / "AGENTS.md").exists(), str(result)
     assert not (profile / ".agents").exists(), str(result)
+
+
+def test_a_claude_folder_answered_no_loses_what_setup_set_up_there(box: Sandbox) -> None:
+    # Such as a folder set up, then answered no: setup's links go, one at a time, each listed,
+    # and so do dev-home and dev-home-tools in its settings.json, with a backup. What's the
+    # person's own there stays, a link to a skill elsewhere and a folder of their own included.
+    folder = box.profile / ".claude-off"
+    settings = folder / "settings.json"
+    allowed = [str(box.content), "~/dev-home-tools-elsewhere", str(box.tools), "D:/shared-notes"]
+    write_text(
+        settings,
+        json.dumps(
+            {"model": "x", "permissions": {"allow": ["Read"], "additionalDirectories": allowed}},
+            indent=2,
+        )
+        + "\n",
+    )
+    skills, rules = folder / "skills", folder / "rules"
+    make_junction(skills / "handoff", box.generated / "skills" / "handoff")
+    make_junction(skills / "mine", box.content / "skills" / "mine")
+    make_junction(rules / "dev-home-operating-rules", box.generated / "operating-rules")
+    make_junction(rules / "dev-home-global-rules", box.content / "global-rules")
+    own = box.root / "own-skill"
+    write_text(own / "SKILL.md", "---\nname: own\ndescription: A test.\n---\n")
+    make_junction(skills / "own", own)
+    write_text(skills / "local" / "SKILL.md", "---\nname: local\ndescription: A test.\n---\n")
+    settings_path = box.tools / "local-settings.json"
+    settings_text = read(settings_path)
+    declined = json.loads(settings_text)
+    declined["claudeCode"]["folders"]["~/.claude-off"] = {"setUp": False}
+    write_text(settings_path, json.dumps(declined, indent=2) + "\n")
+    settings_before = read(settings)
+    try:
+        previewed = setup(box, "--what-if")
+        previewed_left = sorted(entry.name for entry in skills.iterdir())
+        previewed_settings = read(settings)
+        result = setup(box)
+        skills_left = sorted(entry.name for entry in skills.iterdir())
+        rules_left = sorted(entry.name for entry in rules.iterdir())
+        settings_after = json.loads(read(settings))
+        backups = [read(backup) for backup in folder.glob("settings.json.bak-*")]
+        again = setup(box)
+    finally:
+        write_text(settings_path, settings_text)
+        remove_claude_folder(folder)
+        shutil.rmtree(own)
+    off = r".*[\\/]\.claude-off[\\/]"
+    pattern = rf"^What if: Remove a link in a folder you said no to: {off}skills[\\/]handoff$"
+    assert previewed.has_line(pattern), str(previewed)
+    assert previewed.has_line(r"^CHANGE\s+Claude Code settings in \.claude-off: "), str(previewed)
+    assert previewed_left == ["handoff", "local", "mine", "own"], str(previewed)
+    assert previewed_settings == settings_before, str(previewed)
+    assert result.code == 0, str(result)
+    pattern = (
+        r"^SET\s+Claude Code settings in \.claude-off: removed dev-home and dev-home-tools from "
+        rf"permissions\.additionalDirectories in {off}settings\.json\. Backup of the old file: "
+    )
+    assert result.has_line(pattern), str(result)
+    assert settings_after == {
+        "model": "x",
+        "permissions": {
+            "allow": ["Read"],
+            "additionalDirectories": ["~/dev-home-tools-elsewhere", "D:/shared-notes"],
+        },
+    }, settings_after
+    assert backups == [settings_before], backups
+    for link in (r"skills[\\/]handoff", r"skills[\\/]mine", r"rules[\\/]dev-home-operating-rules"):
+        pattern = rf"^REMOVED\s+Link in a folder you said no to: {off}{link}$"
+        assert result.has_line(pattern), str(result)
+    assert result.has_line(rf"{off}rules[\\/]dev-home-global-rules$"), str(result)
+    assert skills_left == ["local", "own"], str(result)
+    assert rules_left == [], str(result)
+    # Only the links went, never what they pointed to.
+    assert (box.generated / "skills" / "handoff" / "SKILL.md").is_file()
+    assert (box.content / "global-rules" / "global-rules.md").is_file()
+    assert again.code == 0 and not again.has_line(r"^(REMOVED|SET)\s"), str(again)
+
+
+def test_a_folder_answered_no_that_is_really_one_set_up_keeps_what_it_uses(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    # A folder saved under another name through a junction, such as ~/.claude-alias for
+    # ~/.claude, and one whose skills and rules are junctions to ~/.claude's, as when an account
+    # shares another's skills: a no to either leaves alone what ~/.claude, answered yes, uses.
+    # The second's own settings.json still loses dev-home's access.
+    claude = box.profile / ".claude"
+    alias = box.profile / ".claude-alias"
+    make_junction(alias, claude)
+    shares = box.profile / ".claude-shares"
+    write_text(shares / "settings.json", read(claude / "settings.json"))
+    make_junction(shares / "skills", claude / "skills")
+    make_junction(shares / "rules", claude / "rules")
+    saved = json.loads(read(settings_kept))
+    saved["claudeCode"]["folders"]["~/.claude-alias"] = {"setUp": False}
+    saved["claudeCode"]["folders"]["~/.claude-shares"] = {"setUp": False}
+    write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
+    try:
+        result = setup(box)
+        again = setup(box)
+        skill = link_target(claude / "skills" / "handoff")
+        rules = link_target(claude / "rules" / "dev-home-global-rules")
+        allowed = json.loads(read(claude / "settings.json"))["permissions"]
+        shared = json.loads(read(shares / "settings.json"))
+    finally:
+        remove_link(alias)
+        remove_link(shares / "skills")
+        remove_link(shares / "rules")
+        shutil.rmtree(shares)
+    assert result.code == 0 and not result.has_line(r"^REMOVED\s"), str(result)
+    pattern = (
+        r"^SET\s+Claude Code settings in \.claude-shares: removed dev-home and dev-home-tools "
+    )
+    assert result.has_line(pattern), str(result)
+    assert not result.has_line(r"\.claude-alias|Claude Code settings in \.claude:"), str(result)
+    assert again.code == 0 and not again.has_line(r"^(REMOVED|LINKED|SET)\s"), str(again)
+    assert skill == box.generated / "skills" / "handoff"
+    assert rules == box.content / "global-rules"
+    assert len(allowed["additionalDirectories"]) == 2, allowed
+    assert "permissions" not in shared, shared
+
+
+def test_a_folder_answered_no_whose_settings_setup_cant_edit_gets_a_problem(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    # A file with comments still names dev-home, so setup says what to take out; one that isn't
+    # JSON at all is named only when it mentions dev-home or dev-home-tools.
+    commented = box.profile / ".claude-commented"
+    broken = box.profile / ".claude-broken"
+    unrelated = box.profile / ".claude-unrelated"
+    folder = forward(box.content).replace("/", "\\\\")
+    write_text(
+        commented / "settings.json",
+        f'{{\n  // mine\n  "permissions": {{"additionalDirectories": ["{folder}"]}}\n}}\n',
+    )
+    write_text(broken / "settings.json", f'{{"permissions": ["{folder}"\n')
+    write_text(unrelated / "settings.json", '{"model": \n')
+    saved = json.loads(read(settings_kept))
+    for name in (".claude-commented", ".claude-broken", ".claude-unrelated"):
+        saved["claudeCode"]["folders"][f"~/{name}"] = {"setUp": False}
+    write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
+    try:
+        result = setup(box)
+        kept = read(commented / "settings.json")
+    finally:
+        for each in (commented, broken, unrelated):
+            shutil.rmtree(each)
+    pattern = (
+        r"^PROBLEM\s+Claude Code settings in \.claude-commented: .*settings\.json needs dev-home "
+        r"taken out of permissions\.additionalDirectories, since you said no to this folder\. "
+        r"Setup won't change this file itself: .*\. Run .*setup\.py in a terminal to see what to "
+        r"change by hand\.$"
+    )
+    assert result.code == 1 and result.has_line(pattern), str(result)
+    assert kept.startswith("{\n  // mine\n"), kept
+    pattern = (
+        r"^PROBLEM\s+.*\.claude-broken[\\/]settings\.json could not be read as JSON, so setup "
+        r"could not take dev-home and dev-home-tools out of it, since you said no to this folder\.$"
+    )
+    assert result.has_line(pattern), str(result)
+    assert not result.has_line("claude-unrelated"), str(result)
+
+
+def test_a_no_to_codex_removes_what_setup_set_up_for_it(
+    box: Sandbox,
+) -> None:
+    # A test profile of its own, so the sandbox's ~/.agents/skills keeps its links. Every home
+    # loses the rules file setup wrote, but keeps an AGENTS.md of the person's own, and dev-home
+    # leaves its writable_roots, with a backup, while project_doc_max_bytes stays.
+    # ~/.agents/skills loses setup's links, but keeps a skill of the person's own.
+    settings_path = box.tools / "local-settings.json"
+    settings_text = read(settings_path)
+    profile = box.root / "codex-declined-profile"
+    main, second = profile / ".codex", profile / ".codex-second"
+    write_text(main / "AGENTS.md", f"{MARKER}\nRules setup wrote.\n")
+    config = (
+        'model = "x"\nproject_doc_max_bytes = 65536\n\n[sandbox_workspace_write]\n'
+        f"writable_roots = ['{box.content}', 'D:\\scratch']\n"
+    )
+    write_text(main / "config.toml", config)
+    write_text(second / "config.toml", "")
+    write_text(second / "AGENTS.md", "My own rules.\n")
+    skills = profile / ".agents" / "skills"
+    make_junction(skills / "handoff", box.generated / "skills" / "handoff")
+    make_junction(skills / "mine", box.content / "skills" / "mine")
+    own = box.root / "own-codex-skill"
+    write_text(own / "SKILL.md", "---\nname: own\ndescription: A test.\n---\n")
+    make_junction(skills / "own", own)
+    declined = json.loads(settings_text)
+    del declined["claudeCode"]
+    declined["codex"] = {
+        "homes": {"~/.codex": {"setUp": False}, "~/.codex-second": {"setUp": False}}
+    }
+    declined["testHomeDir"] = profile.as_posix()
+    write_text(settings_path, json.dumps(declined, indent=2) + "\n")
+    try:
+        previewed = setup(box, "--what-if")
+        previewed_left = sorted(entry.name for entry in skills.iterdir())
+        previewed_config = read(main / "config.toml")
+        result = setup(box)
+        main_rules = (main / "AGENTS.md").exists()
+        second_rules = read(second / "AGENTS.md")
+        left = sorted(entry.name for entry in skills.iterdir())
+        config_after = read(main / "config.toml")
+        backups = [read(backup) for backup in main.glob("config.toml.bak-*")]
+        second_config = read(second / "config.toml")
+        again = setup(box)
+    finally:
+        write_text(settings_path, settings_text)
+        for entry in skills.iterdir():
+            remove_link(entry)
+        shutil.rmtree(profile)
+        shutil.rmtree(own)
+    for pattern in (
+        r"^What if: Remove the rules file setup wrote in a Codex home you said no to: ",
+        r"^What if: Remove a link for Codex, which you said no to: .*[\\/]handoff$",
+        r"^CHANGE\s+Codex config in \.codex: ",
+    ):
+        assert previewed.has_line(pattern), str(previewed)
+    assert previewed_left == ["handoff", "mine", "own"], str(previewed)
+    assert previewed_config == config, str(previewed)
+    assert result.code == 0, str(result)
+    pattern = r"^REMOVED\s+Rules file in a Codex home you said no to: .*[\\/]\.codex[\\/]AGENTS\.md"
+    assert result.has_line(pattern + "$"), str(result)
+    assert not main_rules, str(result)
+    assert second_rules == "My own rules.\n", str(result)
+    for name in ("handoff", "mine"):
+        pattern = (
+            rf"^REMOVED\s+Link for Codex, which you said no to: .*[\\/]\.agents[\\/]skills[\\/]"
+            rf"{name}$"
+        )
+        assert result.has_line(pattern), str(result)
+    assert left == ["own"], str(result)
+    pattern = (
+        r"^SET\s+Codex config in \.codex: removed dev-home from writable_roots in .*[\\/]\.codex"
+        r"[\\/]config\.toml\. Backup of the old file: "
+    )
+    assert result.has_line(pattern), str(result)
+    assert config_after == (
+        'model = "x"\nproject_doc_max_bytes = 65536\n\n[sandbox_workspace_write]\n'
+        "writable_roots = ['D:\\scratch']\n"
+    ), config_after
+    assert backups == [config], backups
+    assert second_config == "", str(result)
+    assert again.code == 0 and not again.has_line(r"^(REMOVED|SET)\s"), str(again)
 
 
 def test_a_folder_answered_yes_that_is_gone_is_skipped_without_a_word(box: Sandbox) -> None:
@@ -1655,8 +1902,12 @@ def test_configure_writes_a_typed_folder_as_setup_writes_folders(
         )
         listed = json.loads(read(settings_kept))["claudeCode"]["folders"]
         full = setup_configure(box, f"claudeCode.folders+={elsewhere}")
-        named = setup_configure(box, f"claudeCode.folders-={box.profile / '.claude'}")
+        linked = sorted(entry.name for entry in (added / "skills").iterdir())
+        # A no, here typed in full, also removes what setup set up there.
+        named = setup_configure(box, f"claudeCode.folders-={added}")
         saved = json.loads(read(settings_kept))["claudeCode"]["folders"]
+        left = sorted(entry.name for entry in (added / "skills").iterdir())
+        allowed = json.loads(read(added / "settings.json"))
     finally:
         remove_claude_folder(added)
         remove_claude_folder(elsewhere)
@@ -1664,10 +1915,14 @@ def test_configure_writes_a_typed_folder_as_setup_writes_folders(
     assert listed == {"~/.claude": {"setUp": True}, "~/.claude-typed": {"setUp": True}}, listed
     assert full.code == 0 and named.code == 0, str(named)
     assert saved == {
-        "~/.claude": {"setUp": False},
-        "~/.claude-typed": {"setUp": True},
+        "~/.claude": {"setUp": True},
+        "~/.claude-typed": {"setUp": False},
         forward(elsewhere): {"setUp": True},
     }, saved
+    assert "handoff" in linked and left == [], str(named)
+    assert named.has_line(r"^REMOVED\s+Link in a folder you said no to: "), str(named)
+    # Its settings.json held only the folders setup added, so nothing is left of them.
+    assert "permissions" not in allowed, allowed
 
 
 def test_configure_adds_a_codex_home_that_matches_and_refuses_one_that_doesnt(
@@ -1715,19 +1970,20 @@ def test_configure_changes_every_codex_home_through_the_main_one(
     # Including one that's gone, which keeps its answer for if it comes back.
     work = box.profile / ".codex-work"
     write_text(work / "config.toml", "")
-    saved = json.loads(read(settings_kept))
-    saved["codex"]["homes"] = {
-        "~/.codex": {"setUp": True},
-        "~/.codex-gone": {"setUp": True},
-        "~/.codex-work": {"setUp": True},
-    }
-    write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
-    try:
-        off = setup_configure(box, "codex.homes-=~/.codex")
-        homes = json.loads(read(settings_kept))["codex"]["homes"]
-        work_rules = (work / "AGENTS.md").exists()
-    finally:
-        shutil.rmtree(work)
+    with profile_kept(box):
+        saved = json.loads(read(settings_kept))
+        saved["codex"]["homes"] = {
+            "~/.codex": {"setUp": True},
+            "~/.codex-gone": {"setUp": True},
+            "~/.codex-work": {"setUp": True},
+        }
+        write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
+        try:
+            off = setup_configure(box, "codex.homes-=~/.codex")
+            homes = json.loads(read(settings_kept))["codex"]["homes"]
+            work_rules = (work / "AGENTS.md").exists()
+        finally:
+            shutil.rmtree(work)
     assert off.code == 0 and off.has_line(r"^SET\s+This PC's settings"), str(off)
     assert homes == {
         "~/.codex": {"setUp": False},
@@ -2075,6 +2331,204 @@ def test_codex_config_keeps_everything_else_as_toml_reads_it(box: Sandbox) -> No
     # And the check catches a change to anything else.
     other = plan.new_text.replace("network_access = true", "network_access = false")
     assert not codex.same_apart_from_change(old, other, ROOT, 65536)
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        (
+            {"permissions": {"additionalDirectories": [*ENTRIES, "D:\\Other"], "allow": ["x"]}},
+            {"permissions": {"additionalDirectories": ["D:\\Other"], "allow": ["x"]}},
+        ),
+        (
+            {"model": "x", "permissions": {"additionalDirectories": ENTRIES, "allow": ["x"]}},
+            {"model": "x", "permissions": {"allow": ["x"]}},
+        ),
+        ({"model": "x", "permissions": {"additionalDirectories": ENTRIES}}, {"model": "x"}),
+    ],
+    ids=["others stay", "an empty list goes", "an empty permissions goes too"],
+)
+def test_claude_settings_takes_out_only_the_folders_named(
+    box: Sandbox, before: dict[str, object], after: dict[str, object]
+) -> None:
+    path = box.root / "plans" / "remove.json"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps(before, indent=2) + "\n", encoding="utf-8")
+    plan = shared_module(box, "claude_settings").plan_removal(path, ENTRIES)
+    assert not plan.reason, plan.reason
+    assert json.loads(plan.new_text) == after
+
+
+@pytest.mark.parametrize(
+    ("text", "reason"),
+    [
+        ('{\n  // mine\n  "permissions": {"additionalDirectories": []}\n}\n', "not plain JSON"),
+        ('{"permissions": {"additionalDirectories": "C:\\\\x"}}\n', "is not a list"),
+        ('{"permissions": {"additionalDirectories": ["D:\\\\Other"]}}\n', "no entry to take out"),
+    ],
+    ids=["comments", "a single string", "nothing to take out"],
+)
+def test_claude_settings_refuses_a_removal_it_cant_make_safely(
+    box: Sandbox, text: str, reason: str
+) -> None:
+    path = box.root / "plans" / "remove-refused.json"
+    path.parent.mkdir(exist_ok=True)
+    path.write_bytes(text.encode("utf-8"))
+    plan = shared_module(box, "claude_settings").plan_removal(path, ENTRIES)
+    assert plan.reason and reason in plan.reason, plan.reason
+
+
+SANDBOX = "[sandbox_workspace_write]\n"
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        (
+            SANDBOX + "writable_roots = ['C:\\Users\\you\\dev-home', 'D:\\Other']\n",
+            SANDBOX + "writable_roots = ['D:\\Other']\n",
+        ),
+        (
+            SANDBOX
+            + "writable_roots = ['C:\\Users\\you\\dev-home-tools', 'C:/Users/you/dev-home']\n",
+            SANDBOX + "writable_roots = ['C:\\Users\\you\\dev-home-tools']\n",
+        ),
+        (
+            SANDBOX + 'writable_roots = ["C:\\\\Users\\\\you\\\\dev-home", "D:/x"]\n',
+            SANDBOX + 'writable_roots = ["D:/x"]\n',
+        ),
+        (
+            'model = "x"\nproject_doc_max_bytes = 65536\n\n'
+            + SANDBOX
+            + "writable_roots = ['C:\\Users\\you\\dev-home']\n",
+            'model = "x"\nproject_doc_max_bytes = 65536\n',
+        ),
+        (
+            SANDBOX + "writable_roots = ['C:\\Users\\you\\dev-home']\n\n[tui]\nx = 1\n",
+            "[tui]\nx = 1\n",
+        ),
+        (
+            SANDBOX + "network_access = true\nwritable_roots = ['C:\\Users\\you\\dev-home']\n",
+            SANDBOX + "network_access = true\n",
+        ),
+        (
+            SANDBOX + "writable_roots = ['C:\\Users\\you\\dev-home'] # mine\n",
+            SANDBOX + "writable_roots = [] # mine\n",
+        ),
+        (
+            "[sandbox_workspace_write] # mine\nwritable_roots = ['C:\\Users\\you\\dev-home']\n",
+            "[sandbox_workspace_write] # mine\n",
+        ),
+        (
+            SANDBOX + "writable_roots = [\n  'D:\\Other', # a comment\n"
+            "  'C:\\Users\\you\\dev-home',\n]\n",
+            SANDBOX + "writable_roots = [\n  'D:\\Other', # a comment\n]\n",
+        ),
+        (SANDBOX + "writable_roots = [\n  'C:\\Users\\you\\dev-home',\n]\n", ""),
+        (
+            SANDBOX + "writable_roots = [\n  'C:\\Users\\you\\dev-home', # mine\n]\n",
+            SANDBOX + "writable_roots = [\n  # mine\n]\n",
+        ),
+        (
+            "model = 'x'\n\n# my sandbox\n"
+            + SANDBOX
+            + "writable_roots = ['C:/Users/you/dev-home']\n",
+            "model = 'x'\n\n# my sandbox\n" + SANDBOX,
+        ),
+        (
+            SANDBOX.replace("\n", "\r\n")
+            + "writable_roots = ['C:\\Users\\you\\dev-home', 'D:\\Other']\r\n",
+            SANDBOX.replace("\n", "\r\n") + "writable_roots = ['D:\\Other']\r\n",
+        ),
+    ],
+    ids=[
+        "others stay",
+        "a longer path starting the same stays",
+        "doubled backslashes",
+        "an empty table at the end goes, with the blank line above it",
+        "an empty table before another goes",
+        "a table with another key stays",
+        "a line with a comment stays, as an empty list",
+        "a table whose header has a comment stays",
+        "one entry of several lines",
+        "the only entry of several lines",
+        "the only entry of several lines, with a comment, which stays",
+        "a comment right above the table keeps it",
+        "crlf",
+    ],
+)
+def test_codex_config_takes_out_only_dev_home(box: Sandbox, before: str, after: str) -> None:
+    path = box.root / "plans" / "remove.toml"
+    path.parent.mkdir(exist_ok=True)
+    path.write_bytes(before.encode("utf-8"))
+    codex = shared_module(box, "codex_config")
+    plan = codex.plan_removal(path, ROOT)
+    assert not plan.reason, plan.reason
+    assert plan.new_text == after
+    assert codex.same_apart_from_removal(before, plan.new_text, ROOT)
+
+
+@pytest.mark.parametrize(
+    ("text", "reason"),
+    [
+        (SANDBOX + "writable_roots.x = 1\n", "writable_roots line is in a form"),
+        (SANDBOX + "writable_roots = [{ path = 'C:\\Users\\you\\dev-home' }]\n", "not a list of"),
+        (SANDBOX + "writable_roots = ['D:\\Other']\n", "dev-home is not in it"),
+        (
+            "sandbox_workspace_write.writable_roots = ['C:\\Users\\you\\dev-home']\n",
+            "writable_roots line is in a form",
+        ),
+        (
+            SANDBOX + "writable_roots = ['C:\\Users\\you\\dev-home',\n  'D:\\Other']\n",
+            "spans several lines in a form",
+        ),
+    ],
+    ids=[
+        "a dotted key",
+        "an inline table",
+        "nothing to take out",
+        "a top-level dotted key",
+        "an entry on the first line",
+    ],
+)
+def test_codex_config_refuses_a_removal_it_cant_make_safely(
+    box: Sandbox, text: str, reason: str
+) -> None:
+    path = box.root / "plans" / "remove-refused.toml"
+    path.parent.mkdir(exist_ok=True)
+    path.write_bytes(text.encode("utf-8"))
+    plan = shared_module(box, "codex_config").plan_removal(path, ROOT)
+    assert plan.reason and reason in plan.reason, plan.reason
+
+
+def test_codex_config_takes_out_a_root_that_starts_with_a_slash(box: Sandbox) -> None:
+    # As on macOS and Linux, where a full path starts with /.
+    path = box.root / "plans" / "remove-posix.toml"
+    path.parent.mkdir(exist_ok=True)
+    path.write_bytes(
+        b"[sandbox_workspace_write]\nwritable_roots = ['/home/you/dev-home', '/srv/x']\n"
+    )
+    plan = shared_module(box, "codex_config").plan_removal(path, "/home/you/dev-home")
+    assert not plan.reason, plan.reason
+    assert plan.new_text == "[sandbox_workspace_write]\nwritable_roots = ['/srv/x']\n"
+
+
+@pytest.mark.parametrize(
+    ("text", "mentioned"),
+    [
+        (SANDBOX + "writable_roots = ['C:\\Users\\you\\dev-home']\n", True),
+        ("sandbox_workspace_write.writable_roots = ['C:\\Users\\you\\dev-home']\n", True),
+        ("sandbox_workspace_write = { writable_roots = ['C:\\Users\\you\\dev-home'] }\n", True),
+        ("# writable_roots = ['C:\\Users\\you\\dev-home']\n", False),
+        (SANDBOX + "writable_roots = ['C:\\Users\\you\\dev-home-tools']\n", False),
+    ],
+    ids=["a table", "a dotted key", "an inline table", "a comment", "a longer path"],
+)
+def test_codex_config_finds_dev_home_in_any_writable_roots(
+    box: Sandbox, text: str, mentioned: bool
+) -> None:
+    # So a removal setup can't make is a problem it names, not one it misses.
+    assert shared_module(box, "codex_config").mentions_root(text, ROOT) is mentioned
 
 
 def test_claude_settings_refuses_half_a_character(box: Sandbox) -> None:

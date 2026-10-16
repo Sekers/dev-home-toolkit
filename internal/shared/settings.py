@@ -141,6 +141,8 @@ CODEX = Tool(
     ("config.toml", "auth.json"),
     shared=True,
 )
+# Adding an AI agent tool: if it reads a skills folder another tool here reads too, such as
+# ~/.agents/skills, see AGENTS_SKILLS in setup.py first.
 TOOLS = (CLAUDE_CODE, CODEX)
 # Each tool's folders, which setting-definitions.json can't declare, since a folder's name can hold
 # a dot.

@@ -23,6 +23,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from . import console
 from .output import CYAN, GREEN, color, status_line
 from .paths import comparable, forward, is_inside, resolve_home, same_path, unsafe_reason
 from .settings import (
@@ -101,7 +102,10 @@ def usage() -> str:
                 f"Set up a {tool.name} {tool.folder}, such as ~/{tool.default} or "
                 f"~/{tool.default}-second.{shared}",
             ),
-            (f"{tool.setting}-=<folder>", "Stop setting one up."),
+            (
+                f"{tool.setting}-=<folder>",
+                "Stop setting one up, and remove what setup set up there.",
+            ),
         ]
     entries += [
         ("skills.<skill>.preferences.<name>=true|false", "A preference a skill declares."),
@@ -294,12 +298,17 @@ def menu(run: "Setup", settings: LocalSettings) -> bool:
         for line in overview(run, settings):
             run.line(line)
         run.line()
-        choice = run.ask("Number to change, a to go through them all, or Enter to go on")
+        choice = run.ask(
+            f"Number to change, {console.key('a')} to go through them all, or Enter to go on"
+        )
         if not choice:
             return changed
         picked = list(steps) if choice.strip().lower() == "a" else [choice.strip()]
         if not all(number in steps for number in picked):
-            run.line(f"Type a number from 1 to {len(steps)}, or a, or press Enter to go on.")
+            run.line(
+                f"Type a number from 1 to {len(steps)}, or {console.key('a')}, or press Enter to "
+                "go on."
+            )
             continue
         for number in picked:
             changed = steps[number](run, settings) or changed

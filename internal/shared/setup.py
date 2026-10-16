@@ -3,8 +3,8 @@ operating rules with this PC's paths, links them into Claude Code and Codex, and
 settings they need.
 
 Safe to run any number of times. It rewrites only its own generated files, creates missing links,
-replaces links whose target is gone, removes links it made to skills that no longer exist, and
-reports anything else without changing it.
+replaces links whose target is gone, removes links it made to skills that no longer exist,
+removes what it set up in a folder answered no, and reports anything else without changing it.
 
 A run goes in this order, so the questions come first and the work after:
 
@@ -50,9 +50,10 @@ can't be variables.
 Each Claude Code folder and Codex home setup sets up needs one change in its settings file, so
 the tool can reach dev-home from any project. The yes to setting up the folder approves it, and
 the question says so, so every run, quiet ones included, makes the change when it's missing: it
-saves a dated backup of the file, then writes the change, and says so. It never edits a file it
-can't fully parse (a settings.json with comments, for example), or a read-only one; it reports
-it, and a run by hand prints what to add by hand.
+saves a dated backup of the file, then writes the change, and says so. A no to the folder takes
+that access back out the same way. It never edits a file it can't fully parse (a settings.json
+with comments, for example), or a read-only one; it reports it, and a run by hand prints what to
+change by hand.
 
 Run it by hand once per PC. After that, each sync runs it with --quiet, so changes to the
 skills, and skills added on another PC, reach this one.
@@ -62,7 +63,9 @@ local-settings.json. Setup offers each Claude Code folder it finds, in a list, e
 ~/.claude, once Claude Code has made it; each extra one, one per account, such as
 ~/.claude-<name>; and the folder in CLAUDE_CONFIG_DIR. It saves a no there too. A folder nobody
 has answered for isn't set up: setup adds no links there and removes none, and a quiet run names
-it. A folder answered no is left alone, and one answered yes that no longer exists is skipped.
+it. In a folder answered no, setup removes the links it made, and takes dev-home and
+dev-home-tools back out of its settings.json, and leaves the rest alone. One answered yes that no
+longer exists is skipped.
 
 Codex homes are saved the same way, under codex.homes, but every home reads the same skills, from
 ~/.agents/skills, so every home has the same answer: setup sets up all of them, or none, and asks
@@ -73,7 +76,9 @@ name, otherwise the first other home there by full path; codex.homes keeps its e
 order too. A home whose answer differs from the main home's, or that has none, such as a new one,
 gets the main home's answer, with a line saying so; when the main home has none, the next home
 there in that order that has one gives it. A yes gets each home its
-rules and settings, and the skills linked into ~/.agents/skills. Until Codex is answered, setup
+rules and settings, and the skills linked into ~/.agents/skills. A no removes the rules file setup
+wrote in each home and the links it made in ~/.agents/skills, and takes dev-home back out of each
+home's writable_roots. Until Codex is answered, setup
 adds no links and removes none, and a quiet run names its homes.
 
 Each link to a folder is a junction on Windows, which needs no Developer Mode, and a symbolic link
@@ -135,7 +140,15 @@ from . import claude_settings, codex_config, configure, console, generated, pyth
 from .git import run_git
 from .links import is_link, link_info, make_folder_link, remove_folder_link
 from .output import GREEN, RED, YELLOW, color, describe, first_line, status_line
-from .paths import comparable, forward, is_inside, resolve_home, same_path, unsafe_reason
+from .paths import (
+    comparable,
+    forward,
+    is_inside,
+    real_path,
+    resolve_home,
+    same_path,
+    unsafe_reason,
+)
 from .programs import SYNC_HOLDS_LOCK, by_hand, find_program
 from .settings import (
     AUTO_UPDATE,
@@ -201,6 +214,15 @@ FOLDER_NOTE = (
 )
 # Files every dev-home starts with, from templates/dev-home-starter/.
 DEV_HOME_FILES = ("global-rules/global-rules.md", "knowledge/README.md")
+# The skills folder every Codex home reads, in the profile folder. Of the tools setup sets up, only
+# Codex reads it, so setup links the skills here for a yes to Codex, and removes its links here
+# for a no.
+# Adding an AI agent tool: other tools read this folder too, such as GitHub Copilot, Gemini CLI,
+# and Cursor (their docs, read 2026-10-16). If setup ever sets up one of them, a no to Codex alone
+# must no longer remove these links: setup links here while any tool that reads the folder is
+# answered yes, and removes its links only once every one of them is answered no. See
+# docs/development/decisions/setup-removes-what-it-set-up-in-a-folder-answered-no.md.
+AGENTS_SKILLS = Path(".agents") / "skills"
 
 
 class CannotGoOnError(Exception):
@@ -210,8 +232,8 @@ class CannotGoOnError(Exception):
 @dataclass(frozen=True)
 class SettingsChange:
     """A change one of the tools' settings files needs: what it's for, the file, what the file
-    needs, the plan, what to add by hand where setup can't make it, and what the change adds, as
-    the line saying it's made puts it."""
+    needs, the plan, what to change by hand where setup can't make it, and what the change does,
+    as the line saying it's made puts it, such as "added dev-home to writable_roots"."""
 
     subject: str
     path: Path
@@ -219,7 +241,7 @@ class SettingsChange:
     plan: Plan
     how_to: str
     snippet: str
-    added: str
+    done: str
 
 
 # What a check of one settings file found: a line to report as it is, or a change it needs.
@@ -229,10 +251,12 @@ SettingsCheck = tuple[str, str] | SettingsChange
 @dataclass(frozen=True)
 class ToolFolders:
     """Where setup sets up each tool, by full path: each Claude Code folder and Codex home answered
-    yes."""
+    yes. And where it removes what it set up: each one answered no."""
 
     claude_dirs: list[str]
     codex_homes: list[str]
+    declined_claude_dirs: list[str]
+    declined_codex_homes: list[str]
 
 
 def cleanup(checked: Checked) -> list[str]:
@@ -1236,9 +1260,9 @@ class Setup:
         self.print_diff(change.plan.file.text, change.plan.new_text or "")
 
     def repair_setting(self, change: SettingsChange) -> None:
-        """Makes a settings change a folder needs, and writes the file with a backup, saying so.
-        When the change can't be made safely, it reports a problem and leaves the file alone, and,
-        except with --quiet, says what to add by hand."""
+        """Makes a settings change a folder needs, or one answered no needs, and writes the file
+        with a backup, saying so. When the change can't be made safely, it reports a problem and
+        leaves the file alone, and, except with --quiet, says what to change by hand."""
         plan = change.plan
         problem = f"{change.subject}: {change.path} needs {change.need}."
         if plan.reason:
@@ -1246,7 +1270,7 @@ class Setup:
                 self.status(
                     "PROBLEM",
                     f"{problem} Setup won't change this file itself: {plan.reason}. Run "
-                    f"{by_hand('setup.py')} in a terminal to see what to add by hand.",
+                    f"{by_hand('setup.py')} in a terminal to see what to change by hand.",
                 )
                 return
             self.status("PROBLEM", problem)
@@ -1269,7 +1293,7 @@ class Setup:
                 change.path, plan.new_text or "", bom=plan.file.bom, backup=True
             )
             saved = f". Backup of the old file: {backup}" if backup else " (new file)"
-            self.status("SET", f"{change.subject}: added {change.added} in {change.path}{saved}")
+            self.status("SET", f"{change.subject}: {change.done} in {change.path}{saved}")
         except (OSError, ValueError) as error:
             self.status("PROBLEM", f"{change.subject}: could not write {change.path}. {error}")
 
@@ -1342,7 +1366,8 @@ class Setup:
                     self.status("SET", matched)
             self.set_up(settings, content_root, tools)
             # The tools' settings files: the change each folder set up needs, which its yes
-            # approved, made with a backup. See repair_setting.
+            # approved, and the access taken back out of each one answered no, which the no
+            # approved, each made with a backup. See repair_setting.
             for check in self.settings_checks(content_root, tools):
                 if isinstance(check, SettingsChange):
                     self.repair_setting(check)
@@ -1624,10 +1649,24 @@ class Setup:
 
     def tool_folders(self, settings: LocalSettings) -> ToolFolders:
         """Where setup sets up each tool, from the answers: each Claude Code folder and Codex home
-        answered yes."""
+        answered yes. And each one answered no, unless a yes covers it too: a folder saved under
+        two names, or reached through a junction, or a Codex home while another is answered yes,
+        since every home shares one answer."""
         claude_dirs = [full for _, full in self.folders_answered(CLAUDE_CODE, settings, True)]
         codex_homes = [full for _, full in self.folders_answered(CODEX, settings, True)]
-        return ToolFolders(claude_dirs, codex_homes)
+        declined_claude_dirs = [
+            full for _, full in self.folders_answered(CLAUDE_CODE, settings, False)
+        ]
+        # Following links takes a little time, so only a run with a folder answered no does it.
+        if declined_claude_dirs:
+            set_up = {real_path(d) for d in claude_dirs}
+            declined_claude_dirs = [d for d in declined_claude_dirs if real_path(d) not in set_up]
+        declined_codex_homes = (
+            []
+            if codex_homes
+            else [full for _, full in self.folders_answered(CODEX, settings, False)]
+        )
+        return ToolFolders(claude_dirs, codex_homes, declined_claude_dirs, declined_codex_homes)
 
     def folders_answered(
         self, tool: Tool, settings: LocalSettings, answer: bool
@@ -1766,9 +1805,10 @@ class Setup:
 
         # 4. Skills, linked into each tool's personal skills folder: the dev-home-tools skills,
         # then the personal skills in dev-home. Every Codex home reads ~/.agents/skills.
+        # Adding an AI agent tool: see AGENTS_SKILLS, which other tools read too.
         tool_skill_folders = [Path(d) / "skills" for d in tools.claude_dirs]
         if tools.codex_homes:
-            tool_skill_folders.append(self.home / ".agents" / "skills")
+            tool_skill_folders.append(self.home / AGENTS_SKILLS)
 
         links, same_names = skill_links(content_root, skill_sources)
         for name in same_names:
@@ -1781,9 +1821,7 @@ class Setup:
 
         # Links into these folders are setup's own, so one whose skill is gone can be removed.
         # A link for a skill that's still here stays, even when its generated folder is missing.
-        owned = [
-            os.path.normcase(comparable(f)) + os.sep for f in (generated_skills, personal_skills)
-        ]
+        skill_targets = (generated_skills, personal_skills)
         current_skills = {os.path.normcase(name) for name, _ in links}
         for folder in tool_skill_folders:
             for name, target in links:
@@ -1793,20 +1831,11 @@ class Setup:
             for entry in sorted(folder.iterdir()):
                 if os.path.normcase(entry.name) in current_skills:
                     continue
-                found = link_info(entry)
-                if found is None or not found.is_link or found.target is None:
-                    continue
-                if Path(found.target).exists():
-                    continue
-                if not os.path.normcase(found.target).startswith(tuple(owned)):
-                    continue
-                if not self.should(entry, "Remove a link to a deleted skill"):
-                    continue
-                try:
-                    remove_folder_link(entry)
-                    self.status("REMOVED", f"Link to a deleted skill: {entry}")
-                except OSError as error:
-                    self.status("PROBLEM", f"Could not remove the stale link {entry}. {error}")
+                points_to = setup_link_target(entry, skill_targets)
+                if points_to is not None and not Path(points_to).exists():
+                    self.remove_link(
+                        entry, "Remove a link to a deleted skill", "Link to a deleted skill"
+                    )
 
         # 5. Always-on rules: the operating rules from here, and the person's global rules from
         # dev-home. Claude Code loads every file in the rules folder of each Claude folder, where
@@ -1839,11 +1868,99 @@ class Setup:
                 Path(home), operating_template, global_rules_file, values, codex_note
             )
 
+        # 6. What setup set up in each folder answered no, each removal listed as it goes: the
+        # links it made in a Claude Code folder, and for Codex, the rules file it wrote in each
+        # home and the links it made in ~/.agents/skills. A link counts as setup's when it points
+        # where setup's links point, so one of the person's own stays, as does anything that
+        # isn't a link. A folder that is really one setup sets up, through a junction, such as
+        # ~/.claude/skills made a junction to ~/.agents/skills to share skills, keeps its links.
+        # The access a yes added to the tools' settings files is taken out last, with the other
+        # settings changes (see settings_checks).
+        set_up: set[str] = set()
+        if tools.declined_claude_dirs or tools.declined_codex_homes:
+            set_up = {real_path(folder) for folder in tool_skill_folders}
+            set_up |= {real_path(Path(d) / "rules") for d in tools.claude_dirs}
+        rules_targets = (operating_rules, global_rules)
+        for claude_dir in tools.declined_claude_dirs:
+            for subfolder, targets in (("skills", skill_targets), ("rules", rules_targets)):
+                self.remove_links_in(
+                    Path(claude_dir) / subfolder,
+                    targets,
+                    set_up,
+                    "Remove a link in a folder you said no to",
+                    "Link in a folder you said no to",
+                )
+        for home in tools.declined_codex_homes:
+            self.remove_codex_rules(Path(home))
+        # Adding an AI agent tool: see AGENTS_SKILLS. Only Codex reads that folder today, of the
+        # tools setup sets up, so a no to Codex is enough to remove the links there.
+        if tools.declined_codex_homes:
+            self.remove_links_in(
+                self.home / AGENTS_SKILLS,
+                skill_targets,
+                set_up,
+                "Remove a link for Codex, which you said no to",
+                "Link for Codex, which you said no to",
+            )
+
+    def remove_links_in(
+        self,
+        folder: Path,
+        targets: Sequence[Path],
+        set_up: set[str],
+        action: str,
+        what: str,
+    ) -> None:
+        """Removes each of setup's links directly in folder (see setup_link_target), one at a
+        time. Anything else there stays: a link of the person's own, a file, or a folder. A folder
+        whose real path is in set_up is one setup sets up this run, so it's left alone. action
+        says what --what-if would do, and what starts each REMOVED line, which names the link."""
+        if not folder.is_dir() or real_path(folder) in set_up:
+            return
+        for entry in sorted(folder.iterdir()):
+            if setup_link_target(entry, targets) is not None:
+                self.remove_link(entry, action, what)
+
+    def remove_link(self, link: Path, action: str, what: str) -> None:
+        """Removes one of setup's links, never anything it points to. action says what --what-if
+        would do, and what starts the REMOVED line, which names the link."""
+        if not self.should(link, action):
+            return
+        try:
+            remove_folder_link(link)
+            self.status("REMOVED", f"{what}: {link}")
+        except OSError as error:
+            self.status("PROBLEM", f"Could not remove the link {link}. {error}")
+
+    def remove_codex_rules(self, home: Path) -> None:
+        """Removes the rules file setup wrote in a Codex home answered no, and leaves an AGENTS.md
+        it didn't write, or a link, as it is."""
+        path = home / "AGENTS.md"
+        if is_link(path) or not path.is_file():
+            return
+        try:
+            current = path.read_bytes().decode("utf-8-sig", errors="replace")
+        except OSError as error:
+            self.status("PROBLEM", f"{path} could not be read, so setup left it as it is. {error}")
+            return
+        if not current.startswith(generated.MARKER):
+            return
+        if not self.should(
+            path, "Remove the rules file setup wrote in a Codex home you said no to"
+        ):
+            return
+        try:
+            remove_generated_file(path)
+            self.status("REMOVED", f"Rules file in a Codex home you said no to: {path}")
+        except OSError as error:
+            self.status("PROBLEM", f"Could not remove {path}. {error}")
+
     def settings_checks(self, content_root: Path, tools: ToolFolders) -> list[SettingsCheck]:
         """What each tool's settings file needs, planned from the file as it is now: each Claude
-        Code folder's and each Codex home's set up."""
+        Code folder's and each Codex home's set up, and the access a yes added taken back out of
+        each one answered no, which that no approves as the yes approved adding it."""
         wanted_dirs = [comparable(content_root), comparable(TOOLS_ROOT)]
-        checks = [
+        checks: list[SettingsCheck] = [
             self.check_claude_settings(Path(claude_dir), wanted_dirs)
             for claude_dir in tools.claude_dirs
         ]
@@ -1851,6 +1968,23 @@ class Setup:
             self.check_codex_config(Path(home), comparable(content_root))
             for home in tools.codex_homes
         ]
+        # A file that is really one a folder set up uses, through a link, keeps what that folder
+        # needs.
+        set_up = (
+            {real_path(Path(d) / "settings.json") for d in tools.claude_dirs}
+            if tools.declined_claude_dirs
+            else set()
+        )
+        removals: list[SettingsCheck | None] = [
+            self.claude_access_to_remove(Path(claude_dir), wanted_dirs)
+            for claude_dir in tools.declined_claude_dirs
+            if real_path(Path(claude_dir) / "settings.json") not in set_up
+        ]
+        removals += [
+            self.codex_access_to_remove(Path(home), comparable(content_root))
+            for home in tools.declined_codex_homes
+        ]
+        checks += [removal for removal in removals if removal is not None]
         return checks
 
     def check_claude_settings(self, claude_dir: Path, wanted_dirs: list[str]) -> SettingsCheck:
@@ -1902,7 +2036,7 @@ class Setup:
             'Merge this into the file. If it already has "permissions", put '
             "additionalDirectories inside that block:",
             snippet,
-            f"{added} to permissions.additionalDirectories",
+            f"added {added} to permissions.additionalDirectories",
         )
 
     def check_codex_config(self, home: Path, content_root: str) -> SettingsCheck:
@@ -1946,7 +2080,83 @@ class Setup:
             "the file already has [sandbox_workspace_write], add only the writable_roots line "
             "under it:",
             snippet,
-            added,
+            f"added {added}",
+        )
+
+    def claude_access_to_remove(
+        self, claude_dir: Path, wanted_dirs: list[str]
+    ) -> SettingsCheck | None:
+        """What a Claude Code folder answered no needs in its settings.json: dev-home and
+        dev-home-tools taken back out of permissions.additionalDirectories, written however they
+        are, such as with ~. A problem when the file isn't JSON but names either. None when
+        neither is there, or there's no file to read."""
+        path = claude_dir / "settings.json"
+        try:
+            text = path.read_bytes().decode("utf-8-sig", errors="replace")
+        except OSError:
+            return None
+        folders = claude_settings.folders_allowed(text)
+        if folders is None:
+            if not mentions_folder(text, wanted_dirs):
+                return None
+            return (
+                "PROBLEM",
+                f"{path} could not be read as JSON, so setup could not take dev-home and "
+                "dev-home-tools out of it, since you said no to this folder.",
+            )
+        found = [
+            folder
+            for folder in folders
+            if any(same_path(resolve_home(folder, self.home), d) for d in wanted_dirs)
+        ]
+        if not found:
+            return None
+        names = and_list(
+            [
+                name
+                for d, name in zip(wanted_dirs, ALLOWED_NAMES, strict=True)
+                if any(same_path(resolve_home(folder, self.home), d) for folder in found)
+            ]
+        )
+        try:
+            plan = claude_settings.plan_removal(path, found)
+        except Exception as error:
+            plan = Plan(SettingsFile(), reason=f"planning the change failed ({describe(error)})")
+        return SettingsChange(
+            f"Claude Code settings in {claude_dir.name}",
+            path,
+            f"{names} taken out of permissions.additionalDirectories, since you said no to this "
+            "folder",
+            plan,
+            "Take these out of permissions.additionalDirectories:",
+            "          " + ", ".join(claude_settings.dump(folder) for folder in found),
+            f"removed {names} from permissions.additionalDirectories",
+        )
+
+    def codex_access_to_remove(self, home: Path, content_root: str) -> SettingsChange | None:
+        """What a Codex home needs in its config.toml after a no to Codex: dev-home taken back
+        out of writable_roots. project_doc_max_bytes stays, since it gives Codex no access. dev-home
+        in a form setup can't edit gets the plan's reason, as a problem. None when dev-home isn't
+        there, or there's no file to read."""
+        path = home / "config.toml"
+        try:
+            text = path.read_bytes().decode("utf-8-sig", errors="replace")
+        except OSError:
+            return None
+        if not codex_config.mentions_root(text, content_root):
+            return None
+        try:
+            plan = codex_config.plan_removal(path, content_root)
+        except Exception as error:
+            plan = Plan(SettingsFile(), reason=f"planning the change failed ({describe(error)})")
+        return SettingsChange(
+            f"Codex config in {home.name}",
+            path,
+            "dev-home taken out of writable_roots, since you said no to Codex",
+            plan,
+            "Take this out of writable_roots, under [sandbox_workspace_write]:",
+            f"          '{content_root}'",
+            "removed dev-home from writable_roots",
         )
 
 
@@ -1955,17 +2165,20 @@ def folder_question(tool: Tool, folder: Path) -> str:
 
 
 def yes_does(tool: Tool, *, several: bool) -> str:
-    """What a yes to setting up a tool's folders does, said before the question: the one change
-    setup also makes in each folder's settings file, which the yes approves (see
-    repair_setting), included."""
+    """What a yes to setting up a tool's folders does, and a no, said before the question: the
+    one change setup also makes in each folder's settings file, which the yes approves (see
+    repair_setting), and its removal, which the no approves, included."""
+    yes, no = console.key("yes"), console.key("no")
+    # Adding an AI agent tool: see AGENTS_SKILLS. A tool that reads ~/.agents/skills, as Codex
+    # does, shares that folder's links with Codex, and its question says so.
     if tool.shared:
         return (
             f"Every {tool.name} {tool.folder} reads the same skills, so they share one answer. A "
-            f"yes sets up dev-home's skills and rules in each {tool.folder}. In each "
+            f"{yes} sets up dev-home's skills and rules in each {tool.folder}. In each "
             f"{tool.folder}'s config.toml, it also adds your dev-home folder to writable_roots, "
             f"so {tool.name} can write there from any project, and sets project_doc_max_bytes to "
-            f"{CODEX_DOC_BYTES}, so {tool.name} reads all of your rules. Setup backs up each file "
-            "first."
+            f"{CODEX_DOC_BYTES}, so {tool.name} reads all of your rules. A {no} removes all of "
+            "that but project_doc_max_bytes, if it's there. Setup backs up each file first."
         )
     where, settings_file, backup = (
         ("in each", f"each {tool.folder}'s settings.json", "each file")
@@ -1973,9 +2186,10 @@ def yes_does(tool: Tool, *, several: bool) -> str:
         else ("there", "its settings.json", "the file")
     )
     return (
-        f"A yes sets up dev-home's skills and rules {where}. It also adds your dev-home and "
+        f"A {yes} sets up dev-home's skills and rules {where}. It also adds your dev-home and "
         f"dev-home-tools folders to permissions.additionalDirectories in {settings_file}, so "
-        f"{tool.name} can use them from any project. Setup backs up {backup} first."
+        f"{tool.name} can use them from any project. A {no} removes all of that, if it's there. "
+        f"Setup backs up {backup} first."
     )
 
 
@@ -2013,6 +2227,24 @@ def unasked_text(tool: Tool, folders: Sequence[Path], *, session: bool = False) 
     if len(folders) == 1:
         return f"whether to set up the {kind} {folders[0]}, so it leaves it as it is"
     return f"whether to set up these {kind}s: {folder_list(folders)}, so it leaves them as they are"
+
+
+def setup_link_target(entry: Path, targets: Sequence[Path]) -> str | None:
+    """Where a link points, when it points where setup's links do: to one of targets, or into
+    one. None for anything else, such as a link of the person's own, a file, or a folder."""
+    found = link_info(entry)
+    if found is None or not found.is_link or found.target is None:
+        return None
+    if not any(is_inside(found.target, target) for target in targets):
+        return None
+    return found.target
+
+
+def mentions_folder(text: str, folders: Sequence[str]) -> bool:
+    """Whether a file's text names one of folders, with either kind of slash, single or doubled,
+    in any case: a rough check for a file that can't be read as a whole."""
+    plain = text.replace("\\\\", "/").replace("\\", "/").casefold()
+    return any(forward(folder).casefold() in plain for folder in folders)
 
 
 def skill_templates() -> list[Path]:
