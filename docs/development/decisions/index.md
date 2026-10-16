@@ -60,3 +60,4 @@ Research a decision rests on has its own page in `../research/`.
 - [A yes to set up a folder approves the settings change it needs](a-yes-to-set-up-a-folder-approves-the-settings-change-it-needs.md)
 - [Setup removes what it set up in a folder answered no](setup-removes-what-it-set-up-in-a-folder-answered-no.md)
 - [Keys and answers in setup's prompts stand apart](keys-and-answers-in-setups-prompts-stand-apart.md)
+- [The sync checks the knowledge index before committing it](the-sync-checks-the-knowledge-index-before-committing-it.md)

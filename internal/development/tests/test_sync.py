@@ -43,6 +43,7 @@ else:
 pytestmark = pytest.mark.xdist_group("sync")
 
 DEMO = "handoffs/demo/HANDOFF.md"
+INDEX = "knowledge/README.md"
 FRESH_SETUP_LINE = "Setup ran with the new code."
 
 
@@ -720,6 +721,82 @@ def test_a_commit_git_refuses_is_reported_and_the_file_left_unstaged(box: Sandbo
     assert result.has_line(pattern), str(result)
     # Changed, but no longer staged, since git refuses to merge while anything is.
     assert status == [" M handoffs/demo/HANDOFF.md"], status
+
+
+def index_row(note: str, question: str) -> str:
+    """A row of the knowledge index, for a note named relative to knowledge/."""
+    return f"| [{note}]({note}) | {question} |"
+
+
+def test_a_commit_of_the_knowledge_index_waits_for_a_note_not_committed_yet(box: Sandbox) -> None:
+    # Another session has written a note and its row, and committed neither yet.
+    note = "knowledge/demo/pending.md"
+    write_text(box.content / note, "# Demo: pending\n")
+    append(box.content / INDEX, index_row("demo/pending.md", "A note still being added."))
+    before = git("-C", str(box.remote), "rev-parse", "main")
+    result = sync(box, "--message", "knowledge: index only", INDEX)
+    after = git("-C", str(box.remote), "rev-parse", "main")
+    status = git("-C", str(box.content), "status", "--porcelain", "--", INDEX)
+    assert result.code == 1, str(result)
+    pattern = (
+        r"^PROBLEM\s+knowledge/README\.md lists notes that wouldn't be committed with it: "
+        r"knowledge/demo/pending\.md\. Nothing was committed\."
+    )
+    assert result.has_line(pattern), str(result)
+    assert not result.has_line(r"^COMMITTED\s"), str(result)
+    assert after == before
+    # Changed, and not staged.
+    assert status == [" M knowledge/README.md"], status
+    # Named together, the note and its row go in one commit.
+    result = sync(box, "--message", "knowledge: demo/pending", note, INDEX)
+    assert result.code == 0, str(result)
+    pattern = r'^COMMITTED\s+"knowledge: demo/pending" \(knowledge/demo/pending\.md, knowledge/'
+    assert result.has_line(pattern), str(result)
+
+
+def test_a_commit_of_the_knowledge_index_refuses_a_note_listed_twice(box: Sandbox) -> None:
+    append(box.content / INDEX, index_row("demo/pending.md", "The same note again."))
+    try:
+        result = sync(box, "--message", "knowledge: index", INDEX)
+    finally:
+        git("-C", str(box.content), "checkout", "--quiet", "--", INDEX)
+    assert result.code == 1, str(result)
+    pattern = (
+        r"^PROBLEM\s+knowledge/README\.md lists knowledge/demo/pending\.md more than once, so "
+        r"nothing was committed\."
+    )
+    assert result.has_line(pattern), str(result)
+    assert not result.has_line(r"^COMMITTED\s"), str(result)
+
+
+@pytest.mark.parametrize("commit_here", [False, True], ids=["fast-forward", "merge"])
+def test_commits_from_github_that_list_a_note_twice_are_reported(
+    box: Sandbox, commit_here: bool
+) -> None:
+    # Two PCs changed the same row: the union merge dev-home's .gitattributes sets keeps both.
+    other = other_pc(box)
+    one_row = (other / INDEX).read_text(encoding="utf-8")
+    append(other / INDEX, index_row("demo/pending.md", "Changed on the other PC."))
+    push_from(other, INDEX, "knowledge: a row on the other PC")
+    try:
+        if commit_here:
+            append(box.content / DEMO, "While another PC changed the index.")
+            result = sync(box, "--message", "handoff: demo", DEMO)
+        else:
+            result = sync(box)
+    finally:
+        other = other_pc(box)
+        write_text(other / INDEX, one_row)
+        push_from(other, INDEX, "knowledge: one row again")
+        sync(box)
+    came_in = r"^MERGED\s+1 commit from GitHub" if commit_here else r"^PULLED\s+1 commit from"
+    assert result.has_line(came_in), str(result)
+    pattern = (
+        r"^PROBLEM\s+After the commits from GitHub, knowledge/README\.md lists "
+        r"knowledge/demo/pending\.md more than once"
+    )
+    assert result.has_line(pattern), str(result)
+    assert result.code == 1, str(result)
 
 
 def test_a_push_github_rejects_gets_one_more_round(box: Sandbox) -> None:

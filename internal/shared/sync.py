@@ -30,6 +30,11 @@ With --message and paths, it commits exactly those paths, then pushes without fe
 Only when GitHub rejects the push, because it has commits this copy lacks, does it fetch, merge,
 and push again. A push that fails for any other reason, such as offline, waits for the next sync.
 
+When the paths include knowledge/README.md, the knowledge base's index, it commits nothing while
+the index lists a note that's neither committed nor among the paths, such as one another session
+is still adding, or lists a note twice. After it brings in commits from GitHub, it reports a note
+the index lists twice, which happens when two PCs change the same row.
+
 Then it runs update's quiet check (internal/shared/update.py, the same as its --quiet), which
 checks dev-home-tools for new commits and makes every decision about them: it pulls them when
 updates.installAutomatically is on, as it is unless local-settings.json turns it off, and
@@ -78,6 +83,7 @@ import contextlib
 import errno
 import importlib
 import os
+import posixpath
 import re
 import sys
 import time
@@ -126,6 +132,31 @@ IN_PROGRESS = {
 QUIET_STATES = {"OK", "LEFT", "STALE", "UPDATE"}
 # The values --fetch takes, the first being what a sync does without it.
 FETCH_WHEN = ("always", "auto", "when-due")
+# The knowledge base's index in dev-home: a table with one row per note, whose first cell links
+# to the note, relative to the index's folder.
+KNOWLEDGE_INDEX = "knowledge/README.md"
+INDEX_ROW = re.compile(r"\|\s*\[[^\]]*\]\(([^)\s]+)\)")
+
+
+def notes_in_index(text: str) -> list[str]:
+    """The notes the knowledge index's rows link to, as paths relative to dev-home, in the order
+    of the rows, so a note in two rows is there twice."""
+    folder = posixpath.dirname(KNOWLEDGE_INDEX)
+    matches = (INDEX_ROW.match(line) for line in text.splitlines())
+    return [posixpath.normpath(posixpath.join(folder, m.group(1))) for m in matches if m]
+
+
+def listed_twice(notes: list[str]) -> list[str]:
+    """Each note that's in the list more than once, named once. On Windows, two spellings that
+    differ only in case are one note."""
+    seen: set[str] = set()
+    repeated: dict[str, str] = {}
+    for note in notes:
+        key = os.path.normcase(note)
+        if key in seen:
+            repeated.setdefault(key, note)
+        seen.add(key)
+    return list(repeated.values())
 
 
 def one_active_copy(root: Path) -> bool:
@@ -257,7 +288,84 @@ class Sync:
             return None
         return int(parts[0]), int(parts[1])
 
+    def read_index(self) -> str | None:
+        """The knowledge index as it is on disk, or None when there isn't one."""
+        try:
+            return (self.root / KNOWLEDGE_INDEX).read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return None
+
+    def index_is_ready(self, paths: list[str]) -> bool:
+        """Whether the knowledge index can be committed with paths. Git commits the whole file,
+        so it would take in a row that another session has added for a note it hasn't committed
+        yet. So every note the index lists has to be committed already, or among paths and still
+        there, and none may be listed twice; otherwise this says why, and returns False. One git
+        call, for the notes already committed."""
+        text = self.read_index()
+        if text is None:
+            return True
+        notes = notes_in_index(text)
+        twice = listed_twice(notes)
+        if twice:
+            self.status(
+                "PROBLEM",
+                f"{KNOWLEDGE_INDEX} lists {', '.join(twice)} more than once, so nothing was "
+                "committed. Keep one row for each, then commit again.",
+            )
+            return False
+        folder = posixpath.dirname(KNOWLEDGE_INDEX) + "/"
+        tree = self.git("ls-tree", "-r", "-z", "--name-only", "HEAD", "--", folder)
+        if tree.code != 0:
+            if tree.locked:
+                self.busy(tree)
+            else:
+                self.status(
+                    "PROBLEM",
+                    f"Could not see which notes {KNOWLEDGE_INDEX} lists are committed, so nothing "
+                    f"was committed. git: {first_line(tree.err)}",
+                )
+            return False
+        committed = {os.path.normcase(name) for name in tree.text.split("\0") if name}
+        given = {os.path.normcase(path) for path in paths}
+
+        def included(note: str) -> bool:
+            key = os.path.normcase(note)
+            if key in given:
+                return (self.root / note).is_file()
+            return key in committed
+
+        missing = [note for note in notes if not included(note)]
+        if missing:
+            self.status(
+                "PROBLEM",
+                f"{KNOWLEDGE_INDEX} lists notes that wouldn't be committed with it: "
+                f"{', '.join(missing)}. Nothing was committed. Another session may still be "
+                "adding them: commit again once they're committed, or name them too if they're "
+                "this session's.",
+            )
+            return False
+        return True
+
+    def report_index_listed_twice(self) -> None:
+        """After commits came in: dev-home's .gitattributes merges the knowledge index line by
+        line, so when two PCs change the same row, both versions stay, with no conflict."""
+        text = self.read_index()
+        twice = listed_twice(notes_in_index(text)) if text else []
+        if twice:
+            self.status(
+                "PROBLEM",
+                f"After the commits from GitHub, {KNOWLEDGE_INDEX} lists {', '.join(twice)} more "
+                "than once, as when two PCs change the same row. Ask the user which row to keep "
+                "for each, then commit the index.",
+            )
+
     def commit(self, paths: list[str], message: str) -> None:
+        index = os.path.normcase(KNOWLEDGE_INDEX)
+        if any(os.path.normcase(path) == index for path in paths) and not self.index_is_ready(
+            paths
+        ):
+            self.stopped = True
+            return
         listed = ", ".join(paths)
         add = self.git("--literal-pathspecs", "add", "--", *paths)
         if add.code != 0:
@@ -303,6 +411,7 @@ class Sync:
             if merge.code == 0:
                 self.brought_in = True
                 self.status("PULLED", f"{commit_count(behind)} from GitHub.")
+                self.report_index_listed_twice()
                 return
         else:
             merge = self.git(
@@ -320,6 +429,7 @@ class Sync:
                     f"{commit_count(behind)} from GitHub, with a merge commit, because two PCs had "
                     "new commits.",
                 )
+                self.report_index_listed_twice()
                 return
         self.stopped = True
         if merge.locked:
