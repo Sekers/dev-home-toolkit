@@ -29,5 +29,26 @@ is clearest.
 - A line for each item: a batch, such as after months without updating or from a set of copied
   skills, would flood the reply.
 
+**Later changed,** on 2026-10-16, not built yet:
+
+- A new skill gets its `NEW` line once, not on every sync. The first setup run that finds it
+  saves it as `unanswered`, which
+  [Settings record answers, not just values](settings-record-answers-not-just-values.md) lets a
+  quiet run write, and names it in one line: whether it was added to the person's agents, and that
+  `/dev-home configure` changes that. The line offers no answers, since the skill works at its
+  default, as a new preference gets no line at all; that's a departure recorded in
+  [Offers use the same answers](offers-use-the-same-answers.md). A skill the person made on
+  another PC can arrive in the sync a handoff or knowledge commit makes, whose steps don't list
+  `NEW`, so its line may go unsaid. `/dev-home skills` still lists it.
+- A Claude Code folder or Codex home setup hasn't asked about gets the repeating `NEW` line, in
+  place of a `PROBLEM` line, so it no longer sets the exit code. It offers the standard answers:
+  set it up, no, or remind me in N days, answered with `/dev-home configure` or at a run of setup
+  by hand. Saying nothing skips it for the session.
+- The skills pass `NEW` and `UPDATE` lines on with one bullet, worded the same in every skill:
+  "`UPDATE` and `NEW`: tell the user each such line once per session, as its own line, and
+  continue." "Each such line" keeps a different line from being dropped because another came
+  earlier in the session. `/dev-home sync`'s summary still names what each `UPDATE` or `NEW` line
+  says is waiting, under the name of what it's about, without asking again.
+
 **Look again if:** the reminders come to feel like noise, such as many new personal skills a week
 across several PCs.

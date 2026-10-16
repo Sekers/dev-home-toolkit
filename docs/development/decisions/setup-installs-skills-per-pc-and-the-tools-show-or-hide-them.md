@@ -5,18 +5,28 @@ folder's `skills/` and into `~/.agents/skills` for Codex. Claude Code's and Code
 decide whether an installed skill is shown in an account or a project.
 
 - Each PC saves a yes or no for each skill in `local-settings.json`, as
-  `skills.<name>.installed`. A no removes
-  setup's links for it, and its lines leave the generated always-on rules. Nothing is deleted.
+  `skills.<name>.addedToAgents`. A no removes
+  setup's links for it, and its lines leave the generated always-on rules
+  ([A skill's always-on lines are blocks in the operating rules](a-skills-always-on-lines-are-blocks-in-the-operating-rules.md)).
+  Nothing is deleted.
 - `dev-home` is always installed. `handoff` and `knowledge` are recommended because the starter
   dev-home makes their folders, so a change to the starter means looking at this set again.
 - The person's own skills, from `skills/` in dev-home, work like recommended skills: installed by
   default, in the same list and prompt, and asked about once on each PC.
-- A skill can carry a `dev-home-skill.json` in its folder, with `recommended`, `alwaysInstalled`,
-  and `requires` (`tools`, `programs`, and `os`). A skill whose requirements a PC doesn't meet
-  isn't installed there, even with a yes, and setup says why. For the person's own skills the
+- A skill can carry a `dev-home-skill.json` in its folder, with `recommended`,
+  `alwaysAddedToAgents`, and `requires`. A skill isn't added to a skills folder whose tools don't
+  meet its requirements, even with a yes;
+  [Skills and releases declare their requirements as facts](skills-and-releases-declare-their-requirements-as-facts.md)
+  says how they're declared and checked, and what setup says. For the person's own skills the
   file is optional: without it, a skill is recommended and needs nothing.
-- `/dev-home skills` shows each skill's state. Codex records a skill turned off by its real path,
-  inside `internal/.generated/skills/`, so that path stays fixed, and a test checks it.
+- `/dev-home skills` shows each skill's state, from the result setup records. Codex records a
+  skill turned off by its real path, inside `internal/.generated/skills/`, so that path stays
+  fixed, and a test checks it.
+
+Changed on 2026-10-12 and 2026-10-16, not built yet: the answer was `skills.<name>.installed` and
+the field `alwaysInstalled`. "Installed" already means installing dev-home-tools updates, and
+"added" alone could read as added to dev-home, so both say `addedToAgents`. `requires` became a
+list of typed entries, checked per skills folder, in place of `tools`, `programs`, and `os`.
 
 **Why:** checked on 2026-10-07 against Claude Code 2.1.293's docs and Codex's source at
 rust-v0.161.0:

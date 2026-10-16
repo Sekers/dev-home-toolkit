@@ -35,6 +35,13 @@ updates, and copied skills. Two terms:
 settings diff's typed yes, stays yes or no. It's one change shown once, not an offer that comes
 back.
 
+**Departure,** decided 2026-10-16: the `NEW` line for a new skill is a notice, not an offer. The
+skill already works at its default, so the line says once what happened and how to change it,
+with no answers, as a new preference gets no line at all
+([New items reach the person at a terminal, or in a NEW line](new-items-reach-the-person-at-a-terminal-or-in-a-new-line.md)).
+A folder setup hasn't asked about is still an offer, with the answers above, so a folder can now
+hold a reminder ([Settings record answers, not just values](settings-record-answers-not-just-values.md)).
+
 **Why:** the offers grew one at a time, with different words for the same idea ("decide later",
 "remind me later", "skip this version"), and "later" never said when. Defining each answer by
 what's remembered and when it comes back makes every question mean the same thing. One type per

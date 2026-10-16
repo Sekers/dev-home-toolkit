@@ -20,8 +20,13 @@ Each setting is one of four kinds, and accepts only the forms that fit it:
 | --- | --- | --- | --- |
 | Has a default, and setup asks about it | `updates.installAutomatically`, skill preferences, `skills.<name>.addedToAgents` | missing, `unanswered`, `default`, plain | Follows the default, and a run of setup by hand asks |
 | Has a default, and nobody asks about it | `updates.checkEveryHours`, `devHome.checkEveryHours` | missing, `default`, plain | Follows the default |
-| No default | `devHome.folder`, `multiMachine`, each folder's `setUp` | missing, plain | Whatever the setting says: with `multiMachine` unanswered every sync fetches, an unanswered folder isn't set up, and without a dev-home folder setup stops |
-| Offer | recommended settings, update notices | missing, `remind`, plain | Offered again, as [Offers use the same answers](offers-use-the-same-answers.md) says |
+| No default | `devHome.folder`, `multiMachine` | missing, plain | Whatever the setting says: with `multiMachine` unanswered every sync fetches, and without a dev-home folder setup stops |
+| Offer | each folder's `setUp`, recommended settings, update notices | missing, `remind`, plain | Offered again, as [Offers use the same answers](offers-use-the-same-answers.md) says. An unanswered folder isn't set up |
+
+(Changed on 2026-10-16, not built yet: each folder's `setUp` was a setting with no default. A
+folder setup hasn't asked about is offered in a `NEW` line with the standard answers, "remind me
+in N days" among them, so it moved to the offer kind, which can hold a reminder. Until the date,
+the folder isn't set up, its `NEW` line is quiet, and a run of setup by hand doesn't ask.)
 
 A form a setting doesn't accept, or a plain value of the wrong type, is a `PROBLEM`, and the
 setting counts as missing.

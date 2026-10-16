@@ -61,3 +61,7 @@ Research a decision rests on has its own page in `../research/`.
 - [Setup removes what it set up in a folder answered no](setup-removes-what-it-set-up-in-a-folder-answered-no.md)
 - [Keys and answers in setup's prompts stand apart](keys-and-answers-in-setups-prompts-stand-apart.md)
 - [The sync checks the knowledge index before committing it](the-sync-checks-the-knowledge-index-before-committing-it.md)
+- [Skills and releases declare their requirements as facts](skills-and-releases-declare-their-requirements-as-facts.md)
+- [A skill's always-on lines are blocks in the operating rules](a-skills-always-on-lines-are-blocks-in-the-operating-rules.md)
+- [Releases go to main, and work happens on develop](releases-go-to-main-and-work-happens-on-develop.md)
+- [A release data file holds the version and what end users need to know](a-release-data-file-holds-the-version-and-what-end-users-need-to-know.md)
