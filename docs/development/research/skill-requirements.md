@@ -35,7 +35,7 @@ got there.
 - **Part 6a, committed (`acdd061`):** the reader of the whole `dev-home-skill.json`
   (`internal/shared/settings.py`), and the checker with the types `os`, `tool`, `program`, and
   `python` (`internal/shared/requirements.py`).
-- **Part 6b, built and not committed:** each PC's answer, `skills.<name>.addedToAgents`; the
+- **Part 6b, committed (`408ae14`):** each PC's answer, `skills.<name>.addedToAgents`; the
   one-time `NEW` line for a new skill; links added and removed by each skill's plan, per skills
   folder; the recorded state in `internal/.generated/skill-states.json`, which `/dev-home skills`
   shows; `formerNames` for a renamed skill; `--configure` for the answer; and the reference page
@@ -406,10 +406,11 @@ because there "tools" means development tools.
   change and need approving again, and every new page adds to the sweep); both before 6b's commit
   (6b, uncommitted and live on the developer's PC, would wait longer).
 
-**Still waiting:** 6b's commit. 6b is reworked to these decisions, with the decision
+**Still waiting:** the decisions about generating the end user's own skills, the words, and the
+rename get their decision files when each is built. 6b, reworked to these decisions, is committed
+(`408ae14`), with the decision
 [Setup keeps a skill off only for its operating system or agent](../decisions/setup-keeps-a-skill-off-only-for-its-operating-system-or-agent.md)
-and changes to the decisions it touches. Those about generating the end user's own skills, the
-words, and the rename get their decision files when each is built.
+and changes to the decisions it touches.
 
 **The earlier list, kept for its notes:**
 
