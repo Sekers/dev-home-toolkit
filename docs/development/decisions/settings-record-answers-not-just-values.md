@@ -40,12 +40,13 @@ setting counts as missing.
 - dev-home-tools' own settings are declared in `internal/shared/setting-definitions.json`, the way
   a skill declares its preferences in its `dev-home-skill.json`: each with its kind, its default,
   a label, help, and `formerNames`, the names it had before.
-- A setting found under a name in `formerNames` has its answer moved to the new name on the first
-  setup run that sees it, quiet runs included, with one line. One that nothing declares any more,
-  dev-home-tools' own or a skill's, is deleted on the first run that sees it, with one line and a
-  backup, and nobody is asked. A whole skill that's gone has its answers deleted by the first run
-  that holds the sync's lock from its start, a sync's setup, so a skill that a sync or an update
-  is replacing at that moment never looks gone.
+- A setting found under a name in `formerNames` has its answer moved to the new name, unless the
+  new name already has an answer: a mark that it's unanswered isn't one. The move happens on the
+  first setup run that sees it, quiet runs included, with one line. One that nothing declares any
+  more, dev-home-tools' own or a skill's, is deleted on the first run that sees it, with one line
+  and a backup, and nobody is asked. A whole skill that's gone has its answers deleted by the
+  first run that holds the sync's lock from its start, a sync's setup, so a skill that a sync or
+  an update is replacing at that moment never looks gone.
 - When an update changes a default, the PCs that follow it get the new value, and the update says
   so once. It reads the definitions, and each skill's `dev-home-skill.json`, before and after it
   pulls.
@@ -86,6 +87,12 @@ setting counts as missing.
   line and the backup show what went.
 - Converting the file keeps the end user's answers through a change to its structure, with
   nothing asked again.
+- A renamed skill's answers move with it, so an end user's no stays a no, with their preferences.
+  Nothing keeps the old name working: no link, alias, or stub, so a rename that leaves out
+  `formerNames` works as a removal and a new skill. A skill that's gone has its answers deleted,
+  since one removed and added back may not come back the same way, and its old answers could be
+  wrong for it. Nothing stops a new skill from reusing a removed name, the developer's choice: a
+  PC that installs the removal and the reuse in one update gives the new skill the old answers.
 - Syncs write the file too, for an announced skill, a rename, or a removal, while a run of setup
   by hand can spend minutes on its questions. Holding the lock only to save, after reading the
   file again, loses neither write, and never holds up a sync while a question waits. It reuses
@@ -116,6 +123,12 @@ setting counts as missing.
 - A separate script for conversions (another process on a path every sync takes), or a data file
   of changes (it would repeat `formerNames`, and a change to the structure needs code anyway).
 - Holding the lock for setup's whole run: every sync would wait while a question does.
+- For a renamed skill: treating it as new (an end user's no would become a yes, and their
+  preferences would be lost); deciding at the first rename, with a tripwire; the update comparing
+  skill folders (it misses a `git pull`, a skill of the end user's own, and a failed setup).
+- For a skill that's gone: a list of removed skills (the developer turned it down); keeping its
+  answers quietly, with a `PROBLEM` on every sync, or deleting them only at a run of setup by
+  hand; a test against reusing a removed name.
 
 This changes
 [local-settings.json groups its settings, and both settings files carry a version](local-settings-json-groups-its-settings-and-both-settings-files-carry-a-version.md):
