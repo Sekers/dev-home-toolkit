@@ -5,6 +5,7 @@ left off, and puts back what it changed. test_setup_questions.py covers what nee
 """
 
 import json
+import os
 import re
 import shutil
 import stat
@@ -1385,11 +1386,11 @@ def test_a_skill_whose_preferences_cant_be_read_keeps_its_answers(
 def test_no_skill_counts_as_gone_while_dev_home_isnt_there(box: Sandbox) -> None:
     # Such as before it's cloned, or on a drive that's unplugged.
     settings = shared_module(box, "settings")
-    there = settings.skill_preferences(str(box.content))
-    missing = settings.skill_preferences(str(box.root / "not-cloned-yet"))
+    there = settings.skill_declarations(str(box.content))
+    missing = settings.skill_declarations(str(box.root / "not-cloned-yet"))
     empty = box.root / "made-for-a-clone"
     empty.mkdir()
-    waiting = settings.skill_preferences(str(empty))
+    waiting = settings.skill_declarations(str(empty))
     assert there.is_gone("deleted-skill") and not there.is_gone("Handoff")
     assert not there.is_gone("mine"), "a personal skill with no preferences is still there"
     assert not missing.is_gone("deleted-skill")
@@ -1849,6 +1850,177 @@ def test_skill_preferences_are_read_checked_and_set(box: Sandbox, settings_kept:
     assert tidied["skills"] == {"mine": {"preferences": {"tidyOutput": "no"}}, "nobody": {}}
     pattern = r"The mine skill declares no preference named broken\. It declares: tidyOutput\."
     assert refused.code == 1 and refused.has_line(pattern), str(refused)
+
+
+def test_each_dev_home_tools_skill_file_reads_with_no_problem(box: Sandbox) -> None:
+    # A field or a type the reader doesn't know is skipped without a word, since a newer
+    # dev-home-tools may know it, so a misspelling in one of these files would go unseen.
+    settings = shared_module(box, "settings")
+    fields = {"recommended", "alwaysAddedToAgents", "requires", "preferences"}
+    entry_fields = {
+        "os": {"type", "anyOf"},
+        "tool": {"type", "anyOf"},
+        "program": {"type", "name", "description"},
+        "python": {"type", "atLeast"},
+    }
+    skills = {}
+    for folder in sorted((box.tools / "templates" / "skills").iterdir()):
+        if not (folder / "SKILL.md").is_file():
+            continue
+        declared, problems = settings.read_skill_file(folder, own=False)
+        assert declared is not None and problems == [], (folder.name, problems)
+        skills[folder.name] = declared
+        file = folder / "dev-home-skill.json"
+        data = json.loads(read(file)) if file.is_file() else {}
+        assert set(data) <= fields, (folder.name, data)
+        for entry in data.get("requires", []):
+            assert set(entry) <= entry_fields[entry["type"]], (folder.name, entry)
+    # Every PC has dev-home, which changes its answers in chat; the starter makes the folders
+    # that handoff and knowledge keep their files in.
+    assert skills["dev-home"].always_added, skills["dev-home"]
+    for name in ("handoff", "knowledge"):
+        assert skills[name].recommended and not skills[name].always_added, skills[name]
+
+
+def test_a_skill_file_declares_what_the_skill_needs_and_each_mistake_is_a_problem(
+    box: Sandbox,
+) -> None:
+    settings = shared_module(box, "settings")
+    requirements = shared_module(box, "requirements")
+    folder = box.content / "skills" / "mine"
+    file = folder / "dev-home-skill.json"
+    declared = {
+        "recommended": False,
+        "alwaysAddedToAgents": True,
+        "requires": [
+            {"type": "os", "anyOf": ["windows", "Windows", "windows"]},
+            {"type": "tool", "anyOf": ["claude-code"]},
+            {"type": "program", "name": "jira", "description": " Atlassian's jira tool "},
+            {"type": "python", "atLeast": "3.13"},
+            {"type": "made-up-later", "atLeast": "9"},
+            {"type": "program", "name": "C:/tools/jira"},
+            {"type": "python", "atLeast": 3.13},
+            {"type": "os", "anyOf": ["beos"]},
+            {"type": "program", "name": "gh", "description": 1},
+            "program",
+        ],
+        "madeUpLater": True,
+    }
+    variants = [
+        {"recommended": "yes", "alwaysAddedToAgents": 1, "requires": {"type": "os"}},
+        [declared],
+    ]
+    try:
+        write_text(file, json.dumps(declared) + "\n")
+        mine, problems = settings.read_skill_file(folder, own=True)
+        listed = settings.skill_declarations(str(box.content))
+        others = []
+        for variant in variants:
+            write_text(file, json.dumps(variant) + "\n")
+            others.append(settings.read_skill_file(folder, own=True))
+    finally:
+        file.unlink()
+    plain = settings.read_skill_file(folder, own=True)
+    needs = requirements.Requirement
+    assert mine == listed.skills["mine"]
+    assert mine.own and not mine.recommended and not mine.always_added, mine
+    assert mine.requires == (
+        needs("os", ("windows",)),
+        needs("tool", ("claude-code",)),
+        needs("program", ("jira",), "Atlassian's jira tool"),
+        needs("python", version=(3, 13)),
+        needs("made-up-later"),
+        needs("program", mistake=True),
+        needs("python", mistake=True),
+        needs("os", mistake=True),
+        needs("program", ("gh",)),
+        needs("", mistake=True),
+    ), mine.requires
+    knows = 'which this dev-home-tools doesn\'t know: it knows "windows", "macos", and "linux".'
+    counts = "so the skill counts as not meeting it."
+    assert [problem.removeprefix(f"{file}: ") for problem in problems] == [
+        "alwaysAddedToAgents is only for dev-home-tools' own skills, so it counts as false.",
+        f'entry 1 of requires (type "os") names "Windows", {knows}',
+        f'entry 6 of requires (type "program") needs name: the program\'s name alone, such as '
+        f'"gh", {counts}',
+        f'entry 7 of requires (type "python") needs atLeast: the lowest version it runs on, in '
+        f'quotes, such as "3.13", {counts}',
+        f'entry 8 of requires (type "os") names "beos", {knows}',
+        'entry 9 of requires (type "program"): description isn\'t text, so it was left out.',
+        f"entry 10 of requires isn't a JSON object with a type, {counts}",
+    ], problems
+    assert listed.problems == problems
+    wrong_kinds, not_an_object = others
+    assert wrong_kinds[0] is not None and wrong_kinds[0].recommended, wrong_kinds
+    assert not wrong_kinds[0].always_added
+    assert wrong_kinds[0].requires == (needs("", mistake=True),)
+    assert [problem.removeprefix(f"{file}: ") for problem in wrong_kinds[1]] == [
+        "recommended isn't true or false, so it counts as true.",
+        "alwaysAddedToAgents isn't true or false, so it counts as false.",
+        f"requires isn't a list, {counts}",
+    ], wrong_kinds[1]
+    assert not_an_object == (None, [f"{file} isn't a JSON object, so it was skipped."])
+    # With no file, a skill is recommended and needs nothing.
+    assert plain == (settings.Skill("mine", own=True), [])
+
+
+def test_the_requirements_checker_applies_each_types_rule(box: Sandbox) -> None:
+    requirements = shared_module(box, "requirements")
+    settings = shared_module(box, "settings")
+    needs, unmet = requirements.Requirement, requirements.Unmet
+    pc = requirements.ThisPC("windows", (3, 13, 2), frozenset({"gh"}))
+
+    def check(*requires: object, tools: tuple[str, ...] = ("claude-code",)) -> list[object]:
+        return list(requirements.unmet(requires, pc, tools))
+
+    met = [
+        needs("os", ("macos", "windows")),
+        needs("tool", ("claude-code", "codex")),
+        needs("program", ("gh",)),
+        needs("python", version=(3, 13)),
+        needs("python", version=(3, 13, 2)),
+    ]
+    assert check(*met) == [] and check(*met, tools=("codex",)) == []
+    assert check(needs("os", ("macos", "linux"))) == [
+        unmet("works only on macOS or Linux", can_act=False, per_folder=False)
+    ]
+    # A tool is checked for each skills folder, against every tool setup sets up that reads it.
+    assert check(needs("tool", ("claude-code",)), tools=("codex",)) == [
+        unmet("works only in Claude Code", can_act=True, per_folder=True)
+    ]
+    assert check(needs("tool", ("codex",)), tools=("codex", "claude-code")) == [
+        unmet("works only in Codex", can_act=True, per_folder=True)
+    ]
+    assert check(needs("program", ("jira",)), needs("python", version=(3, 13, 3))) == [
+        unmet("needs the jira program", can_act=True, per_folder=False),
+        unmet("needs Python 3.13.3 or later", can_act=True, per_folder=False),
+    ]
+    # What this copy can't check counts as not met.
+    assert check(needs("made-up-later"), needs("program", mistake=True)) == [
+        unmet("needs a newer dev-home-tools", can_act=True, per_folder=False),
+        unmet("has a mistake in its dev-home-skill.json", can_act=True, per_folder=False),
+    ]
+    names = requirements.either(["windows", "macos", "linux"], requirements.OPERATING_SYSTEMS)
+    assert names == "Windows, macOS, or Linux"
+    # Every tool setup sets up has a name a requirement can give it.
+    assert set(requirements.TOOLS.values()) == {tool.name for tool in settings.TOOLS}
+
+
+def test_this_pcs_facts_find_a_program_as_a_shell_does(
+    box: Sandbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requirements = shared_module(box, "requirements")
+    on_path = box.root / "programs-on-path"
+    write_text(on_path / "jira.cmd", "@echo off\n")
+    write_text(on_path / "notes.txt", "")
+    # A folder PATH names without a full path is the current folder's, which may be a project's.
+    write_text(box.root / "programs-nearby" / "glab.exe", "")
+    monkeypatch.chdir(box.root)
+    monkeypatch.setenv("PATH", os.pathsep.join([str(on_path), "programs-nearby", ""]))
+    monkeypatch.setenv("PATHEXT", ".COM;.EXE;.BAT;.CMD")
+    pc = requirements.this_pc(["jira", "jira.cmd", "glab", "notes", "missing"])
+    assert pc.programs == {"jira", "jira.cmd"}, pc
+    assert pc.os == "windows" and pc.python == tuple(sys.version_info[:3]), pc
 
 
 def test_configure_sets_content_dir_only_to_a_dev_home(box: Sandbox, settings_kept: Path) -> None:

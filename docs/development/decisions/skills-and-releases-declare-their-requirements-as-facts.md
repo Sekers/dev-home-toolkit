@@ -3,7 +3,9 @@
 **Decision:** a skill's `dev-home-skill.json`, and a release's data file
 ([A release data file holds the version and what end users need to know](a-release-data-file-holds-the-version-and-what-end-users-need-to-know.md)),
 list what it needs to run, as facts, and one checker in `internal/shared/` decides what that
-means. Not built yet.
+means. Built for skills, with the types `os`, `tool`, `program`, and `python`: the reader in
+`settings.py`, and the checker in `requirements.py`. Setup doesn't act on a skill's requirements
+yet, and the release side, with the `devHomeTools` type, isn't built.
 
 - The list is `requires`, a list of typed entries, such as:
 
@@ -18,8 +20,17 @@ means. Not built yet.
   ```
 
   `os` and `tool` take any one of their values, each `program` entry is needed, and `python` and
-  `devHomeTools` are minimums. The exact names are settled when it's built. A skill without the
-  file needs nothing.
+  `devHomeTools` are minimums. A skill without the file needs nothing. The names, settled when
+  the first four types were built:
+  - `os` takes `windows`, `macos`, and `linux`, and `tool` takes `claude-code` and `codex`.
+  - A `program`'s `name` is the program's name alone, such as `gh`, never a path, and its
+    `description` is optional.
+  - `python`'s `atLeast` is text, such as `"3.13"` or `"3.13.1"`, since a JSON number would read
+    3.10 as 3.1.
+- An entry the reader can't use, such as a program with no name, counts as not met, and setup
+  reports it as a `PROBLEM` line naming the file. A name in `anyOf` that the reader doesn't know,
+  such as `Windows` for `windows`, is reported the same way and left out of the entry, so a
+  misspelling never matches by chance; an entry left with no names counts as not met.
 - One reader reads the whole file, for setup and for the update check. One checker holds a rule
   for each type: whether it applies per skills folder (`tool`) or to the whole PC (the rest);
   whether an end user can act on it (not on the operating system; on a program, a tool, a newer
@@ -34,6 +45,12 @@ means. Not built yet.
   the tools it sets up and the folders they read, each named program on the `PATH`, and the
   Python and dev-home-tools versions. Anything that needs a process, such as whether `gh` is
   signed in, is the skill's to check when it runs.
+  - A program counts when it's in a folder that `PATH` names by its full path, with any of the
+    extensions in `PATHEXT` on Windows, such as `.cmd`, as a shell finds it. The current folder
+    never counts: it may be a project's.
+  - The Python version is that of the Python setup runs with. On every sync a skill starts, that's
+    the skills' own, since the sync runs setup with the Python it runs with. Finding the version
+    of the Python that `internal/.python` leads to would take a process.
 - Setup records its result for each skill and skills folder, added or not and why, in a file in
   `internal/.generated/`, which `/dev-home skills` and the settings menu read.
 - For a release, the update check holds the update back when the PC can't meet a requirement,

@@ -285,7 +285,7 @@ def test_the_preferences_topic_reads_saved_values_as_setup_does(box: Sandbox) ->
     skill = box.content / "skills" / "mine" / "dev-home-skill.json"
     write_text(skill, json.dumps({"preferences": entries}) + "\n")
     try:
-        setup_takes = set(settings.skill_preferences(str(box.content)).preferences["mine"])
+        setup_takes = set(settings.skill_declarations(str(box.content)).preferences["mine"])
     finally:
         skill.unlink()
     facts_takes = {name for name, entry in entries.items() if module.usable_preference(name, entry)}

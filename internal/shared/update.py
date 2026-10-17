@@ -47,13 +47,13 @@ from .settings import (
     AUTO_UPDATE,
     DEFINITIONS_PATH,
     MISSING,
-    SKILL_SETTINGS,
     STATE,
     TOOLS_ROOT,
     get,
     hours_setting,
     hours_text,
     read_settings,
+    read_skill_file,
     setting_value,
 )
 from .sync import LOCK_WAIT_SECONDS, LockError, one_run_at_a_time
@@ -264,9 +264,9 @@ def read_json(path: Path) -> object:
 
 def declared_defaults() -> dict[str, Default]:
     """Every default dev-home-tools declares, by the setting's name, as its files say right now:
-    its own settings in setting-definitions.json, and each of its skills' preferences. Read from
-    the files each time, since an update changes them; one that can't be read declares nothing.
-    A person's own skills don't come with updates, so they're left out."""
+    its own settings in setting-definitions.json, and each of its skills' preferences, as setup
+    reads them. Read from the files each time, since an update changes them; one that can't be
+    read declares nothing. A person's own skills don't come with updates, so they're left out."""
     found: dict[str, Default] = {}
     definitions = read_json(DEFINITIONS_PATH)
     settings = definitions.get("settings") if isinstance(definitions, dict) else None
@@ -280,13 +280,9 @@ def declared_defaults() -> dict[str, Default]:
         # A notice that can't be worked out is left out, never the pull it would follow.
         skills = []
     for skill in skills:
-        declared = read_json(skill / SKILL_SETTINGS)
-        preferences = declared.get("preferences") if isinstance(declared, dict) else None
-        for name, entry in preferences.items() if isinstance(preferences, dict) else ():
-            if isinstance(entry, dict) and isinstance(entry.get("default"), bool):
-                label = str(entry.get("label") or name)
-                path = f"skills.{skill.name}.preferences.{name}"
-                found[path] = Default(label, "yes-no", entry["default"])
+        declared, _ = read_skill_file(skill, own=False)
+        for preference in declared.preferences.values() if declared else ():
+            found[preference.setting.path] = Default(preference.label, "yes-no", preference.default)
     return found
 
 

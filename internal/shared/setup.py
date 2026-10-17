@@ -184,7 +184,7 @@ from .settings import (
     saved_answer,
     setting_value,
     settings_text,
-    skill_preferences,
+    skill_declarations,
 )
 from .settings_files import (
     Plan,
@@ -1424,7 +1424,7 @@ class Setup:
                 f"({by_hand('update.py')}), or set the file aside and run setup.py again.",
             )
             raise CannotGoOnError
-        declared = skill_preferences(settings.content_dir)
+        declared = skill_declarations(settings.content_dir)
         # Only a run that holds the sync's lock from its start, a sync's setup, removes the answers
         # of a skill that's gone.
         checked = check_settings(settings.data, declared, remove_gone_skills=self.sync_holds_lock)

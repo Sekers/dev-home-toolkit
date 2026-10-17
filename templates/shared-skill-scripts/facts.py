@@ -745,7 +745,7 @@ def preference_value(saved: object, default: bool) -> bool:
 
 
 def usable_preference(name: str, entry: object) -> bool:
-    """Whether setup uses a declared preference, by the same rules as its skill_preferences (a
+    """Whether setup uses a declared preference, by the same rules as its read_skill_file (a
     test checks the two agree): a name with no dots, a default of true or false, a label, help if
     any as text, and formerNames if any as a list of names."""
     if not isinstance(entry, dict) or not name.strip() or "." in name:

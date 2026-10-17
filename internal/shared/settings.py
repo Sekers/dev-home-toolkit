@@ -3,7 +3,8 @@ dev-home.json in dev-home, which every copy of it shares. setup.py writes both.
 
 Each setting's name is its path in the file, such as devHome.folder. setting-definitions.json,
 beside this file, declares the ones with a single value, as SETTINGS, and each skill declares its
-preferences in its dev-home-skill.json. A saved value is missing, a state such as
+preferences in its dev-home-skill.json, which skill_declarations reads whole, with what the skill
+needs to run (see requirements.py). A saved value is missing, a state such as
 {"$state": "default"}, or a plain value, the person's own answer; read_value says what each counts
 as. check_settings checks every value against the declarations and the folders each tool sets up.
 docs/development/settings.md has the rules."""
@@ -11,11 +12,13 @@ docs/development/settings.md has the rules."""
 import copy
 import json
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from .paths import comparable, resolve_home, same_path
+from .requirements import Requirement, parse_requires
 
 # dev-home-tools' folder: this file is in internal/shared/, two folders below it.
 TOOLS_ROOT = Path(__file__).parent.parent.parent
@@ -26,7 +29,7 @@ DEV_HOME_SETTINGS = "dev-home.json"
 # Each file's layout. It goes up only when a setting is renamed or moved.
 SCHEMA_VERSION = 1
 DEV_HOME_SCHEMA_VERSION = 1
-# The file in a skill's folder that declares its preferences.
+# The file in a skill's folder that declares its preferences, and what it needs to run.
 SKILL_SETTINGS = "dev-home-skill.json"
 # The file that declares dev-home-tools' own settings with a single value.
 DEFINITIONS_PATH = Path(__file__).parent / "setting-definitions.json"
@@ -329,42 +332,128 @@ class Preference:
         )
 
 
+@dataclass(frozen=True)
+class Skill:
+    """What a skill declares in its dev-home-skill.json, or the defaults for a skill without
+    one. own says it's the person's own, from dev-home's skills/, rather than dev-home-tools'.
+    recommended says whether it's added to the agents unless a PC's answer says otherwise, and
+    always_added that it's added on every PC, which only dev-home-tools' own skills can declare.
+    requires is what it needs to run (see requirements.py), and preferences are its preferences,
+    by name."""
+
+    name: str
+    own: bool
+    recommended: bool = True
+    always_added: bool = False
+    requires: tuple[Requirement, ...] = ()
+    preferences: dict[str, Preference] = field(default_factory=dict)
+
+
 @dataclass
 class SkillDeclarations:
-    """What the skills declare. preferences has every skill there is, by name, with the
-    preferences it declares by name, none for a skill without a dev-home-skill.json. unread
-    names, in lowercase, each skill whose file couldn't be read, so what it declares isn't known.
-    complete says whether every skills folder could be listed, so a skill in neither is gone.
-    problems has one for each file, or each preference in one, that can't be used."""
+    """What the skills declare. skills has every skill there is, by name, apart from those in
+    unread, which names, in lowercase, each skill whose file couldn't be read, so what it declares
+    isn't known. complete says whether every skills folder could be listed, so a skill in neither
+    is gone. problems has one for each file, or each part of one, that can't be used."""
 
-    preferences: dict[str, dict[str, Preference]] = field(default_factory=dict)
+    skills: dict[str, Skill] = field(default_factory=dict)
     unread: set[str] = field(default_factory=set)
     complete: bool = True
     problems: list[str] = field(default_factory=list)
+
+    @property
+    def preferences(self) -> dict[str, dict[str, Preference]]:
+        """The preferences each skill declares, by skill and by name."""
+        return {name: skill.preferences for name, skill in self.skills.items()}
 
     def is_gone(self, skill: str) -> bool:
         """Whether a skill is in no skills folder, so its saved answers can go. Never while a
         folder couldn't be listed, or for a skill whose file couldn't be read."""
         return (
             self.complete
-            and find_skill(self.preferences, skill) is None
+            and find_skill(self.skills, skill) is None
             and skill.lower() not in self.unread
         )
 
 
-def skill_preferences(content_dir: str) -> SkillDeclarations:
-    """Every skill and the preferences it declares: dev-home-tools' skills, then the person's
-    own in dev-home, where one with the same name as a dev-home-tools skill isn't set up, so its
-    file is skipped (see SkillDeclarations). The list is complete only when dev-home's folder is a
-    git repo, so a PC whose dev-home isn't cloned yet, even into a folder already made for it, or
-    is on a drive that's unplugged, loses no answers."""
+def read_skill_file(folder: Path, *, own: bool) -> tuple[Skill | None, list[str]]:
+    """What the dev-home-skill.json in a skill's folder declares (see Skill), and a problem for
+    each part of it that can't be used, which counts as left out. None, with its problem, when the
+    file can't be read as a JSON object, or its preferences aren't one, so what it declares isn't
+    known. A field it doesn't know is no problem: a newer dev-home-tools may know it."""
+    path = folder / SKILL_SETTINGS
+    if not path.is_file():
+        return Skill(folder.name, own), []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as error:
+        return None, [f"{path} could not be read as JSON, so it was skipped. {error}"]
+    if not isinstance(data, dict):
+        return None, [f"{path} isn't a JSON object, so it was skipped."]
+    declared = data.get("preferences", {})
+    if not isinstance(declared, dict):
+        return None, [f"{path}: preferences isn't a JSON object, so it was skipped."]
+    problems: list[str] = []
+    recommended = data.get("recommended", True)
+    if not isinstance(recommended, bool):
+        problems.append(f"{path}: recommended isn't true or false, so it counts as true.")
+        recommended = True
+    always = data.get("alwaysAddedToAgents", False)
+    if not isinstance(always, bool):
+        problems.append(f"{path}: alwaysAddedToAgents isn't true or false, so it counts as false.")
+        always = False
+    elif always and own:
+        problems.append(
+            f"{path}: alwaysAddedToAgents is only for dev-home-tools' own skills, so it counts as "
+            "false."
+        )
+        always = False
+    requires: tuple[Requirement, ...] = ()
+    if "requires" in data:
+        requires, mistakes = parse_requires(data["requires"])
+        problems += [f"{path}: {mistake}." for mistake in mistakes]
+    preferences: dict[str, Preference] = {}
+    for key, entry in declared.items():
+        former = entry.get("formerNames", []) if isinstance(entry, dict) else None
+        usable = (
+            isinstance(entry, dict)
+            and isinstance(entry.get("default"), bool)
+            and isinstance(entry.get("label"), str)
+            and entry["label"].strip() != ""
+            and isinstance(entry.get("help", ""), str)
+            and isinstance(former, list)
+            and all(isinstance(name, str) and name.strip() for name in former)
+        )
+        if not usable or "." in key or not key.strip():
+            problems.append(
+                f"{path}: the preference {key} needs a name with no dots, a default of true or "
+                "false, a label, and formerNames, if any, as a list of names, so it was skipped."
+            )
+            continue
+        preferences[key] = Preference(
+            folder.name,
+            key,
+            entry["default"],
+            entry["label"],
+            entry.get("help", ""),
+            tuple(former or ()),
+        )
+    return Skill(folder.name, own, recommended, always, requires, preferences), problems
+
+
+def skill_declarations(content_dir: str) -> SkillDeclarations:
+    """Every skill and what it declares: dev-home-tools' skills, then the person's own in
+    dev-home, where one with the same name as a dev-home-tools skill isn't set up, so its file is
+    skipped (see SkillDeclarations). The list is complete only when dev-home's folder is a git
+    repo, so a PC whose dev-home isn't cloned yet, even into a folder already made for it, or is
+    on a drive that's unplugged, loses no answers."""
     found = SkillDeclarations()
-    folders = [TOOLS_ROOT / "templates" / "skills"]
+    folders = [(TOOLS_ROOT / "templates" / "skills", False)]
     if content_dir and (Path(content_dir) / ".git").exists():
-        folders.append(Path(content_dir) / "skills")
+        folders.append((Path(content_dir) / "skills", True))
     else:
         found.complete = False
-    for folder in folders:
+    for folder, own in folders:
         try:
             skills = sorted(f for f in folder.iterdir() if (f / "SKILL.md").is_file())
         except FileNotFoundError:
@@ -374,61 +463,20 @@ def skill_preferences(content_dir: str) -> SkillDeclarations:
             found.complete = False
             continue
         for skill in skills:
-            path = skill / SKILL_SETTINGS
-            if find_skill(found.preferences, skill.name) is not None:
+            if find_skill(found.skills, skill.name) is not None:
                 continue
-            if not path.is_file():
-                found.preferences[skill.name] = {}
-                continue
-            try:
-                data = json.loads(path.read_text(encoding="utf-8-sig"))
-            except (OSError, ValueError) as error:
-                found.problems.append(
-                    f"{path} could not be read as JSON, so it was skipped. {error}"
-                )
+            declared, problems = read_skill_file(skill, own=own)
+            found.problems += problems
+            if declared is None:
                 found.unread.add(skill.name.lower())
-                continue
-            declared = data.get("preferences", {}) if isinstance(data, dict) else None
-            if not isinstance(declared, dict):
-                found.problems.append(
-                    f"{path}: preferences isn't a JSON object, so it was skipped."
-                )
-                found.unread.add(skill.name.lower())
-                continue
-            found.preferences[skill.name] = {}
-            for key, entry in declared.items():
-                former = entry.get("formerNames", []) if isinstance(entry, dict) else None
-                usable = (
-                    isinstance(entry, dict)
-                    and isinstance(entry.get("default"), bool)
-                    and isinstance(entry.get("label"), str)
-                    and entry["label"].strip() != ""
-                    and isinstance(entry.get("help", ""), str)
-                    and isinstance(former, list)
-                    and all(isinstance(name, str) and name.strip() for name in former)
-                )
-                if not usable or "." in key or not key.strip():
-                    found.problems.append(
-                        f"{path}: the preference {key} needs a name with no dots, a default of "
-                        "true or false, a label, and formerNames, if any, as a list of names, so "
-                        "it was skipped."
-                    )
-                    continue
-                found.preferences[skill.name][key] = Preference(
-                    skill.name,
-                    key,
-                    entry["default"],
-                    entry["label"],
-                    entry.get("help", ""),
-                    tuple(former or ()),
-                )
+            else:
+                found.skills[skill.name] = declared
     return found
 
 
-def find_skill(preferences: dict[str, dict[str, Preference]], skill: str) -> str | None:
-    """The name a skill declares its preferences under, matched without case, as Windows matches
-    its folder."""
-    return next((name for name in preferences if name.lower() == skill.lower()), None)
+def find_skill(skills: Mapping[str, object], skill: str) -> str | None:
+    """The name a skill is listed under, matched without case, as Windows matches its folder."""
+    return next((name for name in skills if name.lower() == skill.lower()), None)
 
 
 def remove_path(data: dict[str, Any], path: str) -> None:

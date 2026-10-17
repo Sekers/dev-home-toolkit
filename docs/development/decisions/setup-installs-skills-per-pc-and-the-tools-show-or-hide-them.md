@@ -14,8 +14,9 @@ decide whether an installed skill is shown in an account or a project.
 - The person's own skills, from `skills/` in dev-home, work like recommended skills: installed by
   default, in the same list and prompt, and asked about once on each PC.
 - A skill can carry a `dev-home-skill.json` in its folder, with `recommended`,
-  `alwaysAddedToAgents`, and `requires`. A skill isn't added to a skills folder whose tools don't
-  meet its requirements, even with a yes;
+  `alwaysAddedToAgents`, and `requires`. Only dev-home-tools' own skills can declare
+  `alwaysAddedToAgents`, so each PC asks about every skill of the person's own, as above. A skill
+  isn't added to a skills folder whose tools don't meet its requirements, even with a yes;
   [Skills and releases declare their requirements as facts](skills-and-releases-declare-their-requirements-as-facts.md)
   says how they're declared and checked, and what setup says. For the person's own skills the
   file is optional: without it, a skill is recommended and needs nothing.

@@ -51,7 +51,7 @@ from .settings import (
     read_dev_home_settings,
     read_value,
     setting_value,
-    skill_preferences,
+    skill_declarations,
     value_text,
 )
 
@@ -264,7 +264,7 @@ def preferences_overview(settings: LocalSettings) -> list[str]:
     """Each preference the skills declare, for an agent: its label and skill, its value, and the
     name --configure changes it by, so a skill can name a preference by its label alone."""
     lines: list[str] = []
-    for skill, declared in skill_preferences(settings.content_dir).preferences.items():
+    for skill, declared in skill_declarations(settings.content_dir).preferences.items():
         for preference in declared.values():
             setting = preference.setting
             shown = value_shown(setting, get(settings.data, setting.path, MISSING))
@@ -575,7 +575,7 @@ def declared_setting(settings: LocalSettings, name: str) -> Setting:
         raise SettingError(
             f"A skill's preference is named skills.<skill>.preferences.<name>, not {name}."
         )
-    preferences = skill_preferences(settings.content_dir).preferences
+    preferences = skill_declarations(settings.content_dir).preferences
     skill = find_skill(preferences, parts[1])
     if skill is None:
         raise SettingError(f"No skill named {parts[1]} declares preferences.")
