@@ -1343,6 +1343,10 @@ def test_update_by_hand_says_which_defaults_it_changed_that_this_pc_follows(
     preferences = json.loads(skill.read_text(encoding="utf-8"))
     preferences["preferences"]["includeSecurityBugsInIssueOffers"]["default"] = False
     write_text(skill, json.dumps(preferences, indent=2) + "\n")
+    # And whether a skill is added to the agents, which this PC hasn't answered either.
+    knowledge = box.upstream / "templates" / "skills" / "knowledge" / "dev-home-skill.json"
+    write_text(knowledge, json.dumps({"recommended": False}) + "\n")
+    git("-C", str(box.upstream), "add", str(knowledge))
     git("-C", str(box.upstream), "commit", "--quiet", "-am", "settings: new defaults")
     git("-C", str(box.upstream), "push", "--quiet")
     result = run_python(box, "update.py", answer="y")
@@ -1351,7 +1355,8 @@ def test_update_by_hand_says_which_defaults_it_changed_that_this_pc_follows(
     notice = (
         r"Pulled \d+ commits?\. It changed the default of settings this PC follows: Check "
         r"GitHub for dev-home's changes is now every 6 hours; Include security bugs in GitHub "
-        r"issue offers is now no\. To choose your own value: /dev-home configure\.$"
+        r"issue offers is now no; Add the knowledge skill to your agents is now no\. To choose "
+        r"your own value: /dev-home configure\.$"
     )
     assert result.has_line(notice), str(result)
 

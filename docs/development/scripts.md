@@ -41,6 +41,9 @@ points here; its rules apply too.
   - its own generated files
   - links whose target is gone
   - links it made to skills that no longer exist
+  - links it made to a skill that isn't added to the agents in that skills folder: by this PC's
+    answer, or the skill's default, or because its `supportedOn` names another operating system,
+    or another agent than those that read the folder, or has something setup can't use
   - in a Claude Code folder or Codex home the person said no to setting up: the links it made
     there, and the rules file it wrote there, each listed in its output as it goes
   - the links it made in `~/.agents/skills`, once the person has said no to Codex

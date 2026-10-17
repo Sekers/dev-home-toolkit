@@ -81,6 +81,18 @@ wrote in each home and the links it made in ~/.agents/skills, and takes dev-home
 home's writable_roots. Until Codex is answered, setup
 adds no links and removes none, and a quiet run names its homes.
 
+Each skill is added to the agents on this PC, or not, by its answer in
+skills.<name>.addedToAgents, and dev-home always. A skill this PC has no answer for follows its
+default, from its dev-home-skill.json: added, unless it says it isn't recommended. Setup saves
+such a skill as unanswered, the one thing a quiet run writes for it, and names it once in a NEW
+line, with whether it was added. A skill goes into each skills folder whose agents meet its
+supportedOn, the operating system and the agent, and anything there setup can't use keeps it off;
+setup removes its links where it isn't added, with a line saying why, and records each skill's
+state in internal/.generated/skill-states.json, which /dev-home skills shows. What its dependsOn
+lists that this PC seems to lack, a program or a Python version, never keeps it off: the NEW line
+says so, and /dev-home skills checks again where the agent runs. A skill whose
+dev-home-skill.json can't be read is left as it is.
+
 Each link to a folder is a junction on Windows, which needs no Developer Mode, and a symbolic link
 elsewhere.
 
@@ -136,7 +148,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import claude_settings, codex_config, configure, console, generated, python_link
+from . import (
+    claude_settings,
+    codex_config,
+    configure,
+    console,
+    generated,
+    python_link,
+    requirements,
+)
 from .git import run_git
 from .links import is_link, link_info, make_folder_link, remove_folder_link
 from .output import GREEN, RED, YELLOW, color, describe, first_line, status_line
@@ -151,6 +171,7 @@ from .paths import (
 )
 from .programs import SYNC_HOLDS_LOCK, by_hand, find_program
 from .settings import (
+    ADDED_TO_AGENTS,
     AUTO_UPDATE,
     BY_PATH,
     CLAUDE_CODE,
@@ -160,10 +181,13 @@ from .settings import (
     MISSING,
     SCHEMA_VERSION,
     SETTINGS_PATH,
+    STATE,
     TOOLS_ROOT,
     Checked,
     LocalSettings,
     Setting,
+    Skill,
+    SkillDeclarations,
     Tool,
     answered,
     apply_changes,
@@ -180,8 +204,10 @@ from .settings import (
     order_folders,
     put,
     read_dev_home_settings,
+    read_value,
     same_apart_from_order,
     saved_answer,
+    saved_skill_path,
     setting_value,
     settings_text,
     skill_declarations,
@@ -206,12 +232,17 @@ ALLOWED_NAMES = ("dev-home", "dev-home-tools")
 GENERATED_ROOT = TOOLS_ROOT / "internal" / ".generated"
 PYTHON_LINK = TOOLS_ROOT / "internal" / ".python"
 GENERATED_FOLDERS = ("skills", "shared-skill-scripts", "operating-rules")
+# What setup decided for each skill on this PC, which facts.py's skills topic shows.
+SKILL_STATES = GENERATED_ROOT / "skill-states.json"
 FOLDER_NOTE = (
-    "Setup writes everything in this folder from templates/skills/, "
-    "templates/shared-skill-scripts/,\nand templates/operating-rules/, with this PC's paths "
-    "filled in. Don't edit it: the next setup\nrun rewrites it. Python writes the __pycache__ "
-    "folders when the scripts run, to start them\nfaster, and setup leaves those alone.\n"
+    "Setup writes everything in this folder: the files from templates/skills/,\n"
+    "templates/shared-skill-scripts/, and templates/operating-rules/, with this PC's paths filled\n"
+    "in, and skill-states.json, what it decided for each skill on this PC. Don't edit it: the\n"
+    "next setup run rewrites it. Python writes the __pycache__ folders when the scripts run, to\n"
+    "start them faster, and setup leaves those alone.\n"
 )
+# Each tool setup sets up, by the name a skill's supportedOn gives it, such as claude-code.
+REQUIRES_NAMES = {shown: name for name, shown in requirements.AGENTS.items()}
 # Files every dev-home starts with, from templates/dev-home-starter/.
 DEV_HOME_FILES = ("global-rules/global-rules.md", "knowledge/README.md")
 # The skills folder every Codex home reads, in the profile folder. Of the tools setup sets up, only
@@ -246,6 +277,27 @@ class SettingsChange:
 
 # What a check of one settings file found: a line to report as it is, or a change it needs.
 SettingsCheck = tuple[str, str] | SettingsChange
+
+
+@dataclass(frozen=True)
+class SkillPlan:
+    """What setup does with one skill on this PC: the skills folders it's linked in, and those it's
+    left out of, each with why, said to follow "which", such as "works only in Claude Code". state
+    is how /dev-home skills and the NEW line show it, such as "added to your agents". told says
+    whether the NEW line names it: not when the only reason it's left out is one nobody can act
+    on, such as the operating system. warnings says what it needs that this PC seems to lack, such
+    as a program, which the NEW line adds to its state; needs is every requirement of that kind,
+    which /dev-home skills checks again where the agent runs. Both are empty for a skill that
+    isn't added anywhere, since no agent uses it. A skill whose dev-home-skill.json can't be read
+    is left as it is: in neither list."""
+
+    name: str
+    added_to: tuple[Path, ...]
+    left_out: tuple[tuple[Path, str], ...]
+    state: str
+    told: bool
+    warnings: tuple[str, ...] = ()
+    needs: tuple[requirements.Requirement, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -313,6 +365,9 @@ class Setup:
         self.matched: dict[str, str] = {}
         # What the profile folder holds, listed once a run (see profile_folders).
         self.profile_entries: list[Path] | None = None
+        # What the skills declare, read once a run with this PC's settings, for the dev-home
+        # folder named here (see skills_declared).
+        self.declared: tuple[str, SkillDeclarations] | None = None
         # Set once this run clones dev-home, which then may have another copy still in use, or
         # creates one, which nothing else can be using yet.
         self.cloned = False
@@ -531,11 +586,12 @@ class Setup:
         self.status("SET", f"This PC's settings: {SETTINGS_PATH}{notes}")
         return True
 
-    def save_matched(self, settings: LocalSettings, read: dict[str, Any] | None) -> bool:
-        """Saves the answers a shared tool's folders got from its main folder, the only change
-        this run makes to this PC's settings, with no backup, since nobody changed a setting: the
-        lines saying which folders got it stand for the save's own line. Returns whether it
-        saved."""
+    def save_recorded(self, settings: LocalSettings, read: dict[str, Any] | None) -> bool:
+        """Saves what this run records without anyone changing a setting, when that's its only
+        change to this PC's settings: the answers a shared tool's folders got from its main
+        folder, and the skills new to this PC, as unanswered. No backup, since nobody changed a
+        setting, and the lines saying what it records stand for the save's own line. Returns
+        whether it saved."""
         try:
             return self.write_settings(settings, read, backup=False) is not None
         except OSError as error:
@@ -1339,15 +1395,21 @@ class Setup:
             self.cloned = self.created = False
         if settings.content_dir != saved_folder:
             save = True
+        # Skills this PC has no answer for yet: each follows its default, and the NEW line after
+        # the save names it, once.
+        declared = self.skills_declared(settings)
+        new_skills = self.note_new_skills(settings, declared)
 
         # 4. The change to dev-home.json to confirm, shown and asked about before the work.
         tools = self.tool_folders(settings)
+        folders = self.skills_folders(tools, declared)
         self.confirm_copies(content_root)
 
         # 5. The work.
         with self.work_lock(content_root) as owned:
             if not owned:
                 raise CannotGoOnError
+            new_skills = self.still_new(settings, new_skills)
             saved = False
             if save:
                 if self.should(SETTINGS_PATH, "Save this PC's settings"):
@@ -1355,8 +1417,8 @@ class Setup:
                 else:
                     for sentence in cleanup(checked):
                         self.line(f"What if: {sentence}")
-            elif self.matched and not self.what_if:
-                saved = self.save_matched(settings, read)
+            elif (self.matched or new_skills) and not self.what_if:
+                saved = self.save_recorded(settings, read)
             elif order_folders(copy.deepcopy(settings.data), self.home) and not self.what_if:
                 self.put_in_order()
             for matched in self.matched.values():
@@ -1364,7 +1426,13 @@ class Setup:
                     self.line(f"What if: {matched}")
                 elif saved:
                     self.status("SET", matched)
-            self.set_up(settings, content_root, tools)
+            plans = self.plan_skills(self.settings_now(settings), declared, folders)
+            told = new_skills_text(new_skills, plans)
+            if told and self.what_if:
+                self.line(f"What if: {told}")
+            elif told and saved:
+                self.status("NEW", told)
+            self.set_up(settings, content_root, tools, folders, plans)
             # The tools' settings files: the change each folder set up needs, which its yes
             # approved, and the access taken back out of each one answered no, which the no
             # approved, each made with a backup. See repair_setting.
@@ -1425,6 +1493,7 @@ class Setup:
             )
             raise CannotGoOnError
         declared = skill_declarations(settings.content_dir)
+        self.declared = (settings.content_dir, declared)
         # Only a run that holds the sync's lock from its start, a sync's setup, removes the answers
         # of a skill that's gone.
         checked = check_settings(settings.data, declared, remove_gone_skills=self.sync_holds_lock)
@@ -1686,12 +1755,169 @@ class Setup:
                 folders.append((entry, full))
         return folders
 
+    # Skills: which are added to the agents on this PC, and where
+
+    def skills_declared(self, settings: LocalSettings) -> SkillDeclarations:
+        """What the skills declare, as this run read them with this PC's settings, or read again
+        once dev-home is in place, when it wasn't at first, such as one this run just cloned, or
+        another dev-home folder was chosen since. A second read reports only the problems the
+        first didn't."""
+        first = self.declared
+        if first is not None and first[0] == settings.content_dir and first[1].complete:
+            return first[1]
+        declared = skill_declarations(settings.content_dir)
+        for problem in declared.problems:
+            if first is None or problem not in first[1].problems:
+                self.status("PROBLEM", problem)
+        self.declared = (settings.content_dir, declared)
+        return declared
+
+    def note_new_skills(self, settings: LocalSettings, declared: SkillDeclarations) -> list[str]:
+        """Saves each skill this PC has no answer for, about adding it to the agents, as
+        unanswered, the one state a quiet run writes, so it follows its default, and the NEW line
+        names it once (see new_skills_text). A value of the wrong kind stays as it is, since setup
+        reports it. Returns the names of the skills it saved."""
+        if not isinstance(settings.data.get("skills", {}), dict):
+            return []
+        new: list[str] = []
+        for name, skill in declared.skills.items():
+            if skill.added_setting is None:
+                continue
+            # A setting's name is its path, with dots between its parts.
+            if "." in name:
+                self.status(
+                    "PROBLEM",
+                    f"The skill {name} has a dot in its folder's name, so setup can't save whether "
+                    "to add it to your agents, and it follows its default. Rename its folder and "
+                    "its name, with lowercase letters, digits, and hyphens.",
+                )
+                continue
+            path = saved_skill_path(settings.data, name, ADDED_TO_AGENTS)
+            entry = get(settings.data, path.rsplit(".", 1)[0], MISSING)
+            if entry is MISSING or (isinstance(entry, dict) and ADDED_TO_AGENTS not in entry):
+                put(settings.data, path, {STATE: "unanswered"})
+                new.append(name)
+        return new
+
+    def skills_folders(
+        self, tools: ToolFolders, declared: SkillDeclarations
+    ) -> list[tuple[Path, frozenset[str]]]:
+        """Each skills folder setup links skills into, with the tools it sets up that read it,
+        each by its name in a skill's supportedOn: each Claude Code folder's skills/, and for Codex,
+        ~/.agents/skills. Adding an AI agent tool: see AGENTS_SKILLS, which other tools read too,
+        so its set of tools would grow.
+
+        A folder that is really another one, through a junction, such as ~/.claude/skills made a
+        junction to ~/.agents/skills to share skills, is one folder that both tools read, under
+        the first name it has here. Only a skill supported on one agent tells them apart, so only
+        then does setup follow the links, which takes a little time."""
+        claude_code = frozenset({REQUIRES_NAMES[CLAUDE_CODE.name]})
+        folders = [(Path(d) / "skills", claude_code) for d in tools.claude_dirs]
+        if tools.codex_homes:
+            folders.append((self.home / AGENTS_SKILLS, frozenset({REQUIRES_NAMES[CODEX.name]})))
+        if not any(r.kind == "agent" for s in declared.skills.values() for r in s.requires):
+            return folders
+        merged: dict[str, tuple[Path, frozenset[str]]] = {}
+        for folder, readers in folders:
+            real = real_path(folder)
+            first, before = merged.get(real, (folder, frozenset()))
+            merged[real] = (first, before | readers)
+        return list(merged.values())
+
+    def still_new(self, settings: LocalSettings, new_skills: list[str]) -> list[str]:
+        """The skills this run found new that still are. A run that didn't hold the sync's lock
+        from its start, such as one that waited on a question, may find another run saved some
+        meanwhile, which named them already."""
+        if self.sync_holds_lock or self.what_if or not new_skills:
+            return new_skills
+        now = load_local_settings()
+        if now is None or not now.found:
+            return new_skills
+        return [
+            name
+            for name in new_skills
+            if get(now.data, saved_skill_path(now.data, name, ADDED_TO_AGENTS), MISSING) is MISSING
+        ]
+
+    def settings_now(self, settings: LocalSettings) -> dict[str, Any]:
+        """This PC's settings for the work to act on: as saved, for a run that didn't hold the
+        sync's lock from its start, since another run may have saved since this one read them, and
+        the save keeps both runs' changes; or as this run has them, for a preview, or when the
+        file can't be read."""
+        if self.sync_holds_lock or self.what_if:
+            return settings.data
+        now = load_local_settings()
+        return now.data if now is not None and now.found else settings.data
+
+    def plan_skills(
+        self,
+        data: dict[str, Any],
+        declared: SkillDeclarations,
+        folders: Sequence[tuple[Path, frozenset[str]]],
+    ) -> dict[str, SkillPlan]:
+        """What setup does with each skill on this PC (see plan_skill), by its name in lowercase,
+        from its answer in data and what it requires, checked against this PC's facts, gathered
+        once."""
+        pc = requirements.this_pc(
+            requirements.programs_named(
+                requirement for skill in declared.skills.values() for requirement in skill.requires
+            )
+        )
+        plans = {
+            name.lower(): plan_skill(skill, data, pc, folders)
+            for name, skill in declared.skills.items()
+        }
+        for name in sorted(declared.unread):
+            plans[name] = SkillPlan(
+                name, (), (), "left as it is: its dev-home-skill.json can't be read", told=False
+            )
+        return plans
+
+    def write_skill_states(self, plans: dict[str, SkillPlan]) -> None:
+        """Records each skill's state on this PC (see SkillPlan), which /dev-home skills shows:
+        facts.py reads it, so it never works out whether a skill is added itself. It only checks
+        again, where the agent runs, what each skill needs that setup only warns about."""
+        text = (
+            json.dumps(
+                {plan.name: recorded_state(plan) for plan in plans.values()},
+                indent=2,
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
+        try:
+            if SKILL_STATES.is_file() and SKILL_STATES.read_text(encoding="utf-8") == text:
+                return
+        except OSError:
+            pass
+        if linked_folder(GENERATED_ROOT) is not None or not self.should(
+            SKILL_STATES, "Write what setup decided for each skill"
+        ):
+            return
+        try:
+            SKILL_STATES.parent.mkdir(parents=True, exist_ok=True)
+            if SKILL_STATES.is_file():
+                make_writable(SKILL_STATES)
+            SKILL_STATES.write_text(text, encoding="utf-8", newline="\n")
+        except OSError as error:
+            self.status("PROBLEM", f"Could not write {SKILL_STATES}. {error}")
+            return
+        self.generated_changes += 1
+
     # The work, which asks nothing
 
-    def set_up(self, settings: LocalSettings, content_root: Path, tools: ToolFolders) -> None:
+    def set_up(
+        self,
+        settings: LocalSettings,
+        content_root: Path,
+        tools: ToolFolders,
+        folders: Sequence[tuple[Path, frozenset[str]]],
+        plans: dict[str, SkillPlan],
+    ) -> None:
         """Everything setup sets up besides this PC's settings and the tools' settings files, in
         order: dev-home's git config and its dev-home.json, Python for the skills' scripts, the
-        generated files, the skills' links, and the always-on rules."""
+        generated files and each skill's state, the skills' links in each skills folder in
+        folders, as plans says, and the always-on rules."""
         values = template_values(content_root)
         # The operating rules template and the person's global rules, each named once: setup
         # reads them from here, and the notes in generated files point to them.
@@ -1709,8 +1935,8 @@ class Setup:
                     self.status("SET", f"dev-home git config {key} = {value}")
                 else:
                     self.status("PROBLEM", f"Could not set git config {key} in {content_root}.")
-        # With signing off, so a commit needs no prompt, and before linking skills, so a merge's
-        # new ones are linked in this run.
+        # With signing off, so a commit needs no prompt. A skill a merge here brings in is linked
+        # by the next run, which names it in its NEW line first.
         self.write_copies(content_root)
 
         # 2. Python, for the skills' scripts. A test profile has its own AppData folder.
@@ -1785,6 +2011,7 @@ class Setup:
         ):
             with note_path.open("w", encoding="utf-8", newline="") as file:
                 file.write(FOLDER_NOTE)
+        self.write_skill_states(plans)
 
         for unknown in dict.fromkeys(self.unknown_placeholders):
             self.status("PROBLEM", f"A placeholder setup does not know, left as it is: {unknown}")
@@ -1804,11 +2031,9 @@ class Setup:
             self.status("OK", label)
 
         # 4. Skills, linked into each tool's personal skills folder: the dev-home-tools skills,
-        # then the personal skills in dev-home. Every Codex home reads ~/.agents/skills.
-        # Adding an AI agent tool: see AGENTS_SKILLS, which other tools read too.
-        tool_skill_folders = [Path(d) / "skills" for d in tools.claude_dirs]
-        if tools.codex_homes:
-            tool_skill_folders.append(self.home / AGENTS_SKILLS)
+        # then the personal skills in dev-home, each where its plan adds it. Every Codex home
+        # reads ~/.agents/skills.
+        tool_skill_folders = [folder for folder, _ in folders]
 
         links, same_names = skill_links(content_root, skill_sources)
         for name in same_names:
@@ -1825,7 +2050,21 @@ class Setup:
         current_skills = {os.path.normcase(name) for name, _ in links}
         for folder in tool_skill_folders:
             for name, target in links:
-                self.sync_link(folder / name, target, f"Skill '{name}' in {folder}")
+                plan = plans.get(name.lower())
+                # A skill that arrived during this run, in a merge, is planned by the next.
+                if plan is None:
+                    continue
+                link = folder / name
+                if folder in plan.added_to:
+                    self.sync_link(link, target, f"Skill '{name}' in {folder}")
+                    continue
+                why = next((why for left, why in plan.left_out if left == folder), None)
+                if why is not None and setup_link_target(link, skill_targets) is not None:
+                    self.remove_link(
+                        link,
+                        f"Remove a link to the skill '{name}', which {why}",
+                        f"Link to the skill '{name}', which {why}",
+                    )
             if not folder.exists():
                 continue
             for entry in sorted(folder.iterdir()):
@@ -2275,6 +2514,122 @@ def skill_links(
                 continue
             links.append((folder.name, folder))
     return links, same_names
+
+
+def plan_skill(
+    skill: Skill,
+    data: dict[str, Any],
+    pc: requirements.ThisPC,
+    folders: Sequence[tuple[Path, frozenset[str]]],
+) -> SkillPlan:
+    """What setup does with one skill on this PC (see SkillPlan): with a yes, its default, or for
+    a skill that's always added, it goes into each skills folder whose agents meet its
+    supportedOn, the operating system and the agent; with a no, into none. Its dependsOn, a
+    program or a Python version, never keeps it off: setup only warns about it."""
+    setting = skill.added_setting
+    said_no = False
+    wanted = True
+    if setting is not None:
+        saved = get(data, saved_skill_path(data, skill.name, ADDED_TO_AGENTS), MISSING)
+        wanted = bool(read_value(saved, setting)[0])
+        said_no = saved is False
+    needs = requirements.warned_about(skill.requires)
+    warnings = tuple(dict.fromkeys(u.reason for u in requirements.unmet(needs, pc, frozenset())))
+
+    def plan(
+        added: Sequence[Path], left_out: Sequence[tuple[Path, str]], state: str, told: bool
+    ) -> SkillPlan:
+        # What's missing is said only for a skill that's added somewhere, which an agent can use.
+        missing = (warnings, needs) if added else ((), ())
+        return SkillPlan(skill.name, tuple(added), tuple(left_out), state, told, *missing)
+
+    def keeping_off(agents: frozenset[str]) -> list[requirements.Unmet]:
+        return [u for u in requirements.unmet(skill.requires, pc, agents) if u.keeps_off]
+
+    # What keeps it off this whole PC, with no agents to check: the operating system, or an entry
+    # about it or the agent with a mistake. A reason nobody can act on stays unsaid.
+    everywhere = keeping_off(frozenset())
+    on_this_pc = and_list(list(dict.fromkeys(u.reason for u in everywhere)))
+    if not wanted:
+        if everywhere and not any(u.can_act for u in everywhere):
+            # It couldn't be added here even with a yes, so that's what its state says.
+            out_of_each = [(f, on_this_pc) for f, _ in folders]
+            return plan((), out_of_each, f"not added: {on_this_pc}", told=False)
+        why = "you said no to" if said_no else "isn't added by default"
+        state = "not added: you said no" if said_no else "not added by default"
+        return plan((), [(f, why) for f, _ in folders], state, told=True)
+    if not folders:
+        if not everywhere:
+            return plan((), (), "not added: no Claude Code folder or Codex home is set up", True)
+        return plan((), (), f"not added: {on_this_pc}", any(u.can_act for u in everywhere))
+    added: list[Path] = []
+    left_out: list[tuple[Path, str]] = []
+    reasons: list[str] = []
+    can_act = False
+    # The agents of the folders it goes into, and of those it's left out of.
+    agents_added: list[str] = []
+    agents_left: list[str] = []
+    for folder, agents in folders:
+        unmet = keeping_off(agents)
+        names = agents_left if unmet else agents_added
+        for name in (requirements.AGENTS[agent] for agent in sorted(agents)):
+            if name not in names:
+                names.append(name)
+        if not unmet:
+            added.append(folder)
+            continue
+        left_out.append((folder, and_list([u.reason for u in unmet])))
+        reasons += [u.reason for u in unmet if u.reason not in reasons]
+        can_act = can_act or any(u.can_act for u in unmet)
+    whole = "always added to your agents" if setting is None else "added to your agents"
+    if not left_out:
+        state = whole
+    elif not added:
+        state = f"not added: {and_list(reasons)}"
+    else:
+        state = (
+            f"{whole} in {and_list(agents_added)}, not in {and_list(agents_left)}: "
+            f"{and_list(reasons)}"
+        )
+    return plan(added, left_out, state, not left_out or can_act)
+
+
+def recorded_state(plan: SkillPlan) -> dict[str, Any]:
+    """One skill's entry in skill-states.json: its state, and what it needs that setup only
+    warns about, for /dev-home skills to check again where the agent runs: each program, by its
+    name, with what the skill uses it for, if its entry says; and the lowest Python it runs on,
+    the highest any entry asks for."""
+    entry: dict[str, Any] = {"state": plan.state}
+    programs: dict[str, dict[str, str]] = {}
+    for need in plan.needs:
+        if need.kind == "program" and need.names[0] not in programs:
+            programs[need.names[0]] = {"name": need.names[0]}
+            if need.description:
+                programs[need.names[0]]["description"] = need.description
+    if programs:
+        entry["programs"] = list(programs.values())
+    versions = [need.version for need in plan.needs if need.kind == "python"]
+    if versions:
+        entry["python"] = requirements.version_text(max(versions))
+    return entry
+
+
+def new_skills_text(new: Sequence[str], plans: dict[str, SkillPlan]) -> str:
+    """The NEW line naming the skills new to this PC, each with its state and what it needs that
+    this PC seems to lack, or "" with none to name. One left out only for a reason nobody can act
+    on, such as the operating system, isn't named (see SkillPlan)."""
+    named = [plans[name.lower()] for name in new if name.lower() in plans]
+    items = [
+        f"'{plan.name}' ({'; '.join([plan.state, *plan.warnings])})" for plan in named if plan.told
+    ]
+    if not items:
+        return ""
+    one = len(items) == 1
+    return (
+        f"New skill{'' if one else 's'} on this PC, following "
+        f"{'its default' if one else 'their defaults'} until you choose: {', '.join(items)}. To "
+        "choose, use /dev-home configure."
+    )
 
 
 def template_values(content_root: Path) -> dict[str, str]:

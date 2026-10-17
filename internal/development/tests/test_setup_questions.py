@@ -779,6 +779,8 @@ def test_at_a_console_settings_in_the_older_layout_are_set_aside_and_asked_again
     assert returned == 0, out
     assert re.search(r"^SET\s+The old settings, set aside: .*local-settings\.json\.bak-", out, re.M)
     assert kept == [old_text], kept
+    # Each skill but dev-home, which is always added, is new to the settings.
+    unanswered = {"addedToAgents": {"$state": "unanswered"}}
     assert written == {
         "schemaVersion": 1,
         "testHomeDir": saved["testHomeDir"],
@@ -786,6 +788,7 @@ def test_at_a_console_settings_in_the_older_layout_are_set_aside_and_asked_again
         "updates": {"installAutomatically": False},
         "claudeCode": {"folders": {"~/.claude": {"setUp": True}}},
         "codex": {"homes": {"~/.codex": {"setUp": True}}},
+        "skills": {"handoff": unanswered, "knowledge": unanswered, "mine": unanswered},
     }, written
 
 

@@ -29,7 +29,7 @@ is clearest.
 - A line for each item: a batch, such as after months without updating or from a set of copied
   skills, would flood the reply.
 
-**Later changed,** on 2026-10-16, not built yet:
+**Later changed,** on 2026-10-16. The first change below is built, and the others aren't yet:
 
 - A new skill gets its `NEW` line once, not on every sync. The first setup run that finds it
   saves it as `unanswered`, which

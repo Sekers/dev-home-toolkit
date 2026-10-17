@@ -172,7 +172,10 @@ one's name is its path, which `--configure` takes too:
 - `updates.checkEveryHours` and `devHome.checkEveryHours` say how often a sync checks GitHub for
   dev-home-tools updates (24 hours unless set) and for dev-home's changes (12 hours unless set,
   when one copy is in active use, and for a plain `/knowledge`), where 0 means every time.
-- A skill's preferences go under `skills`, such as
+- `skills.<name>.addedToAgents` is whether setup adds a skill to your agents on this PC: `true`
+  or `false`. Until you choose, it follows the skill's default, and setup saves it as
+  `{"$state": "unanswered"}`. `dev-home` is always added, so it has none.
+- A skill's preferences go under `skills` too, such as
   `"skills": {"handoff": {"preferences": {"<name>": false}}}`.
 - A setting with a default can also be `{"$state": "default"}`, which follows the default even if
   a later version of dev-home-tools changes it, where a value you write stays as you wrote it.
@@ -238,7 +241,10 @@ A typical day with the included skills:
   `name` (the same as the folder), `description`, and optionally `allowed-tools`. Run
   `py C:\Programming\dev-home-tools\setup.py --quiet` to link it, and commit it (ask an agent,
   or wait for the next `/handoff` to offer). Your other PCs link it at their next
-  sync. A skill can't share a name with one in this repo.
+  sync. A skill can't share a name with one in this repo. Every skill is added to your agents
+  unless it's marked as not recommended, or you say no on that PC, with `/dev-home configure`; a
+  skill can also say what it needs to run, in a
+  [`dev-home-skill.json`](docs/reference/dev-home-skill-json.md).
 
 ## What's in your dev-home
 
@@ -265,6 +271,7 @@ Everything beyond getting started is in the `docs/` folder:
 | Skills | [dev-home](docs/skills/dev-home.md) | `/dev-home sync`, `configure`, and `skills`: syncing when you ask, changing a setting, and listing your skills. |
 | Reference | [The scripts](docs/reference/scripts.md) | `setup.py`, `sync.py`, and `update.py`: when each one runs, what their status words mean, how updates are installed, and where they come from. |
 | Reference | [What setup changes on your PC](docs/reference/setup-changes.md) | Every link, file, and setting that setup adds, why, and how to remove it all. |
+| Reference | [A skill's dev-home-skill.json](docs/reference/dev-home-skill-json.md) | The file that says whether a skill is added to your agents unless you say no, what it needs to run, its preferences, and its old names. |
 | Development | [Design decisions](docs/development/decisions/index.md) | For people changing dev-home-tools: decisions made and options set aside, with the reasons. |
 | Development | [Skills and everything else under templates/](docs/development/skills.md) | The rules for changing the skills, the scripts they share, the operating rules, and the starter. |
 | Development | [setup.py, sync.py, and update.py](docs/development/scripts.md) | The rules for changing the scripts and their code in `internal/shared/`. |
@@ -272,6 +279,7 @@ Everything beyond getting started is in the `docs/` folder:
 | Development | [Testing](docs/development/testing.md) | How the tests work, and the rules for writing them. |
 | Development | [Writing the docs](docs/development/writing-docs.md) | Where each page goes, and the rules for the README and `docs/`. |
 | Development | [A fresh agent's read](docs/development/fresh-agent-reads.md) | How to have a second agent, with no context, check a change. |
+| Development | [Skill requirements](docs/development/research/skill-requirements.md) | What keeps a skill off a PC: why a missing program can't decide it reliably, the options weighed, and a recommended design, with the words "tool", "agent", and "program". |
 | Development | [Pylance comparison](docs/development/research/pylance-comparison.md) | Pylance's standard and strict type checking compared on this repo's code, with the data, so it needn't be run again. |
 
 ## Safety and privacy

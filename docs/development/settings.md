@@ -56,7 +56,8 @@ AGENTS.md's rules apply too.
 ## Changing a setting later
 
 - To rename one, add its old name to its `formerNames`. Setup moves each PC's answer, and
-  `schemaVersion` stays as it is.
+  `schemaVersion` stays as it is. Renaming or removing a whole skill is in
+  [skills.md](skills.md).
 - To remove one, delete its declaration. Setup deletes each PC's answer on its next run. When a
   whole skill is gone, the next sync's setup deletes its answers: it holds the sync's lock from
   its start, when it reads the skills, so a skill that a sync or an update is replacing at that

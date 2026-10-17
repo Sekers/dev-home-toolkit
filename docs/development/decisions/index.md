@@ -65,3 +65,5 @@ Research a decision rests on has its own page in `../research/`.
 - [A skill's always-on lines are blocks in the operating rules](a-skills-always-on-lines-are-blocks-in-the-operating-rules.md)
 - [Releases go to main, and work happens on develop](releases-go-to-main-and-work-happens-on-develop.md)
 - [A release data file holds the version and what end users need to know](a-release-data-file-holds-the-version-and-what-end-users-need-to-know.md)
+- [Skills run programs by name, through the PATH](skills-run-programs-by-name-through-the-path.md)
+- [Setup keeps a skill off only for its operating system or agent](setup-keeps-a-skill-off-only-for-its-operating-system-or-agent.md)

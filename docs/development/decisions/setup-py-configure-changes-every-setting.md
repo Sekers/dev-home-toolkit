@@ -52,6 +52,23 @@ run: `devHome.folder`, `updates.installAutomatically`, `updates.checkEveryHours`
   the README teaches people to look. Git ignores it because it holds the PC's paths, and the
   repo is public.
 
+**Changed on 2026-10-17,** with skills per PC. In the list printed with neither a console nor a
+setting, which in practice an agent reads and sums up for the person:
+
+- A setting nobody has answered shows as "not answered yet (defaults to yes)", or "no", where it
+  said "not answered yet, so yes", and the copies setting as "not answered yet (until then, each
+  sync checks GitHub)". The parenthesis reads better beside the rest of a line, and stays apart
+  from "yes (the default)", an answer of default.
+- Under "Skills added to your agents on this PC", a skill whose recorded state isn't what its
+  answer alone gives, such as one that works only on another operating system, gets ", but on
+  this PC it's ..." with that state, on the same line, before "To change it", so neither the
+  agent nor the person changes an answer for nothing. The settings menu's Skills section, in step
+  8 of setup's new order, is to show the same, in a layout shown to the developer first.
+- Set aside: leaving the list as it was (its heading says "added", while its lines showed
+  answers); changing the heading instead (a heading already approved, and it still wouldn't say
+  why a "yes" skill is missing); the state on a second, indented line (an agent summing up the
+  list could split one skill's two lines apart).
+
 **Options set aside:**
 
 - At a console, every question again with the current answers as defaults: six or more

@@ -27,6 +27,7 @@ from . import console
 from .output import CYAN, GREEN, color, status_line
 from .paths import comparable, forward, is_inside, resolve_home, same_path, unsafe_reason
 from .settings import (
+    ADDED_TO_AGENTS,
     AUTO_UPDATE,
     BY_PATH,
     CLAUDE_CODE,
@@ -108,6 +109,10 @@ def usage() -> str:
             ),
         ]
     entries += [
+        (
+            f"skills.<skill>.{ADDED_TO_AGENTS}=true|false",
+            "Whether to add a skill to your agents on this PC.",
+        ),
         ("skills.<skill>.preferences.<name>=true|false", "A preference a skill declares."),
         (
             "multiMachine=true|false",
@@ -155,7 +160,7 @@ def change_settings(run: "Setup", settings: LocalSettings) -> bool:
         return assign(run, settings, run.configure or "")
     if run.can_ask:
         return False
-    for line in overview(run, settings) + preferences_overview(settings):
+    for line in overview(run, settings) + skills_overview(settings):
         run.line(line)
     run.line()
     run.line(USAGE)
@@ -188,7 +193,7 @@ def value_shown(setting: Setting, saved: object) -> str:
     if not setting.has_default:
         shown = "not set yet" if value is None else value_text(setting, value)
     elif setting.asked and not answered:
-        shown = f"not answered yet, so {value_text(setting, value)}"
+        shown = f"not answered yet (defaults to {value_text(setting, value)})"
     elif saved is MISSING or isinstance(saved, dict):
         shown = f"{value_text(setting, value)} (the default)"
     else:
@@ -234,7 +239,7 @@ def overview(run: "Setup", settings: LocalSettings) -> list[str]:
     elif found in LAYOUT_NOTES:
         copies = f"{DEV_HOME_SETTINGS} {LAYOUT_NOTES[found]}"
     elif answer is None:
-        copies = "not answered yet, so each sync checks GitHub"
+        copies = "not answered yet (until then, each sync checks GitHub)"
     else:
         copies = "several" if answer else "one"
     # The dev-home folder shows what this run will use, which --content-dir can change.
@@ -260,19 +265,63 @@ def overview(run: "Setup", settings: LocalSettings) -> list[str]:
     return lines
 
 
-def preferences_overview(settings: LocalSettings) -> list[str]:
-    """Each preference the skills declare, for an agent: its label and skill, its value, and the
-    name --configure changes it by, so a skill can name a preference by its label alone."""
-    lines: list[str] = []
-    for skill, declared in skill_declarations(settings.content_dir).preferences.items():
-        for preference in declared.values():
+def recorded_states() -> dict[str, str] | None:
+    """Each skill's state on this PC, by its name in lowercase, as setup last recorded it, such
+    as "not added: works only on macOS", or None when setup has recorded none."""
+    # Loaded here, since setup loads this module.
+    from .setup import SKILL_STATES
+
+    try:
+        data = json.loads(SKILL_STATES.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return {
+        name.lower(): entry["state"]
+        for name, entry in data.items()
+        if isinstance(entry, dict) and isinstance(entry.get("state"), str)
+    }
+
+
+def skills_overview(settings: LocalSettings) -> list[str]:
+    """For an agent: whether each skill is added to the agents on this PC, then each preference
+    the skills declare, by its label and skill, each with its value and the name --configure
+    changes it by, so a skill can name a preference by its label alone. Where the state setup
+    last recorded for a skill isn't what its answer alone gives, such as for one that works only
+    on another operating system, the line says so, so nobody changes an answer for nothing."""
+    skills = skill_declarations(settings.content_dir).skills
+    states = recorded_states()
+    added: list[str] = []
+    for name, skill in skills.items():
+        setting = skill.added_setting
+        if setting is None:
+            line, expected = f"  {name}: always", "always added to your agents"
+        else:
+            saved = get(settings.data, setting.path, MISSING)
+            line = f"  {name}: {value_shown(setting, saved)}"
+            if read_value(saved, setting)[0]:
+                expected = "added to your agents"
+            else:
+                expected = "not added: you said no" if saved is False else "not added by default"
+        if states is not None:
+            state = states.get(name.lower(), "not added yet: setup hasn't seen it")
+            if state != expected:
+                line += f", but on this PC it's {state}"
+        if setting is not None:
+            line += f". To change it: {setting.path}=true|false|default"
+        added.append(line)
+    preferences: list[str] = []
+    for name, skill in skills.items():
+        for preference in skill.preferences.values():
             setting = preference.setting
             shown = value_shown(setting, get(settings.data, setting.path, MISSING))
-            lines.append(
-                f"  {preference.label} ({skill} skill): {shown}. To change it: "
+            preferences.append(
+                f"  {preference.label} ({name} skill): {shown}. To change it: "
                 f"{setting.path}=true|false|default"
             )
-    return ["", color("Skill preferences", CYAN), *lines] if lines else []
+    lines = ["", color("Skills added to your agents on this PC", CYAN), *added] if added else []
+    return lines + (["", color("Skill preferences", CYAN), *preferences] if preferences else [])
 
 
 # The menu
@@ -565,15 +614,33 @@ def assign(run: "Setup", settings: LocalSettings, text: str) -> bool:
 
 
 def declared_setting(settings: LocalSettings, name: str) -> Setting:
-    """One of dev-home-tools' own settings, or a skill's preference, named as
-    skills.<skill>.preferences.<name>, with its path spelled as the skill declares it. Raises
-    SettingError for a preference no skill declares."""
+    """One of dev-home-tools' own settings; whether a skill is added to the agents, named as
+    skills.<skill>.addedToAgents; or a skill's preference, named as
+    skills.<skill>.preferences.<name>; with its path spelled as the skill declares it. Raises
+    SettingError for a skill or a preference that isn't declared, a skill whose
+    dev-home-skill.json can't be read, or a skill that's always added."""
     if not name.startswith("skills."):
         return BY_PATH[name]
     parts = name.split(".")
+    if len(parts) == 3 and parts[2] == ADDED_TO_AGENTS and parts[1]:
+        listed = skill_declarations(settings.content_dir)
+        skills = listed.skills
+        found = find_skill(skills, parts[1])
+        if found is None and parts[1].lower() in listed.unread:
+            raise SettingError(
+                f"The {parts[1]} skill's dev-home-skill.json can't be read, so setup leaves the "
+                "skill as it is. Fix the file first."
+            )
+        if found is None:
+            raise SettingError(f"There is no skill named {parts[1]}.")
+        added = skills[found].added_setting
+        if added is None:
+            raise SettingError(f"The {found} skill is always added to your agents.")
+        return added
     if len(parts) != 4 or parts[2] != "preferences" or not all(parts):
         raise SettingError(
-            f"A skill's preference is named skills.<skill>.preferences.<name>, not {name}."
+            f"A skill's setting is named skills.<skill>.{ADDED_TO_AGENTS}, or "
+            f"skills.<skill>.preferences.<name> for a preference, not {name}."
         )
     preferences = skill_declarations(settings.content_dir).preferences
     skill = find_skill(preferences, parts[1])

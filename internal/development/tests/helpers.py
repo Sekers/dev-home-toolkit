@@ -566,7 +566,7 @@ REPORTING_NAMES = {
     "re": {"IGNORECASE", "Match", "compile", "escape", "fullmatch", "match", "search", "sub"},
     "shutil": {"which"},
     "subprocess": {"run", "DEVNULL", "TimeoutExpired"},
-    "sys": {"argv", "exit", "modules", "platform", "stderr", "stdout"},
+    "sys": {"argv", "exit", "modules", "platform", "stderr", "stdout", "version_info"},
     "types": {"ModuleType"},
     "typing": {"Any"},
     "urllib.parse": {"quote", "unquote"},

@@ -22,10 +22,15 @@ it shows, and turning skills on and off can sit under the same word later.
 - Showing where each skill is linked: `facts.py` would need a second copy of setup's rules for
   which Claude folders it sets up, and setup already reports a link problem on every sync.
 
-Later changed, on 2026-10-16, not built yet: with skills added per PC and requirements checked
-per skills folder, the list shows each skill's state, added or not and why, and a copied skill's
+Later changed, on 2026-10-16: with skills added per PC and requirements checked per skills
+folder, the list shows each skill's state, added or not and why, and a copied skill's
 `compatibility` text, from the result setup records in `internal/.generated/`. So `facts.py`
 needs no copy of setup's rules, which was the reason for not showing where each skill is linked
 ([Skills and releases declare their requirements as facts](skills-and-releases-declare-their-requirements-as-facts.md)).
+Both are built: each line shows the state beside whose the skill is, and a skill setup hasn't
+seen yet, such as one made since the last sync, says so; the `compatibility` text follows the
+description. Changed on 2026-10-17: a program or a Python version a skill needs only warns, and
+`facts.py` checks it again each time, where the agent runs, from what setup recorded
+([Setup keeps a skill off only for its operating system or agent](setup-keeps-a-skill-off-only-for-its-operating-system-or-agent.md)).
 
 **Look again if:** people need to see where each skill is linked.

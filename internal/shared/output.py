@@ -16,6 +16,7 @@ STATES = (
     "LEFT",
     "STALE",
     "UPDATE",
+    "NEW",
     "SETTING",
     "TEST",
     "LINKED",
@@ -26,7 +27,7 @@ STATES = (
     "CHANGE",
     "PROBLEM",
 )
-WARNING_STATES = {"PENDING", "OFFLINE", "STALE", "UPDATE", "SETTING", "CHANGE", "TEST"}
+WARNING_STATES = {"PENDING", "OFFLINE", "STALE", "UPDATE", "NEW", "SETTING", "CHANGE", "TEST"}
 
 GREEN = "\x1b[32m"
 RED = "\x1b[31m"

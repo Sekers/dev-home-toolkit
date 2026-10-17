@@ -72,6 +72,7 @@ PC, and says so when it can't.
 | `LEFT` | A file on this PC changed in the last 15 minutes, and the change isn't in a commit yet. Another session may be working on it, so the agent leaves it alone. |
 | `STALE` | A file on this PC whose change isn't in a commit yet, and that nobody has touched for 15 minutes. The agent asks whether to commit and push it. Stale means nobody is working on it, not that it's behind GitHub. |
 | `UPDATE` | New dev-home-tools commits are waiting. |
+| `NEW` | From setup: skills new to this PC, each with whether it was added to your agents, and any program or Python version it needs that this PC seems to lack. It comes once; to change what it chose, use `/dev-home configure`. |
 | `PROBLEM` | Needs you. The message says what to do. |
 | `RELOAD` | From `prepare.py`: the skill has changed since the session loaded it, such as after an update, so the agent stops. Type the skill's command again to load its new steps. |
 

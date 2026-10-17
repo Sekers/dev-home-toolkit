@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from .paths import comparable, resolve_home, same_path
-from .requirements import Requirement, parse_requires
+from .requirements import LISTS, Requirement, parse_list, unknown_field
 
 # dev-home-tools' folder: this file is in internal/shared/, two folders below it.
 TOOLS_ROOT = Path(__file__).parent.parent.parent
@@ -29,8 +29,20 @@ DEV_HOME_SETTINGS = "dev-home.json"
 # Each file's layout. It goes up only when a setting is renamed or moved.
 SCHEMA_VERSION = 1
 DEV_HOME_SCHEMA_VERSION = 1
-# The file in a skill's folder that declares its preferences, and what it needs to run.
+# The file in a skill's folder that declares its preferences, and what it needs to run, with the
+# fields it takes, and those each preference takes. requirements.py has the fields of the entries
+# in supportedOn and dependsOn.
 SKILL_SETTINGS = "dev-home-skill.json"
+SKILL_FIELDS = (
+    "recommended",
+    "alwaysAddedToAgents",
+    *LISTS,
+    "preferences",
+    "formerNames",
+)
+PREFERENCE_FIELDS = ("default", "label", "help", "formerNames")
+# Each skill's answer to whether this PC adds it to the agents, at skills.<skill>.addedToAgents.
+ADDED_TO_AGENTS = "addedToAgents"
 # The file that declares dev-home-tools' own settings with a single value.
 DEFINITIONS_PATH = Path(__file__).parent / "setting-definitions.json"
 # The key of a saved state, such as {"$state": "default"}. No setting's own value uses it.
@@ -338,8 +350,9 @@ class Skill:
     one. own says it's the person's own, from dev-home's skills/, rather than dev-home-tools'.
     recommended says whether it's added to the agents unless a PC's answer says otherwise, and
     always_added that it's added on every PC, which only dev-home-tools' own skills can declare.
-    requires is what it needs to run (see requirements.py), and preferences are its preferences,
-    by name."""
+    requires is what it needs to run, from its supportedOn and dependsOn (see requirements.py),
+    preferences are its preferences, by name, and former_names the names it had before, whose
+    answers setup moves to this one."""
 
     name: str
     own: bool
@@ -347,6 +360,24 @@ class Skill:
     always_added: bool = False
     requires: tuple[Requirement, ...] = ()
     preferences: dict[str, Preference] = field(default_factory=dict)
+    former_names: tuple[str, ...] = ()
+
+    @property
+    def added_setting(self) -> Setting | None:
+        """Whether this PC adds the skill to its agents, as a setting with the skill's default,
+        which setup asks about; None for a skill that's always added, which has no answer."""
+        if self.always_added:
+            return None
+        return Setting(
+            f"skills.{self.name}.{ADDED_TO_AGENTS}",
+            "yes-no",
+            self.recommended,
+            True,
+            True,
+            f"Add the {self.name} skill to your agents",
+            "Whether setup adds the skill to each Claude Code folder and Codex home it sets up on "
+            "this PC.",
+        )
 
 
 @dataclass
@@ -380,7 +411,9 @@ def read_skill_file(folder: Path, *, own: bool) -> tuple[Skill | None, list[str]
     """What the dev-home-skill.json in a skill's folder declares (see Skill), and a problem for
     each part of it that can't be used, which counts as left out. None, with its problem, when the
     file can't be read as a JSON object, or its preferences aren't one, so what it declares isn't
-    known. A field it doesn't know is no problem: a newer dev-home-tools may know it."""
+    known. A field it doesn't know is a problem too, though it changes nothing: it may be
+    misspelled, or come from a newer dev-home-tools. A problem said twice, such as one field
+    misspelled in two places, is listed once."""
     path = folder / SKILL_SETTINGS
     if not path.is_file():
         return Skill(folder.name, own), []
@@ -393,7 +426,9 @@ def read_skill_file(folder: Path, *, own: bool) -> tuple[Skill | None, list[str]
     declared = data.get("preferences", {})
     if not isinstance(declared, dict):
         return None, [f"{path}: preferences isn't a JSON object, so it was skipped."]
-    problems: list[str] = []
+    problems = [
+        f"{path}: {unknown_field(key, SKILL_FIELDS)}" for key in data if key not in SKILL_FIELDS
+    ]
     recommended = data.get("recommended", True)
     if not isinstance(recommended, bool):
         problems.append(f"{path}: recommended isn't true or false, so it counts as true.")
@@ -409,9 +444,17 @@ def read_skill_file(folder: Path, *, own: bool) -> tuple[Skill | None, list[str]
         )
         always = False
     requires: tuple[Requirement, ...] = ()
-    if "requires" in data:
-        requires, mistakes = parse_requires(data["requires"])
-        problems += [f"{path}: {mistake}." for mistake in mistakes]
+    for listed in LISTS:
+        if listed in data:
+            found, mistakes = parse_list(data[listed], listed)
+            requires += found
+            problems += [f"{path}: {mistake}" for mistake in mistakes]
+    former_names = data.get("formerNames", [])
+    if not isinstance(former_names, list) or not all(
+        isinstance(name, str) and name.strip() for name in former_names
+    ):
+        problems.append(f"{path}: formerNames isn't a list of names, so it was left out.")
+        former_names = []
     preferences: dict[str, Preference] = {}
     for key, entry in declared.items():
         former = entry.get("formerNames", []) if isinstance(entry, dict) else None
@@ -430,6 +473,11 @@ def read_skill_file(folder: Path, *, own: bool) -> tuple[Skill | None, list[str]
                 "false, a label, and formerNames, if any, as a list of names, so it was skipped."
             )
             continue
+        problems += [
+            f"{path}: {unknown_field(name, PREFERENCE_FIELDS)}"
+            for name in entry
+            if name not in PREFERENCE_FIELDS
+        ]
         preferences[key] = Preference(
             folder.name,
             key,
@@ -438,7 +486,8 @@ def read_skill_file(folder: Path, *, own: bool) -> tuple[Skill | None, list[str]
             entry.get("help", ""),
             tuple(former or ()),
         )
-    return Skill(folder.name, own, recommended, always, requires, preferences), problems
+    skill = Skill(folder.name, own, recommended, always, requires, preferences, tuple(former_names))
+    return skill, list(dict.fromkeys(problems))
 
 
 def skill_declarations(content_dir: str) -> SkillDeclarations:
@@ -477,6 +526,26 @@ def skill_declarations(content_dir: str) -> SkillDeclarations:
 def find_skill(skills: Mapping[str, object], skill: str) -> str | None:
     """The name a skill is listed under, matched without case, as Windows matches its folder."""
     return next((name for name in skills if name.lower() == skill.lower()), None)
+
+
+def unanswered_only(entry: object) -> bool:
+    """Whether a skill's saved entry holds nothing but marks that nothing is answered yet, such as
+    the one setup writes for a skill new to this PC: no answer of the end user's."""
+    return (
+        isinstance(entry, dict)
+        and bool(entry)
+        and all(value == {STATE: "unanswered"} for value in entry.values())
+    )
+
+
+def saved_skill_path(data: dict[str, Any], skill: str, rest: str) -> str:
+    """Where a skill's setting is in this PC's settings, such as skills.handoff.addedToAgents,
+    with the skill's name as the file has it, matched without case, or as given when the file
+    has no entry for it."""
+    saved = data.get("skills")
+    if not isinstance(saved, dict) or skill in saved:
+        return f"skills.{skill}.{rest}"
+    return f"skills.{find_skill(saved, skill) or skill}.{rest}"
 
 
 def remove_path(data: dict[str, Any], path: str) -> None:
@@ -576,7 +645,40 @@ def check_settings(
                 elif not isinstance(answer, bool):
                     wrong(f"{where}: setUp", answer, "true or false", unset)
 
+    def move_renamed_skills(value: dict[str, Any]) -> None:
+        """Moves a skill's answers to its name as its folder spells it now: from the same name in
+        another case, such as after a folder renamed from Tidy to tidy, so every reader finds them
+        under one name; or from a name it had before, in its formerNames, unless it has answers
+        under its name already, or a skill still has the old name. The mark that nothing is
+        answered yet, which setup writes for a skill new to this PC, holds no answer, so the old
+        answers replace it, such as when the old and the new folder were both there for a while."""
+        for name, skill in declared.skills.items():
+            if name in value and not unanswered_only(value[name]):
+                continue
+            other_case = next(
+                (key for key in value if key != name and key.lower() == name.lower()), None
+            )
+            if other_case is not None:
+                value[name] = value.pop(other_case)
+                checked.moved.append(f"skills.{other_case} to skills.{name}")
+                continue
+            former = {old.lower() for old in skill.former_names}
+            old = next(
+                (
+                    key
+                    for key in value
+                    if key.lower() in former
+                    and find_skill(declared.skills, key) is None
+                    and key.lower() not in declared.unread
+                ),
+                None,
+            )
+            if old is not None:
+                value[name] = value.pop(old)
+                checked.moved.append(f"skills.{old} to skills.{name}")
+
     def check_skills(value: dict[str, Any]) -> None:
+        move_renamed_skills(value)
         for skill, inner in list(value.items()):
             name = find_skill(preferences, skill)
             if name is None:
@@ -588,7 +690,10 @@ def check_settings(
                 continue
             for group, saved in list(inner.items()):
                 where = f"skills.{skill}.{group}"
-                if group != "preferences":
+                added = declared.skills[name].added_setting
+                if group == ADDED_TO_AGENTS and added is not None:
+                    check_value(where, saved, added)
+                elif group != "preferences":
                     remove(inner, group, where)
                 elif not isinstance(saved, dict):
                     wrong(where, saved, "a JSON object of preferences", "the defaults")
@@ -773,7 +878,9 @@ def leaves(data: dict[str, Any], prefix: KeyPath = ()) -> dict[KeyPath, Any]:
 
 def apply_changes(data: dict[str, Any], before: dict[str, Any], after: dict[str, Any]) -> None:
     """Makes in data the changes that turned before into after, value by value, and nothing else,
-    so whatever else data has, such as another run's answer saved in the meantime, stays."""
+    so whatever else data has, such as another run's answer saved in the meantime, stays. A
+    value this run saved as unanswered never replaces one data has: it only records that nothing
+    was answered yet."""
     old, new = leaves(before), leaves(after)
     for path in old:
         # A group this run filled, such as an empty one it added answers to, isn't removed: its
@@ -796,6 +903,16 @@ def apply_changes(data: dict[str, Any], before: dict[str, Any], after: dict[str,
     for path, value in new.items():
         if path in old and old[path] == value:
             continue
+        if value == {STATE: "unanswered"}:
+            # Anything data has on the way counts, such as a value of another kind where its group
+            # should be, which setup reports rather than replaces.
+            found: Any = data
+            for key in path:
+                if not isinstance(found, dict):
+                    break
+                found = found.get(key, MISSING)
+            if found is not MISSING:
+                continue
         target = data
         for key in path[:-1]:
             if not isinstance(target.get(key), dict):

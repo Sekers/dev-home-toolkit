@@ -9,6 +9,7 @@ import sys
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -140,15 +141,38 @@ def test_the_skills_topic_lists_dev_home_tools_skills_then_the_users(box: Sandbo
     )
     listed = [re.fullmatch(r"skill: (\S+) \(([^)]*)\): (.+)", line) for line in result.lines]
     assert result.code == 0 and all(listed), str(result)
+    # Each with its state, as setup recorded it: dev-home is always added.
     assert [(m.group(1), m.group(2)) for m in listed if m] == [
-        *((name, "dev-home-tools") for name in ours),
-        ("mine", "yours"),
+        *(
+            (name, f"dev-home-tools, {'always ' if name == 'dev-home' else ''}added to your agents")
+            for name in ours
+        ),
+        ("mine", "yours, added to your agents"),
     ], str(result)
     assert any(
-        line.startswith("skill: handoff (dev-home-tools): Read, update, or audit")
+        line.startswith(
+            "skill: handoff (dev-home-tools, added to your agents): Read, update, or audit"
+        )
         for line in result.lines
     )
+    expected = "skill: mine (yours, added to your agents): A personal test skill."
+    assert result.lines[-1] == expected, str(result)
+
+
+def test_the_skills_topic_says_only_whose_a_skill_is_before_setup_records_states(
+    box: Sandbox,
+) -> None:
+    # Such as on the first sync after an update that brings the record.
+    states = box.generated / "skill-states.json"
+    aside = box.generated / "skill-states.json.aside"
+    states.rename(aside)
+    try:
+        result = dev_home_skills(box)
+    finally:
+        aside.rename(states)
+    assert result.code == 0, str(result)
     assert result.lines[-1] == "skill: mine (yours): A personal test skill.", str(result)
+    assert all(re.match(r"skill: \S+ \((dev-home-tools|yours)\): ", line) for line in result.lines)
 
 
 def test_the_skills_topic_reads_each_description_form_and_says_what_isnt_set_up(
@@ -173,16 +197,81 @@ def test_the_skills_topic_reads_each_description_form_and_says_what_isnt_set_up(
         for name in [*added, "notes"]:
             shutil.rmtree(skills / name)
     assert result.code == 0, str(result)
+    # Setup hasn't run since they were added, so it hasn't recorded their states.
+    unseen = "yours, not added yet: setup hasn't seen it"
     assert [line for line in result.lines if "(yours" in line] == [
-        "skill: bare (yours): no description",
-        "skill: carried (yours): Starts here and carries on.",
-        "skill: folded (yours): Folded onto one line.",
+        f"skill: bare ({unseen}): no description",
+        f"skill: carried ({unseen}): Starts here and carries on.",
+        f"skill: folded ({unseen}): Folded onto one line.",
         "skill: handoff (yours, not set up: it has the same name as a dev-home-tools skill): "
         "Mine too.",
-        "skill: mine (yours): A personal test skill.",
-        'skill: quoted (yours): Quoted: with a "colon".',
-        "skill: single (yours): The project's own.",
+        "skill: mine (yours, added to your agents): A personal test skill.",
+        f'skill: quoted ({unseen}): Quoted: with a "colon".',
+        f"skill: single ({unseen}): The project's own.",
     ], str(result)
+
+
+def test_the_skills_topic_checks_again_what_setup_only_warns_about(box: Sandbox) -> None:
+    # Here, where the agent runs: git is on this process's PATH, and the Python is the skills' own.
+    # And a skill's compatibility text follows its description.
+    states = box.generated / "skill-states.json"
+    skill = box.content / "skills" / "mine" / "SKILL.md"
+    recorded, written = states.read_text(encoding="utf-8"), skill.read_text(encoding="utf-8")
+    entry = {
+        "state": "added to your agents",
+        "programs": [{"name": "no-such-program-here", "description": "testing"}, {"name": "git"}],
+        "python": "99.0",
+    }
+    write_text(states, json.dumps({**json.loads(recorded), "mine": entry}))
+    write_text(
+        skill,
+        "---\nname: mine\ndescription: A personal test skill.\n"
+        "compatibility: Needs the office network.\n---\n",
+    )
+    try:
+        result = dev_home_skills(box)
+    finally:
+        write_text(states, recorded)
+        write_text(skill, written)
+    pattern = (
+        r"skill: mine \(yours, added to your agents; no-such-program-here isn't on the PATH, and "
+        r"the skill uses it for testing; the skill needs Python 99\.0 or later, and this PC's is "
+        r"\d+\.\d+\.\d+\): A personal test skill\. Compatibility: Needs the office network\."
+    )
+    assert result.code == 0 and re.fullmatch(pattern, result.lines[-1]), str(result)
+
+
+def facts_module(box: Sandbox, name: str) -> Any:
+    """The sandbox's generated facts.py, loaded into the test's process under a name of its own,
+    to call its functions."""
+    path = box.generated / "shared-skill-scripts" / "facts.py"
+    spec = importlib.util.spec_from_file_location(f"{name}_{box.root.name[-8:]}", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_skills_topic_checks_and_words_what_it_checks_as_setup_does(
+    box: Sandbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # facts.py can't load setup's code, so each has its own copy of the check and its words.
+    module = facts_module(box, "facts_needs")
+    requirements = shared_module(box, "requirements")
+    on_path = box.root / "needs-on-path"
+    write_text(on_path / "jira.cmd", "@echo off\n")
+    write_text(box.root / "needs-nearby" / "glab.exe", "")
+    monkeypatch.chdir(box.root)
+    monkeypatch.setenv("PATH", os.pathsep.join([str(on_path), "needs-nearby", ""]))
+    monkeypatch.setenv("PATHEXT", ".COM;.EXE;.BAT;.CMD")
+    folders = requirements.path_folders(os.environ["PATH"])
+    for name in ("jira", "jira.cmd", "glab", "missing"):
+        assert module.on_path(name) == requirements.on_path(name, folders), name
+    for description in ("", "filing Jira issues"):
+        words = requirements.program_missing("jira", description)
+        assert module.program_missing("jira", description) == words
+    words = requirements.python_too_old((3, 14), (3, 13, 2))
+    assert module.python_too_old((3, 14), (3, 13, 2)) == words
 
 
 def test_the_skills_topic_without_skills_of_the_users_own(box: Sandbox) -> None:
@@ -194,7 +283,7 @@ def test_the_skills_topic_without_skills_of_the_users_own(box: Sandbox) -> None:
     finally:
         hidden.rename(skills)
     assert result.code == 0, str(result)
-    assert result.lines and all("(dev-home-tools)" in line for line in result.lines), str(result)
+    assert result.lines and all("(dev-home-tools, " in line for line in result.lines), str(result)
 
 
 # The preferences topic, which reads the sandbox's local-settings.json and the handoff skill's
@@ -257,11 +346,7 @@ def test_the_preferences_topic_needs_a_skill(box: Sandbox) -> None:
 
 def test_the_preferences_topic_reads_saved_values_as_setup_does(box: Sandbox) -> None:
     # facts.py can't load setup's code, so each reads a saved preference its own way.
-    path = box.generated / "shared-skill-scripts" / "facts.py"
-    spec = importlib.util.spec_from_file_location("facts_values_" + box.root.name[-8:], path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = facts_module(box, "facts_values")
     settings = shared_module(box, "settings")
     for default in (True, False):
         setting = settings.Preference("handoff", "x", default, "X", "").setting

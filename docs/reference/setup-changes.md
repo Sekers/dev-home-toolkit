@@ -18,7 +18,8 @@ folder link as a directory junction, which needs no admin rights and no Develope
     the operating rules carry a note saying so, with the path of the template to change
     instead, because an agent working in another project sees only this copy. Python adds
     `__pycache__` folders beside the scripts when they run, so they start faster next time;
-    setup leaves those alone.
+    setup leaves those alone. Setup also writes `skill-states.json` there: whether it added each
+    skill to your agents on this PC, and if not, why, which `/dev-home skills` shows.
   - `internal\.python\`: a directory junction to the folder of the Python the skills' scripts
     run with, so every skill command can name `internal\.python\python.exe` here: a short path,
     the same on every PC, with no spaces to quote. Setup looks first for the Python install
@@ -29,13 +30,15 @@ folder link as a directory junction, which needs no admin rights and no Develope
     it's there.
   - `local-settings.json`: this PC's answers to setup's questions: where your dev-home is,
     whether to install updates automatically, which Claude Code folders to set up, and which not
-    to, whether to set up Codex, and the skills' preferences. The scripts read it to find your dev-home.
+    to, whether to set up Codex, which skills to add to your agents, and the skills' preferences.
+    The scripts read it to find your dev-home.
     Setup removes a setting nothing declares any more, such as one misspelled in a hand edit,
     and says so, after a backup of the file. It never overwrites a file it can't read as JSON,
     or one with a `schemaVersion` it doesn't know. One in an older layout, from before its settings were grouped, it offers to set
     aside, as a dated backup beside it, and then asks its questions again.
 - **In each Claude Code folder you said yes to** (`~\.claude`, and any extra ones):
-  - Links in `skills\` to each skill (this repo's, and your own from dev-home). In `rules\`,
+  - Links in `skills\` to each skill added to your agents on this PC (this repo's, and your own
+    from dev-home; see [A skill's dev-home-skill.json](dev-home-skill-json.md)). In `rules\`,
     `dev-home-operating-rules` links to the operating rules, and `dev-home-global-rules` to your
     dev-home's `global-rules\`. Nothing in that folder says which repo a name belongs to, so
     each link starts with `dev-home-`.
@@ -45,7 +48,8 @@ folder link as a directory junction, which needs no admin rights and no Develope
   - Your own `CLAUDE.md` there is never touched.
 - **For Codex,** once you've said yes to it, in every Codex home (`~\.codex`, and any extra
   ones). Every home reads the same skills, so it's all of them or none:
-  - Links in `~\.agents\skills\`, which every Codex home reads.
+  - Links in `~\.agents\skills\`, which every Codex home reads, to each skill added to your
+    agents on this PC.
   - `AGENTS.md` in each home, such as `~\.codex\AGENTS.md`: the operating rules and your global
     rules joined into one file, because Codex reads only one always-on file. Setup rewrites it
     whenever it runs, but never replaces an `AGENTS.md` it didn't write.
@@ -68,6 +72,11 @@ folder link as a directory junction, which needs no admin rights and no Develope
   folder goes too; the backup keeps it. Other AI tools that read those skills folders lose
   dev-home's skills too: GitHub Copilot, Gemini CLI, and Cursor read `~\.agents\skills\`, and
   Cursor also reads `~\.claude\skills\`.
+- **If a skill isn't added to your agents on this PC,** because you said no to it, it's marked as
+  not recommended and you haven't said yes, or it works only on another operating system or in
+  another agent, setup removes its links from those skills folders, naming each as it goes, and
+  puts them back once that changes. A program or a Python version the skill needs never takes its
+  links out. The skill's copy in `internal\.generated\` stays where it is.
 - **In your dev-home's own git config:** commit signing off, and pulls that merge rather than
   rebase. With signing off, a commit never stops in the middle of a sync to ask for your signing
   passphrase. Your project repos keep signing as usual. Setup does this only in a folder that

@@ -7,7 +7,7 @@ changelog's format.
 
 - It holds the version, such as `1.2.0`, and facts such as whether the release fixes a security
   problem, whether it needs the end user to do something, whether it's recommended or optional,
-  a one-line summary, and what a PC needs to run it (`requires`, as
+  a one-line summary, and what a PC needs to run it (`supportedOn` and `dependsOn`, as
   [Skills and releases declare their requirements as facts](skills-and-releases-declare-their-requirements-as-facts.md)
   describes).
 - On `develop`, it keeps the last release's version and facts until the next release changes

@@ -14,9 +14,10 @@ decide whether an installed skill is shown in an account or a project.
 - The person's own skills, from `skills/` in dev-home, work like recommended skills: installed by
   default, in the same list and prompt, and asked about once on each PC.
 - A skill can carry a `dev-home-skill.json` in its folder, with `recommended`,
-  `alwaysAddedToAgents`, and `requires`. Only dev-home-tools' own skills can declare
+  `alwaysAddedToAgents`, `supportedOn`, and `dependsOn`. Only dev-home-tools' own skills can declare
   `alwaysAddedToAgents`, so each PC asks about every skill of the person's own, as above. A skill
-  isn't added to a skills folder whose tools don't meet its requirements, even with a yes;
+  isn't added to a skills folder whose agents, or whose PC's operating system, it doesn't work
+  in, even with a yes;
   [Skills and releases declare their requirements as facts](skills-and-releases-declare-their-requirements-as-facts.md)
   says how they're declared and checked, and what setup says. For the person's own skills the
   file is optional: without it, a skill is recommended and needs nothing.
@@ -24,10 +25,21 @@ decide whether an installed skill is shown in an account or a project.
   skill turned off by its real path, inside `internal/.generated/skills/`, so that path stays
   fixed, and a test checks it.
 
-Changed on 2026-10-12 and 2026-10-16, not built yet: the answer was `skills.<name>.installed` and
-the field `alwaysInstalled`. "Installed" already means installing dev-home-tools updates, and
-"added" alone could read as added to dev-home, so both say `addedToAgents`. `requires` became a
-list of typed entries, checked per skills folder, in place of `tools`, `programs`, and `os`.
+Changed on 2026-10-12 and 2026-10-16, before it was built: the answer was
+`skills.<name>.installed` and the field `alwaysInstalled`. "Installed" already means installing
+dev-home-tools updates, and "added" alone could read as added to dev-home, so both say
+`addedToAgents`. `requires` became a list of typed entries, checked per skills folder, in place of
+`tools`, `programs`, and `os`. On 2026-10-17, before any release, it was split into two lists,
+`supportedOn` and `dependsOn`
+([Setup keeps a skill off only for its operating system or agent](setup-keeps-a-skill-off-only-for-its-operating-system-or-agent.md)).
+
+Built: each PC's answer, the links setup adds and removes by it and by `supportedOn`, a renamed
+skill's answers moved through `formerNames`, and the state setup records. Not built yet: a
+skill's always-on lines leaving the rules with a no, and asking at a run of setup by hand, which
+comes with setup's question about skills and its preferences. Until then, a skill with no answer
+follows its default, the `NEW` line names it once
+([New items reach the person at a terminal, or in a NEW line](new-items-reach-the-person-at-a-terminal-or-in-a-new-line.md)),
+and `/dev-home configure` changes it.
 
 **Why:** checked on 2026-10-07 against Claude Code 2.1.293's docs and Codex's source at
 rust-v0.161.0:

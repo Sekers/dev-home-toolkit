@@ -264,9 +264,10 @@ def read_json(path: Path) -> object:
 
 def declared_defaults() -> dict[str, Default]:
     """Every default dev-home-tools declares, by the setting's name, as its files say right now:
-    its own settings in setting-definitions.json, and each of its skills' preferences, as setup
-    reads them. Read from the files each time, since an update changes them; one that can't be
-    read declares nothing. A person's own skills don't come with updates, so they're left out."""
+    its own settings in setting-definitions.json, and for each of its skills, whether it's added
+    to the agents and its preferences, as setup reads them. Read from the files each time, since
+    an update changes them; one that can't be read declares nothing. A person's own skills don't
+    come with updates, so they're left out."""
     found: dict[str, Default] = {}
     definitions = read_json(DEFINITIONS_PATH)
     settings = definitions.get("settings") if isinstance(definitions, dict) else None
@@ -281,7 +282,12 @@ def declared_defaults() -> dict[str, Default]:
         skills = []
     for skill in skills:
         declared, _ = read_skill_file(skill, own=False)
-        for preference in declared.preferences.values() if declared else ():
+        if declared is None:
+            continue
+        added = declared.added_setting
+        if added is not None:
+            found[added.path] = Default(added.label, "yes-no", added.default)
+        for preference in declared.preferences.values():
             found[preference.setting.path] = Default(preference.label, "yes-no", preference.default)
     return found
 

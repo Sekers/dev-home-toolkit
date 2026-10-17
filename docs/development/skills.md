@@ -49,9 +49,21 @@ rules apply too.
 - Frontmatter uses only standard fields: `name`, `description`, and `allowed-tools`. The name
   matches the folder name.
 - A skill's preferences, declared in a `dev-home-skill.json` in its folder, follow
-  [settings.md](settings.md). What it needs to run goes in the same file, as `requires`
+  [settings.md](settings.md). What it needs to run goes in the same file, as `supportedOn` and
+  `dependsOn`
   ([Skills and releases declare their requirements as facts](decisions/skills-and-releases-declare-their-requirements-as-facts.md)).
   A test reads each skill's file, and fails at anything the reader can't use, or doesn't know.
+  [A skill's dev-home-skill.json](../reference/dev-home-skill-json.md) describes every field.
+  Only `dev-home` declares `alwaysAddedToAgents`, since every PC needs it to change its answers
+  in chat.
+- To rename a skill, rename its folder and its `name`, and add the old name to `formerNames` in
+  its `dev-home-skill.json`: each PC's setup moves the old name's answers to the new one, and
+  removes the old name's links. Codex records a skill turned off by its path,
+  `internal/.generated/skills/<name>`, so a skill keeps that path while its name stays the same,
+  added to the agents or not (a test checks). To remove a skill, delete its folder: each PC's
+  setup removes its links, and its next sync deletes its answers. Never give a new skill a
+  removed one's name: a PC that gets both changes in one update would give the new skill the old
+  one's answers.
 - Refer to a skill's own files through `{{SKILL_DIR}}`, to a shared script through
   `{{SHARED_SKILL_SCRIPTS_DIR}}`, and to anything else through `{{TOOLS_DIR}}` or
   `{{CONTENT_DIR}}`.

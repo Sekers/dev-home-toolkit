@@ -125,11 +125,25 @@ THE SKILLS TOPIC
 
 Prints one line for each skill setup sets up: dev-home-tools' own, from the generated skills
 beside this script, then the user's, from the skills folder in dev-home, each in name order. A
-skill is a folder with a SKILL.md, as setup sees one, and its description comes from the
-frontmatter, on one line:
+skill is a folder with a SKILL.md, as setup sees one. Each line says whose the skill is and its
+state on this PC, as setup last recorded it beside the generated skills, then its description
+from the frontmatter, on one line, and its compatibility text from there, if it has any:
 
-    skill: handoff (dev-home-tools): Read or update this project's private session handoff ...
-    skill: tidy (yours): Tidies a project's imports.
+    skill: handoff (dev-home-tools, added to your agents): Read or update this project's ...
+    skill: mac-notes (yours, not added: works only on macOS): Keeps notes in Apple Notes.
+    skill: tidy (yours, not added yet: setup hasn't seen it): Tidies a project's imports.
+    skill: vpn-check (yours, added to your agents): Checks the VPN. Compatibility: Needs ...
+
+A skill setup hasn't seen yet, such as one made since the last sync, says so, as tidy's line
+does. Before setup has recorded any state, the lines say only whose each skill is.
+
+What a skill needs that setup only warns about, a program or a Python version, is checked again
+here, where the agent runs, and the state says what's missing:
+
+    skill: jira (yours, added to your agents; jira isn't on the PATH, and the skill uses it ...
+
+A program counts when it's in a folder that this process's PATH, the one the agent's commands
+get, names by its full path, and the Python is the one running this script, the skills' own.
 
 One of the user's skills with the same name as one of dev-home-tools' isn't set up, and its line
 says so, as setup does:
@@ -173,6 +187,7 @@ import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 from urllib.parse import quote, unquote
 
 # Every topic. To add one, add it here, to the description above, and to the topic functions in
@@ -204,6 +219,10 @@ SKILL_SETTINGS = "dev-home-skill.json"
 # The generated skills, beside the folder setup writes this script to, so that setup alone
 # decides where the generated files go.
 GENERATED_SKILLS = Path(__file__).parent.parent / "skills"
+
+# What setup decided for each skill on this PC, beside the generated skills: setup alone works
+# out whether a skill is added, and this script only shows it.
+SKILL_STATES = GENERATED_SKILLS.parent / "skill-states.json"
 
 
 class FactsError(Exception):
@@ -681,17 +700,17 @@ def skill_folders(root: Path) -> list[Path]:
         return []
 
 
-def skill_description(text: str) -> str:
-    """A SKILL.md's description from its frontmatter, on one line: a value on the line itself,
-    quoted or not, with any indented lines that carry it on, or a YAML block (> or |) on the
-    indented lines below. Empty text when there is none."""
+def frontmatter_value(text: str, key: str) -> str:
+    """A field of a SKILL.md's frontmatter, such as its description, on one line: a value on the
+    line itself, quoted or not, with any indented lines that carry it on, or a YAML block (> or |)
+    on the indented lines below. Empty text when there is none."""
     lines = text.replace("\r\n", "\n").split("\n")
     if lines[0].strip() != "---":
         return ""
     for start in range(1, len(lines)):
         if lines[start].strip() == "---":
             break
-        match = re.match(r"description:(.*)$", lines[start])
+        match = re.match(rf"{re.escape(key)}:(.*)$", lines[start])
         if not match:
             continue
         value = match.group(1).strip()
@@ -717,16 +736,24 @@ def skills_lines() -> list[str]:
     ours = skill_folders(GENERATED_SKILLS)
     taken = {os.path.normcase(folder.name) for folder in ours}
     theirs = skill_folders(Path(CONTENT_DIR) / "skills")
+    states = skill_states()
     for folder in [*ours, *theirs]:
         whose = "dev-home-tools" if folder in ours else "yours"
+        entry = states.get(folder.name.lower()) if states is not None else None
         if whose == "yours" and os.path.normcase(folder.name) in taken:
             whose += ", not set up: it has the same name as a dev-home-tools skill"
+        elif entry is not None:
+            whose += f", {'; '.join([entry['state'], *missing_needs(entry)])}"
+        elif states is not None:
+            whose += ", not added yet: setup hasn't seen it"
         try:
             text = (folder / "SKILL.md").read_text(encoding="utf-8-sig", errors="replace")
         except OSError:
             text = ""
-        description = skill_description(text) or "no description"
-        lines.append(f"skill: {folder.name} ({whose}): {description}")
+        description = frontmatter_value(text, "description") or "no description"
+        line = f"skill: {folder.name} ({whose}): {description}"
+        compatibility = frontmatter_value(text, "compatibility")
+        lines.append(f"{line} Compatibility: {compatibility}" if compatibility else line)
     return lines
 
 
@@ -736,6 +763,95 @@ def read_json(path: Path) -> object:
         return json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, ValueError):
         return None
+
+
+def skill_states() -> dict[str, dict[str, Any]] | None:
+    """Each skill's entry on this PC, by its name in lowercase, as setup last recorded it: its
+    state, such as "added to your agents", and what it needs that setup only warns about (see
+    missing_needs). None when setup has recorded none."""
+    data = read_json(SKILL_STATES)
+    if not isinstance(data, dict):
+        return None
+    return {
+        name.lower(): entry
+        for name, entry in data.items()
+        if isinstance(entry, dict) and isinstance(entry.get("state"), str)
+    }
+
+
+def is_file(path: Path) -> bool:
+    """Whether a file is there, counting one that can't be looked at, such as in a folder this
+    user can't read, as not there."""
+    try:
+        return path.is_file()
+    except OSError:
+        return False
+
+
+def on_path(name: str) -> bool:
+    """Whether a program is in a folder this process's PATH names by its full path, as a shell
+    finds it, and as setup's requirements.on_path looks (a test checks the two agree): on
+    Windows, with any of the extensions in PATHEXT, such as .exe or .cmd. The current folder,
+    which here is a project's, never counts."""
+    folders = [
+        folder
+        for folder in os.environ.get("PATH", "").split(os.pathsep)
+        if folder and Path(folder).is_absolute()
+    ]
+    if sys.platform != "win32":
+        return shutil.which(name, path=os.pathsep.join(folders)) is not None
+    extensions = [
+        extension
+        for extension in os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(";")
+        if extension
+    ]
+    if any(name.lower().endswith(extension.lower()) for extension in extensions):
+        candidates = [name]
+    else:
+        candidates = [name + extension for extension in extensions]
+    return any(is_file(Path(folder, candidate)) for folder in folders for candidate in candidates)
+
+
+def version_text(version: Sequence[int]) -> str:
+    return ".".join(str(part) for part in version)
+
+
+def program_missing(name: str, description: str) -> str:
+    """The warning for a program this process's PATH doesn't have, worded as setup's
+    requirements.program_missing words it (a test checks)."""
+    uses = f", and the skill uses it for {description}" if description else ""
+    return f"{name} isn't on the PATH{uses}"
+
+
+def python_too_old(needs: Sequence[int], uses: Sequence[int]) -> str:
+    """The warning for a skill that needs a newer Python than this one, worded as setup's
+    requirements.python_too_old words it (a test checks)."""
+    return (
+        f"the skill needs Python {version_text(needs)} or later, and this PC's is "
+        f"{version_text(uses)}"
+    )
+
+
+def missing_needs(entry: dict[str, Any]) -> list[str]:
+    """What a skill needs that setup only warns about and this session lacks, from the skill's
+    entry setup recorded: each program, by name and with what the skill uses it for, that isn't
+    on this process's PATH, and the lowest Python it runs on, when this one is older."""
+    found: list[str] = []
+    programs = entry.get("programs")
+    for program in programs if isinstance(programs, list) else []:
+        if not isinstance(program, dict) or not isinstance(program.get("name"), str):
+            continue
+        if not on_path(program["name"]):
+            description = program.get("description")
+            uses = description if isinstance(description, str) else ""
+            found.append(program_missing(program["name"], uses))
+    needs = entry.get("python")
+    if isinstance(needs, str) and re.fullmatch(r"\d+(\.\d+)*", needs):
+        version = tuple(int(part) for part in needs.split("."))
+        runs = tuple(sys.version_info[:3])
+        if runs[: len(version)] < version:
+            found.append(python_too_old(version, runs))
+    return found
 
 
 def preference_value(saved: object, default: bool) -> bool:
