@@ -1465,6 +1465,11 @@ def test_a_save_makes_only_its_own_changes_to_a_newer_file(box: Sandbox) -> None
         "skills": {"mine": {"preferences": {"other": True, "tidy": False}}},
         "claudeCode": {"folders": {"~/.claude-y": {"setUp": False}}},
     }, newer
+    # true and 1 differ in the file, though Python counts them as equal.
+    pinned = {"updates": {"installAutomatically": 1}}
+    answer = {"updates": {"installAutomatically": True}}
+    settings.apply_changes(pinned, json.loads(json.dumps(pinned)), answer)
+    assert pinned["updates"]["installAutomatically"] is True, pinned
 
 
 def test_keeps_the_answers_of_a_skill_whose_preferences_cant_be_read(
@@ -2330,20 +2335,6 @@ def test_a_skill_whose_file_cant_be_read_is_left_as_it_is(
     assert not result.has_line(r"^(REMOVED|LINKED)\s"), str(result)
 
 
-def test_an_unanswered_mark_never_replaces_an_answer_saved_meanwhile(box: Sandbox) -> None:
-    # Such as one --configure saved in another session while a run by hand waited on a question.
-    settings = shared_module(box, "settings")
-    data = {"skills": {"tidy": {"addedToAgents": False}}}
-    after = {"skills": {"tidy": {"addedToAgents": {"$state": "unanswered"}}, "new": UNANSWERED}}
-    settings.apply_changes(data, {}, after)
-    assert data == {"skills": {"tidy": {"addedToAgents": False}, "new": UNANSWERED}}, data
-    # Nor a value of another kind where its group should be, such as from a hand edit meanwhile,
-    # which setup reports.
-    edited: dict[str, Any] = {"skills": {"tidy": "oops"}}
-    settings.apply_changes(edited, {}, after)
-    assert edited == {"skills": {"tidy": "oops", "new": UNANSWERED}}, edited
-
-
 def test_with_no_skills_folder_a_skill_says_why_it_isnt_added(box: Sandbox) -> None:
     setup_module = shared_module(box, "setup")
     settings = shared_module(box, "settings")
@@ -2445,22 +2436,6 @@ def test_answers_saved_under_a_skills_name_in_another_case_move_to_its_name(
     assert moved.has_line(pattern), str(moved)
     assert "Mine" not in saved["skills"] and saved["skills"]["mine"] == {"addedToAgents": False}
     assert changed.code == 0 and after["skills"]["mine"] == {"addedToAgents": {"$state": "default"}}
-
-
-def test_a_run_that_waited_doesnt_name_a_skill_another_run_named_meanwhile(
-    box: Sandbox, settings_kept: Path
-) -> None:
-    # Such as a sync's setup while this run waited on a question: that run saved it, and named it.
-    setup_module = shared_module(box, "setup")
-    settings = shared_module(box, "settings")
-    edited = json.loads(read(settings_kept))
-    edited["skills"]["named-already"] = UNANSWERED
-    write_text(settings_kept, json.dumps(edited, indent=2) + "\n")
-    run = setup_module.Setup(quiet=True, what_if=False)
-    found = run.still_new(settings.LocalSettings(), ["named-already", "still-new"])
-    holding = setup_module.Setup(quiet=True, what_if=False, sync_holds_lock=True)
-    assert found == ["still-new"], found
-    assert holding.still_new(settings.LocalSettings(), ["named-already"]) == ["named-already"]
 
 
 def test_a_renamed_skill_keeps_its_answers_after_both_names_were_there(
@@ -2642,6 +2617,26 @@ def test_configure_adds_a_codex_home_that_matches_and_refuses_one_that_doesnt(
     assert whole.code == 1 and whole.has_line(pattern), str(whole)
     pattern = r"^PROBLEM\s+There is no Codex home at .*codex-missing\. Nothing was changed\.$"
     assert missing.code == 1 and missing.has_line(pattern), str(missing)
+
+
+def test_configure_adds_a_codex_home_setup_found_as_a_change_of_its_own(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    # Such as ~/.codex-second, which would get the main home's answer anyway: --configure still
+    # shows the change and keeps a backup, as for any setting it changes, and no line says the
+    # home was matched.
+    second = box.profile / ".codex-second"
+    write_text(second / "config.toml", "")
+    try:
+        result = setup_configure(box, "codex.homes+=~/.codex-second")
+        homes = json.loads(read(settings_kept))["codex"]["homes"]
+    finally:
+        shutil.rmtree(second)
+    assert result.code == 0, str(result)
+    assert result.has_line(r'^\s+\+\s+"~/\.codex-second": \{$'), str(result)
+    assert result.has_line(r"^SET\s+This PC's settings: .* Backup of the old file: "), str(result)
+    assert not result.has_line("dev-home is now"), str(result)
+    assert homes == {"~/.codex": {"setUp": True}, "~/.codex-second": {"setUp": True}}, homes
 
 
 def test_configure_changes_every_codex_home_through_the_main_one(

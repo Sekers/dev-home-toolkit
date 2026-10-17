@@ -150,22 +150,19 @@ class SettingError(Exception):
     """An assignment --configure can't make, and why."""
 
 
-def change_settings(run: "Setup", settings: LocalSettings) -> bool:
+def change_settings(run: "Setup", settings: LocalSettings) -> None:
     """Makes --configure's change to this PC's settings, or chooses dev-home.json's answer, which
-    setup writes later in its run. Returns whether this PC's settings changed. With nobody to
-    answer and no setting given, shows the settings and how to change them, and sets
-    run.just_showing. At a console, setup shows the menu later in its run, as every run by hand
-    does."""
+    setup writes later in its run. With nobody to answer and no setting given, shows the settings
+    and how to change them, and sets run.just_showing. At a console, setup shows the menu later in
+    its run, as every run by hand does."""
     if run.assigned:
-        return assign(run, settings, run.configure or "")
-    if run.can_ask:
-        return False
-    for line in overview(run, settings) + skills_overview(settings):
-        run.line(line)
-    run.line()
-    run.line(USAGE)
-    run.just_showing = True
-    return False
+        assign(run, settings, run.configure or "")
+    elif not run.can_ask:
+        for line in overview(run, settings) + skills_overview(settings):
+            run.line(line)
+        run.line()
+        run.line(USAGE)
+        run.just_showing = True
 
 
 # What the settings are now
@@ -542,7 +539,7 @@ def change_copies(run: "Setup", settings: LocalSettings) -> bool:
 # One setting, from an agent
 
 
-def assign(run: "Setup", settings: LocalSettings, text: str) -> bool:
+def assign(run: "Setup", settings: LocalSettings, text: str) -> None:
     """Makes one assignment, and shows the change to this PC's settings, if any. Raises
     SettingError for one it can't make."""
     match = ASSIGNMENT.fullmatch(text.strip())
@@ -582,9 +579,9 @@ def assign(run: "Setup", settings: LocalSettings, text: str) -> bool:
                 )
             if answer == yes and found != "older":
                 status_line("OK", f"dev-home is already set to {'several' if yes else 'one'}.")
-                return False
+                return
             run.wanted_copies = yes
-            return False
+            return
     elif name in DEFAULT_HOURS:
         if not re.fullmatch(r"\d+", value):
             raise SettingError(f"{name} is a whole number of hours, 0 or more, not {value}.")
@@ -607,10 +604,9 @@ def assign(run: "Setup", settings: LocalSettings, text: str) -> bool:
     old_text, new_text = local_settings_text(before), local_settings_text(settings)
     if old_text == new_text:
         status_line("OK", f"{name} is already set that way, so nothing changed.")
-        return False
+        return
     run.status("CHANGE", f"This PC's settings: {SETTINGS_PATH}")
     run.print_diff(old_text, new_text)
-    return True
 
 
 def declared_setting(settings: LocalSettings, name: str) -> Setting:

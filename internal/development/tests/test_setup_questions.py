@@ -6,6 +6,7 @@ would reach GitHub. Git and the files stay real. The other tests here run setup.
 with no console, to check that it then never waits for an answer.
 """
 
+import contextlib
 import json
 import re
 import shutil
@@ -1374,6 +1375,310 @@ def test_a_file_that_changes_after_its_change_is_planned_is_left_alone(
         r"setup was planning its change, so it was left alone\. The next run makes the change\.$"
     )
     assert re.search(pattern, out, re.M), out
+
+
+# Another run saving this PC's settings while this one asks its questions or waits for the lock.
+
+# What setup saves for a skill new to the PC: no answer yet about adding it to the agents.
+UNANSWERED = {"addedToAgents": {"$state": "unanswered"}}
+# The update check this run's own answer sets, by hand in the menu or through --configure.
+OWN_HOURS = 7
+WAYS = ("quiet", "by hand", "configure")
+# Where setup links the skills in the sandbox's profile: for Claude Code, and for Codex.
+SKILLS_FOLDERS = (Path(".claude") / "skills", Path(".agents") / "skills")
+
+
+def edit(settings: Path, change: Callable[[dict[str, Any]], object]) -> None:
+    data = json.loads(settings.read_text(encoding="utf-8"))
+    change(data)
+    write_text(settings, json.dumps(data, indent=2) + "\n")
+
+
+def before_the_work(
+    box: Sandbox, monkeypatch: pytest.MonkeyPatch, meanwhile: Callable[[], object]
+) -> None:
+    """Runs meanwhile just before this run takes the sync's lock for its work, as another run, such
+    as a sync or --configure in another session, can save this PC's settings while this run asks
+    its questions or waits for the lock."""
+    code = shared_module(box, "setup")
+    taking = code.Setup.work_lock
+
+    @contextlib.contextmanager
+    def another_run_first(run: Any, content_root: Path) -> Iterator[bool]:
+        meanwhile()
+        with taking(run, content_root) as owned:
+            yield owned
+
+    monkeypatch.setattr(code.Setup, "work_lock", another_run_first)
+
+
+def saved_meanwhile(
+    box: Sandbox, monkeypatch: pytest.MonkeyPatch, change: Callable[[dict[str, Any]], object]
+) -> None:
+    """Has another run save this PC's settings with change made (see before_the_work)."""
+    before_the_work(box, monkeypatch, lambda: edit(box.tools / "local-settings.json", change))
+
+
+def run_as(box: Sandbox, person: Person, how: str) -> int:
+    """Runs setup in one of the WAYS a run can wait while another saves: quiet, as an agent runs
+    it, which takes the sync's lock only for its work, unlike a sync's own setup; by hand at the
+    console, changing the update check in the menu; or --configure, changing it, as an agent does.
+    The last two set it to OWN_HOURS."""
+    if how == "quiet":
+        return setup_here(box, "--quiet")
+    if how == "configure":
+        return setup_here(box, "--configure", f"updates.checkEveryHours={OWN_HOURS}")
+    person.answers.update({MENU: ["3", ""], UPDATE_HOURS: str(OWN_HOURS)})
+    return setup_here(box)
+
+
+def own_answer(how: str) -> int | None:
+    """The update check a run leaves: OWN_HOURS, unless it's a quiet run, which answers nothing."""
+    return None if how == "quiet" else OWN_HOURS
+
+
+@pytest.mark.parametrize("how", WAYS)
+def test_an_answer_saved_meanwhile_stays_and_the_work_follows_it(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    how: str,
+) -> None:
+    # Such as a no to a skill new to this PC, given through --configure in another session: this
+    # run found the skill with no answer, but its mark never replaces the answer, the NEW line
+    # doesn't name it, and its links go, as the no says.
+    edit(settings, lambda data: data["skills"].pop("mine"))
+
+    def answered(data: dict[str, Any]) -> None:
+        data["skills"]["mine"] = {"addedToAgents": False}
+        data["devHome"]["checkEveryHours"] = 6
+
+    saved_meanwhile(box, monkeypatch, answered)
+    with profile_kept(box):
+        returned = run_as(box, person, how)
+        out = capsys.readouterr().out
+        saved = json.loads(settings.read_text(encoding="utf-8"))
+        links = [link_target(box.profile / skills / "mine") for skills in SKILLS_FOLDERS]
+    assert returned == 0, out
+    assert saved["skills"]["mine"] == {"addedToAgents": False}, saved
+    assert saved["devHome"]["checkEveryHours"] == 6, saved
+    assert saved["updates"].get("checkEveryHours") == own_answer(how), saved
+    assert not re.search(r"^NEW\s.*'mine'", out, re.M), out
+    assert links == [None, None], out
+
+
+@pytest.mark.parametrize("how", WAYS)
+def test_a_skill_another_run_named_meanwhile_isnt_named_again(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    how: str,
+) -> None:
+    # Such as a sync's setup while this run asked its questions: it saved the skill as new to this
+    # PC, and its NEW line named it.
+    edit(settings, lambda data: data["skills"].pop("mine"))
+    saved_meanwhile(box, monkeypatch, lambda data: data["skills"].update(mine=UNANSWERED))
+    returned = run_as(box, person, how)
+    out = capsys.readouterr().out
+    saved = json.loads(settings.read_text(encoding="utf-8"))
+    assert returned == 0, out
+    assert saved["skills"]["mine"] == UNANSWERED, saved
+    assert saved["updates"].get("checkEveryHours") == own_answer(how), saved
+    assert not re.search(r"^NEW\s", out, re.M), out
+
+
+@pytest.mark.parametrize("how", WAYS)
+def test_codex_turned_off_meanwhile_turns_off_a_home_found_since(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    how: str,
+) -> None:
+    # Such as a no to Codex through --configure in another session, while this run gave a home it
+    # found the main home's yes: every home gets the no, so they still share one answer, and none
+    # is set up.
+    second = box.profile / ".codex-second"
+    write_text(second / "config.toml", "")
+    off = {"homes": {"~/.codex": {"setUp": False}}}
+    saved_meanwhile(box, monkeypatch, lambda data: data.update(codex=off))
+    with profile_kept(box):
+        try:
+            returned = run_as(box, person, how)
+            out = capsys.readouterr().out
+            saved = json.loads(settings.read_text(encoding="utf-8"))
+            set_up = (second / "AGENTS.md").exists()
+        finally:
+            shutil.rmtree(second)
+    assert returned == 0, out
+    homes = {"~/.codex": {"setUp": False}, "~/.codex-second": {"setUp": False}}
+    assert saved["codex"] == {"homes": homes}, saved
+    assert saved["updates"].get("checkEveryHours") == own_answer(how), saved
+    assert not set_up, out
+    pattern = (
+        r"^SET\s+dev-home is now turned off for Codex in ~/\.codex-second, to match ~/\.codex\."
+    )
+    assert re.search(pattern, out, re.M), out
+
+
+@pytest.mark.parametrize("how", WAYS)
+def test_a_rename_another_run_made_meanwhile_keeps_the_answer_it_saved(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    how: str,
+) -> None:
+    # Such as a skill renamed from former to renamed: this run moved former's no to the new name,
+    # and --configure in another session moved it too, then said yes. The yes stays, the skill is
+    # added, and the file names it once, by its new name.
+    folder = box.content / "skills" / "renamed"
+    write_text(folder / "SKILL.md", "---\nname: renamed\ndescription: A test skill.\n---\n")
+    write_text(folder / "dev-home-skill.json", json.dumps({"formerNames": ["former"]}) + "\n")
+    edit(settings, lambda data: data["skills"].update(former={"addedToAgents": False}))
+
+    def moved_then_yes(data: dict[str, Any]) -> None:
+        data["skills"].pop("former")
+        data["skills"]["renamed"] = {"addedToAgents": True}
+
+    saved_meanwhile(box, monkeypatch, moved_then_yes)
+    try:
+        returned = run_as(box, person, how)
+        out = capsys.readouterr().out
+        saved = json.loads(settings.read_text(encoding="utf-8"))
+        links = [link_target(box.profile / skills / "renamed") for skills in SKILLS_FOLDERS]
+    finally:
+        for skills in SKILLS_FOLDERS:
+            if link_target(box.profile / skills / "renamed") is not None:
+                remove_link(box.profile / skills / "renamed")
+        shutil.rmtree(folder)
+    assert returned == 0, out
+    assert saved["skills"]["renamed"] == {"addedToAgents": True}, saved
+    assert "former" not in saved["skills"], saved
+    assert saved["updates"].get("checkEveryHours") == own_answer(how), saved
+    assert links == [folder, folder], out
+    assert "skills.former" not in out, out
+    assert not re.search(r"^NEW\s", out, re.M), out
+
+
+@pytest.mark.parametrize("how", WAYS)
+def test_a_setting_declared_and_answered_meanwhile_stays(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    how: str,
+) -> None:
+    # Such as a preference a sync brought in a skill's update, which --configure in another
+    # session then answered, or a setting of dev-home-tools' own that an update brought: this run
+    # read what's declared before, so it doesn't know them, and leaves them to the runs that do.
+    declared = box.content / "skills" / "mine" / "dev-home-skill.json"
+    preference = {"default": True, "label": "Tidy output"}
+
+    def declared_and_answered() -> None:
+        write_text(declared, json.dumps({"preferences": {"tidy": preference}}) + "\n")
+
+        def answered(data: dict[str, Any]) -> None:
+            data["skills"]["mine"]["preferences"] = {"tidy": False}
+            data["updates"]["fromAnUpdate"] = 5
+
+        edit(settings, answered)
+
+    before_the_work(box, monkeypatch, declared_and_answered)
+    try:
+        returned = run_as(box, person, how)
+        out = capsys.readouterr().out
+        saved = json.loads(settings.read_text(encoding="utf-8"))
+    finally:
+        declared.unlink()
+    assert returned == 0, out
+    assert saved["skills"]["mine"]["preferences"] == {"tidy": False}, saved
+    assert saved["updates"]["fromAnUpdate"] == 5, saved
+    assert saved["updates"].get("checkEveryHours") == own_answer(how), saved
+    assert "Removed" not in out, out
+
+
+def test_a_value_of_the_wrong_kind_saved_meanwhile_is_reported(
+    box: Sandbox,
+    settings: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Such as from a hand edit while this run waited for the lock: the work acts on the file as it
+    # is by then, so it says what that value counts as.
+    saved_meanwhile(box, monkeypatch, lambda data: data["devHome"].update(checkEveryHours="6"))
+    returned = setup_here(box, "--quiet")
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    pattern = (
+        r'^PROBLEM\s+devHome\.checkEveryHours in local-settings\.json is "6", which isn\'t a whole '
+        r"number of hours, 0 or more, so it counts as every 12 hours\. Fix it there\.$"
+    )
+    assert len(re.findall(pattern, out, re.M)) == 1, out
+
+
+@pytest.mark.parametrize(
+    ("text", "said"),
+    [
+        ("{not json\n", "and can't be read now. Fix it, then run setup.py again."),
+        ('{"schemaVersion": 99}\n', "to a layout this setup doesn't know. Run setup.py again."),
+    ],
+)
+def test_settings_changed_meanwhile_to_what_setup_cant_read_are_left_as_they_are(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    text: str,
+    said: str,
+) -> None:
+    # Such as a hand edit, or a newer dev-home-tools, while this run waited at a question: its
+    # answer isn't saved, and the file stays as it is.
+    before_the_work(box, monkeypatch, lambda: write_text(settings, text))
+    returned = run_as(box, person, "by hand")
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    pattern = (
+        r"^PROBLEM\s+This PC's settings weren't saved: .*local-settings\.json changed while setup "
+        rf"ran, {re.escape(said)}$"
+    )
+    assert re.search(pattern, out, re.M), out
+    assert settings.read_text(encoding="utf-8") == text
+
+
+def test_a_syncs_setup_reads_this_pcs_settings_only_once(
+    box: Sandbox,
+    settings: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # It holds the sync's lock from its start, so no other run can have saved them since, and a
+    # second read would only add time.
+    code = shared_module(box, "setup")
+    loading = code.load_local_settings
+    reads: list[None] = []
+
+    def counted() -> Any:
+        reads.append(None)
+        return loading()
+
+    edit(settings, lambda data: data["skills"].pop("mine"))
+    monkeypatch.setattr(code, "load_local_settings", counted)
+    returned = code.main(["--quiet"], sync_holds_lock=True)
+    out = capsys.readouterr().out
+    saved = json.loads(settings.read_text(encoding="utf-8"))
+    assert returned == 0, out
+    assert len(reads) == 1, reads
+    assert saved["skills"]["mine"] == UNANSWERED, saved
+    assert re.search(r"^NEW\s.*'mine'", out, re.M), out
 
 
 def test_stops_when_it_cant_find_the_home_folder(

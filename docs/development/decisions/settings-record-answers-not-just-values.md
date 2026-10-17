@@ -61,6 +61,15 @@ setting counts as missing.
   [A run of setup by hand asks what's unanswered, then shows every setting](a-run-of-setup-by-hand-asks-whats-unanswered-then-shows-every-setting.md):
   setup holds the lock for all its work, the save included, which comes after every question, so
   still no sync waits while a question does.)
+- The answers a run changed are the end user's, given in that run: at a question, in the menu, or
+  through `--configure`. What setup works out by itself isn't an answer: the mark for a skill new
+  to the PC, an answer moved for a rename or a name's case, a setting nothing declares removed,
+  and the answer every Codex home shares. Setup works each of those out again at the save, from
+  the file as it reads it then, after making the end user's changes there, and sets up from what
+  it saved. It removes only what the file held when the run first read it: anything newer came
+  from another run, which may know a declaration this run doesn't, such as one an update brought.
+  A sync's setup reads nothing again: it has held the lock since before it read the file. (Added
+  on 2026-10-17. Until then, the save carried those changes over from the run's first read.)
 - A backup is made only when a person changes a setting, or answers are deleted, never for a
   write that only records something, such as `unanswered`.
 
@@ -98,6 +107,12 @@ setting counts as missing.
   file again, loses neither write, and never holds up a sync while a question waits. It reuses
   the sync's lock ([One sync at a time, through a lock the operating system holds](one-sync-at-a-time-through-a-lock-the-operating-system-holds.md)),
   which the operating system lets go of when a process ends, however it ends.
+- What setup works out by itself depends on what the file holds, so a change worked out from an
+  earlier read can undo another run's answer: a rename's old no, moved to the new name, replaced
+  a yes given meanwhile through `--configure`, without a word, and a Codex home found during the
+  run kept a yes that another run had just turned to no for every home, so the homes disagreed.
+  Working those changes out again at the save leaves the end user's answers as the only changes
+  carried over, and gives each later change setup makes by itself one place to go.
 - A write that only records something can come on any sync, so a backup of each would pile up
   beside the file.
 
@@ -123,6 +138,14 @@ setting counts as missing.
 - A separate script for conversions (another process on a path every sync takes), or a data file
   of changes (it would repeat `formerNames`, and a change to the structure needs code anyway).
 - Holding the lock for setup's whole run: every sync would wait while a question does.
+- For what setup works out by itself, at the save: checks that only keep a mark from replacing an
+  answer, or a skill from being named twice (the rename and Codex cases stay open, and each later
+  change setup makes by itself would need a check of its own); having only a sync's setup make
+  those changes (it changes decided behavior to make the code easier: runs by hand would stop
+  naming new skills, and would still have to work the changes out to show them); working out only
+  the marks again (the rename and Codex cases stay open); removing whatever the run's own
+  declarations don't know, newer settings included (one a sync or an update brought meanwhile
+  would lose its answer).
 - For a renamed skill: treating it as new (an end user's no would become a yes, and their
   preferences would be lost); deciding at the first rename, with a tripwire; the update comparing
   skill folders (it misses a `git pull`, a skill of the end user's own, and a failed setup).

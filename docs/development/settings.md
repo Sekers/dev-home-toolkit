@@ -50,7 +50,12 @@ AGENTS.md's rules apply too.
   answer, with a line saying so
   ([Codex is set up in every Codex home, or in none](decisions/codex-is-set-up-in-every-codex-home-or-in-none.md)).
 - Save `local-settings.json` only through setup's save, which holds the sync's lock while it
-  reads the file again and applies only that run's changes.
+  reads the file again and makes there only the changes a person made in that run. Anything setup
+  works out by itself, such as a mark or an answer moved for a rename, is worked out again in
+  `Setup.settle`, in `internal/shared/setup.py`, from the file as it is then, never carried over
+  from an earlier read. One that the questions or the menu should show is also made before them,
+  as each Codex home's shared answer is, outside `Setup.answering`, which records only a person's
+  changes ([why](decisions/settings-record-answers-not-just-values.md)).
 - Make a backup only when a person changes a setting, or answers are deleted.
 
 ## Changing a setting later

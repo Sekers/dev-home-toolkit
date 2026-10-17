@@ -53,6 +53,9 @@ TYPE_TEXT = {
     "hours": "a whole number of hours, 0 or more",
 }
 MISSING = object()
+# A value's path in the settings as its keys, for where a key can hold a dot, as a folder's name
+# can.
+KeyPath = tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -200,6 +203,15 @@ def get(data: object, path: str, default: object = None) -> Any:
         if not isinstance(data, dict) or part not in data:
             return default
         data = data[part]
+    return data
+
+
+def value_at(data: object, keys: KeyPath) -> Any:
+    """The value at a path of keys, or MISSING when any part of it is missing."""
+    for key in keys:
+        if not isinstance(data, dict) or key not in data:
+            return MISSING
+        data = data[key]
     return data
 
 
@@ -577,21 +589,30 @@ class Checked:
 
 
 def check_settings(
-    data: dict[str, Any], declared: SkillDeclarations, *, remove_gone_skills: bool
+    data: dict[str, Any],
+    declared: SkillDeclarations,
+    *,
+    remove_gone_skills: bool,
+    seen: dict[str, Any] | None = None,
 ) -> Checked:
     """Checks this PC's settings against the declarations: an answer saved under a setting's
     former name moves to its name, a setting nothing declares is removed, and a value of the wrong
     kind is a problem, saying what it counts as instead. A skill whose file can't be read keeps
     its answers. So does a skill that's gone, unless remove_gone_skills: only a run that holds the
     sync's lock passes it, since a sync or an update may be replacing a skill's files at that
-    moment, and the skill would only look gone. The settings passed in aren't changed."""
+    moment, and the skill would only look gone. With seen, the file as a run first read it, only
+    what that held is removed: another run saved the rest since, and it may know a declaration
+    that this run, which read its own earlier, doesn't, such as one an update brought. The
+    settings passed in aren't changed."""
     preferences = declared.preferences
     checked = Checked(copy.deepcopy(data))
     data = checked.data
     problems = checked.problems
     file = SETTINGS_PATH.name
 
-    def remove(container: dict[str, Any], key: str, path: str) -> None:
+    def remove(container: dict[str, Any], key: str, path: str, keys: KeyPath) -> None:
+        if seen is not None and value_at(seen, keys) is MISSING:
+            return
         del container[key]
         checked.removed.append(path)
 
@@ -626,7 +647,7 @@ def check_settings(
             elif tool is not None:
                 check_folders(path, inner, tool)
             else:
-                remove(value, name, path)
+                remove(value, name, path, (key, name))
 
     def check_folders(path: str, value: object, tool: Tool) -> None:
         """A tool's folders, each with an entry, which holds its answer, setUp."""
@@ -641,7 +662,8 @@ def check_settings(
                 continue
             for entry_key, answer in list(entry.items()):
                 if entry_key != "setUp":
-                    remove(entry, entry_key, f"{where}: {entry_key}")
+                    keys = (*path.split("."), folder, entry_key)
+                    remove(entry, entry_key, f"{where}: {entry_key}", keys)
                 elif not isinstance(answer, bool):
                     wrong(f"{where}: setUp", answer, "true or false", unset)
 
@@ -683,7 +705,7 @@ def check_settings(
             name = find_skill(preferences, skill)
             if name is None:
                 if remove_gone_skills and declared.is_gone(skill):
-                    remove(value, skill, f"skills.{skill}")
+                    remove(value, skill, f"skills.{skill}", ("skills", skill))
                 continue
             if not isinstance(inner, dict):
                 wrong(f"skills.{skill}", inner, "a JSON object", "the defaults")
@@ -694,7 +716,7 @@ def check_settings(
                 if group == ADDED_TO_AGENTS and added is not None:
                     check_value(where, saved, added)
                 elif group != "preferences":
-                    remove(inner, group, where)
+                    remove(inner, group, where, ("skills", skill, group))
                 elif not isinstance(saved, dict):
                     wrong(where, saved, "a JSON object of preferences", "the defaults")
                 else:
@@ -708,7 +730,8 @@ def check_settings(
                     for key, answer in list(saved.items()):
                         known = preferences[name].get(key)
                         if known is None:
-                            remove(saved, key, f"{where}.{key}")
+                            keys = ("skills", skill, "preferences", key)
+                            remove(saved, key, f"{where}.{key}", keys)
                         else:
                             check_value(f"{where}.{key}", answer, known.setting)
 
@@ -730,7 +753,7 @@ def check_settings(
             if isinstance(value, dict) and not value:
                 del data[key]
         else:
-            remove(data, key, key)
+            remove(data, key, key, (key,))
     return checked
 
 
@@ -765,21 +788,24 @@ def answered(folders: dict[str, bool], answer: bool) -> list[str]:
 def load_local_settings() -> LocalSettings | None:
     """The settings, or None when the file is there but can't be read as a JSON object. A file
     in another layout loads too, so the caller checks layout() first."""
-    settings = LocalSettings()
     if not SETTINGS_PATH.exists():
-        return settings
+        return LocalSettings()
     try:
         text = SETTINGS_PATH.read_text(encoding="utf-8-sig")
         # An empty file holds no answers yet, so it counts as no file.
         if not text.strip():
-            return settings
+            return LocalSettings()
         data = json.loads(text)
     except (OSError, ValueError):
         return None
     if not isinstance(data, dict):
         return None
-    settings.data = data
-    settings.found = True
+    return settings_in(data)
+
+
+def settings_in(data: dict[str, Any]) -> LocalSettings:
+    """The settings a file's data holds, as load_local_settings reads them, keeping data itself."""
+    settings = LocalSettings(data=data, found=True)
     folder = get(data, "devHome.folder")
     if isinstance(folder, str):
         settings.content_dir = folder
@@ -859,9 +885,6 @@ def local_settings_text(settings: LocalSettings) -> str:
     return settings_text(local_settings_data(settings))
 
 
-KeyPath = tuple[str, ...]
-
-
 def leaves(data: dict[str, Any], prefix: KeyPath = ()) -> dict[KeyPath, Any]:
     """Each value in the settings by its path of keys. A state, such as {"$state": "default"}, and
     an empty group are values of their own. Keys go in a tuple, since a folder's name can hold a
@@ -876,11 +899,15 @@ def leaves(data: dict[str, Any], prefix: KeyPath = ()) -> dict[KeyPath, Any]:
     return found
 
 
+def written_alike(first: object, second: object) -> bool:
+    """Whether two values are written the same in a settings file, whatever the order of their
+    keys. true and 1 differ, though Python counts them as equal."""
+    return json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
+
+
 def apply_changes(data: dict[str, Any], before: dict[str, Any], after: dict[str, Any]) -> None:
     """Makes in data the changes that turned before into after, value by value, and nothing else,
-    so whatever else data has, such as another run's answer saved in the meantime, stays. A
-    value this run saved as unanswered never replaces one data has: it only records that nothing
-    was answered yet."""
+    so whatever else data has, such as another run's answer saved in the meantime, stays."""
     old, new = leaves(before), leaves(after)
     for path in old:
         # A group this run filled, such as an empty one it added answers to, isn't removed: its
@@ -901,18 +928,8 @@ def apply_changes(data: dict[str, Any], before: dict[str, Any], after: dict[str,
                         break
                     del container[key]
     for path, value in new.items():
-        if path in old and old[path] == value:
+        if path in old and written_alike(old[path], value):
             continue
-        if value == {STATE: "unanswered"}:
-            # Anything data has on the way counts, such as a value of another kind where its group
-            # should be, which setup reports rather than replaces.
-            found: Any = data
-            for key in path:
-                if not isinstance(found, dict):
-                    break
-                found = found.get(key, MISSING)
-            if found is not MISSING:
-                continue
         target = data
         for key in path[:-1]:
             if not isinstance(target.get(key), dict):

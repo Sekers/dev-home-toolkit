@@ -23,9 +23,11 @@ A run goes in this order, so the questions come first and the work after:
 3. At a console, the settings menu that --configure shows, so any setting can be changed.
 4. The change to confirm to dev-home.json.
 5. The work, which asks nothing, and holds the sync's lock, so a sync in another session waits
-   for it, while no sync ever waits for a person's answer: it saves this PC's answers in
-   local-settings.json in dev-home-tools' folder, commits dev-home.json, sets up everything
-   else, and last makes the change each folder it sets up needs in Claude Code's or Codex's
+   for it, while no sync ever waits for a person's answer. It reads local-settings.json, in
+   dev-home-tools' folder, again, since another run may have saved it meanwhile, makes there only
+   the changes a person made in this run, works out its own changes again from what that gives,
+   and saves it. Then it commits dev-home.json, sets up everything else from the settings it
+   saved, and last makes the change each folder it sets up needs in Claude Code's or Codex's
    settings file.
 
 local-settings.json groups the settings, and each one's name is its path, such as
@@ -177,7 +179,6 @@ from .settings import (
     CLAUDE_CODE,
     CODEX,
     DEV_HOME_SETTINGS,
-    FOLDER_SETTINGS,
     MISSING,
     SCHEMA_VERSION,
     SETTINGS_PATH,
@@ -193,7 +194,6 @@ from .settings import (
     apply_changes,
     check_settings,
     dev_home_text,
-    folder_answers,
     folder_rank,
     get,
     layout,
@@ -209,8 +209,10 @@ from .settings import (
     saved_answer,
     saved_skill_path,
     setting_value,
+    settings_in,
     settings_text,
     skill_declarations,
+    written_alike,
 )
 from .settings_files import (
     Plan,
@@ -311,6 +313,24 @@ class ToolFolders:
     declined_codex_homes: list[str]
 
 
+@dataclass(frozen=True)
+class Settled:
+    """This PC's settings as the work saves them and acts on them (see Setup.settle). changes is
+    what the check of the file moved and removed; matched has, by each shared tool's setting, the
+    line saying which of its folders got the main folder's answer; new_skills names each skill
+    marked as new to this PC; answered says whether a person changed a setting in this run;
+    problem is why the settings can't be saved, or "" when they can; and out_of_order says the
+    file as it is now lists a shared tool's folders out of order."""
+
+    settings: LocalSettings
+    changes: Checked
+    matched: dict[str, str]
+    new_skills: list[str]
+    answered: bool
+    problem: str = ""
+    out_of_order: bool = False
+
+
 def cleanup(checked: Checked) -> list[str]:
     """What check_settings removed and moved, a sentence for each, for the line that says so."""
     sentences = []
@@ -363,6 +383,12 @@ class Setup:
         # tool's setting, printed once the settings are saved, unless a person answers for the
         # tool's folders first.
         self.matched: dict[str, str] = {}
+        # What a person changed in this PC's settings in this run, as the settings before and
+        # after each step that takes their answers, apart from setup's own changes in between,
+        # which the work makes in the file as it is by then (see answering and settle).
+        self.answers: list[tuple[dict[str, Any], dict[str, Any]]] = []
+        # What the check of this PC's settings at the start of the run moved and removed.
+        self.checked = Checked({})
         # What the profile folder holds, listed once a run (see profile_folders).
         self.profile_entries: list[Path] | None = None
         # What the skills declare, read once a run with this PC's settings, for the dev-home
@@ -565,38 +591,43 @@ class Setup:
                 )
             yield owned
 
-    def save_settings(
-        self, settings: LocalSettings, read: dict[str, Any] | None, checked: Checked
-    ) -> bool:
-        """Saves this PC's settings, and says so in one line, which names any setting this run
-        moved or removed. The file is backed up first when a person changed a setting, through
-        the menu or --configure, or a setting was removed. The work that runs this holds the
-        sync's lock, so a sync's own save can't come in between. Returns whether it saved."""
-        backup = self.changed_by_hand or self.assigned or bool(checked.removed)
+    def save(self, settled: Settled) -> bool:
+        """Saves this PC's settings as the work settled them, when anything changed, and returns
+        whether it saved. When a person changed a setting, or the check moved or removed one, the
+        save says so in one line, which names what was moved or removed, and backs the file up
+        first when a person changed a setting, through the menu or --configure, or a setting was
+        removed. When the only changes are what setup records by itself, the answers a shared
+        tool's folders got from the main one and the skills new to this PC, it keeps no backup,
+        since nobody changed a setting, and the lines saying what it records stand for its own.
+        With no change at all, it only puts a shared tool's folders back in order."""
+        changes = settled.changes
+        changed = settled.answered or bool(changes.moved or changes.removed)
+        if not (changed or settled.matched or settled.new_skills):
+            if settled.out_of_order and not self.what_if:
+                self.put_in_order()
+            return False
+        if changed and not self.should(SETTINGS_PATH, "Save this PC's settings"):
+            for sentence in cleanup(changes):
+                self.line(f"What if: {sentence}")
+            return False
+        if self.what_if:
+            return False
+        if settled.problem:
+            self.status("PROBLEM", settled.problem)
+            return False
+        backup = changed and (self.changed_by_hand or self.assigned or bool(changes.removed))
+        text = local_settings_text(settled.settings)
         try:
-            kept = self.write_settings(settings, read, backup=backup)
+            kept = write_settings_file(SETTINGS_PATH, text, bom=False, backup=backup)
         except OSError as error:
             self.status("PROBLEM", f"Could not save this PC's settings in {SETTINGS_PATH}. {error}")
             return False
-        if kept is None:
-            return False
-        notes = "".join(f". {sentence}" for sentence in cleanup(checked))
-        if backup:
-            notes += f". Backup of the old file: {kept}" if kept else " (new file)"
-        self.status("SET", f"This PC's settings: {SETTINGS_PATH}{notes}")
+        if changed:
+            notes = "".join(f". {sentence}" for sentence in cleanup(changes))
+            if backup:
+                notes += f". Backup of the old file: {kept}" if kept else " (new file)"
+            self.status("SET", f"This PC's settings: {SETTINGS_PATH}{notes}")
         return True
-
-    def save_recorded(self, settings: LocalSettings, read: dict[str, Any] | None) -> bool:
-        """Saves what this run records without anyone changing a setting, when that's its only
-        change to this PC's settings: the answers a shared tool's folders got from its main
-        folder, and the skills new to this PC, as unanswered. No backup, since nobody changed a
-        setting, and the lines saying what it records stand for the save's own line. Returns
-        whether it saved."""
-        try:
-            return self.write_settings(settings, read, backup=False) is not None
-        except OSError as error:
-            self.status("PROBLEM", f"Could not save this PC's settings in {SETTINGS_PATH}. {error}")
-            return False
 
     def put_in_order(self) -> None:
         """Puts a shared tool's folders back in order in this PC's settings, after a hand edit,
@@ -623,36 +654,87 @@ class Setup:
         except OSError as error:
             self.status("PROBLEM", f"Could not save this PC's settings in {SETTINGS_PATH}. {error}")
 
-    def write_settings(
-        self, settings: LocalSettings, read: dict[str, Any] | None, *, backup: bool
-    ) -> str | None:
-        """Writes this PC's settings, and returns the backup's path, "" when it made none, or None
-        when it wrote nothing, having said why. When the file changed since this run read it, such
-        as by a sync while a question waited, only this run's changes go into the newer file."""
-        wanted = local_settings_data(settings)
-        now = load_local_settings()
-        if now is None:
-            self.status(
-                "PROBLEM",
-                f"This PC's settings weren't saved: {SETTINGS_PATH} changed while setup ran, and "
-                "can't be read now. Fix it, then run setup.py again.",
-            )
-            return None
-        if now.found and now.data != read:
-            if layout(now.data, SCHEMA_VERSION):
-                self.status(
-                    "PROBLEM",
+    @contextlib.contextmanager
+    def answering(self, settings: LocalSettings) -> Iterator[None]:
+        """Around a step that takes a person's answers, at a question, in the menu, or through
+        --configure or --content-dir: records what they changed in this PC's settings, which the
+        work makes in the file as it is by then (see settle). A change setup makes by itself
+        between two such steps is no answer of theirs, so it's left out."""
+        before = local_settings_data(settings)
+        yield
+        self.answers.append((before, local_settings_data(settings)))
+
+    def settle(
+        self, settings: LocalSettings, read: dict[str, Any] | None, declared: SkillDeclarations
+    ) -> Settled:
+        """This PC's settings as the work saves them and acts on them, worked out while it holds
+        the sync's lock, so no other run saves in between. It reads the file again, since another
+        run may have saved it while this one asked its questions or waited for the lock, such as a
+        sync, or --configure in another session. It makes there only the changes a person made in
+        this run (see answering), which win over the other run's where both changed a setting.
+        Then it works out again from that each change setup makes by itself, so none comes from an
+        earlier read: the check's moves and removals (see check_settings, which removes only what
+        read held), the answer a shared tool's folders share (see match_shared_answer), and the
+        marks for skills new to this PC (see note_new_skills).
+
+        A sync's setup reads nothing again: it has held the lock since before it read the file,
+        so nothing else has saved it, and its own settings, checked and matched at its start, are
+        the file's. When the file is missing now, this run's own settings stand for it. When it
+        can't be read now, or is in a layout this setup doesn't know, they're worked out for the
+        work alone, with the reason they can't be saved."""
+        answered = any(not written_alike(before, after) for before, after in self.answers)
+        problem = ""
+        # The file as it is now, when the work goes on from it.
+        newer: LocalSettings | None = None
+        if not self.sync_holds_lock:
+            now = load_local_settings()
+            if now is None:
+                problem = (
                     f"This PC's settings weren't saved: {SETTINGS_PATH} changed while setup ran, "
-                    "to a layout this setup doesn't know. Run setup.py again.",
+                    "and can't be read now. Fix it, then run setup.py again."
                 )
-                return None
-            merged = copy.deepcopy(now.data)
-            apply_changes(merged, read or {}, wanted)
-            order_folders(merged, self.home)
-            text = settings_text(merged)
-        else:
-            text = settings_text(wanted)
-        return write_settings_file(SETTINGS_PATH, text, bom=False, backup=backup)
+            elif now.found and layout(now.data, SCHEMA_VERSION):
+                problem = (
+                    f"This PC's settings weren't saved: {SETTINGS_PATH} changed while setup ran, "
+                    "to a layout this setup doesn't know. Run setup.py again."
+                )
+            elif now.found:
+                newer = now
+        if newer is None:
+            result = settings_in(local_settings_data(settings))
+            new_skills = self.note_new_skills(result, declared)
+            return Settled(
+                result,
+                self.checked,
+                dict(self.matched),
+                new_skills,
+                answered,
+                problem,
+                read is not None and order_folders(copy.deepcopy(read), self.home),
+            )
+        changes = check_settings(
+            newer.data, declared, remove_gone_skills=False, seen=read if read is not None else {}
+        )
+        for found in changes.problems:
+            if found not in self.problems:
+                self.status("PROBLEM", found)
+        start = local_settings_data(settings_in(changes.data))
+        for before, after in self.answers:
+            apply_changes(start, before, after)
+        result = settings_in(start)
+        self.matched = {}
+        for tool in (CLAUDE_CODE, CODEX):
+            if tool.shared:
+                self.match_shared_answer(tool, result)
+        new_skills = self.note_new_skills(result, declared)
+        return Settled(
+            settings_in(local_settings_data(result)),
+            changes,
+            dict(self.matched),
+            new_skills,
+            answered,
+            out_of_order=order_folders(copy.deepcopy(newer.data), self.home),
+        )
 
     # The tools' folders: Claude Code folders and Codex homes
 
@@ -761,15 +843,14 @@ class Setup:
             if self.entry_named(folder, answers) is None:
                 answers[self.entry_for(tool, settings, folder)] = answer
 
-    def match_shared_answer(self, tool: Tool, settings: LocalSettings) -> bool:
+    def match_shared_answer(self, tool: Tool, settings: LocalSettings) -> None:
         """Gives each of a shared tool's folders that's there the shared answer (see
         shared_answer), when its own differs or it has none, such as a new folder, or one whose
-        answer was changed by hand, and keeps a line saying so for after the save. Returns whether
-        an answer changed."""
+        answer was changed by hand, and keeps a line saying so for after the save."""
         folders = self.known_folders(tool, settings)
         answer, source = self.shared_answer(tool, settings, folders)
         if answer is None or source is None:
-            return False
+            return
         answers = settings.folders[tool.setting]
         changed: list[str] = []
         for folder in folders:
@@ -779,14 +860,13 @@ class Setup:
                 answers[entry] = answer
                 changed.append(entry)
         if not changed:
-            return False
+            return
         done = "set up" if answer else "turned off"
         self.matched[tool.setting] = (
             f"dev-home is now {done} for {tool.name} in {and_list(changed)}, to match "
             f"{self.entry_named(source, answers)}. {tool.name} only supports one set of skills for "
             f"all your {tool.name} {tool.folder}s, so they share one setting."
         )
-        return True
 
     def folder_entry(self, folder: Path) -> str:
         """How a folder is written in local-settings.json: from ~ when it's in the profile folder,
@@ -1359,80 +1439,72 @@ class Setup:
     # their changes too.
 
     def run(self, content_dir_option: str) -> None:
-        settings, read, checked = self.read_settings()
-        saved_folder = settings.content_dir
+        settings, read = self.read_settings()
         # A PC's first setup: no dev-home folder saved yet, such as after settings are set aside.
-        first_setup = not saved_folder
-        # A setting moved or removed is saved, whether anything else changes or not.
-        save = bool(checked.moved or checked.removed)
+        first_setup = not settings.content_dir
         if self.configure is not None:
-            try:
-                save = configure.change_settings(self, settings) or save
-            except configure.SettingError as error:
-                self.status("PROBLEM", f"{error} Nothing was changed.")
-                self.line(configure.USAGE)
-                raise CannotGoOnError from error
+            with self.answering(settings):
+                try:
+                    configure.change_settings(self, settings)
+                except configure.SettingError as error:
+                    self.status("PROBLEM", f"{error} Nothing was changed.")
+                    self.line(configure.USAGE)
+                    raise CannotGoOnError from error
             if self.just_showing:
                 raise CannotGoOnError
+        # Each of a shared tool's folders gets the answer they share, so the questions and the
+        # menu show it. It's setup's own change, not an answer, so the work works it out again
+        # (see settle).
+        for tool in (CLAUDE_CODE, CODEX):
+            if tool.shared:
+                self.match_shared_answer(tool, settings)
 
-        # 1. dev-home first: its folder, then, when it's missing, clone or create it. Nothing is
-        # saved before it's in place.
-        self.choose_dev_home_folder(settings, content_dir_option)
-        while True:
-            content_root = self.find_dev_home(settings)
-            # 2. The questions not answered yet.
-            save = self.ask_unanswered(settings, content_root, first_setup=first_setup) or save
-            # 3. At a console, the settings menu, so any setting can be changed.
-            if not self.can_ask:
-                break
-            folder = settings.content_dir
-            if configure.menu(self, settings):
-                self.changed_by_hand = save = True
-            if same_path(folder, settings.content_dir):
-                break
-            # Another dev-home folder: its checks again, and its own answer about copies.
-            self.wanted_copies = None
-            self.cloned = self.created = False
-        if settings.content_dir != saved_folder:
-            save = True
-        # Skills this PC has no answer for yet: each follows its default, and the NEW line after
-        # the save names it, once.
+        with self.answering(settings):
+            # 1. dev-home first: its folder, then, when it's missing, clone or create it. Nothing
+            # is saved before it's in place.
+            self.choose_dev_home_folder(settings, content_dir_option)
+            while True:
+                content_root = self.find_dev_home(settings)
+                # 2. The questions not answered yet.
+                self.ask_unanswered(settings, content_root, first_setup=first_setup)
+                # 3. At a console, the settings menu, so any setting can be changed.
+                if not self.can_ask:
+                    break
+                folder = settings.content_dir
+                if configure.menu(self, settings):
+                    self.changed_by_hand = True
+                if same_path(folder, settings.content_dir):
+                    break
+                # Another dev-home folder: its checks again, and its own answer about copies.
+                self.wanted_copies = None
+                self.cloned = self.created = False
         declared = self.skills_declared(settings)
-        new_skills = self.note_new_skills(settings, declared)
 
         # 4. The change to dev-home.json to confirm, shown and asked about before the work.
-        tools = self.tool_folders(settings)
-        folders = self.skills_folders(tools, declared)
         self.confirm_copies(content_root)
 
-        # 5. The work.
+        # 5. The work, on this PC's settings as it saves them: the file as it is by then, with
+        # this run's answers, and setup's own changes worked out again (see settle). Skills this
+        # PC has no answer for yet each follow their default, and the NEW line names them, once.
         with self.work_lock(content_root) as owned:
             if not owned:
                 raise CannotGoOnError
-            new_skills = self.still_new(settings, new_skills)
-            saved = False
-            if save:
-                if self.should(SETTINGS_PATH, "Save this PC's settings"):
-                    saved = self.save_settings(settings, read, checked)
-                else:
-                    for sentence in cleanup(checked):
-                        self.line(f"What if: {sentence}")
-            elif (self.matched or new_skills) and not self.what_if:
-                saved = self.save_recorded(settings, read)
-            elif order_folders(copy.deepcopy(settings.data), self.home) and not self.what_if:
-                self.put_in_order()
-            for matched in self.matched.values():
+            settled = self.settle(settings, read, declared)
+            saved = self.save(settled)
+            for matched in settled.matched.values():
                 if self.what_if:
                     self.line(f"What if: {matched}")
                 elif saved:
                     self.status("SET", matched)
-            plans = self.plan_skills(self.settings_now(settings), declared, folders)
-            told = new_skills_text(new_skills, plans)
+            tools = self.tool_folders(settled.settings)
+            folders = self.skills_folders(tools, declared)
+            plans = self.plan_skills(settled.settings.data, declared, folders)
+            told = new_skills_text(settled.new_skills, plans)
             if told and self.what_if:
                 self.line(f"What if: {told}")
             elif told and saved:
                 self.status("NEW", told)
-            self.set_up(settings, content_root, tools, folders, plans)
+            self.set_up(settled.settings, content_root, tools, folders, plans)
             # The tools' settings files: the change each folder set up needs, which its yes
             # approved, and the access taken back out of each one answered no, which the no
             # approved, each made with a backup. See repair_setting.
@@ -1442,10 +1514,11 @@ class Setup:
                 else:
                     self.status(*check)
 
-    def read_settings(self) -> tuple[LocalSettings, dict[str, Any] | None, Checked]:
+    def read_settings(self) -> tuple[LocalSettings, dict[str, Any] | None]:
         """Where things are: dev-home-tools' folder, the profile to set up, and this PC's
-        settings, checked. Returns them, the file as this run read it, which its save compares
-        with, and what the check moved or removed."""
+        settings, checked, with what the check moved or removed, which it keeps in self.checked.
+        Returns them, and the file as this run read it, or None when there was none: the work
+        removes only what that held (see settle)."""
         tools_problem = unsafe_reason(comparable(TOOLS_ROOT))
         if tools_problem:
             self.status(
@@ -1477,8 +1550,6 @@ class Setup:
                 f"Using the test profile {self.home} instead of {Path.home()}, because "
                 "local-settings.json sets testHomeDir.",
             )
-        # The file as this run read it: its save makes only this run's changes, to whatever the
-        # file holds by then.
         read: dict[str, Any] | None = copy.deepcopy(settings.data) if settings.found else None
         file_layout = layout(settings.data, SCHEMA_VERSION) if settings.found else ""
         if file_layout == "older":
@@ -1496,17 +1567,14 @@ class Setup:
         self.declared = (settings.content_dir, declared)
         # Only a run that holds the sync's lock from its start, a sync's setup, removes the answers
         # of a skill that's gone.
-        checked = check_settings(settings.data, declared, remove_gone_skills=self.sync_holds_lock)
-        for problem in declared.problems + checked.problems:
+        self.checked = check_settings(
+            settings.data, declared, remove_gone_skills=self.sync_holds_lock
+        )
+        for problem in declared.problems + self.checked.problems:
             self.status("PROBLEM", problem)
-        if checked.moved or checked.removed:
-            settings.data = checked.data
-            folder = get(settings.data, "devHome.folder")
-            settings.content_dir = folder if isinstance(folder, str) else ""
-            settings.folders = {
-                path: folder_answers(get(settings.data, path)) for path in FOLDER_SETTINGS
-            }
-        return settings, read, checked
+        if self.checked.moved or self.checked.removed:
+            settings = settings_in(self.checked.data)
+        return settings, read
 
     # dev-home first
 
@@ -1626,41 +1694,36 @@ class Setup:
 
     def ask_unanswered(
         self, settings: LocalSettings, content_root: Path, *, first_setup: bool
-    ) -> bool:
-        """Asks each question whose answer isn't saved yet, and returns whether this PC's
-        settings changed. A quiet run asks nothing, and names what's unanswered instead."""
-        changed = False
+    ) -> None:
+        """Asks each question whose answer isn't saved yet. A quiet run asks nothing, and names
+        what's unanswered instead."""
         if self.can_ask and not setting_value(settings.data, AUTO_UPDATE)[1]:
             updates = self.ask_auto_update(settings.data)
             if updates is not MISSING:
                 put(settings.data, AUTO_UPDATE, updates)
-                changed = True
         for tool in (CLAUDE_CODE, CODEX):
-            changed = self.ask_about_folders(tool, settings) or changed
+            self.ask_about_folders(tool, settings)
         self.ask_about_copies(settings, content_root, first_setup=first_setup)
-        return changed
 
-    def ask_about_folders(self, tool: Tool, settings: LocalSettings) -> bool:
+    def ask_about_folders(self, tool: Tool, settings: LocalSettings) -> None:
         """Asks about each of a tool's folders that setup knows of with no answer yet, and keeps
         every answer, a no included, so it's asked about once: in the shared prompt for optional
         lists, a list of the tool's own, each one recommended, or for a shared tool, one question
-        for them all, whose answer goes to every folder. A shared tool's folders already answered
-        give theirs to the others instead (see match_shared_answer). A folder nobody has answered
-        for isn't set up: setup adds no links there and removes none. A quiet run names those
-        folders instead. Returns whether an answer came."""
+        for them all, whose answer goes to every folder. Once one of a shared tool's folders has an
+        answer, the others have it too (see match_shared_answer), so it asks only while none has.
+        A folder nobody has answered for isn't set up: setup adds no links there and removes none.
+        A quiet run names those folders instead."""
         answers = settings.folders[tool.setting]
         known = self.known_folders(tool, settings)
-        if tool.shared and self.match_shared_answer(tool, settings):
-            return False
         unanswered = [f for f in known if self.entry_named(f, answers) is None]
         if not unanswered:
-            return False
+            return
         if self.can_ask:
             if tool.shared:
                 shared = self.ask_codex(known, None)
                 if shared is not None:
                     self.answer_every_folder(tool, settings, shared)
-                    return True
+                    return
                 which = f"{tool.name}, so setup left it as it is"
             else:
                 if len(unanswered) == 1:
@@ -1686,12 +1749,12 @@ class Setup:
                     for folder in unanswered:
                         entry = self.entry_for(tool, settings, folder)
                         answers[entry] = answer.answers[str(folder)]
-                    return True
+                    return
                 which = (
                     " and ".join(str(f) for f in unanswered) + ", so setup left them as they are"
                 )
             self.status("PROBLEM", f"No answer came about {which}. Run setup.py again to answer.")
-            return False
+            return
         # The session's own folder, when it's in the profile folder under another name or outside
         # it, comes only from the tool's variable, which a terminal usually doesn't have.
         visible = self.profile_folders(tool) + [
@@ -1714,7 +1777,6 @@ class Setup:
                 f"Setup hasn't asked yet {unasked_text(tool, seen)}. Run {by_hand('setup.py')} in "
                 "a terminal, and it asks.",
             )
-        return False
 
     def tool_folders(self, settings: LocalSettings) -> ToolFolders:
         """Where setup sets up each tool, from the answers: each Claude Code folder and Codex home
@@ -1775,8 +1837,10 @@ class Setup:
     def note_new_skills(self, settings: LocalSettings, declared: SkillDeclarations) -> list[str]:
         """Saves each skill this PC has no answer for, about adding it to the agents, as
         unanswered, the one state a quiet run writes, so it follows its default, and the NEW line
-        names it once (see new_skills_text). A value of the wrong kind stays as it is, since setup
-        reports it. Returns the names of the skills it saved."""
+        names it once (see new_skills_text). The work runs this on the settings as it saves them,
+        so a mark never replaces an answer, and a skill another run marked meanwhile, and named,
+        isn't named again. A value of the wrong kind stays as it is, since setup reports it.
+        Returns the names of the skills it saved."""
         if not isinstance(settings.data.get("skills", {}), dict):
             return []
         new: list[str] = []
@@ -1823,31 +1887,6 @@ class Setup:
             first, before = merged.get(real, (folder, frozenset()))
             merged[real] = (first, before | readers)
         return list(merged.values())
-
-    def still_new(self, settings: LocalSettings, new_skills: list[str]) -> list[str]:
-        """The skills this run found new that still are. A run that didn't hold the sync's lock
-        from its start, such as one that waited on a question, may find another run saved some
-        meanwhile, which named them already."""
-        if self.sync_holds_lock or self.what_if or not new_skills:
-            return new_skills
-        now = load_local_settings()
-        if now is None or not now.found:
-            return new_skills
-        return [
-            name
-            for name in new_skills
-            if get(now.data, saved_skill_path(now.data, name, ADDED_TO_AGENTS), MISSING) is MISSING
-        ]
-
-    def settings_now(self, settings: LocalSettings) -> dict[str, Any]:
-        """This PC's settings for the work to act on: as saved, for a run that didn't hold the
-        sync's lock from its start, since another run may have saved since this one read them, and
-        the save keeps both runs' changes; or as this run has them, for a preview, or when the
-        file can't be read."""
-        if self.sync_holds_lock or self.what_if:
-            return settings.data
-        now = load_local_settings()
-        return now.data if now is not None and now.found else settings.data
 
     def plan_skills(
         self,
