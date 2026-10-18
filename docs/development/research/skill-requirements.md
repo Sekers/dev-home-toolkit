@@ -62,19 +62,19 @@ got there.
    `internal\.python`, was proposed. It works only for skills setup generates, not the end user's
    own, which setup links as written.
 5. **The developer asked to restart from the whole picture.** The inventory showed that
-   dev-home-tools' own needs (Python, Git, `gh`) are never in doubt, because each script finds a
+   dev-home-toolkit's own needs (Python, Git, `gh`) are never in doubt, because each script finds a
    program and runs it in the same process. The trouble is only with a program a skill needs and
    the agent runs.
 6. **Per-OS alternatives**, such as `clip`, `pbcopy`, or `xclip`, are plausible once macOS and
    Linux are supported. The developer pointed out that an older copy that doesn't know a newer
    form should just be updated, so this can wait until a skill needs it.
-7. **A minimum dev-home-tools version for skills** isn't worth asking skill writers for: their own
+7. **A minimum dev-home-toolkit version for skills** isn't worth asking skill writers for: their own
    skills are written against their own copy, and skills from elsewhere won't declare it. Instead,
    an older copy should report a requirement it doesn't know, so the end user knows to update.
 8. **The Agent Skills standard** has a free-text `compatibility` field and a string-only
    `metadata` map, and nothing checkable, which is why `dev-home-skill.json` exists.
-9. **Requirements no dev-home-tools ever learns,** such as a VPN or an environment variable, have
-   no type. As built, an unknown type says "needs a newer dev-home-tools", which is wrong for a
+9. **Requirements no dev-home-toolkit ever learns,** such as a VPN or an environment variable, have
+   no type. As built, an unknown type says "needs a newer dev-home-toolkit", which is wrong for a
    type the skill's writer invented.
 10. **The developer asked why skills are kept off at all,** and proposed adding them anyway and
     warning, since parts of a skill may work without a requirement, and agents work around what
@@ -171,7 +171,7 @@ there, even one whose program is missing, lets the agent explain the gap.
 ## Why keeping a skill off needs a reliable answer
 
 Two lookups happen for the same program: setup's, to decide the links, and the agent's, when it
-runs the skill. They use different copies of `PATH`, so they can disagree. dev-home-tools' own
+runs the skill. They use different copies of `PATH`, so they can disagree. dev-home-toolkit's own
 scripts never have this problem, because each finds a program and runs it in the same process.
 A warning can afford to be wrong now and then: a wrong hint costs a sentence. A decision about
 links can't, because a wrong one flips the skill in and out, or leaves the agent blind to it.
@@ -199,7 +199,7 @@ links can't, because a wrong one flips the skill in and out, or leaves the agent
 | Operating system (`os`) | Yes, silently | It can't work on this PC, and nothing the end user does changes that. `/dev-home skills` still lists it, with why |
 | Agent (`tool` today) | Yes, per skills folder | Its writer says it works only there, and setup knows exactly which agent reads each folder |
 | Program (`program`) | No: add it, and warn | Parts may work, the agent can work around it, and only the agent's own shell knows |
-| Python version (`python`) | No: add it, and warn | The same: setup checks only the Python it runs on, which only dev-home-tools' own skills run (decided 2026-10-17) |
+| Python version (`python`) | No: add it, and warn | The same: setup checks only the Python it runs on, which only dev-home-toolkit's own skills run (decided 2026-10-17) |
 | Anything else | No: described in `compatibility` | Setup can't check it |
 
 ### How the end user hears about a missing need
@@ -218,13 +218,13 @@ links can't, because a wrong one flips the skill in and out, or leaves the agent
   A skill made elsewhere doesn't do this, but as the live test showed, the agent explains a
   "command not found" well on its own.
 
-### Requirements dev-home-tools doesn't know
+### Requirements dev-home-toolkit doesn't know
 
 A type, or a field in an entry, that this copy doesn't know is reported as a `PROBLEM` naming the
-file and the type or field: "If the skill came from a newer dev-home-tools, update this one;
+file and the type or field: "If the skill came from a newer dev-home-toolkit, update this one;
 otherwise, describe the need in the skill's `compatibility` text instead." It doesn't keep the
 skill off: under this design, only the operating system and the agent do. No skill writer has to
-declare a minimum dev-home-tools version.
+declare a minimum dev-home-toolkit version.
 
 ### The end user's answer, and what ships not recommended
 
@@ -288,7 +288,7 @@ naming the words not to use for it. Its advice is to "Be opinionated": one word 
 others listed to avoid. It enforces the words by having agents challenge a word that conflicts
 with the glossary while they work. This repo already enforces two sets of words more firmly: the
 names for the developer and the end user ("Who's who" in AGENTS.md, with a test), and dev-home
-versus dev-home-tools ("The two repos"). Another of the developer's projects has a rule for the
+versus dev-home-toolkit ("The two repos"). Another of the developer's projects has a rule for the
 very same word: its agent guidance says to call products like it by their kind, not "tools",
 because there "tools" means development tools.
 
@@ -312,25 +312,25 @@ because there "tools" means development tools.
 
 - Setup keeps a skill off only for its operating system or the agent it works in; a skill whose
   program is missing, or whose Python version is too old, is added, with a warning.
-- For Python, decided separately: setup checks the Python it runs on, which only dev-home-tools'
+- For Python, decided separately: setup checks the Python it runs on, which only dev-home-toolkit's
   own skills run (and later, skills that opt in to being generated); for any other skill, the
   check is a guess, as for a program, so keeping the skill off could hide one that works. Set
-  aside: keeping the skill off (reliable only for skills that run dev-home-tools' Python, and it
+  aside: keeping the skill off (reliable only for skills that run dev-home-toolkit's Python, and it
   would treat two needs the end user can fix differently); keeping off only the skills that run
-  dev-home-tools' Python (the rule would depend on the opt-in's flag, is harder to explain to
+  dev-home-toolkit's Python (the rule would depend on the opt-in's flag, is harder to explain to
   skill writers, and applies to no skill today). Look again when the opt-in is built, since a
   `python` requirement gets a reliable meaning for the end user's skills then. An update that
   needs a newer Python is still held back, since it would break the sync itself.
 - A skill lists its programs for the skill as a whole, with no map of which feature needs which.
-- Setup generates only dev-home-tools' own skills, plus any skill of the end user's that opts in
+- Setup generates only dev-home-toolkit's own skills, plus any skill of the end user's that opts in
   through a flag in its `dev-home-skill.json`; every other skill is linked as written. No new
   format is asked of skills made elsewhere. When built, as its own part (see the order below),
   settle the flag's name, a small public set of placeholders
   (such as `{{PYTHON}}`, `{{SKILL_DIR}}`, and `{{CONTENT_DIR}}`, keeping those that name
-  dev-home-tools' internals private, since public names freeze at 1.0.0), and where generated
+  dev-home-toolkit's internals private, since public names freeze at 1.0.0), and where generated
   copies go. Consequences found while deciding: a `python` requirement only means something for
-  a skill that runs dev-home-tools' Python, so its meaning follows the opt-in; and an older
-  dev-home-tools that doesn't know the flag links the skill with raw placeholders, which argues
+  a skill that runs dev-home-toolkit's Python, so its meaning follows the opt-in; and an older
+  dev-home-toolkit that doesn't know the flag links the skill with raw placeholders, which argues
   for reporting an unknown field.
 
 - Skills run programs by name, through the `PATH`, with no fixed paths; fixed paths are recorded
@@ -354,7 +354,7 @@ because there "tools" means development tools.
   typo from a newer or made-up word. When a word known in that place is close, the line first
   asks "Did you mean ...?", offering only types the same list takes, and keeps the rest of its
   advice. There's no check for a known type under the other list: that list doesn't know it. No
-  skill declares a minimum dev-home-tools version; releases decide that separately. A skill
+  skill declares a minimum dev-home-toolkit version; releases decide that separately. A skill
   without the file gets no such lines. The reference page explains `compatibility`, with an
   example. How this was reached, from one list called `requires`, with the options and names set
   aside, is in the decisions
@@ -380,7 +380,7 @@ because there "tools" means development tools.
   "CLI", "binary", and "executable". The type stays `program`. Most docs say "command-line tool"
   or "CLI", so this is a deliberate choice, to free "tool".
 
-- "Development tools", written out, means what's used to work on dev-home-tools (pytest, ruff,
+- "Development tools", written out, means what's used to work on dev-home-toolkit (pytest, ruff,
   mypy, uv). "Tool" and "tools" are never used for programs or agents, and stay only inside names:
   dev-home-tools, an agent's own named tools such as Claude Code's Bash tool, and fields such as
   `allowed-tools`. AGENTS.md's "Tools" section gets a heading that says it covers installing
@@ -392,8 +392,8 @@ because there "tools" means development tools.
   job only, such as "dev-home-setup". The rename is its own piece of work (see the order below):
   the GitHub repo (its redirect keeps old clone and update addresses working), the folder on each
   PC with a setup run after, the handoff's path in dev-home, and every file that names it.
-  Renaming the GitHub repo needs the developer's go-ahead at the time. GitHub and PyPI names
-  weren't checked for collisions.
+  Renaming the GitHub repo needs the developer's go-ahead at the time. Checked on 2026-10-17,
+  when building it: no GitHub repo and no PyPI project had the name.
 - The order, once 6b is committed: the rename, then the glossary with its sweep, both before 6c;
   then 6c to 6e, steps 7 to 9, `/handoff update audit`, and shared skill text; then the opt-in;
   then the release work and 1.0.0. Why: the text 6c to step 9 add, such as the always-on lines,
@@ -406,8 +406,9 @@ because there "tools" means development tools.
   change and need approving again, and every new page adds to the sweep); both before 6b's commit
   (6b, uncommitted and live on the developer's PC, would wait longer).
 
-**Still waiting:** the decisions about generating the end user's own skills, the words, and the
-rename get their decision files when each is built. 6b, reworked to these decisions, is committed
+**Still waiting:** the decisions about generating the end user's own skills and the words get
+their decision files when each is built; the rename's is
+[The product is named dev-home-toolkit](../decisions/the-product-is-named-dev-home-toolkit.md). 6b, reworked to these decisions, is committed
 (`408ae14`), with the decision
 [Setup keeps a skill off only for its operating system or agent](../decisions/setup-keeps-a-skill-off-only-for-its-operating-system-or-agent.md)
 and changes to the decisions it touches.
@@ -423,7 +424,7 @@ and changes to the decisions it touches.
    check in `/dev-home skills`, and each skill's own check when it runs. Recommended over a plain
    "uses …" with no checking.
 3. Report an unknown type or field as a `PROBLEM` pointing to `compatibility`, and ask skill
-   writers for no minimum dev-home-tools version. Recommended.
+   writers for no minimum dev-home-toolkit version. Recommended.
 4. The glossary page, its test, and the words, including renaming the type `tool` to `agent`.
    Recommended.
 5. Python: warn, like a program (recommended), or keep the skill off, since setup can check it.
@@ -431,7 +432,7 @@ and changes to the decisions it touches.
 6. Then the commit of 6b, reworked to match.
 
 Later, and separate: whether setup should generate the end user's own skills as it does
-dev-home-tools', which would give them `{{PYTHON}}`, pre-approved commands that work on every
+dev-home-toolkit's, which would give them `{{PYTHON}}`, pre-approved commands that work on every
 PC, and fixed paths to programs.
 
 ## Limits, and when to look again

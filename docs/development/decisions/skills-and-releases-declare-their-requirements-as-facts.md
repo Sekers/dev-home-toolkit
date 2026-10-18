@@ -5,7 +5,7 @@
 list what it needs to run, as facts, and one checker in `internal/shared/` decides what that
 means. Built for skills, with the types `os`, `agent`, `program`, and `python`: the reader in
 `settings.py`, the checker in `requirements.py`, and what setup does with the result, in
-`setup.py`. The release side, with the `devHomeTools` type, isn't built. Which requirements keep
+`setup.py`. The release side, with the `devHomeToolkit` type, isn't built. Which requirements keep
 a skill off, and which only warn, is a decision of its own:
 [Setup keeps a skill off only for its operating system or agent](setup-keeps-a-skill-off-only-for-its-operating-system-or-agent.md).
 
@@ -24,7 +24,7 @@ a skill off, and which only warn, is a decision of its own:
   ```
 
   `os` and `agent` take any one of their values, each entry applies, and `python` is a minimum. A
-  release adds a `devHomeTools` minimum, which list it goes in to be settled with the release
+  release adds a `devHomeToolkit` minimum, which list it goes in to be settled with the release
   design. A skill without the file needs nothing. The names, settled when the first four types
   were built:
   - `os` takes `windows`, `macos`, and `linux`, and `agent` takes `claude-code` and `codex`.
@@ -45,7 +45,7 @@ a skill off, and which only warn, is a decision of its own:
   for each type: whether a skill that doesn't meet it is kept off (`os` and `agent`) or only
   warned about (the rest); whether it applies per skills folder (`agent`) or to the whole PC (the
   rest); whether an end user can act on it (not on the operating system; on a program, an agent,
-  a newer Python, or a newer dev-home-tools, yes); and the message that says what's missing.
+  a newer Python, or a newer dev-home-toolkit, yes); and the message that says what's missing.
 - A skill goes into a skills folder only when it meets its `supportedOn`: its `os` requirement,
   and its `agent` requirement for every agent setup sets up that reads the folder. An `os`
   requirement, which
@@ -56,7 +56,7 @@ a skill off, and which only warn, is a decision of its own:
   saying why, and adds them back once it's met again.
 - Setup gathers this PC's facts once a run, without starting a process: the operating system,
   the agents it sets up and the folders they read, each named program on the `PATH`, and the
-  Python and dev-home-tools versions. Anything that needs a process, such as whether `gh` is
+  Python and dev-home-toolkit versions. Anything that needs a process, such as whether `gh` is
   signed in, is the skill's to check when it runs.
   - A program counts when it's in a folder that `PATH` names by its full path, in setup's own
     `PATH` or, on Windows, the saved one, with any of the extensions in `PATHEXT` on Windows,
@@ -77,25 +77,25 @@ a skill off, and which only warn, is a decision of its own:
   with a line saying what's missing.
 - A skill copied from elsewhere keeps its own files. If its `SKILL.md` has the Agent Skills
   standard's `compatibility` text, `/dev-home skills` shows it.
-- A test checks each of dev-home-tools' own skill files, setup reports a mistake in an end
+- A test checks each of dev-home-toolkit's own skill files, setup reports a mistake in an end
   user's own as a `PROBLEM`, and a page in `docs/reference/` describes the file.
 
 **How it grows:**
 
-- A new type goes in the list of its kind. A copy of dev-home-tools that doesn't know it reports
+- A new type goes in the list of its kind. A copy of dev-home-toolkit that doesn't know it reports
   it in a `PROBLEM` line for a skill, which tells the end user to update, and handles it as its
   list says: under `supportedOn` it keeps the skill off, and under `dependsOn` it's ignored. The
   update check never holds a release back only because it can't read a requirement, so a new
   type ships in one release before any release requires it
   ([A broken step can't stop the update that would fix it](a-broken-step-cant-stop-the-update-that-would-fix-it.md)).
 - A type that later gains a use in the other list, such as `python` becoming a limit for skills
-  that run dev-home-tools' Python, is one older copies don't know there: they keep the skill off
+  that run dev-home-toolkit's Python, is one older copies don't know there: they keep the skill off
   or ignore the entry, as that list says. Plan for those copies when making such a change.
 - A field a copy doesn't know is reported the same way. In an entry of `supportedOn` it keeps the
   skill off, since it may narrow the limit, such as a minimum agent version; anywhere else it's
   ignored, so a new field there must be safe to ignore. A need of one command only, such as
   `/handoff issue` needing `gh`, would need a list of its own.
-- A skill declares no minimum dev-home-tools version: an older copy reports what it doesn't
+- A skill declares no minimum dev-home-toolkit version: an older copy reports what it doesn't
   know. So the file needs no format version.
 
 **Why:**
@@ -118,13 +118,13 @@ a skill off, and which only warn, is a decision of its own:
   install a program, so knowing what's missing helps.
 
 Established practice: typed entries, and shipping a new type before requiring it. The rule per
-type, the check per skills folder, and the recorded result are dev-home-tools' own design.
+type, the check per skills folder, and the recorded result are dev-home-toolkit's own design.
 
 **Changed on 2026-10-17,** before any release, with the reasons in
 [Setup keeps a skill off only for its operating system or agent](setup-keeps-a-skill-off-only-for-its-operating-system-or-agent.md):
 a missing program or an older Python only warns, where it kept the skill off; a type or a field
 the reader doesn't know is a `PROBLEM` line, where an unknown type counted as not met and an
-unknown field went unsaid; and no skill declares a `devHomeTools` minimum, which was to be the
+unknown field went unsaid; and no skill declares a `devHomeToolkit` minimum, which was to be the
 format's gate. The type `tool` became `agent`, since "tool" means several things in this repo.
 Types and names in `anyOf` match in any case, where `Windows` was reported as unknown: the case
 carries no meaning, and the people writing these files write names the way they know them.

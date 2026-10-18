@@ -1,7 +1,7 @@
-"""Shows the dev-home-tools commits waiting on GitHub, and pulls them after a yes. Run it with
+"""Shows the dev-home-toolkit commits waiting on GitHub, and pulls them after a yes. Run it with
 Python 3.12 or later, such as:
 
-    py C:/Users/you/dev-home-tools/update.py
+    py C:/Users/you/dev-home-toolkit/update.py
 
 --help says what it does. The code is in internal/shared/update.py, and this file only loads it;
 internal/shared/__init__.py says why.
@@ -16,7 +16,7 @@ from types import ModuleType
 
 # An older Python can still read this far, so it gets a message instead of a syntax error.
 if sys.version_info < (3, 12):  # noqa: UP036
-    sys.exit("dev-home-tools needs Python 3.12 or later, and this is " + sys.version.split()[0])
+    sys.exit("dev-home-toolkit needs Python 3.12 or later, and this is " + sys.version.split()[0])
 
 
 def load(name: str) -> ModuleType:
@@ -24,7 +24,7 @@ def load(name: str) -> ModuleType:
     import path."""
     folder = Path(__file__).parent / "internal" / "shared"
     spec = importlib.util.spec_from_file_location(
-        "dev_home_tools_shared", folder / "__init__.py", submodule_search_locations=[str(folder)]
+        "dev_home_toolkit_shared", folder / "__init__.py", submodule_search_locations=[str(folder)]
     )
     if spec is None or spec.loader is None:
         raise ImportError(str(folder) + " could not be loaded")
@@ -37,12 +37,12 @@ def load(name: str) -> ModuleType:
 def stopped(error: Exception) -> str:
     """A PROBLEM line for code that couldn't load or run, with the way to install a fix by hand,
     since an update that can't run can't install one either."""
-    tools = Path(__file__).parent.as_posix()
+    toolkit = Path(__file__).parent.as_posix()
     launcher = "py" if sys.platform == "win32" else "python3"
     return (
         f"PROBLEM   {Path(__file__).name} stopped: {type(error).__name__}: {error}. If an update"
-        f" has a fix, install it by hand: git -C {tools} pull --ff-only, then"
-        f" {launcher} {tools}/setup.py"
+        f" has a fix, install it by hand: git -C {toolkit} pull --ff-only, then"
+        f" {launcher} {toolkit}/setup.py"
     )
 
 

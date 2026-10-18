@@ -4,7 +4,7 @@
 included, removes what setup set up there, and lists each removal as it goes:
 
 - In a Claude Code folder: the links setup made in its `skills\` and `rules\`, and dev-home and
-  dev-home-tools in `permissions.additionalDirectories` in its `settings.json`.
+  dev-home-toolkit in `permissions.additionalDirectories` in its `settings.json`.
 - For Codex, in every Codex home: the `AGENTS.md` setup wrote, which starts with setup's note,
   and dev-home in `writable_roots` in its `config.toml`. And the links setup made in
   `~/.agents/skills`, the one skills folder every home reads.
@@ -13,7 +13,7 @@ included, removes what setup set up there, and lists each removal as it goes:
 REMOVED   Link in a folder you said no to: C:\Users\you\.claude-second\skills\handoff
 REMOVED   Rules file in a Codex home you said no to: C:\Users\you\.codex\AGENTS.md
 REMOVED   Link for Codex, which you said no to: C:\Users\you\.agents\skills\handoff
-SET       Claude Code settings in .claude-second: removed dev-home and dev-home-tools from permissions.additionalDirectories in C:\Users\you\.claude-second\settings.json. Backup of the old file: C:\Users\you\.claude-second\settings.json.bak-YYYYMMDD-HHMMSS
+SET       Claude Code settings in .claude-second: removed dev-home and dev-home-toolkit from permissions.additionalDirectories in C:\Users\you\.claude-second\settings.json. Backup of the old file: C:\Users\you\.claude-second\settings.json.bak-YYYYMMDD-HHMMSS
 SET       Codex config in .codex: removed dev-home from writable_roots in C:\Users\you\.codex\config.toml. Backup of the old file: C:\Users\you\.codex\config.toml.bak-YYYYMMDD-HHMMSS
 ```
 
@@ -57,7 +57,7 @@ SET       Codex config in .codex: removed dev-home from writable_roots in C:\Use
   Removing only what's inside the homes would leave Codex listing dev-home's skills after a no
   (decided with the developer, 2026-10-16).
 - The settings files' entries are what give an account access to dev-home: without them, Claude
-  Code asks before using dev-home and dev-home-tools from another project, and Codex's sandbox
+  Code asks before using dev-home and dev-home-toolkit from another project, and Codex's sandbox
   blocks writes to dev-home. The usual reason for a no is keeping an account apart, such as a
   work one, so the access goes with the skills and rules (decided with the developer,
   2026-10-16).
@@ -82,7 +82,7 @@ SET       Codex config in .codex: removed dev-home from writable_roots in C:\Use
 - Cursor also reads `~/.claude/skills` and `~/.codex/skills`, for compatibility.
 
 So on a PC with those tools, a no to Codex takes dev-home's skills from Copilot, Gemini CLI, and
-Cursor too, and a no to `~/.claude` takes them from Cursor. dev-home-tools doesn't set those tools
+Cursor too, and a no to `~/.claude` takes them from Cursor. dev-home-toolkit doesn't set those tools
 up, so they had the skills only because those folders were set up for Claude Code or Codex.
 
 **Adding an AI agent tool:** a folder that several tools read can't hold a different answer for

@@ -1,6 +1,6 @@
 # New items reach the person at a terminal, or in a NEW line
 
-**Decision:** an update or a sync can bring new items: a dev-home-tools skill or recommended
+**Decision:** an update or a sync can bring new items: a dev-home-toolkit skill or recommended
 setting, or a personal skill made on another PC.
 
 - When `update.py` runs at a console, the setup it runs afterward does too, and asks about the new

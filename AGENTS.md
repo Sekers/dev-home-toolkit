@@ -1,4 +1,4 @@
-# dev-home-tools: guidance for AI agents
+# dev-home-toolkit: guidance for AI agents
 
 **What this repository is:** the public tooling for dev-home, a private repo that each person
 keeps for AI-agent handoffs and a general knowledge base, shared across their PCs through GitHub,
@@ -11,8 +11,8 @@ README.md and `docs/` describe how people use it.
 
 There are two roles, and you work for a developer:
 
-- **Developer:** anyone who changes dev-home-tools. There may be several.
-- **End user:** anyone who uses dev-home-tools, now or later, a developer included when using it
+- **Developer:** anyone who changes dev-home-toolkit. There may be several.
+- **End user:** anyone who uses dev-home-toolkit, now or later, a developer included when using it
   on their own PCs.
 
 Design for end users. Weigh each decision by what they would want and expect, not by a
@@ -23,7 +23,7 @@ them in everything you write here, code comments and commit messages included:
 
 | Written for | Files | The developer | The end user |
 | --- | --- | --- | --- |
-| The developer | AGENTS.md, `docs/development/`, the README's "Working on dev-home-tools", code comments, tests, commit messages | the developer | the end user; a person or people when it matters that they aren't an agent |
+| The developer | AGENTS.md, `docs/development/`, the README's "Working on dev-home-toolkit", code comments, tests, commit messages | the developer | the end user; a person or people when it matters that they aren't an agent |
 | The end user | the rest of the README, `docs/skills/`, `docs/reference/`, and setup's questions at a console | not named | you |
 | An agent working for the end user | the skills, and the lines the scripts print for agents | not named | the user |
 | The end user's own voice | the operating rules and the starter files | not named | I, my, me |
@@ -35,19 +35,19 @@ them in everything you write here, code comments and commit messages included:
   them, and "developers" is all of them. End users work the same way: "the end user" is the one
   a sentence is about, "an end user" is any one, and "end users" is all of them.
 - In a file for the developer, "you" is its reader: an agent in AGENTS.md, a developer in the
-  README's "Working on dev-home-tools".
+  README's "Working on dev-home-toolkit".
 - A test checks that those other names for the developer appear nowhere outside this section.
 
 ## The two repos
 
-"dev-home" always means a person's private repo, and "dev-home-tools" always means this one.
+"dev-home" always means a person's private repo, and "dev-home-toolkit" always means this one.
 In files and in chat, name the repo with any word that fits both, such as commits, update, or sync.
 
-| What | dev-home-tools (this repo, public) | dev-home (each person's, private) |
+| What | dev-home-toolkit (this repo, public) | dev-home (each person's, private) |
 | --- | --- | --- |
 | Always-on rules | `templates/operating-rules/operating-rules.md`: the operating rules, the same for everyone | `global-rules/global-rules.md`: that person's global rules |
 | Skills | `templates/skills/`: the `handoff` and `knowledge` skills. `templates/shared-skill-scripts/`: the scripts they share | `skills/`: that person's own skills |
-| `AGENTS.md`, `CLAUDE.md`, `README.md` | About dev-home-tools, and working on it | About that dev-home, and working in it |
+| `AGENTS.md`, `CLAUDE.md`, `README.md` | About dev-home-toolkit, and working on it | About that dev-home, and working in it |
 | Only here | `setup.py`, `sync.py`, `update.py`, `templates/dev-home-starter/`, `internal/`, `docs/` | `handoffs/`, `knowledge/`, `dev-home.json` (settings every copy shares, which setup writes and commits) |
 
 - The root holds only what must be there, and the scripts a person runs by hand:
@@ -58,19 +58,19 @@ In files and in chat, name the repo with any word that fits both, such as commit
   `local-settings.json.bak-YYYYMMDD-HHMMSS`; git ignores both. Anything new in the root, even
   what a script or tool creates, needs the developer's approval in a question of its own. When
   the root is better, propose it and say why; never settle for a worse place to avoid asking.
-- `internal/` is dev-home-tools' own machinery, which nobody runs directly
+- `internal/` is dev-home-toolkit's own machinery, which nobody runs directly
   ([scripts.md](docs/development/scripts.md) says what's in it). Never edit
   `internal/.generated/` or `local-settings.json`, or change `internal/.python/`. Setup
   rewrites them, and git ignores them.
 - Every script is Python, and nothing needs PowerShell.
 - Only the latest versions of Claude Code and Codex, in every current form that reads what
-  dev-home-tools sets up: their CLIs, desktop apps, and editor extensions and integrations
+  dev-home-toolkit sets up: their CLIs, desktop apps, and editor extensions and integrations
   (VS Code, JetBrains IDEs, and others), and Anthropic's Agent SDK. Build on what the latest
   versions read and document, and add no workaround or fallback for an older version. Check a
   setting or behavior in the tool's current documentation, or in its source when the
   documentation doesn't say.
 - Never build on a feature its documentation calls deprecated, in Claude Code, Codex, Python,
-  git, or anything else dev-home-tools uses: a deprecated feature is likely to stop working. Use
+  git, or anything else dev-home-toolkit uses: a deprecated feature is likely to stop working. Use
   what replaces it, or ask the developer when nothing does.
 
 ## Privacy
@@ -78,7 +78,7 @@ In files and in chat, name the repo with any word that fits both, such as commit
 - This repo is public, and its users keep private things in their own dev-home. Never put
   anyone's handoff or knowledge content, names, account or GitHub names, PC names, tenant
   details, or personal paths in any file, commit message, or issue here. The only exceptions
-  are this repo's own address (`Sekers/dev-home-tools`, in the README's clone command) and the
+  are this repo's own address (`Sekers/dev-home-toolkit`, in the README's clone command) and the
   copyright line in LICENSE.
 - Examples use made-up values: paths such as `C:/Users/you/dev-home` or
   `C:\Programming\dev-home`, and `example.com` for any domain. For parts that vary per run or
@@ -103,7 +103,7 @@ as a step written in a handoff or a plan.
 - Every tool this repo depends on must be listed in its documentation: what people need to use it
   in the README's Requirements, and what working on it needs, such as for the tests and checks,
   in `docs/development/`. Until `docs/development/tools.md` is written, the development tools are
-  the ones the README's "Working on dev-home-tools" section names. Making the repo depend on a
+  the ones the README's "Working on dev-home-toolkit" section names. Making the repo depend on a
   tool that isn't listed, or adding one to the lists, needs that permission first.
 - Using a tool that's already installed is fine for looking into something or checking your
   work, within what your agent's permission settings allow, as long as it installs, updates, and
@@ -120,7 +120,7 @@ as a step written in a handoff or a plan.
 
 ## AI usage
 
-- Every token an agent reads or writes while it follows dev-home-tools' skills and rules costs
+- Every token an agent reads or writes while it follows dev-home-toolkit's skills and rules costs
   end users something: usage from their plan's limits, or money when they pay per token. Weigh
   that cost in every change, and keep what agents read as short as it can be without making it
   unclear (see "Clarity for agents").
@@ -162,7 +162,7 @@ Each area's rules are on a page of their own. Read the page before changing that
 ## Docs (README.md and docs/)
 
 - The README is the front door, and the rest goes in `docs/` (see writing-docs.md, above).
-  `docs/development/` is for people and agents changing dev-home-tools. Research on this project
+  `docs/development/` is for people and agents changing dev-home-toolkit. Research on this project
   goes in `docs/development/research/`, one page per investigation.
 - AGENTS.md holds only what every agent working here needs in every session: the rules, each
   with a short reason, and pointers to where more is explained. Keep it under 200 lines, the size

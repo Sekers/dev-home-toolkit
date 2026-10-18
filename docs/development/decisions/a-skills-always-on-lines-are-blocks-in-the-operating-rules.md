@@ -26,7 +26,7 @@ so there's one version per tool.
   and its "use me" lines, since every protection is in the general part.
 - A skill gets always-on lines only when agents must act without being asked, such as making an
   offer or keeping something out of auto memory. Everything else goes in its description or its
-  steps. Only dev-home-tools' own skills have blocks: an end user's own rules go in their global
+  steps. Only dev-home-toolkit's own skills have blocks: an end user's own rules go in their global
   rules. `docs/development/skills.md` says so.
 - Tests check that each tool's rules hold the block of each skill added for it and no other,
   that every marker names a skill that exists, and that the heading "Private repo: dev-home
@@ -52,7 +52,7 @@ Measured on 2026-10-16: the rules are 317 words, about 150 general, 50 for `hand
   agent to do that skill's job without its rules.
 - Answering skills per account instead of per PC: the questions multiply, Codex can't do it,
   since every Codex home reads `~/.agents/skills`, and it reverses the split in which
-  dev-home-tools decides what a PC has and the tools decide what each account shows.
+  dev-home-toolkit decides what a PC has and the tools decide what each account shows.
 - Setup reading the tools' switches and leaving a hidden skill's lines out: Claude Code's
   `/skills` menu writes its switch to the project's `.claude/settings.local.json` (its settings
   reference, read 2026-10-07), which setup can't see, so the most common way of hiding a skill

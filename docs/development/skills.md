@@ -20,7 +20,7 @@ rules apply too.
 
 - Every file under `templates/` is a template: setup replaces these placeholders with
   forward-slash absolute paths.
-  - `{{TOOLS_DIR}}`: this repo's folder on that PC.
+  - `{{TOOLKIT_DIR}}`: this repo's folder on that PC.
   - `{{CONTENT_DIR}}`: that person's dev-home folder.
   - `{{SKILL_DIR}}`: the skill's own folder under `internal/.generated/skills/` (skills only).
   - `{{SHARED_SKILL_SCRIPTS_DIR}}`: the shared scripts' folder,
@@ -65,7 +65,7 @@ rules apply too.
   removed one's name: a PC that gets both changes in one update would give the new skill the old
   one's answers.
 - Refer to a skill's own files through `{{SKILL_DIR}}`, to a shared script through
-  `{{SHARED_SKILL_SCRIPTS_DIR}}`, and to anything else through `{{TOOLS_DIR}}` or
+  `{{SHARED_SKILL_SCRIPTS_DIR}}`, and to anything else through `{{TOOLKIT_DIR}}` or
   `{{CONTENT_DIR}}`.
 - Run a shared script as `{{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/<script>.py`, followed by
   `--skill <the skill's name> --stamp {{SKILL_STAMP}}` and its own arguments. Setup stamps each
@@ -82,7 +82,7 @@ rules apply too.
   `allowed-tools`. Whether they ask first is each person's choice, in their own settings.
 - Give each command both a `Bash(...)` and a `PowerShell(...)` pre-approval, as the Python
   commands and `gh issue list` have (a test checks the Python ones). Add no command that starts
-  PowerShell (`pwsh`): dev-home-tools doesn't need it, and Claude Code's PowerShell tool asks
+  PowerShell (`pwsh`): dev-home-toolkit doesn't need it, and Claude Code's PowerShell tool asks
   before running any command that starts another PowerShell, even one a `PowerShell(...)` rule
   matches exactly (a test checks the generated skills).
 - Each skill stands on its own. Mention another skill only where that's part of how this one

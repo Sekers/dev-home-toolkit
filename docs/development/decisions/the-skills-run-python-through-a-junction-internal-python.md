@@ -1,7 +1,7 @@
 # The skills run Python through a junction, internal/.python
 
 **Decision:** every skill command starts with `{{PYTHON}} -I`, and setup fills in `{{PYTHON}}`
-as `internal/.python/python.exe` in dev-home-tools' folder. `internal/.python/` is a directory
+as `internal/.python/python.exe` in dev-home-toolkit's folder. `internal/.python/` is a directory
 junction setup makes to the Python install manager's shortcut folder,
 `%LocalAppData%\Python\bin`, or else to the folder of the newest Python 3.12 or later in the
 registry (PEP 514), which covers the traditional installer. Each run checks only that the
@@ -9,7 +9,7 @@ junction's `python.exe` is there, which starts no process. Setup starts Python t
 version only when it makes the junction, or re-points it because that `python.exe` is gone. A
 symbolic link will do the same job on macOS and Linux.
 
-**Why a junction:** dev-home-tools' path has no spaces, so the command is the same unquoted text
+**Why a junction:** dev-home-toolkit's path has no spaces, so the command is the same unquoted text
 in Claude Code's Bash and PowerShell tools and in Codex, and each is pre-approved as both
 `Bash(...)` and `PowerShell(...)`. Python's own path is usually under the end user's profile, which
 can have a space, and a quoted path needs a different text in each tool (a probe skill showed

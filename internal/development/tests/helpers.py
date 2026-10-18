@@ -58,13 +58,13 @@ SETTINGS_FILES = "local-settings.json"
 
 @dataclass(frozen=True)
 class Sandbox:
-    """A sandbox's folders. tools is the copy of this repo, and content its dev-home."""
+    """A sandbox's folders. toolkit is the copy of this repo, and content its dev-home."""
 
     root: Path
 
     @property
-    def tools(self) -> Path:
-        return self.root / "tools"
+    def toolkit(self) -> Path:
+        return self.root / "toolkit"
 
     @property
     def profile(self) -> Path:
@@ -79,22 +79,22 @@ class Sandbox:
         return self.root / "dev-home-remote.git"
 
     @property
-    def tools_remote(self) -> Path:
-        return self.root / "tools-remote.git"
+    def toolkit_remote(self) -> Path:
+        return self.root / "toolkit-remote.git"
 
     @property
     def upstream(self) -> Path:
-        """A second clone of tools_remote, standing in for the developer pushing updates."""
-        return self.root / "tools-upstream"
+        """A second clone of toolkit_remote, standing in for the developer pushing updates."""
+        return self.root / "toolkit-upstream"
 
     @property
     def generated(self) -> Path:
-        return self.tools / "internal" / ".generated"
+        return self.toolkit / "internal" / ".generated"
 
     @property
     def python(self) -> Path:
         """The Python link's python.exe, which every skill command starts with."""
-        return self.tools / "internal" / ".python" / "python.exe"
+        return self.toolkit / "internal" / ".python" / "python.exe"
 
     @property
     def python_bin(self) -> Path:
@@ -155,7 +155,7 @@ def shared_module(box: "Sandbox", name: str) -> ModuleType:
     """A module of the sandbox copy's internal/shared/, loaded into this process, under a
     package name of the sandbox's own, for a test that has to change something inside it, such
     as a fake for the person at the console."""
-    folder = box.tools / "internal" / "shared"
+    folder = box.toolkit / "internal" / "shared"
     package = "shared_" + box.root.name.replace("-", "_")
     if package not in sys.modules:
         spec = importlib.util.spec_from_file_location(
@@ -221,10 +221,10 @@ def write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8", newline="\n")
 
 
-def new_sandbox(name: str, *, tools_repo: bool = False) -> Sandbox:
+def new_sandbox(name: str, *, toolkit_repo: bool = False) -> Sandbox:
     """Builds a sandbox. The copy's local-settings.json, with testHomeDir, is written before
-    anything in the copy can run. With tools_repo, the copy is also a git repo with a remote,
-    as a clone of dev-home-tools is, and upstream is a second clone of that remote. The
+    anything in the copy can run. With toolkit_repo, the copy is also a git repo with a remote,
+    as a clone of dev-home-toolkit is, and upstream is a second clone of that remote. The
     profile's Python install manager folder is a junction to this environment's base Python,
     which setup links the copy's internal/.python to."""
     box = Sandbox(SANDBOX_ROOT / f"py-{name}-{uuid.uuid4().hex[:8]}")
@@ -240,7 +240,7 @@ def new_sandbox(name: str, *, tools_repo: bool = False) -> Sandbox:
             or (here == Path() and n.startswith(SETTINGS_FILES))
         }
 
-    shutil.copytree(REPO_ROOT, box.tools, ignore=leave_out)
+    shutil.copytree(REPO_ROOT, box.toolkit, ignore=leave_out)
     settings = {
         "schemaVersion": 1,
         "devHome": {"folder": box.content.as_posix()},
@@ -249,11 +249,11 @@ def new_sandbox(name: str, *, tools_repo: bool = False) -> Sandbox:
         "codex": {"homes": {"~/.codex": {"setUp": True}}},
         "testHomeDir": box.profile.as_posix(),
     }
-    write_text(box.tools / "local-settings.json", json.dumps(settings, indent=2) + "\n")
+    write_text(box.toolkit / "local-settings.json", json.dumps(settings, indent=2) + "\n")
 
     # A scratch profile whose settings already have what setup checks for, so a clean run
     # exits 0.
-    claude = {"permissions": {"additionalDirectories": [str(box.content), str(box.tools)]}}
+    claude = {"permissions": {"additionalDirectories": [str(box.content), str(box.toolkit)]}}
     write_text(box.profile / ".claude" / "settings.json", json.dumps(claude, indent=2) + "\n")
     write_text(
         box.profile / ".codex" / "config.toml",
@@ -279,23 +279,23 @@ def new_sandbox(name: str, *, tools_repo: bool = False) -> Sandbox:
     git("-C", str(box.content), "commit", "--quiet", "-m", "test: content")
     git("-C", str(box.content), "push", "--quiet", "-u", "origin", "main")
 
-    if tools_repo:
-        git("-C", str(box.tools), "init", "--quiet", "-b", "main")
-        git("-C", str(box.tools), "add", "-A")
-        git("-C", str(box.tools), "commit", "--quiet", "-m", "test: tools")
-        git("init", "--quiet", "--bare", "-b", "main", str(box.tools_remote))
-        git("-C", str(box.tools), "remote", "add", "origin", str(box.tools_remote))
-        git("-C", str(box.tools), "push", "--quiet", "-u", "origin", "main")
-        git("clone", "--quiet", str(box.tools_remote), str(box.upstream))
+    if toolkit_repo:
+        git("-C", str(box.toolkit), "init", "--quiet", "-b", "main")
+        git("-C", str(box.toolkit), "add", "-A")
+        git("-C", str(box.toolkit), "commit", "--quiet", "-m", "test: toolkit")
+        git("init", "--quiet", "--bare", "-b", "main", str(box.toolkit_remote))
+        git("-C", str(box.toolkit), "remote", "add", "origin", str(box.toolkit_remote))
+        git("-C", str(box.toolkit), "push", "--quiet", "-u", "origin", "main")
+        git("clone", "--quiet", str(box.toolkit_remote), str(box.upstream))
     return box
 
 
 def sandbox_for(
-    request: pytest.FixtureRequest, name: str, *, tools_repo: bool = False
+    request: pytest.FixtureRequest, name: str, *, toolkit_repo: bool = False
 ) -> Iterator[Sandbox]:
     """A sandbox for a module's tests, after one setup run, which must exit 0. It's deleted
     afterwards when they all pass, and kept for a look when one fails."""
-    box = new_sandbox(name, tools_repo=tools_repo)
+    box = new_sandbox(name, toolkit_repo=toolkit_repo)
     failed = request.session.testsfailed
     setup = run_python(box, "setup.py", "--quiet")
     assert setup.code == 0, str(setup)
@@ -379,7 +379,7 @@ def run_python(
 ) -> Run:
     """Runs one of the sandbox copy's Python scripts in its root, such as sync.py, as the skills
     do, with this environment's Python (see the description above)."""
-    argv = [sys.executable, "-I", str(box.tools / script), *args]
+    argv = [sys.executable, "-I", str(box.toolkit / script), *args]
     return run(box, argv, cwd=cwd or box.root, env=env, answer=answer)
 
 
@@ -390,7 +390,7 @@ def profile_kept(box: Sandbox) -> Iterator[None]:
     settings files back as they were, removes the backups the test left beside them, and runs
     setup, which sets the profile up again for the tests after it."""
     files = [
-        box.tools / "local-settings.json",
+        box.toolkit / "local-settings.json",
         box.profile / ".claude" / "settings.json",
         box.profile / ".codex" / "config.toml",
     ]
@@ -411,7 +411,7 @@ def profile_kept(box: Sandbox) -> Iterator[None]:
 def start_python(box: Sandbox, script: str, *args: str) -> subprocess.Popen[bytes]:
     """Starts one of the sandbox copy's Python scripts in its root without waiting for it, as
     run_python runs it, with its output and errors together."""
-    argv = [sys.executable, "-I", str(box.tools / script), *args]
+    argv = [sys.executable, "-I", str(box.toolkit / script), *args]
     check_in_sandbox(argv)
     return subprocess.Popen(
         argv,
@@ -434,7 +434,7 @@ def run_while_asking(
 ) -> Run:
     """Runs one of the sandbox copy's Python scripts, waits for the output line that matches
     prompt, which comes just before its question, calls meanwhile, then answers."""
-    argv = [sys.executable, "-I", str(box.tools / script)]
+    argv = [sys.executable, "-I", str(box.toolkit / script)]
     check_in_sandbox(argv)
     process = subprocess.Popen(
         argv,

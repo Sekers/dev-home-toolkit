@@ -1,11 +1,11 @@
-# For people changing dev-home-tools only. Users never install anything from here: the scripts
+# For people changing dev-home-toolkit only. Users never install anything from here: the scripts
 # use only Python's standard library. Paths here are relative to this folder, and the tools run
 # from it: AGENTS.md's "Testing" section has the commands.
 
 [project]
-name = "dev-home-tools"
+name = "dev-home-toolkit"
 version = "0"
-description = "Development settings for dev-home-tools. Not a package."
+description = "Development settings for dev-home-toolkit. Not a package."
 requires-python = ">=3.12"
 dependencies = []
 

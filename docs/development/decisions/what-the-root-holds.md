@@ -38,7 +38,7 @@ links into it, as it does any link whose target is gone.
 **Why `internal/development/`, with the tests in it:** ruff finds its settings by looking in a
 file's folder and the ones above it, so tests under the settings get them with no flag, in the
 editor too. "development" matches `docs/development/`; `dev/` or `dev-tools/` would read like
-"dev-home" or "dev-home-tools".
+"dev-home" or "dev-home-tools", the product's name then.
 
 **What it costs:** longer development commands (`uv run --directory internal/development ...`).
 Ruff has to be given its settings for the skill scripts, which aren't under them, and an editor's
@@ -50,7 +50,7 @@ decision.
 
 - `pyproject.toml` and `uv.lock` in the root, where Python projects usually keep them: the tools
   would find them without flags, but they and what the tools write would add seven entries to
-  the root, and dev-home-tools isn't a package.
+  the root, and dev-home-toolkit isn't a package.
 - The whole of sync's and update's code in the root, with `prepare.py` loading it without
   writing a cache: it would be compiled again on every skill command, and the code they share
   would still need a folder elsewhere.
@@ -62,5 +62,5 @@ decision.
   `__pycache__` reason applies.
 - The tests staying in `internal/tests/`: ruff wouldn't find its settings for them.
 
-**Look again if:** dev-home-tools becomes a Python package, an editor's settings become worth a
+**Look again if:** dev-home-toolkit becomes a Python package, an editor's settings become worth a
 root folder, or a `--configure` switch means nobody edits `local-settings.json` by hand.

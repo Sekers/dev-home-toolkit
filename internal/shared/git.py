@@ -17,7 +17,9 @@ RETRY_SECONDS = 2.0
 LOCKED = re.compile(
     r"Unable to create '[^']*\.lock'|cannot lock ref|index\.lock|could not lock config file"
 )
-GIT_MISSING = "Git was not found in PATH. Install it (see dev-home-tools' README), then try again."
+GIT_MISSING = (
+    "Git was not found in PATH. Install it (see dev-home-toolkit's README), then try again."
+)
 
 
 @dataclass(frozen=True)

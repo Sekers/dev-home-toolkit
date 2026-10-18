@@ -1,4 +1,4 @@
-"""Syncs your dev-home with GitHub, commits only the files it's given, and checks dev-home-tools
+"""Syncs your dev-home with GitHub, commits only the files it's given, and checks dev-home-toolkit
 for updates.
 
 Agents run git in dev-home only through this script, so that several sessions can use the
@@ -36,7 +36,7 @@ is still adding, or lists a note twice. After it brings in commits from GitHub, 
 the index lists twice, which happens when two PCs change the same row.
 
 Then it runs update's quiet check (internal/shared/update.py, the same as its --quiet), which
-checks dev-home-tools for new commits and makes every decision about them: it pulls them when
+checks dev-home-toolkit for new commits and makes every decision about them: it pulls them when
 updates.installAutomatically is on, as it is unless local-settings.json turns it off, and
 otherwise says they're waiting. It
 checks GitHub only once updates.checkEveryHours (24 by default) have passed since it last did.
@@ -62,7 +62,7 @@ Options:
     <path> ...                   The files to commit, relative to dev-home. Name both paths of a
                                  renamed file.
 
-Examples, in dev-home-tools' folder, with Python 3.12 or later:
+Examples, in dev-home-toolkit's folder, with Python 3.12 or later:
 
     py sync.py
 
@@ -259,7 +259,7 @@ class Sync:
         # Set once commits from GitHub are merged in, since they may bring skills that setup must
         # link.
         self.brought_in = False
-        # Set once the update check installs new dev-home-tools commits, whose code setup must
+        # Set once the update check installs new dev-home-toolkit commits, whose code setup must
         # load fresh.
         self.updated = False
 
@@ -610,8 +610,8 @@ class Sync:
             else:
                 self.status("LEFT", f"{file} ({kind}, {format_age(age)})")
 
-    def update_tools(self) -> None:
-        """Runs update's check, which decides what to do about new dev-home-tools commits, so what
+    def update_toolkit(self) -> None:
+        """Runs update's check, which decides what to do about new dev-home-toolkit commits, so what
         the user is told and what gets installed come from the same code. It's loaded only now,
         so an error in it, even one that stops it loading, is reported and can't stop the rest
         of this sync."""
@@ -680,7 +680,7 @@ class Sync:
             return
         plain = not paths
         if plain:
-            self.update_tools()
+            self.update_toolkit()
         if plain or self.brought_in:
             self.step("Running setup", self.setup)
 
@@ -737,7 +737,7 @@ def sync(argv: Sequence[str]) -> int:
     setup = by_hand("setup.py")
     if not SETTINGS_PATH.exists():
         return problem(
-            f"dev-home-tools is not set up on this PC yet. The user runs {setup} once in a "
+            f"dev-home-toolkit is not set up on this PC yet. The user runs {setup} once in a "
             "terminal."
         )
     settings = read_settings()
@@ -755,7 +755,7 @@ def sync(argv: Sequence[str]) -> int:
         )
     if found == "unknown":
         return problem(
-            f"{SETTINGS_PATH} has a schemaVersion this dev-home-tools doesn't know, perhaps "
+            f"{SETTINGS_PATH} has a schemaVersion this dev-home-toolkit doesn't know, perhaps "
             f"written by a newer one, so the sync left dev-home alone. The user runs "
             f"{by_hand('update.py')}, or sets the file aside and runs {setup} in a terminal."
         )

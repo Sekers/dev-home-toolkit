@@ -1,6 +1,6 @@
 # Skills share text through committed copies
 
-**Decision:** text that several of dev-home-tools' skills need word for word has one source, a
+**Decision:** text that several of dev-home-toolkit's skills need word for word has one source, a
 file in `templates/shared-skill-text/` named for what it says, such as `other-sessions.md`. It
 isn't built yet.
 
@@ -18,7 +18,7 @@ isn't built yet.
   of each. When one changes, it fails and names the others, and the new fingerprint is recorded
   once they've been checked.
 - A passage is whole lines. Setup removes the marker lines when it generates the skills.
-- It covers only dev-home-tools' own skills. A person's own skills in dev-home are separate.
+- It covers only dev-home-toolkit's own skills. A person's own skills in dev-home are separate.
 
 **The problem:** about 11 lines are the same word for word in the handoff, knowledge, and dev-home
 skills, and about 15 more in the handoff and knowledge skills, with more that differ only in a
@@ -45,7 +45,7 @@ them.
 - The folder stays in `templates/`, though only the script and the tests read it: it's skill
   text, with the same placeholders, edited along with the skills.
 - Tokens: sessions using the skills load the same text as before. Sessions working on
-  dev-home-tools read a few more lines of the rules for skills, and bigger diffs.
+  dev-home-toolkit read a few more lines of the rules for skills, and bigger diffs.
 
 **What it costs:** one more thing to learn. A change to a shared passage shows up in each skill
 that has it, and two branches that change the same passage conflict in each copy. A passage that

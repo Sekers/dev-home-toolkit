@@ -340,7 +340,7 @@ def test_each_skill_pre_approves_its_sync_commands_for_both_tools(skill: Path) -
     text = (skill / "SKILL.md").read_text(encoding="utf-8")
     allowed = re.search(r'^allowed-tools:\s*"(.*)"\s*$', text, re.MULTILINE)
     approvals = allowed.group(1) if allowed else ""
-    prefix = "{{PYTHON}} -I {{TOOLS_DIR}}/sync.py"
+    prefix = "{{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py"
     assert re.search(rf"`{re.escape(prefix)} --message ", text), f"{skill.name} never commits"
     for tool in ("Bash", "PowerShell"):
         assert f"{tool}({prefix})" in approvals, f"{tool} plain sync"
@@ -365,7 +365,7 @@ def test_handoff_environment_edits_follow_evidence_not_session_location() -> Non
 def test_the_dev_home_skill_changes_settings_only_through_setup() -> None:
     # The person's yes in chat to the exact preview is the approval, as for a commit.
     text = (SKILLS / "dev-home" / "SKILL.md").read_text(encoding="utf-8")
-    configure = "{{PYTHON}} -I {{TOOLS_DIR}}/setup.py --configure"
+    configure = "{{PYTHON}} -I {{TOOLKIT_DIR}}/setup.py --configure"
     commands = re.findall(rf"`({re.escape(configure)}[^`]*)`", text)
     assert f"{configure} '<name>=<value>' --what-if" in commands, commands
     assert f"{configure} '<name>=<value>'" in commands, commands

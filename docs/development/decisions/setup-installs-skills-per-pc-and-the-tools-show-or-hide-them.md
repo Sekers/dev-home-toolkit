@@ -14,7 +14,7 @@ decide whether an installed skill is shown in an account or a project.
 - The person's own skills, from `skills/` in dev-home, work like recommended skills: installed by
   default, in the same list and prompt, and asked about once on each PC.
 - A skill can carry a `dev-home-skill.json` in its folder, with `recommended`,
-  `alwaysAddedToAgents`, `supportedOn`, and `dependsOn`. Only dev-home-tools' own skills can declare
+  `alwaysAddedToAgents`, `supportedOn`, and `dependsOn`. Only dev-home-toolkit's own skills can declare
   `alwaysAddedToAgents`, so each PC asks about every skill of the person's own, as above. A skill
   isn't added to a skills folder whose agents, or whose PC's operating system, it doesn't work
   in, even with a yes;
@@ -27,7 +27,7 @@ decide whether an installed skill is shown in an account or a project.
 
 Changed on 2026-10-12 and 2026-10-16, before it was built: the answer was
 `skills.<name>.installed` and the field `alwaysInstalled`. "Installed" already means installing
-dev-home-tools updates, and "added" alone could read as added to dev-home, so both say
+dev-home-toolkit updates, and "added" alone could read as added to dev-home, so both say
 `addedToAgents`. `requires` became a list of typed entries, checked per skills folder, in place of
 `tools`, `programs`, and `os`. On 2026-10-17, before any release, it was split into two lists,
 `supportedOn` and `dependsOn`
@@ -48,16 +48,16 @@ rust-v0.161.0:
   menu writes `skillOverrides` to the current project's `.claude/settings.local.json`, and for a
   whole account `skillOverrides` goes in that account's `settings.json`. Codex's `/skills` writes
   `[[skills.config]]` entries to that Codex home's `config.toml`, and reads none from a project.
-- So dev-home-tools adds what the tools lack, a choice of what a PC has at all, and leaves showing
+- So dev-home-toolkit adds what the tools lack, a choice of what a PC has at all, and leaves showing
   and hiding to them. The two answer different questions, so they can't disagree, and
-  dev-home-tools never writes the tools' switches.
+  dev-home-toolkit never writes the tools' switches.
 - Some planned skills suit only some setups, such as one for each work tracker, and some can't
   work everywhere: ones that use Claude Code-only features, need a program such as `gh`, or work
   on one OS. Only an install step keeps those off a PC.
 - Per PC, because the tools' own choices are per PC, and a skill for one setup belongs on that PC.
 - Both tools list every installed skill's name and description in every session, within 1% of the
   context window in Claude Code and 2% in Codex, so a skill a PC doesn't use costs tokens there.
-- A file in the skill's folder rather than its frontmatter: dev-home-tools' skills and the
+- A file in the skill's folder rather than its frontmatter: dev-home-toolkit's skills and the
   person's own work the same way, setup reads JSON with Python's standard library, and a skill
   copied from elsewhere will need a file of its own anyway, to record where it came from.
 
@@ -66,9 +66,9 @@ skill's state.
 
 **Options set aside:**
 
-- The tools' switches only: a skill dev-home-tools doesn't recommend would be linked and listed on
+- The tools' switches only: a skill dev-home-toolkit doesn't recommend would be linked and listed on
   every PC until turned off there.
-- dev-home-tools' own on and off, ignoring the tools': two switches with the same meaning, which
+- dev-home-toolkit's own on and off, ignoring the tools': two switches with the same meaning, which
   could disagree.
 - Choices shared in `dev-home.json`, or per PC with shared defaults: a skill for one setup would
   follow to every PC, at the cost of commits and merge conflicts.

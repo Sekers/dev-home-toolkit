@@ -4,7 +4,7 @@ Called by: dev-home, handoff, knowledge
 
 Every skill command that syncs dev-home starts with this script, so the agent gets what it needs
 before its own work from one call. First it runs sync, which syncs dev-home with GitHub, checks
-dev-home-tools for updates, and runs setup. --fetch always, auto, or when-due goes to the sync,
+dev-home-toolkit for updates, and runs setup. --fetch always, auto, or when-due goes to the sync,
 and says when it fetches dev-home (see sync.py); without it, the sync fetches every time. Then it
 loads facts.py, the copy beside this one, which that setup run has just brought up to date, and
 with it:
@@ -20,7 +20,7 @@ the sync, facts.py, or this script stops. A failing exit code would make a tool 
 call as failed, and an agent could stop or retry instead of doing what the skill says about each
 line.
 
-The sync runs inside this process: it's the code of sync.py in dev-home-tools' root, which this
+The sync runs inside this process: it's the code of sync.py in dev-home-toolkit's root, which this
 script loads from internal/shared/ there, as sync.py does, and the sync runs update's and
 setup's code there too. facts.py runs inside this process as well. Everything this process
 prints is written as UTF-8.
@@ -28,7 +28,7 @@ prints is written as UTF-8.
 Committing is never done here: a skill commits through sync.py --message.
 
 Examples, shortened: the skills give the full path of python.exe, which is
-internal/.python/python.exe in dev-home-tools' folder, and of this script.
+internal/.python/python.exe in dev-home-toolkit's folder, and of this script.
 
     python.exe -I prepare.py --skill handoff --stamp 3f9c2ab1d0e4 handoff environment newer-commits
 
@@ -48,8 +48,8 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
-# dev-home-tools' folder, filled in by setup.
-TOOLS_DIR = "{{TOOLS_DIR}}"
+# dev-home-toolkit's folder, filled in by setup.
+TOOLKIT_DIR = "{{TOOLKIT_DIR}}"
 
 
 def write_status(state: str, message: str) -> None:
@@ -85,15 +85,15 @@ def run_sync(sync_args: list[str]) -> None:
     user needs to act, and its lines already say why, so the number itself is ignored. When it
     can't be loaded, or stops, a PROBLEM line says so, and the facts still follow."""
     try:
-        shared = Path(TOOLS_DIR) / "internal" / "shared"
-        package = load_from_path("dev_home_tools_shared", shared / "__init__.py", shared)
+        shared = Path(TOOLKIT_DIR) / "internal" / "shared"
+        package = load_from_path("dev_home_toolkit_shared", shared / "__init__.py", shared)
         importlib.import_module(f"{package.__name__}.sync").main(sync_args)
     except Exception as error:
         write_status(
             "PROBLEM",
             f"The sync stopped, so dev-home may be behind: {type(error).__name__}: {error}. If an"
-            f" update has a fix, the user installs it by hand: git -C {TOOLS_DIR} pull --ff-only,"
-            f" then {'py' if sys.platform == 'win32' else 'python3'} {TOOLS_DIR}/setup.py",
+            f" update has a fix, the user installs it by hand: git -C {TOOLKIT_DIR} pull --ff-only,"
+            f" then {'py' if sys.platform == 'win32' else 'python3'} {TOOLKIT_DIR}/setup.py",
         )
 
 

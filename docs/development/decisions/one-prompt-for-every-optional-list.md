@@ -11,7 +11,7 @@ offers the same four answers.
 
 **Why:** one prompt to learn, however long the lists grow, and each new list costs only its
 catalog. Someone in a hurry presses Enter, and someone careful goes through each. With every
-default matching the recommendation, pressing Enter can never record a choice dev-home-tools
+default matching the recommendation, pressing Enter can never record a choice dev-home-toolkit
 doesn't recommend.
 
 **Options set aside:** a question for each item (a long run of questions as the lists grow); all

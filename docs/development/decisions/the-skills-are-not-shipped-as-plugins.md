@@ -17,7 +17,7 @@ Claude Code 2.1.284. Claude Code's mods docs were read on 2026-10-03, for 2.1.28
   is filled in only in the skill's text. `sync.py` has to run from the clone, so the plugin
   would have to load in place, from the clone added as a local-directory marketplace; a plugin
   installed from GitHub is copied into a versioned cache. Commands become
-  `/dev-home-tools:handoff`, though a bare `/handoff` still works while nothing else uses the
+  `/dev-home-toolkit:handoff`, though a bare `/handoff` still works while nothing else uses the
   name (tested).
 - **Codex.** Its docs say "Plugins aren't available in the IDE extension." It copies even a
   local plugin into `~/.codex/plugins/cache/` and loads the copy, so each change needs a

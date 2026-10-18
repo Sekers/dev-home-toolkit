@@ -1,6 +1,6 @@
 # Settings
 
-The rules for adding or changing a setting: one of dev-home-tools' own, in `local-settings.json`
+The rules for adding or changing a setting: one of dev-home-toolkit's own, in `local-settings.json`
 or `dev-home.json`, or a skill's preference.
 [Settings record answers, not just values](decisions/settings-record-answers-not-just-values.md)
 defines the forms a saved setting takes and the four kinds of setting, with the reasons.
@@ -8,7 +8,7 @@ AGENTS.md's rules apply too.
 
 ## Adding a setting
 
-- Declare it in one place: one of dev-home-tools' own in `internal/shared/setting-definitions.json`,
+- Declare it in one place: one of dev-home-toolkit's own in `internal/shared/setting-definitions.json`,
   and a skill's preference under `preferences` in that skill's `dev-home-skill.json`. Give it a
   kind, a default or none, a label, and help. Setup, the menu, `--configure`, and `facts.py` all
   read the declaration, so never write a setting's default or label anywhere else.

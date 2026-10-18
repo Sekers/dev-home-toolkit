@@ -8,7 +8,7 @@ apply too.
   - `docs/skills/`: one page per skill in `templates/skills/`, with the same name.
   - `docs/reference/`: facts to look up, such as what the scripts report and what setup changes.
   - `docs/guide/` (not made yet): how-to pages read start to finish, when one leaves the README.
-  - `docs/development/`: for people and agents changing dev-home-tools (see AGENTS.md's "Docs"):
+  - `docs/development/`: for people and agents changing dev-home-toolkit (see AGENTS.md's "Docs"):
     - one page for each area's rules, such as `skills.md`, which AGENTS.md points to
     - `decisions/`: one file per design decision, named for it, with its reasons, the options set
       aside, and when to look again, and `decisions/index.md` listing them all, oldest first

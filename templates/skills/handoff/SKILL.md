@@ -1,7 +1,7 @@
 ---
 name: handoff
 description: Read, update, or audit this project's private session handoff (where the work stands, what's next up, what's waiting on the user or on others, to-dos, and bugs), kept in the private dev-home repo, and file handoff items as GitHub issues when asked. Use when the user runs /handoff or $handoff, asks where things stand or where we left off, asks to update or audit the handoff or change what's next up, or asks to file a handoff item as a GitHub issue.
-allowed-tools: "Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill handoff --stamp {{SKILL_STAMP}} --fetch auto handoff environment newer-commits preferences) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill handoff --stamp {{SKILL_STAMP}} --fetch auto handoff environment newer-commits preferences) Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py --skill handoff --stamp {{SKILL_STAMP}} handoff environment newer-commits preferences) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py --skill handoff --stamp {{SKILL_STAMP}} handoff environment newer-commits preferences) Bash({{PYTHON}} -I {{SKILL_DIR}}/issue_status.py) PowerShell({{PYTHON}} -I {{SKILL_DIR}}/issue_status.py) Bash(gh label list *) Bash(gh issue list *) Bash({{PYTHON}} -I {{TOOLS_DIR}}/sync.py) Bash({{PYTHON}} -I {{TOOLS_DIR}}/sync.py *) PowerShell(gh label list *) PowerShell(gh issue list *) PowerShell({{PYTHON}} -I {{TOOLS_DIR}}/sync.py) PowerShell({{PYTHON}} -I {{TOOLS_DIR}}/sync.py *)"
+allowed-tools: "Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill handoff --stamp {{SKILL_STAMP}} --fetch auto handoff environment newer-commits preferences) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill handoff --stamp {{SKILL_STAMP}} --fetch auto handoff environment newer-commits preferences) Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py --skill handoff --stamp {{SKILL_STAMP}} handoff environment newer-commits preferences) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py --skill handoff --stamp {{SKILL_STAMP}} handoff environment newer-commits preferences) Bash({{PYTHON}} -I {{SKILL_DIR}}/issue_status.py) PowerShell({{PYTHON}} -I {{SKILL_DIR}}/issue_status.py) Bash(gh label list *) Bash(gh issue list *) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *) PowerShell(gh label list *) PowerShell(gh issue list *) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *)"
 ---
 
 # Handoff
@@ -15,7 +15,7 @@ first depends on the user's own permission settings.
 
 Sessions in other projects, and Codex, use dev-home at the same time, so a file there that you
 didn't change may be someone's work in progress. Run git in dev-home only through
-`{{TOOLS_DIR}}/sync.py`, which commits only the files you name and runs one sync at a time.
+`{{TOOLKIT_DIR}}/sync.py`, which commits only the files you name and runs one sync at a time.
 Never stage, commit, stash, or discard a file yourself.
 
 ## Commands
@@ -175,7 +175,7 @@ about this project doesn't belong here either.
    which one, if any, is this project under an old name or address, saying that you'll move it,
    commit, and push. When the user names one, move it to `<handoff>`, then run the command below,
    where `<old path>` is where it was, relative to dev-home:
-   `{{PYTHON}} -I {{TOOLS_DIR}}/sync.py --message "handoff: <name>" "<old path>" "<handoff>"`.
+   `{{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py --message "handoff: <name>" "<old path>" "<handoff>"`.
    If none is, offer to create one from `{{SKILL_DIR}}/template.md`: "Create it, commit, and
    push?". On a yes, create it and commit it as in "Changing the handoff".
 
@@ -189,22 +189,22 @@ about this project doesn't belong here either.
    loaded it, then prints the facts that "Find this project's handoff" uses. When dev-home is in
    active use on several copies, such as two PCs, the sync checks GitHub every time; with one,
    only every few hours, since nothing else changes it. If it can't start because `{{PYTHON}}`
-   doesn't exist, tell the user that dev-home-tools needs Python 3.12 or later: to install it if
-   they have none, then run `py {{TOOLS_DIR}}/setup.py` in a terminal. Then stop. Pass on anything
+   doesn't exist, tell the user that dev-home-toolkit needs Python 3.12 or later: to install it if
+   they have none, then run `py {{TOOLKIT_DIR}}/setup.py` in a terminal. Then stop. Pass on anything
    it prints beyond `OK` and the facts:
    - `RELOAD`: this skill has changed since you loaded it, so these steps are out of date. Show
      the line, and stop: the user runs the command again to load the new steps.
    - `OFFLINE`: GitHub couldn't be reached. When the line says dev-home may be behind, say the
      handoff may be stale too. With one active copy, it says nothing should be missing instead,
-     so don't call the handoff stale. When the line is about dev-home-tools, say its updates
+     so don't call the handoff stale. When the line is about dev-home-toolkit, say its updates
      weren't checked. Then continue.
    - `SETTING`: dev-home is set to one active copy, but the sync brought in commits from
      another. Pass the line on, with its advice to run `/dev-home configure` if another copy is
      in use, and never change the setting yourself. Then continue.
    - `LEFT`: leave the file alone. Another session may be editing it.
    - `STALE`: nobody has touched the file for 15 minutes. Ask "Commit and push it?". On a yes, run
-     `{{PYTHON}} -I {{TOOLS_DIR}}/sync.py --message "sync: <what changed>" "<path>"`.
-   - `UPDATE`: new dev-home-tools commits are available. Tell the user, and continue.
+     `{{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py --message "sync: <what changed>" "<path>"`.
+   - `UPDATE`: new dev-home-toolkit commits are available. Tell the user, and continue.
    - `PROBLEM`: show it. When it's about syncing dev-home, say the handoff may be behind. Then
      continue, unless it says `facts.py` stopped (see "Find this project's handoff").
 3. Find this project's handoff (see above), read it, and summarize where things stand. Start
@@ -231,7 +231,7 @@ about this project doesn't belong here either.
    in another PC's version.
 4. After editing, check the handoff for anything rule 7 forbids, and take it out.
 5. Run
-   `{{PYTHON}} -I {{TOOLS_DIR}}/sync.py --message "handoff: <name>" "<handoff>"`.
+   `{{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py --message "handoff: <name>" "<handoff>"`.
    It commits only this handoff, then syncs.
    - `OFFLINE` or `PENDING`: the commit is safe on this PC, and a later sync pushes it.
    - `PROBLEM`: stop and show it. The handoff is safe on this PC.

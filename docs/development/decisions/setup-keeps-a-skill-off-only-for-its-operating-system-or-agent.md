@@ -26,7 +26,7 @@ discussion are in [Skill requirements](../research/skill-requirements.md).
 - The warning is only for a skill that's added somewhere on this PC. One that isn't, by an
   answer, its default, or its `supportedOn`, gets none, since no agent uses it.
 - A skill lists its programs for the skill as a whole, with no map of which feature needs which.
-- For Python, setup checks the Python it runs on, which only dev-home-tools' own skills run, and,
+- For Python, setup checks the Python it runs on, which only dev-home-toolkit's own skills run, and,
   once the opt-in is built, the skills that opt in to being generated. For any other skill the
   check is a guess, as for a program, so keeping the skill off could hide one that works.
 - Anything in `supportedOn` that the reader can't use keeps the skill off: an entry with a
@@ -37,12 +37,12 @@ discussion are in [Skill requirements](../research/skill-requirements.md).
   doesn't know anywhere else in the file.
 - Each is a `PROBLEM` line naming the file and the word, said once however often its word
   appears, which says what setup did: kept the skill off, or ignored it. Setup can't tell a
-  misspelled word from one a newer dev-home-tools knows, or one made up, so the line gives every
-  fix that may apply: for a type, update dev-home-tools, or describe the need in the skill's
+  misspelled word from one a newer dev-home-toolkit knows, or one made up, so the line gives every
+  fix that may apply: for a type, update dev-home-toolkit, or describe the need in the skill's
   `compatibility` text; for a field, check its spelling, or update. When a word known in that
   place is close, such as a type the same list takes, the line first asks "Did you mean ...?",
   as git and Python suggest a near match, and keeps the rest of its advice. No skill declares a
-  minimum dev-home-tools version.
+  minimum dev-home-toolkit version.
 - `/dev-home skills` shows a skill's `compatibility` text too: the Agent Skills standard's free
   text for what setup can't check.
 
@@ -72,7 +72,7 @@ warns. npm leaves out an optional dependency that can't run on the platform, whi
 required Node.js version, its `engines`, only warns unless `engine-strict` is set (npm's
 documentation, read 2026-10-17). Suggesting the closest known word for a misspelled one follows
 git's and Python's own error messages. The three places for the warning, where setup looks, and the
-recorded needs that `/dev-home skills` checks again are dev-home-tools' own design.
+recorded needs that `/dev-home skills` checks again are dev-home-toolkit's own design.
 
 **Options set aside:**
 
@@ -90,11 +90,11 @@ recorded needs that `/dev-home skills` checks again are dev-home-tools' own desi
   skill, for what the end user's answer already covers.
 - Fixed paths for programs: see
   [Skills run programs by name, through the PATH](skills-run-programs-by-name-through-the-path.md).
-- For Python, keeping the skill off: reliable only for skills that run dev-home-tools' Python,
+- For Python, keeping the skill off: reliable only for skills that run dev-home-toolkit's Python,
   and it would treat two needs the end user can fix differently. Keeping off only the skills that
-  run dev-home-tools' Python: the rule would depend on the opt-in's flag, is harder to explain to
+  run dev-home-toolkit's Python: the rule would depend on the opt-in's flag, is harder to explain to
   people writing skills, and applies to no skill today.
-- An unknown type counting as not met, "needs a newer dev-home-tools", as first built: wrong for
+- An unknown type counting as not met, "needs a newer dev-home-toolkit", as first built: wrong for
   a type the skill's writer invented, which no copy will ever know.
 - For a misspelled type, adding "Check the spelling" to the type's line: noise for an invented
   type, such as "vpn". And the line with no hint: it points a typo, such as "progam", to updating,
@@ -110,7 +110,7 @@ recorded needs that `/dev-home skills` checks again are dev-home-tools' own desi
 - Ignoring a field setup doesn't know in an entry of `supportedOn`, as elsewhere: a newer field
   that narrows the limit, such as a minimum agent version, would be skipped by older copies, and
   the skill would go where it may not work.
-- A minimum dev-home-tools version for skills: an end user's own skills are written against their
+- A minimum dev-home-toolkit version for skills: an end user's own skills are written against their
   own copy, and skills from elsewhere won't declare it. The `PROBLEM` line tells the end user to
   update instead.
 

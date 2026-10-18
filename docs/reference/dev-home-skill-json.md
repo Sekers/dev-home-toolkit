@@ -1,7 +1,7 @@
 # A skill's dev-home-skill.json
 
 A skill can carry a file named `dev-home-skill.json` in its folder, beside its `SKILL.md`, to
-tell dev-home-tools what the Agent Skills standard has no place for: whether to add the skill to
+tell dev-home-toolkit what the Agent Skills standard has no place for: whether to add the skill to
 your agents unless you say otherwise, where it works and what it depends on, its preferences, and
 the names it had before. Your own skills, in `skills\` in your dev-home, can have one too. The
 file is optional, and so is each field: a skill without one is added to your agents, and needs
@@ -32,7 +32,7 @@ the file and says what setup did about it. That includes a field it doesn't know
 misspelled one, which it otherwise ignores:
 
 ```text
-C:\Programming\dev-home\skills\tracker\dev-home-skill.json: "descripton" is a field this dev-home-tools doesn't know, so setup ignores it. Check the spelling of "descripton", or update dev-home-tools to a newer version.
+C:\Programming\dev-home\skills\tracker\dev-home-skill.json: "descripton" is a field this dev-home-toolkit doesn't know, so setup ignores it. Check the spelling of "descripton", or update dev-home-toolkit to a newer version.
 ```
 
 When the word is close to one setup knows in that place, such as `descriptoin` in an entry of
@@ -67,7 +67,7 @@ both lists applies.
 | `supportedOn` | `os` | `anyOf`: a list of one or more of `windows`, `macos`, and `linux` | Adds the skill only on a PC that runs one of them. On any other, it's left out with no `NEW` line, and `/dev-home skills` still lists it, with why. |
 | `supportedOn` | `agent` | `anyOf`: a list of one or more of `claude-code` and `codex` | Adds the skill only to the skills folders these agents read: each Claude Code folder's `skills\` for `claude-code`, and `~\.agents\skills\` for `codex`. |
 | `dependsOn` | `program` | `name`: the program's name alone, such as `gh`; and, if you like, a `description` of what the skill uses it for, as it would finish "the skill uses it for", such as "filing and reading Jira issues" | Adds the skill either way. When a newly started shell wouldn't find the program on your `PATH`, the `NEW` line says so, and `/dev-home skills` checks again in the agent's own shell. |
-| `dependsOn` | `python` | `atLeast`: the lowest Python version, in quotes, such as `"3.13"` | Adds the skill either way. When the installed Python that dev-home-tools uses, which runs its own skills, is older, the `NEW` line and `/dev-home skills` say so, with its version. A skill of yours that runs another Python, such as `python` from your `PATH`, may get a warning that doesn't apply to it, so describe its Python version in `compatibility` instead. |
+| `dependsOn` | `python` | `atLeast`: the lowest Python version, in quotes, such as `"3.13"` | Adds the skill either way. When the installed Python that dev-home-toolkit uses, which runs its own skills, is older, the `NEW` line and `/dev-home skills` say so, with its version. A skill of yours that runs another Python, such as `python` from your `PATH`, may get a warning that doesn't apply to it, so describe its Python version in `compatibility` instead. |
 
 A `type`, and a name in `anyOf`, can be written in any case, such as `Windows` for `windows`.
 
@@ -77,19 +77,19 @@ why, and puts them back once it's met again.
 ### Mistakes, and what setup doesn't know
 
 Each list has its own types: a type under the other list is one that list doesn't know. Setup
-can't tell a misspelled type from one a newer dev-home-tools knows, or one you made up, so its
+can't tell a misspelled type from one a newer dev-home-toolkit knows, or one you made up, so its
 line gives every fix that may apply, and asks `Did you mean ...?` when a type the list takes is
 close.
 
 - **In `supportedOn`, anything setup can't use keeps the skill off until it's fixed:** a type it
-  doesn't know, a field it doesn't know, such as a limit a newer dev-home-tools adds, or an entry
+  doesn't know, a field it doesn't know, such as a limit a newer dev-home-toolkit adds, or an entry
   with a mistake, such as an `anyOf` that isn't a list. A name in `anyOf` that setup doesn't know
   is only reported, since it can only add a place, never rule out one that's listed.
 - **In `dependsOn`, anything setup can't use is ignored,** and the skill is added.
 
 ```text
-C:\Programming\dev-home\skills\tracker\dev-home-skill.json: "agents" in supportedOn is a requirement this dev-home-tools doesn't know, so setup keeps the skill off until it's fixed. Did you mean "agent"? If not, update dev-home-tools to a newer version, or remove "agents" from supportedOn and describe it in the compatibility: line at the top of the skill's SKILL.md.
-C:\Programming\dev-home\skills\tracker\dev-home-skill.json: "vpn" in dependsOn is a requirement this dev-home-tools doesn't know, so setup ignores it. Update dev-home-tools to a newer version, or remove "vpn" from dependsOn and describe it in the compatibility: line at the top of the skill's SKILL.md.
+C:\Programming\dev-home\skills\tracker\dev-home-skill.json: "agents" in supportedOn is a requirement this dev-home-toolkit doesn't know, so setup keeps the skill off until it's fixed. Did you mean "agent"? If not, update dev-home-toolkit to a newer version, or remove "agents" from supportedOn and describe it in the compatibility: line at the top of the skill's SKILL.md.
+C:\Programming\dev-home\skills\tracker\dev-home-skill.json: "vpn" in dependsOn is a requirement this dev-home-toolkit doesn't know, so setup ignores it. Update dev-home-toolkit to a newer version, or remove "vpn" from dependsOn and describe it in the compatibility: line at the top of the skill's SKILL.md.
 ```
 
 ### A program that isn't on the PATH
@@ -147,6 +147,6 @@ name on its next sync. Nothing keeps the old name working.
 
 ## alwaysAddedToAgents
 
-For dev-home-tools' own skills only: `true` adds the skill to your agents on every PC, with no
+For dev-home-toolkit's own skills only: `true` adds the skill to your agents on every PC, with no
 answer to change, as for `dev-home`. In one of your own skills, setup reports it as a mistake,
 and treats the skill like any other.

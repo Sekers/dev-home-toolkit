@@ -1,6 +1,6 @@
 # Design decisions
 
-Decisions about how dev-home-tools works, and options that were looked at and set aside, one
+Decisions about how dev-home-toolkit works, and options that were looked at and set aside, one
 file each, oldest first. Each gives the decision, the reason, and what would be a reason to look
 again. Read the decision before reopening a question, and change it when the answer changes.
 Research a decision rests on has its own page in `../research/`.
@@ -13,7 +13,7 @@ Research a decision rests on has its own page in `../research/`.
 - [The skills don't run commands as they load](the-skills-dont-run-commands-as-they-load.md)
 - [facts.py finds the commit the handoff's State line names](facts-py-finds-the-commit-the-handoffs-state-line-names.md)
 - [Environment notes follow evidence, not the current session](environment-notes-follow-evidence-not-the-current-session.md)
-- [dev-home-tools moves from PowerShell to Python, in phases](dev-home-tools-moves-from-powershell-to-python-in-phases.md)
+- [dev-home-toolkit moves from PowerShell to Python, in phases](dev-home-toolkit-moves-from-powershell-to-python-in-phases.md)
 - [The skills run Python through a junction, internal/.python](the-skills-run-python-through-a-junction-internal-python.md)
 - [Folders for what several skills share](folders-for-what-several-skills-share.md)
 - [Skills share text through committed copies](skills-share-text-through-committed-copies.md)
@@ -55,7 +55,7 @@ Research a decision rests on has its own page in `../research/`.
 - [The sync's status words stay, and the reference explains them](the-syncs-status-words-stay-and-the-reference-explains-them.md)
 - [Settings record answers, not just values](settings-record-answers-not-just-values.md)
 - [The tests check the scripts that only report in two ways](the-tests-check-the-scripts-that-only-report-in-two-ways.md)
-- [dev-home-tools updates install themselves unless you say no](dev-home-tools-updates-install-themselves-unless-you-say-no.md)
+- [dev-home-toolkit updates install themselves unless you say no](dev-home-toolkit-updates-install-themselves-unless-you-say-no.md)
 - [Codex is set up in every Codex home, or in none](codex-is-set-up-in-every-codex-home-or-in-none.md)
 - [A yes to set up a folder approves the settings change it needs](a-yes-to-set-up-a-folder-approves-the-settings-change-it-needs.md)
 - [Setup removes what it set up in a folder answered no](setup-removes-what-it-set-up-in-a-folder-answered-no.md)
@@ -67,3 +67,4 @@ Research a decision rests on has its own page in `../research/`.
 - [A release data file holds the version and what end users need to know](a-release-data-file-holds-the-version-and-what-end-users-need-to-know.md)
 - [Skills run programs by name, through the PATH](skills-run-programs-by-name-through-the-path.md)
 - [Setup keeps a skill off only for its operating system or agent](setup-keeps-a-skill-off-only-for-its-operating-system-or-agent.md)
+- [The product is named dev-home-toolkit](the-product-is-named-dev-home-toolkit.md)

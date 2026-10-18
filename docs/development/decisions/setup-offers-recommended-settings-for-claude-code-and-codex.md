@@ -1,6 +1,6 @@
 # Setup offers recommended settings for Claude Code and Codex
 
-**Decision:** setup offers settings that dev-home-tools recommends for the tools, from a list in
+**Decision:** setup offers settings that dev-home-toolkit recommends for the tools, from a list in
 `templates/recommended-settings/recommended-settings.json`. Each entry has an id that is never
 reused, what it does, why it's recommended, and the setting for each tool that has one. The first
 two are for Claude Code: `"attribution": false` (id `attribution-off`), which leaves commits and

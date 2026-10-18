@@ -38,7 +38,7 @@ GitHub's draft security advisories keep it private until a fix is out. Filing on
   line beside each offer reaches end users exactly when it matters.
 - The label names one part of the offers, so a no leaves the other offers alone. It follows
   Microsoft's guidelines for on/off labels on Windows: say what "on" does, in positive words.
-- In `local-settings.json`, per PC, because the end user chose it: it sits with dev-home-tools'
+- In `local-settings.json`, per PC, because the end user chose it: it sits with dev-home-toolkit's
   other settings, and a change commits nothing.
 - The skill learns the preference from a fact, since reading it takes no judgment
   ([skills.md](../skills.md)). The topic reads two small files: 0.14 ms at the median in 200

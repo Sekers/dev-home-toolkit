@@ -1,5 +1,5 @@
-"""This PC's settings, from local-settings.json in dev-home-tools' folder, and dev-home's own, from
-dev-home.json in dev-home, which every copy of it shares. setup.py writes both.
+"""This PC's settings, from local-settings.json in dev-home-toolkit's folder, and dev-home's own,
+from dev-home.json in dev-home, which every copy of it shares. setup.py writes both.
 
 Each setting's name is its path in the file, such as devHome.folder. setting-definitions.json,
 beside this file, declares the ones with a single value, as SETTINGS, and each skill declares its
@@ -20,9 +20,9 @@ from typing import Any
 from .paths import comparable, resolve_home, same_path
 from .requirements import LISTS, Requirement, parse_list, unknown_field
 
-# dev-home-tools' folder: this file is in internal/shared/, two folders below it.
-TOOLS_ROOT = Path(__file__).parent.parent.parent
-SETTINGS_PATH = TOOLS_ROOT / "local-settings.json"
+# dev-home-toolkit's folder: this file is in internal/shared/, two folders below it.
+TOOLKIT_ROOT = Path(__file__).parent.parent.parent
+SETTINGS_PATH = TOOLKIT_ROOT / "local-settings.json"
 # dev-home's own settings, in its root: for now, only multiMachine, whether more than one copy is
 # in active use.
 DEV_HOME_SETTINGS = "dev-home.json"
@@ -43,7 +43,7 @@ SKILL_FIELDS = (
 PREFERENCE_FIELDS = ("default", "label", "help", "formerNames")
 # Each skill's answer to whether this PC adds it to the agents, at skills.<skill>.addedToAgents.
 ADDED_TO_AGENTS = "addedToAgents"
-# The file that declares dev-home-tools' own settings with a single value.
+# The file that declares dev-home-toolkit's own settings with a single value.
 DEFINITIONS_PATH = Path(__file__).parent / "setting-definitions.json"
 # The key of a saved state, such as {"$state": "default"}. No setting's own value uses it.
 STATE = "$state"
@@ -60,7 +60,7 @@ KeyPath = tuple[str, ...]
 
 @dataclass(frozen=True)
 class Setting:
-    """A setting with a single value: one of dev-home-tools' own, or a skill's preference. type
+    """A setting with a single value: one of dev-home-toolkit's own, or a skill's preference. type
     is "folder", "yes-no", or "hours" (a whole number of hours, 0 or more, where 0 means every
     time). has_default says whether default means anything; asked, whether setup asks about it.
     former_names are the names it was saved under before."""
@@ -85,7 +85,7 @@ def is_valid(kind: str, value: object) -> bool:
 
 
 def load_definitions() -> tuple[Setting, ...]:
-    """dev-home-tools' own settings, as setting-definitions.json declares them. It comes with the
+    """dev-home-toolkit's own settings, as setting-definitions.json declares them. It comes with the
     code, so one it can't use is a bug, which stops the run; a test reads it."""
     data = json.loads(DEFINITIONS_PATH.read_text(encoding="utf-8"))
     found: list[Setting] = []
@@ -114,7 +114,7 @@ def load_definitions() -> tuple[Setting, ...]:
 SETTINGS = load_definitions()
 BY_PATH = {setting.path: setting for setting in SETTINGS}
 # How long, in whole hours, a sync goes without checking GitHub, when this PC's settings don't
-# say: for dev-home itself, and for dev-home-tools' updates.
+# say: for dev-home itself, and for dev-home-toolkit's updates.
 DEFAULT_HOURS = {s.path: s.default for s in SETTINGS if s.type == "hours" and s.has_default}
 AUTO_UPDATE = "updates.installAutomatically"
 # Each tool's folders setup knows of, an entry for each with its answer, setUp, in the same shape
@@ -260,7 +260,7 @@ def saved_answer(answer: bool | str) -> object:
 
 
 def setting_value(data: dict[str, Any], path: str) -> tuple[Any, bool, bool]:
-    """read_value for one of dev-home-tools' own settings, from the file's data."""
+    """read_value for one of dev-home-toolkit's own settings, from the file's data."""
     return read_value(get(data, path, MISSING), BY_PATH[path])
 
 
@@ -295,7 +295,7 @@ def read_settings() -> dict[str, Any] | None:
 def layout(data: dict[str, Any], known: int) -> str:
     """Whether a settings file has the layout the code knows: "" when it does, "older" when it
     has no schemaVersion, from before the layout was versioned, and "unknown" for any other
-    version, such as one a newer dev-home-tools wrote."""
+    version, such as one a newer dev-home-toolkit wrote."""
     if "schemaVersion" not in data:
         return "older"
     version = data["schemaVersion"]
@@ -359,9 +359,9 @@ class Preference:
 @dataclass(frozen=True)
 class Skill:
     """What a skill declares in its dev-home-skill.json, or the defaults for a skill without
-    one. own says it's the person's own, from dev-home's skills/, rather than dev-home-tools'.
+    one. own says it's the person's own, from dev-home's skills/, rather than dev-home-toolkit's.
     recommended says whether it's added to the agents unless a PC's answer says otherwise, and
-    always_added that it's added on every PC, which only dev-home-tools' own skills can declare.
+    always_added that it's added on every PC, which only dev-home-toolkit's own skills can declare.
     requires is what it needs to run, from its supportedOn and dependsOn (see requirements.py),
     preferences are its preferences, by name, and former_names the names it had before, whose
     answers setup moves to this one."""
@@ -424,7 +424,7 @@ def read_skill_file(folder: Path, *, own: bool) -> tuple[Skill | None, list[str]
     each part of it that can't be used, which counts as left out. None, with its problem, when the
     file can't be read as a JSON object, or its preferences aren't one, so what it declares isn't
     known. A field it doesn't know is a problem too, though it changes nothing: it may be
-    misspelled, or come from a newer dev-home-tools. A problem said twice, such as one field
+    misspelled, or come from a newer dev-home-toolkit. A problem said twice, such as one field
     misspelled in two places, is listed once."""
     path = folder / SKILL_SETTINGS
     if not path.is_file():
@@ -451,8 +451,8 @@ def read_skill_file(folder: Path, *, own: bool) -> tuple[Skill | None, list[str]
         always = False
     elif always and own:
         problems.append(
-            f"{path}: alwaysAddedToAgents is only for dev-home-tools' own skills, so it counts as "
-            "false."
+            f"{path}: alwaysAddedToAgents is only for dev-home-toolkit's own skills, so it counts "
+            "as false."
         )
         always = False
     requires: tuple[Requirement, ...] = ()
@@ -503,13 +503,13 @@ def read_skill_file(folder: Path, *, own: bool) -> tuple[Skill | None, list[str]
 
 
 def skill_declarations(content_dir: str) -> SkillDeclarations:
-    """Every skill and what it declares: dev-home-tools' skills, then the person's own in
-    dev-home, where one with the same name as a dev-home-tools skill isn't set up, so its file is
+    """Every skill and what it declares: dev-home-toolkit's skills, then the person's own in
+    dev-home, where one with the same name as a dev-home-toolkit skill isn't set up, so its file is
     skipped (see SkillDeclarations). The list is complete only when dev-home's folder is a git
     repo, so a PC whose dev-home isn't cloned yet, even into a folder already made for it, or is
     on a drive that's unplugged, loses no answers."""
     found = SkillDeclarations()
-    folders = [(TOOLS_ROOT / "templates" / "skills", False)]
+    folders = [(TOOLKIT_ROOT / "templates" / "skills", False)]
     if content_dir and (Path(content_dir) / ".git").exists():
         folders.append((Path(content_dir) / "skills", True))
     else:

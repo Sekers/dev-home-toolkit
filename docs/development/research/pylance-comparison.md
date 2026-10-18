@@ -1,6 +1,6 @@
 # Pylance comparison
 
-On 2026-10-12, Pylance's standard and strict type checking were run on dev-home-tools' code, so
+On 2026-10-12, Pylance's standard and strict type checking were run on dev-home-toolkit's code, so
 a later decision about strict mode doesn't need the comparison run again. Nothing is decided yet:
 whether to adopt strict mode, and clean up what it reports, is still open. mypy stays one of the
 four required checks in AGENTS.md's "Testing".

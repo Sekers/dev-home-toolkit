@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .settings import TOOLS_ROOT
+from .settings import TOOLKIT_ROOT
 
 SHARED_ROOT = Path(__file__).parent
 # Set in the environment of a setup that a sync runs in a process of its own, while the sync holds
@@ -72,7 +72,7 @@ def run_setup(
         environment = os.environ | {SYNC_HOLDS_LOCK: "1"} if sync_holds_lock else None
         options = [] if at_console else ["--quiet"]
         done = subprocess.run(
-            [sys.executable, "-I", str(TOOLS_ROOT / "setup.py"), *options],
+            [sys.executable, "-I", str(TOOLKIT_ROOT / "setup.py"), *options],
             stdin=None if at_console else subprocess.DEVNULL,
             env=environment,
             check=False,
@@ -85,4 +85,4 @@ def run_setup(
 def by_hand(script: str) -> str:
     """The command a person types to run one of the scripts in the root."""
     launcher = "py" if sys.platform == "win32" else "python3"
-    return f"{launcher} {(TOOLS_ROOT / script).as_posix()}"
+    return f"{launcher} {(TOOLKIT_ROOT / script).as_posix()}"

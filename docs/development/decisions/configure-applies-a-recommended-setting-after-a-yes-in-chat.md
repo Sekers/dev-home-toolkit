@@ -1,7 +1,7 @@
 # --configure applies a recommended setting after a yes in chat
 
 **Decision:** `setup.py --configure` can apply a recommended setting to a tool's settings file,
-not only change dev-home-tools' own settings. With `--what-if`, it prints the diff for each file
+not only change dev-home-toolkit's own settings. With `--what-if`, it prints the diff for each file
 and a fingerprint of that preview. The agent shows it, the person says yes in chat, and the agent
 runs the same command with the fingerprint. Setup writes only if the files still match what was
 shown, with a backup as usual. Only values from the recommended-settings list can be applied this

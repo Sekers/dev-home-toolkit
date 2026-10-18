@@ -7,7 +7,7 @@ of its own when the sync has just installed an update, or when that check finds 
 check both cases).
 
 The second case covers two overlapping syncs. One can load its modules and wait for the other
-to release dev-home's sync lock. If the first sync installs a dev-home-tools update, the waiting
+to release dev-home's sync lock. If the first sync installs a dev-home-toolkit update, the waiting
 one otherwise has old modules loaded when it reaches the new setup file. The fresh process
 loads one consistent version. An unreadable check also counts as a change, since isolation is
 the safe choice then. The same rule holds for setup's code as for the rest of

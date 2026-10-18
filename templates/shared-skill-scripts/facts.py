@@ -7,7 +7,7 @@ Name the topics you want. It prints each topic's lines, as key: value, in the or
     handoff         where the current project's handoff lives in dev-home (six lines)
     environment     the name of the computer the session is on (one line)
     newer-commits   the project's commits since the one its handoff says was checked
-    skills          the skills setup sets up: dev-home-tools' own, then the user's
+    skills          the skills setup sets up: dev-home-toolkit's own, then the user's
     preferences     the running skill's preferences on this PC (one line each)
 
 It only reports, and only from this PC: it changes nothing and never uses the network, which is
@@ -28,7 +28,7 @@ Setup stamps each skill when it writes the skill's SKILL.md: the stamp is a fing
 skill's text, written into the skill's own commands. An agent keeps the text of a skill it has
 loaded until the user runs the skill's command again, so when the stamp given differs from the
 one in that SKILL.md now, the agent is following steps that have changed since. Then this prints
-why, and no facts, and exits 1. Both options are for dev-home-tools' own skills.
+why, and no facts, and exits 1. Both options are for dev-home-toolkit's own skills.
 
 prepare.py runs this file's code inside its own process, after a sync that may have brought in a
 newer copy of this file than the prepare.py already running. So keep the names and arguments of
@@ -123,13 +123,13 @@ latest one.
 
 THE SKILLS TOPIC
 
-Prints one line for each skill setup sets up: dev-home-tools' own, from the generated skills
+Prints one line for each skill setup sets up: dev-home-toolkit's own, from the generated skills
 beside this script, then the user's, from the skills folder in dev-home, each in name order. A
 skill is a folder with a SKILL.md, as setup sees one. Each line says whose the skill is and its
 state on this PC, as setup last recorded it beside the generated skills, then its description
 from the frontmatter, on one line, and its compatibility text from there, if it has any:
 
-    skill: handoff (dev-home-tools, added to your agents): Read or update this project's ...
+    skill: handoff (dev-home-toolkit, added to your agents): Read or update this project's ...
     skill: mac-notes (yours, not added: works only on macOS): Keeps notes in Apple Notes.
     skill: tidy (yours, not added yet: setup hasn't seen it): Tidies a project's imports.
     skill: vpn-check (yours, added to your agents): Checks the VPN. Compatibility: Needs ...
@@ -145,10 +145,10 @@ here, where the agent runs, and the state says what's missing:
 A program counts when it's in a folder that this process's PATH, the one the agent's commands
 get, names by its full path, and the Python is the one running this script, the skills' own.
 
-One of the user's skills with the same name as one of dev-home-tools' isn't set up, and its line
+One of the user's skills with the same name as one of dev-home-toolkit's isn't set up, and its line
 says so, as setup does:
 
-    skill: handoff (yours, not set up: it has the same name as a dev-home-tools skill): ...
+    skill: handoff (yours, not set up: it has the same name as a dev-home-toolkit skill): ...
 
 It reads only this PC's copy of dev-home, so a skill added on another PC shows up after the next
 sync. It runs anywhere: no project folder is needed.
@@ -156,7 +156,7 @@ sync. It runs anywhere: no project folder is needed.
 THE PREFERENCES TOPIC
 
 Prints each preference the skill named by --skill declares in its dev-home-skill.json, one line
-each, by its name, with this PC's value from local-settings.json in dev-home-tools' folder:
+each, by its name, with this PC's value from local-settings.json in dev-home-toolkit's folder:
 
     includeSecurityBugsInIssueOffers: true
 
@@ -171,7 +171,7 @@ Every line is written as UTF-8, so an accented letter in a name, path, or commit
 the agent as it is.
 
 Example, shortened: the skills give the full path of python.exe, which is
-internal/.python/python.exe in dev-home-tools' folder, and of this script.
+internal/.python/python.exe in dev-home-toolkit's folder, and of this script.
 
     python.exe -I facts.py handoff environment
 """
@@ -210,8 +210,8 @@ SERVICES = {
 # dev-home's folder, filled in by setup.
 CONTENT_DIR = "{{CONTENT_DIR}}"
 
-# This PC's settings, in dev-home-tools' folder, filled in by setup.
-LOCAL_SETTINGS = "{{TOOLS_DIR}}/local-settings.json"
+# This PC's settings, in dev-home-toolkit's folder, filled in by setup.
+LOCAL_SETTINGS = "{{TOOLKIT_DIR}}/local-settings.json"
 
 # The file in a skill's folder that declares its preferences.
 SKILL_SETTINGS = "dev-home-skill.json"
@@ -731,17 +731,17 @@ def frontmatter_value(text: str, key: str) -> str:
 
 
 def skills_lines() -> list[str]:
-    """The skills topic's lines: dev-home-tools' skills, then the user's own."""
+    """The skills topic's lines: dev-home-toolkit's skills, then the user's own."""
     lines: list[str] = []
     ours = skill_folders(GENERATED_SKILLS)
     taken = {os.path.normcase(folder.name) for folder in ours}
     theirs = skill_folders(Path(CONTENT_DIR) / "skills")
     states = skill_states()
     for folder in [*ours, *theirs]:
-        whose = "dev-home-tools" if folder in ours else "yours"
+        whose = "dev-home-toolkit" if folder in ours else "yours"
         entry = states.get(folder.name.lower()) if states is not None else None
         if whose == "yours" and os.path.normcase(folder.name) in taken:
-            whose += ", not set up: it has the same name as a dev-home-tools skill"
+            whose += ", not set up: it has the same name as a dev-home-toolkit skill"
         elif entry is not None:
             whose += f", {'; '.join([entry['state'], *missing_needs(entry)])}"
         elif states is not None:
@@ -879,7 +879,7 @@ def usable_preference(name: str, entry: object) -> bool:
 
 
 def declared_preferences(skill: str) -> dict[str, bool]:
-    """The preferences a skill declares, each with its default: from dev-home-tools' own copy of
+    """The preferences a skill declares, each with its default: from dev-home-toolkit's own copy of
     the skill, or else the user's own in dev-home, as setup reads them. A file that can't be read,
     or an entry setup would skip, declares nothing."""
     for folder in (GENERATED_SKILLS / skill, Path(CONTENT_DIR) / "skills" / skill):

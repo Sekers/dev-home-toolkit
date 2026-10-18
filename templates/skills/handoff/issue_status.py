@@ -39,7 +39,7 @@ It loads the generated facts.py by its path, as prepare.py does, and uses its
 find_handoff_place, find_program, CONTENT_DIR, and FactsError, so facts.py keeps those names.
 
 Example, shortened: the skill gives the full path of python.exe, which is
-internal/.python/python.exe in dev-home-tools' folder, and of this script.
+internal/.python/python.exe in dev-home-toolkit's folder, and of this script.
 
     python.exe -I issue_status.py
 """

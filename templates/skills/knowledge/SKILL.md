@@ -1,7 +1,7 @@
 ---
 name: knowledge
 description: Private general knowledge base for coding and AI work (languages, tools, libraries, platforms, and AI agents such as Claude Code and Codex), kept in the private dev-home repo. Check it before researching or testing a general question about these, or asking the user to test one, even partway through other work. Also use when the user runs /knowledge, asks to look something up in or add something to the knowledge base, or when a hard-won general finding comes up during work.
-allowed-tools: "Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch when-due) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch when-due) Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch auto) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch auto) Bash({{PYTHON}} -I {{TOOLS_DIR}}/sync.py) Bash({{PYTHON}} -I {{TOOLS_DIR}}/sync.py *) PowerShell({{PYTHON}} -I {{TOOLS_DIR}}/sync.py) PowerShell({{PYTHON}} -I {{TOOLS_DIR}}/sync.py *)"
+allowed-tools: "Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch when-due) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch when-due) Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch auto) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch auto) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *)"
 ---
 
 # Knowledge base
@@ -13,7 +13,7 @@ Claude Code they are pre-approved.
 
 Sessions in other projects, and Codex, use dev-home at the same time, so a file there that you
 didn't change may be someone's work in progress. Run git in dev-home only through
-`{{TOOLS_DIR}}/sync.py`, which commits only the files you name and runs one sync at a time.
+`{{TOOLKIT_DIR}}/sync.py`, which commits only the files you name and runs one sync at a time.
 Never stage, commit, stash, or discard a file yourself.
 
 ## Sync with GitHub (plain /knowledge, and before adding)
@@ -35,21 +35,21 @@ Either way:
 
 1. Run the command. It syncs dev-home and runs setup, then checks that this skill hasn't changed
    since you loaded it. If it can't start because `{{PYTHON}}` doesn't exist, tell the user that
-   dev-home-tools needs Python 3.12 or later: to install it if they have none, then run
-   `py {{TOOLS_DIR}}/setup.py` in a terminal. Then stop. Pass on anything it prints beyond `OK`:
+   dev-home-toolkit needs Python 3.12 or later: to install it if they have none, then run
+   `py {{TOOLKIT_DIR}}/setup.py` in a terminal. Then stop. Pass on anything it prints beyond `OK`:
    - `RELOAD`: this skill has changed since you loaded it, so these steps are out of date. Show
      the line, and stop: the user runs the command again to load the new steps.
    - `OFFLINE`: GitHub couldn't be reached. When the line says dev-home may be behind, say the
      knowledge base may be stale too. With one active copy, it says nothing should be missing
-     instead, so don't call the knowledge base stale. When the line is about dev-home-tools, say
+     instead, so don't call the knowledge base stale. When the line is about dev-home-toolkit, say
      its updates weren't checked. Then continue.
    - `SETTING`: dev-home is set to one active copy, but the sync brought in commits from
      another. Pass the line on, with its advice to run `/dev-home configure` if another copy is
      in use, and never change the setting yourself. Then continue.
    - `LEFT`: leave the file alone. Another session may be editing it.
    - `STALE`: nobody has touched the file for 15 minutes. Ask "Commit and push it?". On a yes, run
-     `{{PYTHON}} -I {{TOOLS_DIR}}/sync.py --message "sync: <what changed>" "<path>"`.
-   - `UPDATE`: new dev-home-tools commits are available. Tell the user, and continue.
+     `{{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py --message "sync: <what changed>" "<path>"`.
+   - `UPDATE`: new dev-home-toolkit commits are available. Tell the user, and continue.
    - `PROBLEM`: show it to the user.
 2. Tell the user in one line where things stand: up to date, pulled, pushed, or not checked and
    why.
@@ -156,7 +156,7 @@ commit, and push" says, or after a yes to a candidate you offered.
 5. If you added, renamed, or split a file, update the index table in
    `{{CONTENT_DIR}}/knowledge/README.md`.
 6. Run
-   `{{PYTHON}} -I {{TOOLS_DIR}}/sync.py --message "knowledge: <folder>/<file>" "<path>" ...`,
+   `{{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py --message "knowledge: <folder>/<file>" "<path>" ...`,
    naming every file you created, changed, or deleted (a rename is its old and its new path),
    plus `knowledge/README.md` if the index changed. It commits only those, then syncs.
    - `OFFLINE` or `PENDING`: the commit is safe on this PC, and a later sync pushes it.

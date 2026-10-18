@@ -49,7 +49,7 @@ path, as in git config and Codex's `-c`:
   the settings menu shows it as not found.
 - A skill declares its preferences in a `dev-home-skill.json` in its folder:
   `{"preferences": {"<name>": {"default": true, "label": "...", "help": "..."}}}`. Setup reads
-  these from dev-home-tools' skills and from the person's own, and a preference is saved, and
+  these from dev-home-toolkit's skills and from the person's own, and a preference is saved, and
   set with `--configure`, as `skills.<skill>.preferences.<name>`
   ([Settings record answers, not just values](settings-record-answers-not-just-values.md)).
   Only yes-or-no preferences for now.
@@ -65,7 +65,7 @@ path, as in git config and Codex's `-c`:
   `main` again, and with `dev-home.json` when the PCs update at different times. An older file
   happens when a backup is restored. Without a version, the code would read either as broken
   settings. "schemaVersion" follows Docker's image manifests: "version" alone would read as
-  dev-home-tools' own version.
+  dev-home-toolkit's own version.
 - Setting an old file aside, rather than moving it forward, keeps code for an old layout out of
   the scripts: each PC answers setup's questions again, once.
 - A `PROBLEM` on every sync for a folder that's gone nags someone who removed an account on

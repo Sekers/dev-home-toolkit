@@ -49,7 +49,7 @@ MISTAKE = "has a mistake in its dev-home-skill.json"
 
 @dataclass(frozen=True)
 class Requirement:
-    """One entry of a skill's supportedOn or dependsOn, as this copy of dev-home-tools reads it.
+    """One entry of a skill's supportedOn or dependsOn, as this copy of dev-home-toolkit reads it.
     kind is its type: os, agent, program, or python, or "" for one this copy doesn't know. names
     holds the operating systems or agents it takes any one of, only ones this copy knows, or the
     program it needs, whose description says what the skill uses it for, if the entry says.
@@ -123,7 +123,7 @@ def program_missing(name: str, description: str) -> str:
 
 
 def python_too_old(needs: Sequence[int], uses: Sequence[int]) -> str:
-    """The warning for a skill that needs a newer Python than the one dev-home-tools uses: the
+    """The warning for a skill that needs a newer Python than the one dev-home-toolkit uses: the
     installed one setup links internal/.python to, which runs the skills' scripts. facts.py's
     skills topic words its own check the same way (a test checks)."""
     return (
@@ -211,33 +211,33 @@ def advice(said: str, meant: str, fixes: str, otherwise: str = "") -> str:
 
 def unknown_type(kind: str, listed: str) -> str:
     """The mistake for a type the list doesn't take, said with every fix that may apply, since
-    the type may be misspelled, come from a newer dev-home-tools, or be made up, and with the
+    the type may be misspelled, come from a newer dev-home-toolkit, or be made up, and with the
     closest type the list takes, if one is close."""
     said = (
-        f'"{kind}" in {listed} is a requirement this dev-home-tools doesn\'t know, so '
+        f'"{kind}" in {listed} is a requirement this dev-home-toolkit doesn\'t know, so '
         f"{outcome(listed)}."
     )
     fixes = (
-        f'update dev-home-tools to a newer version, or remove "{kind}" from {listed} and describe '
-        "it in the compatibility: line at the top of the skill's SKILL.md."
+        f'update dev-home-toolkit to a newer version, or remove "{kind}" from {listed} and '
+        "describe it in the compatibility: line at the top of the skill's SKILL.md."
     )
     return advice(said, closest(kind, LISTS[listed]), fixes)
 
 
 def unknown_field(name: str, known: Iterable[str], *, limit: bool = False) -> str:
     """The mistake for a field in a dev-home-skill.json that this copy doesn't know, among the
-    fields known in its place: it may be misspelled, or come from a newer dev-home-tools. One in
+    fields known in its place: it may be misspelled, or come from a newer dev-home-toolkit. One in
     an entry of supportedOn (limit) keeps the skill off, since it may narrow where the skill goes,
     such as a minimum version; any other is ignored."""
     meant = closest(name, known)
-    update = "update dev-home-tools to a newer version"
+    update = "update dev-home-toolkit to a newer version"
     if limit:
         said = (
-            f'"{name}" in {SUPPORTED_ON} is a field this dev-home-tools doesn\'t know, so '
+            f'"{name}" in {SUPPORTED_ON} is a field this dev-home-toolkit doesn\'t know, so '
             f"{outcome(SUPPORTED_ON)}."
         )
         return advice(said, meant, f'{update}, or remove "{name}".')
-    said = f'"{name}" is a field this dev-home-tools doesn\'t know, so setup ignores it.'
+    said = f'"{name}" is a field this dev-home-toolkit doesn\'t know, so setup ignores it.'
     return advice(said, meant, f"{update}.", f'check the spelling of "{name}", or {update}.')
 
 
@@ -281,7 +281,7 @@ def parse_entry(entry: object, number: int, listed: str) -> tuple[Requirement | 
         # A name this copy doesn't know is left out, so a misspelling never matches by accident.
         # It can only add a place, never rule out one that's listed, so the rest still apply.
         mistakes += [
-            f'{where} names "{name}", which this dev-home-tools doesn\'t know: it knows '
+            f'{where} names "{name}", which this dev-home-toolkit doesn\'t know: it knows '
             f"{quoted(known)}."
             for name in names
             if name.lower() not in known

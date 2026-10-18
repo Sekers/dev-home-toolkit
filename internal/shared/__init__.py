@@ -1,4 +1,4 @@
-"""The code behind dev-home-tools' scripts, loaded by the entry points in the root and by
+"""The code behind dev-home-toolkit's scripts, loaded by the entry points in the root and by
 prepare.py.
 
 setup.py, sync.py, and update.py in the root are short entry points that load this package and
@@ -6,7 +6,7 @@ run its module of the same name. prepare.py, which every skill command that sync
 loads it too, and runs the sync inside its own process; the sync runs update's and setup's code
 there as well.
 
-Each entry point loads this package by its path, as dev_home_tools_shared, because python -I
+Each entry point loads this package by its path, as dev_home_toolkit_shared, because python -I
 leaves the script's folder off the import path. The code isn't in the root files themselves
 because Python writes a __pycache__ folder beside any file another script loads, and the root
 holds only what must be there.

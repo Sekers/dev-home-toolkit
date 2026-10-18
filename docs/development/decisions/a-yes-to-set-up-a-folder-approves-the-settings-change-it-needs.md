@@ -1,7 +1,7 @@
 # A yes to set up a folder approves the settings change it needs
 
 **Decision:** the yes to setting up a Claude Code folder, or Codex in every Codex home, also
-approves the one change setup makes in that folder's settings file: dev-home and dev-home-tools
+approves the one change setup makes in that folder's settings file: dev-home and dev-home-toolkit
 in `permissions.additionalDirectories` in Claude Code's `settings.json`, and dev-home in
 `writable_roots`, with `project_doc_max_bytes`, in Codex's `config.toml`. The question says so
 first, including the access it grants. Every run, quiet ones included, makes the change when it's

@@ -1,4 +1,4 @@
-# dev-home-tools moves from PowerShell to Python, in phases
+# dev-home-toolkit moves from PowerShell to Python, in phases
 
 **Decision:** the scripts move to Python 3.12 or later, in three phases: 1. the scripts the
 skills share, `facts.py` and `prepare.py`, with `prepare.py` still running `sync.ps1`; 2.

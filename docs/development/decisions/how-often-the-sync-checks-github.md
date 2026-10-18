@@ -7,7 +7,7 @@ where 0 means every time:
   fetching dev-home, and, in both modes, how long plain `/knowledge` reads the local copy before
   syncing first.
 - `updates.checkEveryHours`, 24 by default: how long the update check goes without fetching
-  dev-home-tools. Between checks, it still reports, or installs when
+  dev-home-toolkit. Between checks, it still reports, or installs when
   `updates.installAutomatically` is on, the
   commits an earlier fetch found. `update.py` run by hand always fetches, and a sync someone asks
   for, `/dev-home sync` included, keeps to this interval.

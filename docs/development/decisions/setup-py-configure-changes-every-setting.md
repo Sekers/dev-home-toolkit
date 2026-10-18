@@ -23,7 +23,7 @@ run: `devHome.folder`, `updates.installAutomatically`, `updates.checkEveryHours`
   Code's and Codex's settings do. (It kept any key it didn't know until
   [Settings record answers, not just values](settings-record-answers-not-just-values.md) had one
   nothing declares removed.) A new `devHome.folder` never
-  moves a folder. The backup goes beside the file, in dev-home-tools' root, and git ignores it,
+  moves a folder. The backup goes beside the file, in dev-home-toolkit's root, and git ignores it,
   as it does the file.
 - The `dev-home` skill pre-approves `setup.py --configure *`, as the skills pre-approve
   `sync.py *` for commits: the person's yes in chat to the exact preview is the approval.

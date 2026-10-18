@@ -42,7 +42,7 @@ FACT_KEYS = [
 
 @pytest.fixture(scope="module")
 def box(request: pytest.FixtureRequest) -> Iterator[Sandbox]:
-    yield from sandbox_for(request, "prepare", tools_repo=True)
+    yield from sandbox_for(request, "prepare", toolkit_repo=True)
 
 
 @pytest.fixture(scope="module")
@@ -140,7 +140,7 @@ def test_when_the_sync_reports_a_problem_still_prints_the_facts(
     box: Sandbox, project: Path
 ) -> None:
     # The sync stops and returns 1 without local-settings.json, before it could run setup.
-    settings = box.tools / "local-settings.json"
+    settings = box.toolkit / "local-settings.json"
     hidden = settings.with_name("local-settings.json.off")
     settings.rename(hidden)
     try:
@@ -167,7 +167,7 @@ def test_needs_no_powershell(box: Sandbox, project: Path) -> None:
 def test_when_the_sync_cant_load_says_so_and_still_prints_the_facts(
     box: Sandbox, project: Path
 ) -> None:
-    sync = box.tools / "internal" / "shared" / "sync.py"
+    sync = box.toolkit / "internal" / "shared" / "sync.py"
     before = sync.read_bytes()
     write_text(sync, "this is not Python\n")
     try:
@@ -176,15 +176,15 @@ def test_when_the_sync_cant_load_says_so_and_still_prints_the_facts(
         sync.write_bytes(before)
     assert result.code == 0, str(result)
     assert result.has_line(r"^PROBLEM\s+The sync stopped, so dev-home may be behind"), str(result)
-    tools = box.tools.as_posix()
-    assert result.has_line(re.escape(f"installs it by hand: git -C {tools} pull --ff-only")), str(
+    toolkit = box.toolkit.as_posix()
+    assert result.has_line(re.escape(f"installs it by hand: git -C {toolkit} pull --ff-only")), str(
         result
     )
     assert result.keys == FACT_KEYS, str(result)
 
 
 def test_runs_the_facts_that_the_syncs_setup_has_just_written(box: Sandbox, project: Path) -> None:
-    template = box.tools / "templates" / "shared-skill-scripts" / "facts.py"
+    template = box.toolkit / "templates" / "shared-skill-scripts" / "facts.py"
     text = template.read_text(encoding="utf-8")
     write_text(template, text.replace('f"environment: {', 'f"environment: (new copy) {'))
     try:
@@ -201,7 +201,7 @@ def test_when_the_syncs_setup_changes_the_skill_says_reload_and_no_facts(
     box: Sandbox, project: Path
 ) -> None:
     command = skill_command(box, "handoff", "prepare.py")
-    skill = box.tools / "templates" / "skills" / "handoff" / "SKILL.md"
+    skill = box.toolkit / "templates" / "skills" / "handoff" / "SKILL.md"
     text = skill.read_text(encoding="utf-8")
     write_text(skill, text + "\nA line added to the skill.\n")
     try:

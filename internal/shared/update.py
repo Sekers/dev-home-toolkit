@@ -1,4 +1,4 @@
-"""Shows the dev-home-tools commits waiting on GitHub, and pulls them after a yes.
+"""Shows the dev-home-toolkit commits waiting on GitHub, and pulls them after a yes.
 
 Lists each waiting commit and the files it changes, and points to the command that shows every
 changed line. On a yes, it pulls them (fast-forward only), holding the sync's lock on dev-home
@@ -7,7 +7,7 @@ so the updated skills and rules take effect on this PC, and at a console setup a
 anything new. When the pull changes the default of a setting this PC follows, one it hasn't
 chosen a value for, it says so, once, then and there.
 
-Everything about dev-home-tools updates happens here: a sync runs its quiet check, the same as
+Everything about dev-home-toolkit updates happens here: a sync runs its quiet check, the same as
 --quiet, and a person runs it without. So what the user is told and what gets installed come
 from the same code.
 
@@ -26,7 +26,7 @@ Run without --quiet, it always checks GitHub.
 
 Example, with Python 3.12 or later:
 
-    py C:/Users/you/dev-home-tools/update.py
+    py C:/Users/you/dev-home-toolkit/update.py
 
 A sync loads this module only when it gets to the update check, and an error in it is reported
 and can't stop the rest of the sync: an update is how fixes arrive.
@@ -48,7 +48,7 @@ from .settings import (
     DEFINITIONS_PATH,
     MISSING,
     STATE,
-    TOOLS_ROOT,
+    TOOLKIT_ROOT,
     get,
     hours_setting,
     hours_text,
@@ -97,7 +97,7 @@ def check_is_due() -> bool:
     """Whether a quiet check fetches: once updates.checkEveryHours have passed since the last
     successful fetch. A clone whose .git isn't a folder, such as a worktree, fetches every time."""
     hours = hours_setting(read_settings() or {}, "updates.checkEveryHours")[0]
-    git_dir = TOOLS_ROOT / ".git"
+    git_dir = TOOLKIT_ROOT / ".git"
     if hours == 0 or not git_dir.is_dir():
         return True
     age = last_fetch_age(git_dir)
@@ -107,31 +107,31 @@ def check_is_due() -> bool:
 def check(*, quiet: bool) -> tuple[int, bool]:
     # Git would otherwise use any repo this folder sits in, such as a zip download unpacked inside
     # another project, and offer to update that repo instead.
-    if not (TOOLS_ROOT / ".git").exists():
+    if not (TOOLKIT_ROOT / ".git").exists():
         if quiet:
             return 0, False
         return stop(
             quiet,
-            f"{TOOLS_ROOT} is not a git clone of dev-home-tools, so it can't update itself. Clone "
-            "dev-home-tools as the README shows, and use that copy instead.",
+            f"{TOOLKIT_ROOT} is not a git clone of dev-home-toolkit, so it can't update itself. "
+            "Clone dev-home-toolkit as the README shows, and use that copy instead.",
         ), False
 
     if find_program("git") is None:
-        return stop(quiet, f"dev-home-tools was not checked for updates. {GIT_MISSING}"), False
+        return stop(quiet, f"dev-home-toolkit was not checked for updates. {GIT_MISSING}"), False
 
     # A clone with no upstream branch, such as a new local copy, has nothing to update from.
-    if run_git(TOOLS_ROOT, "rev-parse", "--verify", "--quiet", "@{upstream}").code != 0:
+    if run_git(TOOLKIT_ROOT, "rev-parse", "--verify", "--quiet", "@{upstream}").code != 0:
         if quiet:
             return 0, False
         return stop(quiet, "This clone has no upstream branch to update from."), False
 
     # Between checks, a quiet check uses what the last fetch found.
-    fetch = run_git(TOOLS_ROOT, "fetch", "--quiet") if not quiet or check_is_due() else None
+    fetch = run_git(TOOLKIT_ROOT, "fetch", "--quiet") if not quiet or check_is_due() else None
     if fetch is not None and fetch.code != 0:
         if quiet:
             status_line(
                 "OFFLINE",
-                f"Could not check dev-home-tools for updates. git: {first_line(fetch.err)}",
+                f"Could not check dev-home-toolkit for updates. git: {first_line(fetch.err)}",
             )
             return 0, False
         problem = f"Could not reach GitHub. git: {first_line(fetch.err + fetch.out)}"
@@ -139,34 +139,34 @@ def check(*, quiet: bool) -> tuple[int, bool]:
 
     # Everything below uses this exact commit, not @{upstream}: a sync in another session can
     # fetch newer commits while the question waits, and a yes pulls only what was shown.
-    target = run_git(TOOLS_ROOT, "rev-parse", "--verify", "--quiet", "@{upstream}")
+    target = run_git(TOOLKIT_ROOT, "rev-parse", "--verify", "--quiet", "@{upstream}")
     if target.code != 0:
         return stop(
             quiet,
-            "Could not read what GitHub has for dev-home-tools. "
+            "Could not read what GitHub has for dev-home-toolkit. "
             f"git: {first_line(target.err + target.out)}",
         ), False
     commit = target.text.strip()
 
-    counts = run_git(TOOLS_ROOT, "rev-list", "--left-right", "--count", f"HEAD...{commit}")
+    counts = run_git(TOOLKIT_ROOT, "rev-list", "--left-right", "--count", f"HEAD...{commit}")
     parts = counts.text.split()
     if counts.code != 0 or len(parts) != 2:
         return stop(
             quiet,
-            "Could not compare dev-home-tools with GitHub. "
+            "Could not compare dev-home-toolkit with GitHub. "
             f"git: {first_line(counts.err + counts.out)}",
         ), False
     ahead, behind = int(parts[0]), int(parts[1])
     if behind == 0:
         if not quiet:
-            print(color("dev-home-tools is up to date.", GREEN), flush=True)
+            print(color("dev-home-toolkit is up to date.", GREEN), flush=True)
         return 0, False
     waiting = commit_count(behind)
     if ahead > 0:
         if quiet:
             status_line(
                 "UPDATE",
-                f"{waiting} waiting in dev-home-tools, not installed, because this clone has "
+                f"{waiting} waiting in dev-home-toolkit, not installed, because this clone has "
                 f"{commit_count(ahead)} of its own. The user can merge them by hand.",
             )
             return 0, False
@@ -184,34 +184,34 @@ def check(*, quiet: bool) -> tuple[int, bool]:
         if settings is None or setting_value(settings, AUTO_UPDATE)[0] is not True:
             status_line(
                 "UPDATE",
-                f"{waiting} waiting in dev-home-tools. To see them and install them, the user "
+                f"{waiting} waiting in dev-home-toolkit. To see them and install them, the user "
                 f"runs: {by_hand('update.py')}",
             )
             return 0, False
         before = declared_defaults()
-        merge = run_git(TOOLS_ROOT, "merge", "--ff-only", "--quiet", commit)
+        merge = run_git(TOOLKIT_ROOT, "merge", "--ff-only", "--quiet", commit)
         if merge.code != 0:
             status_line(
                 "UPDATE",
-                f"{waiting} waiting in dev-home-tools, not installed. "
+                f"{waiting} waiting in dev-home-toolkit, not installed. "
                 f"git: {first_line(merge.err + merge.out)}",
             )
             return 0, False
         notice = changed_defaults_notice(before, declared_defaults(), settings)
-        status_line("PULLED", f"{waiting} to dev-home-tools.{notice}")
+        status_line("PULLED", f"{waiting} to dev-home-toolkit.{notice}")
         return 0, True
 
-    print(f"{waiting} waiting in dev-home-tools:")
+    print(f"{waiting} waiting in dev-home-toolkit:")
     print()
-    log = run_git(TOOLS_ROOT, "log", "--format=  %h %ad  %s", "--date=short", f"HEAD..{commit}")
+    log = run_git(TOOLKIT_ROOT, "log", "--format=  %h %ad  %s", "--date=short", f"HEAD..{commit}")
     for line in log.out:
         print(line)
     print()
     print("Files they change:")
-    for line in run_git(TOOLS_ROOT, "diff", "--stat", "HEAD", commit).out:
+    for line in run_git(TOOLKIT_ROOT, "diff", "--stat", "HEAD", commit).out:
         print("  " + line)
     print()
-    print(f"To see every changed line first: git -C {TOOLS_ROOT.as_posix()} diff HEAD {commit}")
+    print(f"To see every changed line first: git -C {TOOLKIT_ROOT.as_posix()} diff HEAD {commit}")
     print(flush=True)
 
     try:
@@ -231,7 +231,7 @@ def check(*, quiet: bool) -> tuple[int, bool]:
                 f"{LOCK_WAIT_SECONDS // 60} minutes. Run {by_hand('update.py')} again shortly.",
             ), False
         before = declared_defaults()
-        merge = run_git(TOOLS_ROOT, "merge", "--ff-only", "--quiet", commit)
+        merge = run_git(TOOLKIT_ROOT, "merge", "--ff-only", "--quiet", commit)
     if merge.code != 0:
         problem = f"Could not pull them. git: {first_line(merge.err + merge.out)}"
         return stop(quiet, problem), False
@@ -248,7 +248,7 @@ def check(*, quiet: bool) -> tuple[int, bool]:
 
 @dataclass(frozen=True)
 class Default:
-    """A default dev-home-tools declares: the setting's label, its type, and the value."""
+    """A default dev-home-toolkit declares: the setting's label, its type, and the value."""
 
     label: str
     type: str
@@ -263,7 +263,7 @@ def read_json(path: Path) -> object:
 
 
 def declared_defaults() -> dict[str, Default]:
-    """Every default dev-home-tools declares, by the setting's name, as its files say right now:
+    """Every default dev-home-toolkit declares, by the setting's name, as its files say right now:
     its own settings in setting-definitions.json, and for each of its skills, whether it's added
     to the agents and its preferences, as setup reads them. Read from the files each time, since
     an update changes them; one that can't be read declares nothing. A person's own skills don't
@@ -276,7 +276,7 @@ def declared_defaults() -> dict[str, Default]:
             label = str(entry.get("label") or path)
             found[path] = Default(label, str(entry.get("type", "")), entry["default"])
     try:
-        skills = sorted((TOOLS_ROOT / "templates" / "skills").iterdir())
+        skills = sorted((TOOLKIT_ROOT / "templates" / "skills").iterdir())
     except OSError:
         # A notice that can't be worked out is left out, never the pull it would follow.
         skills = []

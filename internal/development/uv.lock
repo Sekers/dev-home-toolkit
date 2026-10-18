@@ -179,7 +179,7 @@ wheels = [
 ]
 
 [[package]]
-name = "dev-home-tools"
+name = "dev-home-toolkit"
 version = "0"
 source = { virtual = "." }
 

@@ -5,14 +5,14 @@ points here; its rules apply too.
 
 ## The internal/ folder
 
-`internal/` is dev-home-tools' own machinery, which nobody runs directly:
+`internal/` is dev-home-toolkit's own machinery, which nobody runs directly:
 
 - `internal/shared/`: the code the scripts in the root load. `setup.py`, `sync.py`, and
   `update.py` in the root are short entry points that load the module of the same name from
   here, and `prepare.py` loads the sync's from here too.
 - `internal/.generated/` and `internal/.python/`: what setup makes on each PC (see
   [skills.md](skills.md)). Git ignores both.
-- `internal/development/`: everything only people changing dev-home-tools use: the development
+- `internal/development/`: everything only people changing dev-home-toolkit use: the development
   tools' settings (`pyproject.toml`, `uv.lock`), the tests, and what the tools write there, such
   as `.venv/`, their caches, and the tests' `.test-sandbox/`.
 
@@ -84,7 +84,7 @@ points here; its rules apply too.
   ([One prompt for every optional list](decisions/one-prompt-for-every-optional-list.md)).
 - update.py pulls exactly the commit it showed the end user, so nothing new can slip in between
   their yes and the pull.
-- Everything about dev-home-tools updates happens in update's code, so what the end user is told
+- Everything about dev-home-toolkit updates happens in update's code, so what the end user is told
   and what gets installed come from the same code. Every sync that doesn't commit runs it with
   `--quiet`, which checks GitHub only once `updates.checkEveryHours` have passed since its last
   fetch (and otherwise uses what that fetch found), never asks, and installs waiting commits only

@@ -2,7 +2,7 @@
 
 **Decision:** every question that offers something a person can take or turn down uses the same
 answers, built and planned offers alike: issue and knowledge candidates, setup's optional lists
-(skills, recommended settings, example rules), the `NEW` line, dev-home-tools updates, starter
+(skills, recommended settings, example rules), the `NEW` line, dev-home-toolkit updates, starter
 updates, and copied skills. Two terms:
 
 - **Session:** one conversation with an agent. A new conversation, or `/clear`, starts a new

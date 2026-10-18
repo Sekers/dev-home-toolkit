@@ -132,11 +132,11 @@ def dev_home_skills(box: Sandbox) -> Run:
     return run_command(box, skill_command(box, "dev-home", "facts.py"), cwd=box.root)
 
 
-def test_the_skills_topic_lists_dev_home_tools_skills_then_the_users(box: Sandbox) -> None:
+def test_the_skills_topic_lists_dev_home_toolkit_skills_then_the_users(box: Sandbox) -> None:
     result = dev_home_skills(box)
     ours = sorted(
         folder.name
-        for folder in (box.tools / "templates" / "skills").iterdir()
+        for folder in (box.toolkit / "templates" / "skills").iterdir()
         if (folder / "SKILL.md").is_file()
     )
     listed = [re.fullmatch(r"skill: (\S+) \(([^)]*)\): (.+)", line) for line in result.lines]
@@ -144,14 +144,17 @@ def test_the_skills_topic_lists_dev_home_tools_skills_then_the_users(box: Sandbo
     # Each with its state, as setup recorded it: dev-home is always added.
     assert [(m.group(1), m.group(2)) for m in listed if m] == [
         *(
-            (name, f"dev-home-tools, {'always ' if name == 'dev-home' else ''}added to your agents")
+            (
+                name,
+                f"dev-home-toolkit, {'always ' if name == 'dev-home' else ''}added to your agents",
+            )
             for name in ours
         ),
         ("mine", "yours, added to your agents"),
     ], str(result)
     assert any(
         line.startswith(
-            "skill: handoff (dev-home-tools, added to your agents): Read, update, or audit"
+            "skill: handoff (dev-home-toolkit, added to your agents): Read, update, or audit"
         )
         for line in result.lines
     )
@@ -172,7 +175,9 @@ def test_the_skills_topic_says_only_whose_a_skill_is_before_setup_records_states
         aside.rename(states)
     assert result.code == 0, str(result)
     assert result.lines[-1] == "skill: mine (yours): A personal test skill.", str(result)
-    assert all(re.match(r"skill: \S+ \((dev-home-tools|yours)\): ", line) for line in result.lines)
+    assert all(
+        re.match(r"skill: \S+ \((dev-home-toolkit|yours)\): ", line) for line in result.lines
+    )
 
 
 def test_the_skills_topic_reads_each_description_form_and_says_what_isnt_set_up(
@@ -203,7 +208,7 @@ def test_the_skills_topic_reads_each_description_form_and_says_what_isnt_set_up(
         f"skill: bare ({unseen}): no description",
         f"skill: carried ({unseen}): Starts here and carries on.",
         f"skill: folded ({unseen}): Folded onto one line.",
-        "skill: handoff (yours, not set up: it has the same name as a dev-home-tools skill): "
+        "skill: handoff (yours, not set up: it has the same name as a dev-home-toolkit skill): "
         "Mine too.",
         "skill: mine (yours, added to your agents): A personal test skill.",
         f'skill: quoted ({unseen}): Quoted: with a "colon".',
@@ -283,7 +288,7 @@ def test_the_skills_topic_without_skills_of_the_users_own(box: Sandbox) -> None:
     finally:
         hidden.rename(skills)
     assert result.code == 0, str(result)
-    assert result.lines and all("(dev-home-tools, " in line for line in result.lines), str(result)
+    assert result.lines and all("(dev-home-toolkit, " in line for line in result.lines), str(result)
 
 
 # The preferences topic, which reads the sandbox's local-settings.json and the handoff skill's
@@ -294,7 +299,7 @@ SECURITY_BUGS = "includeSecurityBugsInIssueOffers"
 
 def preference_facts(box: Sandbox, text: str) -> Run:
     """The preferences topic, with local-settings.json holding the text given, then put back."""
-    settings = box.tools / "local-settings.json"
+    settings = box.toolkit / "local-settings.json"
     before = settings.read_bytes()
     write_text(settings, text)
     try:
@@ -317,7 +322,7 @@ def preference_facts(box: Sandbox, text: str) -> Run:
 def test_the_preferences_topic_prints_each_preference_or_its_default(
     box: Sandbox, value: object, printed: str
 ) -> None:
-    data = json.loads((box.tools / "local-settings.json").read_text(encoding="utf-8"))
+    data = json.loads((box.toolkit / "local-settings.json").read_text(encoding="utf-8"))
     data.pop("skills", None)
     if value is not None:
         # A skill's name matches without case, as its folder's does.

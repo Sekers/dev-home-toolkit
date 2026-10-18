@@ -2,13 +2,13 @@
 
 **Decision:** a skill runs each program it needs by name, as its steps write it, such as
 `zorkcli ticket create`, and the shell the agent uses finds the program through its own `PATH`.
-dev-home-tools doesn't give programs fixed paths, as it does for Python. Decided by the developer
+dev-home-toolkit doesn't give programs fixed paths, as it does for Python. Decided by the developer
 on 2026-10-17.
 
 - A program a skill needs must be on the `PATH` of the shell the agent runs it in. One installed
   elsewhere needs its folder added to the `PATH`, and on Windows, agents started before an install
   see the program only after a restart.
-- Python is the exception, for its own reasons: dev-home-tools' skills, and skills that setup
+- Python is the exception, for its own reasons: dev-home-toolkit's skills, and skills that setup
   generates, run `{{PYTHON}}`, the one Python 3.12 or later that setup links as
   `internal/.python`, because their scripts must run on a known Python with pre-approved
   commands, and on Windows Python is often reached only through the Store's placeholder.
@@ -17,7 +17,7 @@ on 2026-10-17.
 
 **Why:**
 
-- It's how every skill works, including skills made elsewhere, which never use dev-home-tools'
+- It's how every skill works, including skills made elsewhere, which never use dev-home-toolkit's
   placeholders. So programs run one way for every skill.
 - Programs installed the usual way are on the `PATH` of every shell: on 2026-10-17, `gh`, `uv`,
   `node`, and `python` were found as the same file from Claude Code's Bash and PowerShell tools
@@ -40,10 +40,10 @@ on 2026-10-17.
   - its placeholder would be public, and frozen from 1.0.0;
   - nothing uses it yet.
 - **A folder of launchers on the end user's `PATH`:** it changes their `PATH` outside
-  dev-home-tools, still needs restarts, and Git Bash can't run a `.cmd` launcher by its bare name
+  dev-home-toolkit, still needs restarts, and Git Bash can't run a `.cmd` launcher by its bare name
   (tested 2026-10-17).
 
 **Look again if:** programs off the `PATH` turn out to be common for the skills people use, a
 skill needs its program run exactly, such as a work-tracker skill, or sessions not restarted after
 an install cause real trouble. Fixed paths can then be added for skills setup generates,
-dev-home-tools' own and those that opt in, without changing anything else.
+dev-home-toolkit's own and those that opt in, without changing anything else.

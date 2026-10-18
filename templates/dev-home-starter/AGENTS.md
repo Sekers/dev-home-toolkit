@@ -2,7 +2,7 @@
 
 This is my private repo for project handoffs and a general knowledge base, shared by my PCs
 through GitHub. The tooling that works with it (the skills, the always-on operating rules,
-setup.py, and sync.py) lives in my clone of dev-home-tools, at `{{TOOLS_DIR}}`.
+setup.py, and sync.py) lives in my clone of dev-home-toolkit, at `{{TOOLKIT_DIR}}`.
 
 ## Privacy
 
@@ -22,7 +22,7 @@ setup.py, and sync.py) lives in my clone of dev-home-tools, at `{{TOOLS_DIR}}`.
 - `knowledge/`: my general knowledge base. `knowledge/README.md` is its index; the rules for
   files come with the knowledge skill.
 - `global-rules/global-rules.md`: my global rules, my own always-on preferences for every
-  project. Every session loads them along with the operating rules from dev-home-tools. Keep
+  project. Every session loads them along with the operating rules from dev-home-toolkit. Keep
   the file short: every line costs tokens in every session.
 - `skills/`: my personal skills, if any. Setup links them into Claude Code and Codex.
 - `.drafts/`: git-ignored scratch space for text that leaves this repo, such as GitHub issue
@@ -33,13 +33,13 @@ setup.py, and sync.py) lives in my clone of dev-home-tools, at `{{TOOLS_DIR}}`.
 - Frontmatter uses only standard fields: `name`, `description`, and `allowed-tools`. The name
   matches the folder name.
 - After adding, renaming, or removing one, run
-  `{{PYTHON}} -I {{TOOLS_DIR}}/setup.py --quiet`.
+  `{{PYTHON}} -I {{TOOLKIT_DIR}}/setup.py --quiet`.
 
 ## Git
 
 - Sessions in several projects, and Codex, use this repo at the same time, so a file you didn't
   change may be someone's work in progress. Never stage, commit, stash, reset, or discard it.
-- Run git here only through `{{PYTHON}} -I {{TOOLS_DIR}}/sync.py`. It syncs with GitHub; add
+- Run git here only through `{{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py`. It syncs with GitHub; add
   `--message "<area>: <what>"` and the paths to commit exactly those paths first. Show its
   `PROBLEM` lines to me.
 - Never delete a lock file such as `.git/index.lock`. If sync.py says git stayed busy, ask me.

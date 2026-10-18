@@ -49,7 +49,7 @@ FRESH_SETUP_LINE = "Setup ran with the new code."
 
 @pytest.fixture(scope="module")
 def box(request: pytest.FixtureRequest) -> Iterator[Sandbox]:
-    for sandbox in sandbox_for(request, "sync", tools_repo=True):
+    for sandbox in sandbox_for(request, "sync", toolkit_repo=True):
         # Most tests here push an update and expect the next sync to find it, so the update check
         # fetches every time. The tests of its interval set their own.
         set_setting(sandbox, "updates.checkEveryHours", 0)
@@ -91,7 +91,7 @@ def make_setup_require_fresh_output(shared: Path) -> None:
 def set_setting(box: Sandbox, path: str, value: object) -> None:
     """Sets one setting in the sandbox's local-settings.json, by its path, such as
     updates.checkEveryHours, or removes it when value is None."""
-    file = box.tools / "local-settings.json"
+    file = box.toolkit / "local-settings.json"
     settings = json.loads(file.read_text(encoding="utf-8"))
     *groups, name = path.split(".")
     group = settings
@@ -154,14 +154,14 @@ def test_a_plain_sync_says_dev_home_is_up_to_date(box: Sandbox) -> None:
 def test_the_skills_commit_command_runs_as_written(box: Sandbox) -> None:
     # Every command in the skills that commits starts the same way: the Python link, -I,
     # sync.py, and --message. Once, it runs through the link, with a message and a path.
-    prefix = f"{box.python.as_posix()} -I {(box.tools / 'sync.py').as_posix()} --message "
+    prefix = f"{box.python.as_posix()} -I {(box.toolkit / 'sync.py').as_posix()} --message "
     for skill in ("handoff", "knowledge"):
         text = (box.generated / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
         commands = re.findall(r"`([^`]*/sync\.py --message [^`]*)`", text)
         assert commands, f"{skill} gives no command that commits"
         assert all(c.startswith(prefix) for c in commands), commands
     append(box.content / DEMO, "Committed through the Python link.")
-    argv = [str(box.python), "-I", str(box.tools / "sync.py"), "--message", "handoff: demo", DEMO]
+    argv = [str(box.python), "-I", str(box.toolkit / "sync.py"), "--message", "handoff: demo", DEMO]
     result = run(box, argv, cwd=box.root)
     assert result.code == 0, str(result)
     assert result.has_line(r'^COMMITTED\s+"handoff: demo" \(handoffs/demo/HANDOFF\.md\)'), str(
@@ -320,9 +320,9 @@ def test_with_auto_update_off_reports_a_waiting_update_and_pulls_nothing(box: Sa
     push_update(box, "Upstream change one.")
     result = sync(box)
     assert result.code == 0, str(result)
-    command = f"py {(box.tools / 'update.py').as_posix()}"
+    command = f"py {(box.toolkit / 'update.py').as_posix()}"
     if sys.platform != "win32":
-        command = f"python3 {(box.tools / 'update.py').as_posix()}"
+        command = f"python3 {(box.toolkit / 'update.py').as_posix()}"
     pattern = rf"^UPDATE\s+1 commit waiting.*the user runs: {re.escape(command)}$"
     assert result.has_line(pattern), str(result)
     assert "Upstream change one." not in generated_skill(box)
@@ -344,13 +344,13 @@ def test_with_auto_update_on_pulls_the_update_and_sets_it_up(box: Sandbox) -> No
     finally:
         set_auto_update(box, False)
     assert result.code == 0, str(result)
-    assert result.has_line(r"^PULLED\s+1 commit to dev-home-tools\."), str(result)
+    assert result.has_line(r"^PULLED\s+1 commit to dev-home-toolkit\."), str(result)
     assert "Upstream change one." in generated_skill(box)
 
 
 def test_with_auto_update_on_never_overwrites_a_local_edit(box: Sandbox) -> None:
     push_update(box, "Upstream change one-b.")
-    local = box.tools / "templates" / "skills" / "handoff" / "SKILL.md"
+    local = box.toolkit / "templates" / "skills" / "handoff" / "SKILL.md"
     before = local.read_bytes()
     append(local, "A local edit.")
     set_auto_update(box, True)
@@ -387,7 +387,7 @@ def test_setup_after_an_update_runs_the_new_code(box: Sandbox) -> None:
         sync(box)
         set_auto_update(box, False)
     assert result.code == 0, str(result)
-    assert result.has_line(r"^PULLED\s+1 commit to dev-home-tools\."), str(result)
+    assert result.has_line(r"^PULLED\s+1 commit to dev-home-toolkit\."), str(result)
     assert result.has_line(rf"^{re.escape(FRESH_SETUP_LINE)}$"), str(result)
 
 
@@ -397,7 +397,7 @@ def test_setup_after_waiting_for_an_update_in_another_sync_runs_fresh_code(
     # This sync loads the shared modules, then waits for another sync. The other sync can update
     # those files before it releases the lock, so setup must not combine the loaded old modules
     # with new setup.py from disk.
-    shared = box.tools / "internal" / "shared"
+    shared = box.toolkit / "internal" / "shared"
     programs = shared / "programs.py"
     output = shared / "output.py"
     setup = shared / "setup.py"
@@ -443,13 +443,13 @@ def test_setup_after_waiting_for_an_update_in_another_sync_runs_fresh_code(
 def test_update_with_nothing_waiting_says_so(box: Sandbox) -> None:
     result = run_python(box, "update.py")
     assert result.code == 0, str(result)
-    assert result.has_line("dev-home-tools is up to date"), str(result)
+    assert result.has_line("dev-home-toolkit is up to date"), str(result)
 
 
 def test_a_broken_update_is_reported_and_setup_still_runs_after_it(box: Sandbox) -> None:
     # An update is how fixes arrive, so even an update.py that can't load can't stop the sync.
     push_update(box, "Upstream change two.")
-    update = box.tools / "internal" / "shared" / "update.py"
+    update = box.toolkit / "internal" / "shared" / "update.py"
     before = update.read_bytes()
     write_text(update, "raise RuntimeError('broken on purpose')\n")
     probe = box.content / "skills" / "probe"
@@ -514,7 +514,7 @@ def test_update_pulls_only_the_commits_it_showed(box: Sandbox) -> None:
 
     def newer_commit_arrives() -> None:
         push_update(box, "Upstream change four.")
-        git("-C", str(box.tools), "fetch", "--quiet")
+        git("-C", str(box.toolkit), "fetch", "--quiet")
 
     result = run_while_asking(
         box,
@@ -523,7 +523,7 @@ def test_update_pulls_only_the_commits_it_showed(box: Sandbox) -> None:
         answer="y",
         meanwhile=newer_commit_arrives,
     )
-    head = git("-C", str(box.tools), "log", "-1", "--format=%s")
+    head = git("-C", str(box.toolkit), "log", "-1", "--format=%s")
     skill = generated_skill(box)
     assert result.code == 0, str(result)
     assert head == ["handoff: Upstream change three."], head
@@ -533,27 +533,27 @@ def test_update_pulls_only_the_commits_it_showed(box: Sandbox) -> None:
 
 def test_with_commits_of_its_own_the_notice_says_to_merge_by_hand(box: Sandbox) -> None:
     # A clone with a commit of its own can't simply move forward, and update.py would refuse.
-    write_text(box.tools / "local-note.md", "a local change\n")
-    git("-C", str(box.tools), "add", "--", "local-note.md")
-    git("-C", str(box.tools), "commit", "--quiet", "-m", "local: note")
+    write_text(box.toolkit / "local-note.md", "a local change\n")
+    git("-C", str(box.toolkit), "add", "--", "local-note.md")
+    git("-C", str(box.toolkit), "commit", "--quiet", "-m", "local: note")
     try:
         result = sync(box)
     finally:
-        git("-C", str(box.tools), "reset", "--quiet", "--hard", "HEAD~1")
+        git("-C", str(box.toolkit), "reset", "--quiet", "--hard", "HEAD~1")
     assert result.code == 0, str(result)
     assert result.has_line(r"^UPDATE\s.*merge them by hand"), str(result)
     assert not result.has_line(r"update\.py"), str(result)
 
 
-def test_when_dev_home_tools_cant_be_checked_says_offline_for_it_alone(box: Sandbox) -> None:
-    url = git("-C", str(box.tools), "remote", "get-url", "origin")[0]
-    git("-C", str(box.tools), "remote", "set-url", "origin", str(box.root / "missing.git"))
+def test_when_dev_home_toolkit_cant_be_checked_says_offline_for_it_alone(box: Sandbox) -> None:
+    url = git("-C", str(box.toolkit), "remote", "get-url", "origin")[0]
+    git("-C", str(box.toolkit), "remote", "set-url", "origin", str(box.root / "missing.git"))
     try:
         result = sync(box)
     finally:
-        git("-C", str(box.tools), "remote", "set-url", "origin", url)
+        git("-C", str(box.toolkit), "remote", "set-url", "origin", url)
     assert result.code == 0, str(result)
-    assert result.has_line(r"^OFFLINE\s.*dev-home-tools"), str(result)
+    assert result.has_line(r"^OFFLINE\s.*dev-home-toolkit"), str(result)
     assert count(result, r"^OFFLINE\s") == 1, str(result)
 
 
@@ -572,11 +572,11 @@ def test_when_dev_home_cant_be_synced_its_offline_line_names_dev_home(box: Sandb
 
 
 def test_a_tooling_clone_with_no_upstream_is_skipped_quietly(box: Sandbox) -> None:
-    git("-C", str(box.tools), "branch", "--quiet", "--unset-upstream")
+    git("-C", str(box.toolkit), "branch", "--quiet", "--unset-upstream")
     try:
         result = sync(box)
     finally:
-        git("-C", str(box.tools), "branch", "--quiet", "--set-upstream-to=origin/main")
+        git("-C", str(box.toolkit), "branch", "--quiet", "--set-upstream-to=origin/main")
     assert result.code == 0, str(result)
     assert not result.has_line(r"^(UPDATE|OFFLINE)\s"), str(result)
 
@@ -610,7 +610,7 @@ def test_help_says_how_to_commit(box: Sandbox) -> None:
 
 
 def test_without_local_settings_says_to_run_setup(box: Sandbox) -> None:
-    settings = box.tools / "local-settings.json"
+    settings = box.toolkit / "local-settings.json"
     hidden = settings.with_name("local-settings.json.off")
     settings.rename(hidden)
     try:
@@ -618,7 +618,7 @@ def test_without_local_settings_says_to_run_setup(box: Sandbox) -> None:
     finally:
         hidden.rename(settings)
     assert result.code == 1, str(result)
-    assert result.has_line(r"^PROBLEM\s+dev-home-tools is not set up on this PC"), str(result)
+    assert result.has_line(r"^PROBLEM\s+dev-home-toolkit is not set up on this PC"), str(result)
 
 
 @pytest.mark.parametrize(
@@ -629,14 +629,14 @@ def test_without_local_settings_says_to_run_setup(box: Sandbox) -> None:
             r"is in an older layout, from before its settings were grouped, so the sync can't find "
             r"dev-home\. The user runs .*setup\.py in a terminal: it offers to set the file aside",
         ),
-        (2, r"has a schemaVersion this dev-home-tools doesn't know, perhaps written by a newer"),
+        (2, r"has a schemaVersion this dev-home-toolkit doesn't know, perhaps written by a newer"),
     ],
     ids=["older layout", "newer layout"],
 )
 def test_settings_in_another_layout_stop_the_sync_and_say_what_to_do(
     box: Sandbox, version: int | None, said: str
 ) -> None:
-    settings = box.tools / "local-settings.json"
+    settings = box.toolkit / "local-settings.json"
     before = settings.read_bytes()
     data = json.loads(before)
     if version is None:
@@ -653,8 +653,8 @@ def test_settings_in_another_layout_stop_the_sync_and_say_what_to_do(
 
 def test_update_in_a_copy_that_is_not_a_git_clone_stops_before_running_git(box: Sandbox) -> None:
     # Git would otherwise use the repo around the copy. The tests' ceiling is a second guard.
-    dot_git = box.tools / ".git"
-    hidden = box.tools / ".git-off"
+    dot_git = box.toolkit / ".git"
+    hidden = box.toolkit / ".git-off"
     dot_git.rename(hidden)
     try:
         result = run_python(box, "update.py")
@@ -881,7 +881,7 @@ def test_without_git_in_path_says_so_and_runs_nothing_named_git(box: Sandbox) ->
     )
     result = run_python(box, "update.py", env={"PATH": path})
     assert result.code == 1, str(result)
-    assert result.has_line("dev-home-tools was not checked for updates. Git was not found"), str(
+    assert result.has_line("dev-home-toolkit was not checked for updates. Git was not found"), str(
         result
     )
 
@@ -957,24 +957,24 @@ def test_an_error_in_one_step_still_lets_the_update_check_and_setup_run(
 
 @pytest.mark.parametrize("script", ["setup.py", "sync.py", "update.py"])
 def test_code_that_cant_load_says_how_to_install_a_fix_by_hand(box: Sandbox, script: str) -> None:
-    code = box.tools / "internal" / "shared" / script
+    code = box.toolkit / "internal" / "shared" / script
     before = code.read_bytes()
     write_text(code, "def (:\n")
     try:
         result = run_python(box, script)
     finally:
         code.write_bytes(before)
-    tools = box.tools.as_posix()
+    toolkit = box.toolkit.as_posix()
     assert result.code == 1, str(result)
     assert result.has_line(rf"^PROBLEM\s+{re.escape(script)} stopped: SyntaxError: "), str(result)
-    assert result.has_line(re.escape(f"git -C {tools} pull --ff-only, then py")), str(result)
+    assert result.has_line(re.escape(f"git -C {toolkit} pull --ff-only, then py")), str(result)
     assert not result.has_line("Traceback"), str(result)
 
 
 @pytest.mark.parametrize("script", ["setup.py", "sync.py", "update.py"])
 def test_ctrl_c_says_the_script_stopped_instead_of_a_traceback(box: Sandbox, script: str) -> None:
     # Ctrl+C at a console raises KeyboardInterrupt in whatever code is running.
-    code = box.tools / "internal" / "shared" / script
+    code = box.toolkit / "internal" / "shared" / script
     before = code.read_bytes()
     write_text(code, "def main(argv):\n    raise KeyboardInterrupt\n")
     try:
@@ -1165,7 +1165,7 @@ def test_setups_commit_brings_in_commits_without_running_setup_or_the_update_che
         ran.append("update check")
 
     monkeypatch.setattr(code, "run_setup", setup_ran)
-    monkeypatch.setattr(code.Sync, "update_tools", update_check_ran)
+    monkeypatch.setattr(code.Sync, "update_toolkit", update_check_ran)
     push_from_another_copy(box, "Before setup's commit.")
     write_text(box.content / "notes" / "from-setup.md", "committed by setup's sync\n")
     returned = code.commit_for_setup(box.content, "notes/from-setup.md", "notes: from setup")
@@ -1205,7 +1205,7 @@ def test_the_update_check_waits_its_interval_and_uses_what_it_knows(box: Sandbox
         sync(box)
         push_update(box, "Upstream change five.")
         between = sync(box)
-        age_last_fetch(box.tools, 25)
+        age_last_fetch(box.toolkit, 25)
         due = sync(box)
         push_update(box, "Upstream change six.")
         by_hand = run_python(box, "update.py", answer="n")
@@ -1236,7 +1236,7 @@ def test_update_by_hand_pulls_nothing_while_a_sync_holds_the_lock(
 ) -> None:
     # The wait is 2 minutes, so this runs update's code here, with no wait.
     push_update(box, "Upstream change while locked.")
-    head = git("-C", str(box.tools), "rev-parse", "HEAD")
+    head = git("-C", str(box.toolkit), "rev-parse", "HEAD")
     monkeypatch.setattr(shared_module(box, "sync"), "LOCK_WAIT_SECONDS", 0)
     code = shared_module(box, "update")
     monkeypatch.setattr(code, "input", lambda _prompt: "y", raising=False)
@@ -1249,7 +1249,7 @@ def test_update_by_hand_pulls_nothing_while_a_sync_holds_the_lock(
     out = capsys.readouterr().out
     assert returned == 1, out
     assert "Nothing was pulled: a sync, or another update, has been using dev-home" in out, out
-    assert git("-C", str(box.tools), "rev-parse", "HEAD") == head
+    assert git("-C", str(box.toolkit), "rev-parse", "HEAD") == head
 
 
 def test_update_by_hand_holds_the_lock_for_the_pull_then_runs_setup_at_the_console(
@@ -1280,7 +1280,7 @@ def test_update_by_hand_holds_the_lock_for_the_pull_then_runs_setup_at_the_conso
     assert returned == 0, out
     assert merges == [True], merges
     assert setups == [(False, {"at_console": True})], setups
-    head = git("-C", str(box.tools), "log", "-1", "--format=%s")
+    head = git("-C", str(box.toolkit), "log", "-1", "--format=%s")
     assert head == ["handoff: Upstream change under the lock."], head
 
 
@@ -1290,15 +1290,15 @@ def test_a_settings_file_the_update_check_cant_read_installs_nothing(
     # Whatever the default says: something has gone wrong on this PC. A sync stops before its
     # update check when it can't read the file, so this runs the check's code here.
     push_update(box, "Upstream change with unreadable settings.")
-    git("-C", str(box.tools), "fetch", "--quiet")
-    head = git("-C", str(box.tools), "rev-parse", "HEAD")
+    git("-C", str(box.toolkit), "fetch", "--quiet")
+    head = git("-C", str(box.toolkit), "rev-parse", "HEAD")
     code = shared_module(box, "update")
     monkeypatch.setattr(code, "read_settings", lambda: None)
     returned = code.quiet_check()
     out = capsys.readouterr().out
     assert returned == (0, False), out
-    assert re.search(r"^UPDATE\s+\d+ commits? waiting in dev-home-tools\.", out, re.M), out
-    assert git("-C", str(box.tools), "rev-parse", "HEAD") == head
+    assert re.search(r"^UPDATE\s+\d+ commits? waiting in dev-home-toolkit\.", out, re.M), out
+    assert git("-C", str(box.toolkit), "rev-parse", "HEAD") == head
 
 
 def test_the_notice_names_only_changed_defaults_this_pc_follows(box: Sandbox) -> None:

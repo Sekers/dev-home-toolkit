@@ -1,4 +1,4 @@
-"""Sets up dev-home-tools on this PC: finds or creates your dev-home, fills in the skills and
+"""Sets up dev-home-toolkit on this PC: finds or creates your dev-home, fills in the skills and
 operating rules with this PC's paths, links them into Claude Code and Codex, and checks the
 settings they need.
 
@@ -24,7 +24,7 @@ A run goes in this order, so the questions come first and the work after:
 4. The change to confirm to dev-home.json.
 5. The work, which asks nothing, and holds the sync's lock, so a sync in another session waits
    for it, while no sync ever waits for a person's answer. It reads local-settings.json, in
-   dev-home-tools' folder, again, since another run may have saved it meanwhile, makes there only
+   dev-home-toolkit's folder, again, since another run may have saved it meanwhile, makes there only
    the changes a person made in this run, works out its own changes again from what that gives,
    and saves it. Then it commits dev-home.json, sets up everything else from the settings it
    saved, and last makes the change each folder it sets up needs in Claude Code's or Codex's
@@ -66,7 +66,7 @@ local-settings.json. Setup offers each Claude Code folder it finds, in a list, e
 ~/.claude-<name>; and the folder in CLAUDE_CONFIG_DIR. It saves a no there too. A folder nobody
 has answered for isn't set up: setup adds no links there and removes none, and a quiet run names
 it. In a folder answered no, setup removes the links it made, and takes dev-home and
-dev-home-tools back out of its settings.json, and leaves the rest alone. One answered yes that no
+dev-home-toolkit back out of its settings.json, and leaves the rest alone. One answered yes that no
 longer exists is skipped.
 
 Codex homes are saved the same way, under codex.homes, but every home reads the same skills, from
@@ -99,7 +99,7 @@ Each link to a folder is a junction on Windows, which needs no Developer Mode, a
 elsewhere.
 
 The skills run their scripts with Python 3.12 or later, as internal/.python/python.exe in
-dev-home-tools' folder: a junction setup makes to the folder of a Python it finds, so the
+dev-home-toolkit's folder: a junction setup makes to the folder of a Python it finds, so the
 skills' commands name the same short path on every PC.
 
 For testing, the tests in internal/development/tests/ run a throwaway copy of this repo whose
@@ -128,7 +128,7 @@ It asks a question only when a person can see it and answer: never with --quiet,
 its input comes from a real console and its output goes to one. Input that ends without an
 answer counts as no.
 
-Examples, in dev-home-tools' folder, with Python 3.12 or later:
+Examples, in dev-home-toolkit's folder, with Python 3.12 or later:
 
     py setup.py --what-if
     py setup.py
@@ -183,7 +183,7 @@ from .settings import (
     SCHEMA_VERSION,
     SETTINGS_PATH,
     STATE,
-    TOOLS_ROOT,
+    TOOLKIT_ROOT,
     Checked,
     LocalSettings,
     Setting,
@@ -230,9 +230,9 @@ from .settings_files import (
 CODEX_DOC_BYTES = 65536
 # What each folder Claude Code's settings.json gets in additionalDirectories is called, in the
 # order settings_checks lists them.
-ALLOWED_NAMES = ("dev-home", "dev-home-tools")
-GENERATED_ROOT = TOOLS_ROOT / "internal" / ".generated"
-PYTHON_LINK = TOOLS_ROOT / "internal" / ".python"
+ALLOWED_NAMES = ("dev-home", "dev-home-toolkit")
+GENERATED_ROOT = TOOLKIT_ROOT / "internal" / ".generated"
+PYTHON_LINK = TOOLKIT_ROOT / "internal" / ".python"
 GENERATED_FOLDERS = ("skills", "shared-skill-scripts", "operating-rules")
 # What setup decided for each skill on this PC, which facts.py's skills topic shows.
 SKILL_STATES = GENERATED_ROOT / "skill-states.json"
@@ -440,7 +440,7 @@ class Setup:
         return console.choose_from_list(intro, question, items, details)
 
     def choose_or_default(self, question: str, setting: Setting, data: dict[str, Any]) -> object:
-        """Asks about a yes-or-no setting with a default, one of dev-home-tools' own or a
+        """Asks about a yes-or-no setting with a default, one of dev-home-toolkit's own or a
         skill's preference, saved in data: yes, no, or follow the default. Returns the answer as
         it's saved (see saved_answer), or MISSING when no answer came. Enter keeps a saved yes or
         no, and otherwise follows the default."""
@@ -456,7 +456,7 @@ class Setup:
     def ask_auto_update(self, data: dict[str, Any]) -> object:
         """Whether a sync installs updates by itself, as choose_or_default returns it."""
         self.line(
-            "sync.py can pull dev-home-tools updates on every sync, or only tell you when there "
+            "sync.py can pull dev-home-toolkit updates on every sync, or only tell you when there "
             "are some,"
         )
         self.line("so you can look at them first and pull them with update.py.")
@@ -1040,7 +1040,7 @@ class Setup:
         if not self.should(path, action):
             return
         path.mkdir(parents=True, exist_ok=True)
-        starter = TOOLS_ROOT / "templates" / "dev-home-starter"
+        starter = TOOLKIT_ROOT / "templates" / "dev-home-starter"
         files: list[str] = []
         for file in sorted(f for f in starter.rglob("*") if f.is_file()):
             relative = file.relative_to(starter)
@@ -1113,9 +1113,9 @@ class Setup:
         if found.layout == "unknown":
             self.status(
                 "PROBLEM",
-                f"{path} has a schemaVersion this dev-home-tools doesn't know, perhaps written by "
-                "a newer one on another copy, so setup left it alone, and each sync checks GitHub "
-                f"every time. Update dev-home-tools: {by_hand('update.py')}",
+                f"{path} has a schemaVersion this dev-home-toolkit doesn't know, perhaps written "
+                "by a newer one on another copy, so setup left it alone, and each sync checks "
+                f"GitHub every time. Update dev-home-toolkit: {by_hand('update.py')}",
             )
             return
         older = found.layout == "older"
@@ -1515,17 +1515,17 @@ class Setup:
                     self.status(*check)
 
     def read_settings(self) -> tuple[LocalSettings, dict[str, Any] | None]:
-        """Where things are: dev-home-tools' folder, the profile to set up, and this PC's
+        """Where things are: dev-home-toolkit's folder, the profile to set up, and this PC's
         settings, checked, with what the check moved or removed, which it keeps in self.checked.
         Returns them, and the file as this run read it, or None when there was none: the work
         removes only what that held (see settle)."""
-        tools_problem = unsafe_reason(comparable(TOOLS_ROOT))
-        if tools_problem:
+        toolkit_problem = unsafe_reason(comparable(TOOLKIT_ROOT))
+        if toolkit_problem:
             self.status(
                 "PROBLEM",
-                f"dev-home-tools is at {comparable(TOOLS_ROOT)}, which {tools_problem}. Setup "
-                "writes this path into commands as it is, so move the folder, then run setup.py "
-                "again.",
+                f"dev-home-toolkit is at {comparable(TOOLKIT_ROOT)}, which {toolkit_problem}. "
+                "Setup writes this path into commands as it is, so move the folder, then run "
+                "setup.py again.",
             )
             raise CannotGoOnError
         loaded = load_local_settings()
@@ -1558,9 +1558,10 @@ class Setup:
         elif file_layout == "unknown":
             self.status(
                 "PROBLEM",
-                f"{SETTINGS_PATH} has a schemaVersion this dev-home-tools doesn't know, perhaps "
-                "written by a newer one, so setup left it alone and stopped. Update dev-home-tools "
-                f"({by_hand('update.py')}), or set the file aside and run setup.py again.",
+                f"{SETTINGS_PATH} has a schemaVersion this dev-home-toolkit doesn't know, perhaps "
+                "written by a newer one, so setup left it alone and stopped. Update "
+                f"dev-home-toolkit ({by_hand('update.py')}), or set the file aside and run "
+                "setup.py again.",
             )
             raise CannotGoOnError
         declared = skill_declarations(settings.content_dir)
@@ -1583,7 +1584,7 @@ class Setup:
         if content_dir_option:
             settings.content_dir = forward(content_dir_option)
         elif not settings.content_dir:
-            default = forward(TOOLS_ROOT.parent / "dev-home")
+            default = forward(TOOLKIT_ROOT.parent / "dev-home")
             if self.can_ask:
                 self.line(
                     "dev-home is your private repo for handoffs and a knowledge base. Setup needs "
@@ -1618,11 +1619,11 @@ class Setup:
                     "this path into commands as it is. Choose another folder with --content-dir.",
                 )
                 raise CannotGoOnError
-            if is_inside(settings.content_dir, TOOLS_ROOT):
+            if is_inside(settings.content_dir, TOOLKIT_ROOT):
                 self.status(
                     "PROBLEM",
-                    f"The dev-home folder {settings.content_dir} is dev-home-tools' own folder, or "
-                    "inside it. Choose your dev-home's folder with --content-dir.",
+                    f"The dev-home folder {settings.content_dir} is dev-home-toolkit's own folder, "
+                    "or inside it. Choose your dev-home's folder with --content-dir.",
                 )
                 raise CannotGoOnError
             # An empty or missing folder gets a dev-home below. One with files must already be
@@ -1960,7 +1961,7 @@ class Setup:
         values = template_values(content_root)
         # The operating rules template and the person's global rules, each named once: setup
         # reads them from here, and the notes in generated files point to them.
-        operating_template = TOOLS_ROOT / "templates" / "operating-rules" / "operating-rules.md"
+        operating_template = TOOLKIT_ROOT / "templates" / "operating-rules" / "operating-rules.md"
         global_rules_file = content_root / "global-rules" / "global-rules.md"
 
         # 1. dev-home: no signing prompts for agent commits, and pulls that merge rather than
@@ -2002,7 +2003,7 @@ class Setup:
             skill_values["SKILL_STAMP"] = generated.skill_stamp(skill / "SKILL.md", skill_values)
             skill_note = generated.note(
                 f"{forward(skill)}/",
-                "Changing the skill there changes dev-home-tools itself; skills of your own go "
+                "Changing the skill there changes dev-home-toolkit itself; skills of your own go "
                 f"in {values['CONTENT_DIR']}/skills/.",
             )
             self.sync_generated_folder(destination, skill_values, skill, "SKILL.md", skill_note)
@@ -2015,7 +2016,7 @@ class Setup:
         rules_note = generated.note(
             forward(operating_template),
             f"Put rules of your own in {forward(global_rules_file)}; changing the template "
-            "changes dev-home-tools itself.",
+            "changes dev-home-toolkit itself.",
         )
         self.sync_generated_folder(
             GENERATED_ROOT / "operating-rules",
@@ -2029,7 +2030,7 @@ class Setup:
         self.sync_generated_folder(
             GENERATED_ROOT / "shared-skill-scripts",
             values,
-            TOOLS_ROOT / "templates" / "shared-skill-scripts",
+            TOOLKIT_ROOT / "templates" / "shared-skill-scripts",
         )
         # A folder here with no templates, such as one left from an older layout, is removed.
         # A link here isn't setup's, so it stays.
@@ -2069,7 +2070,7 @@ class Setup:
         else:
             self.status("OK", label)
 
-        # 4. Skills, linked into each tool's personal skills folder: the dev-home-tools skills,
+        # 4. Skills, linked into each tool's personal skills folder: the dev-home-toolkit skills,
         # then the personal skills in dev-home, each where its plan adds it. Every Codex home
         # reads ~/.agents/skills.
         tool_skill_folders = [folder for folder, _ in folders]
@@ -2078,8 +2079,8 @@ class Setup:
         for name in same_names:
             self.status(
                 "PROBLEM",
-                f"Your personal skill '{name}' has the same name as a dev-home-tools skill, so it "
-                "isn't linked. Rename its folder and its name field.",
+                f"Your personal skill '{name}' has the same name as a dev-home-toolkit skill, so "
+                "it isn't linked. Rename its folder and its name field.",
             )
         personal_skills = content_root / "skills"
 
@@ -2139,7 +2140,7 @@ class Setup:
         codex_note = generated.note(
             f"{forward(operating_template)} and {forward(global_rules_file)}",
             "Put rules of your own in the second file; changing the first changes "
-            "dev-home-tools itself.",
+            "dev-home-toolkit itself.",
         )
         for home in tools.codex_homes:
             self.sync_codex_rules(
@@ -2237,7 +2238,7 @@ class Setup:
         """What each tool's settings file needs, planned from the file as it is now: each Claude
         Code folder's and each Codex home's set up, and the access a yes added taken back out of
         each one answered no, which that no approves as the yes approved adding it."""
-        wanted_dirs = [comparable(content_root), comparable(TOOLS_ROOT)]
+        wanted_dirs = [comparable(content_root), comparable(TOOLKIT_ROOT)]
         checks: list[SettingsCheck] = [
             self.check_claude_settings(Path(claude_dir), wanted_dirs)
             for claude_dir in tools.claude_dirs
@@ -2292,7 +2293,7 @@ class Setup:
             return (
                 "OK",
                 f"Claude Code settings in {claude_name}: additionalDirectories includes dev-home "
-                "and dev-home-tools",
+                "and dev-home-toolkit",
             )
         try:
             plan = claude_settings.plan(path, missing)
@@ -2365,7 +2366,7 @@ class Setup:
         self, claude_dir: Path, wanted_dirs: list[str]
     ) -> SettingsCheck | None:
         """What a Claude Code folder answered no needs in its settings.json: dev-home and
-        dev-home-tools taken back out of permissions.additionalDirectories, written however they
+        dev-home-toolkit taken back out of permissions.additionalDirectories, written however they
         are, such as with ~. A problem when the file isn't JSON but names either. None when
         neither is there, or there's no file to read."""
         path = claude_dir / "settings.json"
@@ -2380,7 +2381,7 @@ class Setup:
             return (
                 "PROBLEM",
                 f"{path} could not be read as JSON, so setup could not take dev-home and "
-                "dev-home-tools out of it, since you said no to this folder.",
+                "dev-home-toolkit out of it, since you said no to this folder.",
             )
         found = [
             folder
@@ -2465,7 +2466,7 @@ def yes_does(tool: Tool, *, several: bool) -> str:
     )
     return (
         f"A {yes} sets up dev-home's skills and rules {where}. It also adds your dev-home and "
-        f"dev-home-tools folders to permissions.additionalDirectories in {settings_file}, so "
+        f"dev-home-toolkit folders to permissions.additionalDirectories in {settings_file}, so "
         f"{tool.name} can use them from any project. A {no} removes all of that, if it's there. "
         f"Setup backs up {backup} first."
     )
@@ -2526,10 +2527,10 @@ def mentions_folder(text: str, folders: Sequence[str]) -> bool:
 
 
 def skill_templates() -> list[Path]:
-    """The folder of each of dev-home-tools' skills, in templates/skills/."""
+    """The folder of each of dev-home-toolkit's skills, in templates/skills/."""
     return sorted(
         folder
-        for folder in (TOOLS_ROOT / "templates" / "skills").iterdir()
+        for folder in (TOOLKIT_ROOT / "templates" / "skills").iterdir()
         if folder.is_dir() and (folder / "SKILL.md").is_file()
     )
 
@@ -2538,9 +2539,9 @@ def skill_links(
     content_root: Path, skill_sources: Sequence[Path]
 ) -> tuple[list[tuple[str, Path]], list[str]]:
     """Each skill setup links into the tools, by its name and the folder its link points to:
-    dev-home-tools' skills, generated with this PC's paths from skill_sources, the same list the
+    dev-home-toolkit's skills, generated with this PC's paths from skill_sources, the same list the
     generated files come from, then the person's own in dev-home. Also the name of each of the
-    person's own that has the same name as one of dev-home-tools', which isn't linked."""
+    person's own that has the same name as one of dev-home-toolkit's, which isn't linked."""
     links = [(skill.name, GENERATED_ROOT / "skills" / skill.name) for skill in skill_sources]
     same_names: list[str] = []
     personal_skills = content_root / "skills"
@@ -2674,7 +2675,7 @@ def new_skills_text(new: Sequence[str], plans: dict[str, SkillPlan]) -> str:
 def template_values(content_root: Path) -> dict[str, str]:
     """What setup fills in for each placeholder in the templates: this PC's paths."""
     return {
-        "TOOLS_DIR": forward(TOOLS_ROOT),
+        "TOOLKIT_DIR": forward(TOOLKIT_ROOT),
         "CONTENT_DIR": forward(content_root),
         "SHARED_SKILL_SCRIPTS_DIR": forward(GENERATED_ROOT / "shared-skill-scripts"),
         "PYTHON": forward(PYTHON_LINK / "python.exe"),

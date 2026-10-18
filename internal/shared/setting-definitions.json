@@ -10,14 +10,14 @@
       "type": "yes-no",
       "default": true,
       "asked": true,
-      "label": "Install dev-home-tools updates automatically",
-      "help": "Whether a sync installs dev-home-tools updates as soon as it finds them."
+      "label": "Install dev-home-toolkit updates automatically",
+      "help": "Whether a sync installs dev-home-toolkit updates as soon as it finds them."
     },
     "updates.checkEveryHours": {
       "type": "hours",
       "default": 24,
-      "label": "Check GitHub for dev-home-tools updates",
-      "help": "How often a sync checks GitHub for dev-home-tools updates. 0 checks every time."
+      "label": "Check GitHub for dev-home-toolkit updates",
+      "help": "How often a sync checks GitHub for dev-home-toolkit updates. 0 checks every time."
     },
     "devHome.checkEveryHours": {
       "type": "hours",

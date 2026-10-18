@@ -36,14 +36,14 @@ setting counts as missing.
   At any question, Enter keeps the saved answer, a plain value or the default alike, and means
   default only when nothing is answered yet.
 - A skill's preferences are saved as `skills.<name>.preferences.<preference>`, beside
-  dev-home-tools' own settings for that skill, such as `skills.<name>.addedToAgents`.
-- dev-home-tools' own settings are declared in `internal/shared/setting-definitions.json`, the way
+  dev-home-toolkit's own settings for that skill, such as `skills.<name>.addedToAgents`.
+- dev-home-toolkit's own settings are declared in `internal/shared/setting-definitions.json`, the way
   a skill declares its preferences in its `dev-home-skill.json`: each with its kind, its default,
   a label, help, and `formerNames`, the names it had before.
 - A setting found under a name in `formerNames` has its answer moved to the new name, unless the
   new name already has an answer: a mark that it's unanswered isn't one. The move happens on the
   first setup run that sees it, quiet runs included, with one line. One that nothing declares any
-  more, dev-home-tools' own or a skill's, is deleted on the first run that sees it, with one line
+  more, dev-home-toolkit's own or a skill's, is deleted on the first run that sees it, with one line
   and a backup, and nobody is asked. A whole skill that's gone has its answers deleted by the
   first run that holds the sync's lock from its start, a sync's setup, so a skill that a sync or
   an update is replacing at that moment never looks gone.
@@ -84,11 +84,11 @@ setting counts as missing.
   plain yes, two answers that look the same at the console would behave differently later. Enter
   keeps a saved answer because a question asked again, as the settings menu does, would otherwise
   turn a yes the end user chose into following the default without their noticing.
-- Nesting preferences means dev-home-tools' own settings for a skill can never collide with that
+- Nesting preferences means dev-home-toolkit's own settings for a skill can never collide with that
   skill's preferences, whatever either is named later. No PC had a preference saved yet, so it
   cost nothing.
 - One way to declare every setting makes renames and changed defaults work the same for
-  dev-home-tools' settings as for a skill's, and gives the menu every label and help from data.
+  dev-home-toolkit's settings as for a skill's, and gives the menu every label and help from data.
   An update can compare a default before and after only when it's in a file; in Python code, it
   would have to load the new code.
 - Deleting what nothing declares keeps the file to what setup knows. Setup can't tell a removed
@@ -127,11 +127,11 @@ setting counts as missing.
 - Setup's links as the record of what's announced: a skill that's off by default would be
   announced on every sync.
 - Every value as an object: wordier, for no planned need.
-- Reserving dev-home-tools' names among a skill's settings, instead of nesting preferences: a
+- Reserving dev-home-toolkit's names among a skill's settings, instead of nesting preferences: a
   later name could hit a preference already in use.
-- Keeping dev-home-tools' settings declared in Python: no notice of a changed default, and two
+- Keeping dev-home-toolkit's settings declared in Python: no notice of a changed default, and two
   ways to declare a setting.
-- Naming the file `settings-schema.json` (it suggests a JSON Schema), `dev-home-tools-settings.json`
+- Naming the file `settings-schema.json` (it suggests a JSON Schema), `dev-home-toolkit-settings.json`
   (it reads like values), or `settings-catalog.json`.
 - Keeping a key setup doesn't know, with a `PROBLEM` on every sync: it nags about a setting that's
   gone.

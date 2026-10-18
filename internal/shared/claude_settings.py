@@ -1,5 +1,5 @@
 """Claude Code's settings.json: which folders it lets Claude Code use, and planning the change that
-adds dev-home and dev-home-tools to them, or takes them back out."""
+adds dev-home and dev-home-toolkit to them, or takes them back out."""
 
 import json
 from pathlib import Path

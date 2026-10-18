@@ -44,7 +44,7 @@ made it, each `~/.codex-*` folder that holds a `config.toml` or an `auth.json`, 
 ([Codex is set up in every Codex home, or in none](codex-is-set-up-in-every-codex-home-or-in-none.md)).
 Until it's answered, setup adds no links and removes none, as for a folder.
 
-**Why:** running setup by hand is a normal way to use dev-home-tools, so it should offer every
+**Why:** running setup by hand is a normal way to use dev-home-toolkit, so it should offer every
 setting, not only the unanswered ones. Questions first and the work after is what people expect
 from a setup program, and keeps every question in one place as the lists grow. dev-home comes
 first because later steps need it, and only the questions the clone needs come before it, so a
@@ -61,7 +61,7 @@ about one that changed would otherwise hold the lock while a question waits. A c
 would hold up every sync, and only a sync bringing in another copy's change can change it, which
 is rare.
 
-Asking about every folder, the default one included, means dev-home-tools does nothing the person
+Asking about every folder, the default one included, means dev-home-toolkit does nothing the person
 may not want: an extra account is often kept apart on purpose, such as a work one; the
 `~/.claude-*` match also catches folders that aren't accounts, such as a backup; and someone who
 doesn't want their default account set up sees the choice. It's one rule for every folder, and

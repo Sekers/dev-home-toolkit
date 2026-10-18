@@ -112,7 +112,7 @@ def fake_gh(box: Sandbox, monkeypatch: pytest.MonkeyPatch) -> FakeGh:
 @pytest.fixture
 def settings(box: Sandbox) -> Iterator[Path]:
     """local-settings.json, put back as it was after the test."""
-    path = box.tools / "local-settings.json"
+    path = box.toolkit / "local-settings.json"
     before = path.read_bytes()
     yield path
     path.write_bytes(before)
@@ -138,7 +138,7 @@ def test_with_input_from_a_silent_pipe_it_never_waits(box: Sandbox, settings: Pa
     saved = json.loads(settings.read_text(encoding="utf-8"))
     saved["devHome"]["folder"] = ""
     write_text(settings, json.dumps(saved, indent=2) + "\n")
-    argv = [sys.executable, "-I", str(box.tools / "setup.py")]
+    argv = [sys.executable, "-I", str(box.toolkit / "setup.py")]
     check_in_sandbox(argv)
     process = subprocess.Popen(
         argv,
@@ -412,7 +412,7 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_codex(
     # first.
     assert len(allowed["permissions"]["additionalDirectories"]) == 2
     pattern = (
-        r"^SET\s+Claude Code settings in \.claude-second: added dev-home and dev-home-tools to "
+        r"^SET\s+Claude Code settings in \.claude-second: added dev-home and dev-home-toolkit to "
         r"permissions\.additionalDirectories in .*settings\.json \(new file\)$"
     )
     assert re.search(pattern, out, re.M), out
@@ -420,7 +420,7 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_codex(
     words = " ".join(out.split())
     claude = (
         f"{box.profile / '.claude-third'} A 'yes' sets up dev-home's skills and rules in each. "
-        "It also adds your dev-home and dev-home-tools folders to "
+        "It also adds your dev-home and dev-home-toolkit folders to "
         "permissions.additionalDirectories in each folder's settings.json, so Claude Code can use "
         "them from any project. A 'no' removes all of that, if it's there. Setup backs up each "
         "file first."
@@ -1057,7 +1057,7 @@ def test_an_older_dev_home_json_is_asked_again_and_rewritten_in_place(
         ),
         (
             '{"schemaVersion": 2, "multiMachine": false}\n',
-            r"has a schemaVersion this dev-home-tools doesn't know, perhaps written by a newer "
+            r"has a schemaVersion this dev-home-toolkit doesn't know, perhaps written by a newer "
             r"one on another copy, so setup left it alone",
         ),
     ],
@@ -1101,7 +1101,7 @@ def test_a_copies_answer_that_cant_be_saved_leaves_dev_home_as_it_is(
 # --configure's menu at a console.
 
 MENU = r"^Number to change, 'a' to go through them all, or Enter to go on: $"
-UPDATE_HOURS = r"^Check GitHub for dev-home-tools updates every how many hours .*\[24\]: $"
+UPDATE_HOURS = r"^Check GitHub for dev-home-toolkit updates every how many hours .*\[24\]: $"
 CONTENT_HOURS = r"^Check GitHub for dev-home's changes every how many hours .*\[12\]: $"
 
 
@@ -1119,7 +1119,7 @@ def test_the_menu_changes_the_setting_picked_and_keeps_a_backup(
     returned = setup_here(box, "--configure")
     out = capsys.readouterr().out
     assert returned == 0, out
-    assert "dev-home-tools settings" in out and "Shared by every copy of dev-home" in out, out
+    assert "dev-home-toolkit settings" in out and "Shared by every copy of dev-home" in out, out
     assert "Type a number from 1 to 7, or 'a', or press Enter to go on." in out, out
     saved = json.loads(backups_removed.read_text(encoding="utf-8"))
     assert saved["updates"]["installAutomatically"] is True, saved
@@ -1312,7 +1312,7 @@ def test_a_run_by_hand_makes_a_folders_settings_change_without_asking(
     assert len(changed["permissions"]["additionalDirectories"]) == 2
     assert backup_text == '{\n  "model": "x"\n}\n'
     pattern = (
-        r"^SET\s+Claude Code settings in \.claude: added dev-home and dev-home-tools to "
+        r"^SET\s+Claude Code settings in \.claude: added dev-home and dev-home-toolkit to "
         r"permissions\.additionalDirectories in .*settings\.json\. Backup of the old file: "
     )
     assert re.search(pattern, out, re.M), out
@@ -1416,7 +1416,7 @@ def saved_meanwhile(
     box: Sandbox, monkeypatch: pytest.MonkeyPatch, change: Callable[[dict[str, Any]], object]
 ) -> None:
     """Has another run save this PC's settings with change made (see before_the_work)."""
-    before_the_work(box, monkeypatch, lambda: edit(box.tools / "local-settings.json", change))
+    before_the_work(box, monkeypatch, lambda: edit(box.toolkit / "local-settings.json", change))
 
 
 def run_as(box: Sandbox, person: Person, how: str) -> int:
@@ -1577,7 +1577,7 @@ def test_a_setting_declared_and_answered_meanwhile_stays(
     how: str,
 ) -> None:
     # Such as a preference a sync brought in a skill's update, which --configure in another
-    # session then answered, or a setting of dev-home-tools' own that an update brought: this run
+    # session then answered, or a setting of dev-home-toolkit's own that an update brought: this run
     # read what's declared before, so it doesn't know them, and leaves them to the runs that do.
     declared = box.content / "skills" / "mine" / "dev-home-skill.json"
     preference = {"default": True, "label": "Tidy output"}
@@ -1640,7 +1640,7 @@ def test_settings_changed_meanwhile_to_what_setup_cant_read_are_left_as_they_are
     text: str,
     said: str,
 ) -> None:
-    # Such as a hand edit, or a newer dev-home-tools, while this run waited at a question: its
+    # Such as a hand edit, or a newer dev-home-toolkit, while this run waited at a question: its
     # answer isn't saved, and the file stays as it is.
     before_the_work(box, monkeypatch, lambda: write_text(settings, text))
     returned = run_as(box, person, "by hand")
@@ -1887,9 +1887,9 @@ def test_creates_a_new_dev_home_from_the_starter(
     agents = (new_home / "AGENTS.md").read_text(encoding="utf-8")
     subject = git("-C", str(new_home), "log", "-1", "--format=%s")
     signing = git("-C", str(new_home), "config", "--local", "--get", "commit.gpgsign")
-    tools = str(box.tools).replace("\\", "/")
+    toolkit = str(box.toolkit).replace("\\", "/")
     assert re.search(r"^CREATED\s+New private repo my-dev-home on GitHub", out, re.M), out
-    assert f"{tools}/sync.py" in agents
+    assert f"{toolkit}/sync.py" in agents
     assert subject == ["starter: new dev-home"]
     assert signing == ["false"]
     # A new dev-home starts with one active copy, without a question.

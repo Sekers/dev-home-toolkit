@@ -4,7 +4,7 @@ How the tests work, and the rules for writing them. AGENTS.md has the four check
 proposing a commit, and points here; its rules apply too.
 
 - uv installs the tools pinned in `internal/development/pyproject.toml` and `uv.lock`, for
-  development only: people who use dev-home-tools never need them. The tools run from that
+  development only: people who use dev-home-toolkit never need them. The tools run from that
   folder, so their settings, `.venv`, and caches stay out of the root. Ruff looks for settings
   only in each file's own folder and the ones above it, so the ruff commands name them, and
   check the whole repo from its root, skipping what git ignores. The tests check the working

@@ -39,8 +39,8 @@ from .settings import (
     SETTINGS,
     SETTINGS_PATH,
     STATE,
+    TOOLKIT_ROOT,
     TOOLS,
-    TOOLS_ROOT,
     LocalSettings,
     Setting,
     Tool,
@@ -85,8 +85,8 @@ def usage_entry(name: str, text: str) -> list[str]:
 
 
 def usage() -> str:
-    """How to change one setting, with every setting's name; the help of dev-home-tools' own comes
-    from setting-definitions.json."""
+    """How to change one setting, with every setting's name; the help of dev-home-toolkit's own
+    comes from setting-definitions.json."""
     entries = [
         (f"{setting.path}={PLACEHOLDERS[setting.type]}", setting.help) for setting in SETTINGS
     ]
@@ -142,7 +142,7 @@ USAGE = usage()
 LAYOUT_NOTES = {
     "unreadable": "can't be read",
     "older": "is in an older layout, so each sync checks GitHub",
-    "unknown": "has a schemaVersion this dev-home-tools doesn't know",
+    "unknown": "has a schemaVersion this dev-home-toolkit doesn't know",
 }
 
 
@@ -179,7 +179,7 @@ def copies_answer(settings: LocalSettings) -> tuple[bool | None, str]:
 
 
 def setting_text(settings: LocalSettings, path: str) -> str:
-    """One of dev-home-tools' own settings as the menu shows it (see value_shown)."""
+    """One of dev-home-toolkit's own settings as the menu shows it (see value_shown)."""
     return value_shown(BY_PATH[path], get(settings.data, path, MISSING))
 
 
@@ -255,7 +255,7 @@ def overview(run: "Setup", settings: LocalSettings) -> list[str]:
     def row(number: int, label: str, value: str) -> str:
         return f"  {color(str(number), GREEN)}  {label:<{width}}{value}"
 
-    lines = [color("dev-home-tools settings", CYAN), "", color("This PC", CYAN)]
+    lines = [color("dev-home-toolkit settings", CYAN), "", color("This PC", CYAN)]
     lines += [row(number, label, value) for number, (label, value) in enumerate(this_pc, 1)]
     lines += ["", color("Shared by every copy of dev-home", CYAN)]
     lines += [row(len(this_pc) + 1, label, value) for label, value in shared]
@@ -333,7 +333,7 @@ def menu(run: "Setup", settings: LocalSettings) -> bool:
         "updates.checkEveryHours": change_update_hours,
         "devHome.checkEveryHours": change_content_hours,
     }
-    # Numbered as overview numbers the rows: dev-home-tools' own settings in the order
+    # Numbered as overview numbers the rows: dev-home-toolkit's own settings in the order
     # setting-definitions.json has them, then each tool's folders, then the shared setting.
     order = [changers[setting.path] for setting in SETTINGS]
     order += [change_claude_folders, change_codex_homes, change_copies]
@@ -413,7 +413,7 @@ def change_update_hours(run: "Setup", settings: LocalSettings) -> bool:
         run,
         settings,
         "updates.checkEveryHours",
-        "Check GitHub for dev-home-tools updates every how many hours (0 for every sync)",
+        "Check GitHub for dev-home-toolkit updates every how many hours (0 for every sync)",
     )
 
 
@@ -610,7 +610,7 @@ def assign(run: "Setup", settings: LocalSettings, text: str) -> None:
 
 
 def declared_setting(settings: LocalSettings, name: str) -> Setting:
-    """One of dev-home-tools' own settings; whether a skill is added to the agents, named as
+    """One of dev-home-toolkit's own settings; whether a skill is added to the agents, named as
     skills.<skill>.addedToAgents; or a skill's preference, named as
     skills.<skill>.preferences.<name>; with its path spelled as the skill declares it. Raises
     SettingError for a skill or a preference that isn't declared, a skill whose
@@ -660,8 +660,8 @@ def checked_dev_home(value: str) -> str:
     reason = unsafe_reason(folder)
     if reason:
         raise SettingError(f"The folder {folder} {reason}, so commands would need it quoted.")
-    if is_inside(folder, TOOLS_ROOT):
-        raise SettingError(f"The folder {folder} is dev-home-tools' own folder, or inside it.")
+    if is_inside(folder, TOOLKIT_ROOT):
+        raise SettingError(f"The folder {folder} is dev-home-toolkit's own folder, or inside it.")
     full = Path(comparable(folder))
     if not is_in_use(full) or missing_dev_home_files(full):
         raise SettingError(

@@ -6,7 +6,7 @@ read through it as if the files were right there. So when a sync or an update ch
 or a rule, the tools see the change at once, with nothing to copy. On Windows, setup makes each
 folder link as a directory junction, which needs no admin rights and no Developer Mode.
 
-- **In your dev-home-tools folder,** three things that belong to this PC only. Git ignores them,
+- **In your dev-home-toolkit folder,** three things that belong to this PC only. Git ignores them,
   so they never go to GitHub, and an update never overwrites them.
   - `internal\.generated\`: this PC's copy of the skills, the scripts they share, and the
     operating rules, at the same paths they have under `templates/`. In this repo, they hold a
@@ -42,7 +42,7 @@ folder link as a directory junction, which needs no admin rights and no Develope
     `dev-home-operating-rules` links to the operating rules, and `dev-home-global-rules` to your
     dev-home's `global-rules\`. Nothing in that folder says which repo a name belongs to, so
     each link starts with `dev-home-`.
-  - `settings.json` gets your dev-home and dev-home-tools folders in
+  - `settings.json` gets your dev-home and dev-home-toolkit folders in
     `permissions.additionalDirectories`, so Claude Code can use them from any project. Your yes to
     the folder approves this, and every sync puts it back if it goes missing, with a backup.
   - Your own `CLAUDE.md` there is never touched.
@@ -63,7 +63,7 @@ folder link as a directory junction, which needs no admin rights and no Develope
 - **If you say no later,** to a Claude Code folder or to Codex, setup removes what it set up
   there, naming each as it goes:
   - In a Claude Code folder: its links in `skills\` and `rules\`, and your dev-home and
-    dev-home-tools folders in `settings.json`'s `permissions.additionalDirectories`, with a backup.
+    dev-home-toolkit folders in `settings.json`'s `permissions.additionalDirectories`, with a backup.
   - For Codex: the `AGENTS.md` it wrote in each home, its links in `~\.agents\skills\`, and your
     dev-home in each `config.toml`'s `writable_roots`, with a backup.
     `project_doc_max_bytes` stays, since it gives Codex no access.
@@ -87,4 +87,4 @@ folder link as a directory junction, which needs no admin rights and no Develope
 
 **To remove it all:** delete each link with `cmd /c rmdir <link>`, `internal\.python` included,
 delete the `AGENTS.md` setup wrote in each Codex home, take the added lines out of the settings
-files, then delete your dev-home-tools folder. Your dev-home stays as it is.
+files, then delete your dev-home-toolkit folder. Your dev-home stays as it is.

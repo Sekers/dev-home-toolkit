@@ -136,7 +136,7 @@ EACH = "each"
 
 @dataclass(frozen=True)
 class ListItem:
-    """One optional item: its name in the list, whether dev-home-tools recommends it, and its own
+    """One optional item: its name in the list, whether dev-home-toolkit recommends it, and its own
     question, such as "Set up ~/.claude-<name>?", for when the items are asked one at a time."""
 
     name: str

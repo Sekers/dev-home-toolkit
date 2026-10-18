@@ -1,6 +1,6 @@
 # A release data file holds the version and what end users need to know
 
-**Decision:** dev-home-tools' version lives in a small data file in `internal/shared/`, such as
+**Decision:** dev-home-toolkit's version lives in a small data file in `internal/shared/`, such as
 `release.json`, beside the code that reads it, with the facts about the release that end users
 and the update check need. Not built yet. Its exact name and fields are decided with the
 changelog's format.
@@ -14,7 +14,7 @@ changelog's format.
   them.
 - The update check reads the waiting release's file from the fetched commit with one git command,
   only when an update is waiting. From it, the update lines show versions, not commits, such as
-  "dev-home-tools 1.1.0 is available; you have 1.0.0", and the check holds the update back when
+  "dev-home-toolkit 1.1.0 is available; you have 1.0.0", and the check holds the update back when
   the PC can't meet a requirement. The lines' exact wording, and their link to the changelog, are
   decided when it's built.
 - Each release's tag matches the file
