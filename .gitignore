@@ -20,17 +20,22 @@ __pycache__/
 .coverage.*
 htmlcov/
 
-# Windows thumbnail cache files
+# Files Windows creates: thumbnail caches, folder settings, and shortcuts
 Thumbs.db
 Thumbs.db:encryptable
 ehthumbs.db
 ehthumbs_vista.db
-
-# Folder config file
 [Dd]esktop.ini
-
-# Windows shortcuts
 *.lnk
+
+# Files macOS creates: folder settings, and resource forks on drives that aren't Mac-formatted
+.DS_Store
+._*
+
+# Files Linux desktops and editors create: backups, folder settings, and trash folders
+*~
+.directory
+.Trash-*
 
 # Visual Studio Code
 .vscode/*

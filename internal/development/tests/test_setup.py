@@ -1790,6 +1790,35 @@ def test_git_ignores_this_pcs_settings_and_what_saving_them_leaves_beside_them(
     assert git("-C", str(repo), "check-ignore", "--no-index", *names) == names
 
 
+def operating_system_section(gitignore: Path) -> list[str]:
+    """The lines from the section on files Windows creates up to the one on Visual Studio Code."""
+    lines = read(gitignore).splitlines()
+    start = lines.index("# Files Windows creates: thumbnail caches, folder settings, and shortcuts")
+    return lines[start : lines.index("# Visual Studio Code")]
+
+
+def test_both_gitignores_ignore_what_each_operating_system_leaves(box: Sandbox) -> None:
+    # dev-home's sync offers to commit any file git doesn't ignore, and developers work on more
+    # than one operating system, so both files ignore the same list.
+    starter = box.toolkit / "templates" / "dev-home-starter" / ".gitignore"
+    toolkit = box.toolkit / ".gitignore"
+    assert operating_system_section(starter) == operating_system_section(toolkit)
+    names = [
+        "Thumbs.db",
+        "desktop.ini",
+        "shortcut.lnk",
+        ".DS_Store",
+        "._notes.md",
+        "notes.md~",
+        ".directory",
+        ".Trash-1000",
+    ]
+    repo = box.root / "operating-system-ignore-check"
+    git("init", "--quiet", str(repo))
+    shutil.copyfile(starter, repo / ".gitignore")
+    assert git("-C", str(repo), "check-ignore", "--no-index", *names) == names
+
+
 def setup_configure(box: Sandbox, *args: str) -> Run:
     return run_python(box, "setup.py", "--configure", *args)
 

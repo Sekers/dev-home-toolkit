@@ -1,15 +1,22 @@
 # Scratch space for text that leaves this repo, such as GitHub issue bodies
 .drafts/
 
-# Windows thumbnail cache files
+# Files Windows creates: thumbnail caches, folder settings, and shortcuts
 Thumbs.db
+Thumbs.db:encryptable
 ehthumbs.db
-
-# Folder config file
+ehthumbs_vista.db
 [Dd]esktop.ini
-
-# Windows shortcuts
 *.lnk
+
+# Files macOS creates: folder settings, and resource forks on drives that aren't Mac-formatted
+.DS_Store
+._*
+
+# Files Linux desktops and editors create: backups, folder settings, and trash folders
+*~
+.directory
+.Trash-*
 
 # Visual Studio Code
 .vscode/*
