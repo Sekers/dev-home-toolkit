@@ -92,5 +92,11 @@ folders"; where "Setup offers recommended settings for Claude Code and Codex" an
 skills per PC, and the tools show or hide them" save their answers; and the schema version that
 "A dev-home has one active copy, or several" set aside until the format changed.
 
+**Changed on 2026-10-18,** not built yet: `dev-home.json` gains the newest dev-home-toolkit
+version that has set dev-home up, and `layoutVersions`, one number for each part of dev-home
+([dev-home records the newest version and each part's layout](dev-home-records-the-newest-version-and-each-parts-layout.md)).
+Setup's code creates the file, where the starter used to seed it
+([Every file in dev-home belongs to dev-home-toolkit or to the end user](every-file-in-dev-home-belongs-to-dev-home-toolkit-or-to-the-end-user.md)).
+
 **Look again if:** a setting needs more than two levels of grouping, or a file without a version
 should be moved forward instead of set aside.

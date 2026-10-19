@@ -137,6 +137,13 @@ was ignored, and the skill went into agents its writer excluded. With two lists,
 its own rule even for what the reader doesn't know, and either kind can gain types later. Both
 names state facts about the skill, not what setup should do, so they hold for releases too.
 
+**Changed on 2026-10-18,** before any release, not built yet, with the reasons in
+[Skill and rule files share their fields](skill-and-rule-files-share-their-fields.md): a
+program's `description` becomes `usedFor`; a built-in rule's `dev-home-rule.json` takes the same
+`supportedOn`, with `os` and `agent`, and no `dependsOn`, since a rule loads whether or not a
+program is there; and neither file gets a format version, with a rule for developers that a field
+never changes meaning.
+
 **Options set aside:**
 
 - One list, `requires`, with each entry's kind known from its type's name: see the change above.

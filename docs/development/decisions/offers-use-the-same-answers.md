@@ -42,6 +42,15 @@ with no answers, as a new preference gets no line at all
 A folder setup hasn't asked about is still an offer, with the answers above, so a folder can now
 hold a reminder ([Settings record answers, not just values](settings-record-answers-not-just-values.md)).
 
+**Departure,** decided 2026-10-18, not built yet: the example rules above became built-in rules,
+and a new one is announced in one `NEW` line for its batch, once. Its answers are `added`,
+`not added`, `default`, and `unanswered`, as for skills, with no reminders: a rule loads in every
+session, so it never applies without a yes, and a line in every session would cost attention for
+something optional
+([Built-in rules ship with dev-home-toolkit and wait for a yes](built-in-rules-ship-with-dev-home-toolkit-and-wait-for-a-yes.md)).
+Starter updates were dropped the same day
+([Every file in dev-home belongs to dev-home-toolkit or to the end user](every-file-in-dev-home-belongs-to-dev-home-toolkit-or-to-the-end-user.md)).
+
 **Why:** the offers grew one at a time, with different words for the same idea ("decide later",
 "remind me later", "skip this version"), and "later" never said when. Defining each answer by
 what's remembered and when it comes back makes every question mean the same thing. One type per

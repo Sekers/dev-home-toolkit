@@ -28,5 +28,13 @@ come in only reads the file. The developer approved the call, as AGENTS.md's "Sp
 - Generating the index from each note's **Covers:** line, so no agent edits it: it changes the
   index's format, the filing rules, and the knowledge skill, too much for problems this rare.
 
+**Changed on 2026-10-18,** not built yet, with the reasons in
+[The knowledge index lists subjects, and each subject lists its notes](the-knowledge-index-lists-subjects-and-each-subject-lists-its-notes.md):
+the index becomes a subject list in `knowledge/README.md` and a list of notes in each subject's
+own `README.md`, each still one line per entry. So the checks cover every index file a sync
+commits: every note a subject's list names is committed already, or among the files given and
+still there; every subject the subject list names has its folder; and no file lists an entry
+twice. It's still one `git ls-tree` of `knowledge/`, which lists every subject's files.
+
 **Look again if:** the index stops being one row per line, or notes reach dev-home other than
 through the sync.

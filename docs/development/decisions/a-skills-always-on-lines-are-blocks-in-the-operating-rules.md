@@ -66,4 +66,11 @@ Measured on 2026-10-16: the rules are 317 words, about 150 general, 50 for `hand
 - A file of lines in each skill's folder, which setup assembles: the rules stop being one file to
   read whole, and the file is linked into the tools with the skill.
 
+**Changed on 2026-10-18,** not built yet, with the reasons in
+[Each agent gets its rules as one file setup writes in its own folder](each-agent-gets-its-rules-as-one-file-setup-writes-in-its-own-folder.md):
+each Claude Code folder gets a file of its own, which setup writes in its `rules\` in place of the
+links, so the one generated file every Claude Code folder shared goes. Each agent's file joins the
+operating rules, with the blocks of the skills added for that agent, and the end user's rules for
+that agent on that PC. The blocks, their heading, and the tests work as above.
+
 **Look again if:** many skills need always-on lines, or a tool starts loading rules per skill.

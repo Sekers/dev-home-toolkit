@@ -14,6 +14,16 @@ anyone who ignores the note.
 report a `PROBLEM` (as chezmoi does); keep a `.bak` of the old file (as Ruler does); or make the
 generated files read-only.
 
+**Changed on 2026-10-18,** not built yet, with the reasons in
+[Each agent gets its rules as one file setup writes in its own folder](each-agent-gets-its-rules-as-one-file-setup-writes-in-its-own-folder.md)
+and
+[Every file in dev-home belongs to dev-home-toolkit or to the end user](every-file-in-dev-home-belongs-to-dev-home-toolkit-or-to-the-end-user.md):
+the notes go, from every generated file. Two kinds of file get a safety net. Setup's rules file
+in each agent's folder: setup keeps a copy of what it last wrote, and asks where any added lines
+go. And the files dev-home-toolkit owns in dev-home: a hand edit goes to the Recycle Bin before
+setup puts the file back. What's left with no net is `internal/.generated/`, where an edit is
+still lost at the next sync, now with no note warning against it.
+
 **Look again if:** an edit is ever actually lost, or plugins are looked at again (see
 [The skills are not shipped as plugins](the-skills-are-not-shipped-as-plugins.md)), where a hook
 could block agents' edits under `internal/.generated/`.

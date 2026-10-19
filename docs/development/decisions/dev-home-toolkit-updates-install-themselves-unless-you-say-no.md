@@ -20,5 +20,10 @@ matters only if the file breaks between the two reads.
 - Treating a settings file that can't be read as missing, so the default installs: it would
   install code on a PC whose settings are broken.
 
+**Open question,** raised on 2026-10-18 with the release data file's `urgency`
+([A release data file holds the version and what end users need to know](a-release-data-file-holds-the-version-and-what-end-users-need-to-know.md)):
+whether automatic updates should stop before a new major version and ask. This decision never
+weighed majors, and npm's `^` ranges and update bots such as Renovate treat them apart.
+
 **Look again if:** dev-home-toolkit gains a check that an update comes from its publisher, such as
 a signature, or an update ever breaks the PCs that followed the default.

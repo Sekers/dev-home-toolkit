@@ -123,5 +123,14 @@ where a folder with a no was left alone; and
 [A yes to set up a folder approves the settings change it needs](a-yes-to-set-up-a-folder-approves-the-settings-change-it-needs.md),
 whose change a no now takes back out.
 
+**Changed on 2026-10-18,** not built yet, with the reasons in
+[Each agent gets its rules as one file setup writes in its own folder](each-agent-gets-its-rules-as-one-file-setup-writes-in-its-own-folder.md):
+setup's rules file in each agent's folder replaces the links in `rules\`, and setup tells its
+`AGENTS.md` in a Codex home by its last-written copy, not by a note. A no first saves any lines
+added to that file, as every run does, then removes the file and setup's copy of it, and says so
+in one line, noting that the end user's rules are still in dev-home. Nothing in dev-home changes,
+and setup stops creating `my-rules.md` for that agent on that PC. How another tool is added is in
+[Agents added later work like Claude Code and Codex](agents-added-later-work-like-claude-code-and-codex.md).
+
 **Look again if:** setup sets up another tool that reads `~/.agents/skills`, Claude Code starts
 reading it, or Codex gets a skills folder for each home that isn't deprecated.

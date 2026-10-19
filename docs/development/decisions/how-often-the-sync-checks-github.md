@@ -38,4 +38,11 @@ value that isn't a whole number of 0 or more means the default, and setup says s
 - A yes or no for the update check: one number covers the default, every time, and anything
   between.
 
+**Changed on 2026-10-18,** not built yet, with the reasons in
+[dev-home records the newest version and each part's layout](dev-home-records-the-newest-version-and-each-parts-layout.md):
+when `dev-home.json` records a newer dev-home-toolkit than this PC's, the sync checks GitHub for
+updates right away, ignoring `updates.checkEveryHours`, once per newer version. And for both
+intervals, a last fetch with no line for the upstream branch, only `not-for-merge` lines, no
+longer counts.
+
 **Look again if:** git changes what a failed fetch does to `FETCH_HEAD`.

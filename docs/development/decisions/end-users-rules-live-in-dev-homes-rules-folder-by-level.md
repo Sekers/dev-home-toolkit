@@ -1,0 +1,137 @@
+# End users' rules live in dev-home's rules folder, by level
+
+**Decision:** dev-home's `global-rules/` becomes `rules/`, with four levels:
+
+```text
+rules/_all-agents/              every agent, every PC
+rules/<agent>/                  one agent, every PC: claude-code/, codex/
+rules/pcs/<pc>/_all-agents/     every agent, one PC
+rules/pcs/<pc>/<agent>/         one agent, one PC
+```
+
+Each level holds `mine/`, the end user's rule files. `_all-agents/` and each `<agent>/` also hold
+`built-in/`
+([Built-in rules ship with dev-home-toolkit and wait for a yes](built-in-rules-ship-with-dev-home-toolkit-and-wait-for-a-yes.md)),
+never the per-PC levels, and `pcs/<pc>/<agent>/` also holds `unanswered/`
+([Each agent gets its rules as one file setup writes in its own folder](each-agent-gets-its-rules-as-one-file-setup-writes-in-its-own-folder.md)).
+Not built yet. Decided by the developer on 2026-10-17 and 2026-10-18.
+
+- **Names.** `<pc>` is the computer's name in lowercase, any other character a hyphen.
+  `claude-code/` and `codex/` exist only for agents set up on some PC.
+  `claude-code` matches the agent's name in `dev-home-skill.json`.
+- **`mine/`.** Setup makes sure every `mine/` exists and holds a `my-rules.md`, recreating an empty
+  one whenever it's missing (deleted or renamed away, letter case ignored), for `_all-agents` and
+  each agent set up on that PC, at both levels, and commits it. It never touches any other file in
+  `mine/`. The end user's files there take any `.md` name, subfolders included, joined
+  alphabetically by path. A file directly in a level folder is reported on each sync and not
+  joined. The end user's current `global-rules.md` moves to `rules/_all-agents/mine/my-rules.md`.
+- **Operating systems.** A rule file's note may say `os: windows`, or several names separated by
+  commas, the names `supportedOn` takes, in any case
+  ([Rule files can carry a note](rule-files-can-carry-a-note.md)). Setup joins the file only on
+  those systems. A misspelled name gets a `PROBLEM` line naming the file, with "Did you mean
+  ...?", and the rule loads everywhere until it's fixed.
+- **Joining.** Each agent's file holds the operating rules first, never merged, then
+  `_all-agents`, `<agent>`, `pcs/<pc>/_all-agents`, and `pcs/<pc>/<agent>`, each with
+  `built-in/on/` before `mine/`, and `pcs/<pc>/<agent>/unanswered/` after them, files alphabetically
+  by path. No sentence says which rule wins. Matching headings combine: the same level and text
+  (letter case and surrounding spaces ignored) under the same parent. A merged section sits where
+  its heading first appears, its content in join order; only lines starting with `#` outside
+  fenced code count; the operating rules never merge; and content is never deduplicated. So a
+  built-in rule carrying `## Writing style` lands under the end user's own section of that name.
+- **The operating rules' last line** becomes "My rules are in `<dev-home>/rules/`;
+  `<dev-home>/README.md` explains its folders.", dropping "and win where the two conflict".
+- **Comments and blank lines.** Setup removes every HTML comment that starts a line, with all its
+  lines, outside fenced code, notes included; a comment in the middle of a line stays. A comment
+  with no `-->` in its file is removed to that file's end, and reported on every sync. Each file's
+  leading and trailing blank lines are dropped, one blank line separates files, and the joined
+  file ends with one line break; blank lines inside a file stay. An empty file, or one with only a
+  note, adds nothing.
+- **Encoding.** Setup names every encoding, never the operating system's default, and writes the
+  joined file as UTF-8 with LF. A byte-order mark decides (UTF-8 or UTF-16); any other file is read
+  as UTF-8, each bad byte shown as the replacement character, NUL bytes dropped. A file that isn't
+  clean UTF-8, or is UTF-16, is reported on every sync until it's saved as UTF-8; setup never
+  rewrites it.
+- **Size.** Two settings per PC, changeable through `/dev-home configure` or setup's menu. A Codex
+  instruction budget, 128 KiB by default: setup makes sure each Codex home's
+  `project_doc_max_bytes` is at least that (64 KiB as built), leaving a bigger value alone. A
+  warning when the end user's own rules for one agent on one PC pass 32 KiB; its status word, and
+  how often skills repeat it, are settled when building.
+- **Path length.** Caps of 40 characters on built-in skill and rule names, 24 on agent folder
+  names, and 32 on PC folder names, with moved-file names cut to 60. A longer computer name is cut
+  to 32 characters; two PCs whose names agree that far would share a folder, which is accepted as
+  rare, since a Windows computer name is at most 15 characters. Each run, setup checks that
+  dev-home's folder path, plus the longest rules path it creates, plus 30 characters, fits under
+  260 characters, and otherwise prints a `PROBLEM` line suggesting a shorter place for dev-home.
+  The handoff skill checks the same way when it creates a handoff. Setup turns on `core.longpaths`
+  in dev-home's git config with its other git settings there; if checking it adds a git call to
+  each run, it's measured and the developer is asked first, as AGENTS.md's Speed rule says.
+- **Docs.** `docs/guide/your-rules.md` explains the levels with an example of each, `mine/` and
+  `my-rules.md`, `os:`, a takeover of an agent's file, and getting dropped text back;
+  `docs/reference/rule-files.md` holds the facts to look up; the README's "Your own rules and
+  skills" points to the guide; and dev-home's root README explains `rules/`.
+
+**Why:**
+
+- Really per PC: a file in a Codex home is per home, and several homes would make "this PC"
+  unclear. Synced and backed up. A file per rule is easy to update and has its own history, the
+  way Claude Code's and Cursor's rules folders work. `_all-agents` always sorts first, whatever the
+  next agent is called (Aider would sort above `all-agents`), and `claude-code` doesn't suggest
+  claude.ai's chats.
+- `mine/` and `my-rules.md`: an agent asked to add a rule for, say, Codex on this PC always knows
+  which file to open. There's no `rules/README.md`: dev-home's root README, which setup keeps
+  current, explains the layout, and a README an end user adds is theirs.
+- No sentence says which rule wins: tools that combine rule files, such as Ruler and Cursor, add
+  none; a conflict is better fixed than ranked; and a later, more specific rule is usually
+  followed.
+- Comments: Claude Code's memory docs (read 2026-10-18) strip "Block-level HTML comments" and keep
+  "Comments inside code blocks", so both agents see the same rules, and comments cost no tokens in
+  Codex. An unclosed comment kept would likely hide every later file from Claude Code (inferred
+  from Markdown, not tested).
+- Encoding: such files are unlikely. Editors and the agents' file tools write UTF-8; tested
+  2026-10-18, only Windows PowerShell 5.1 wrote others (`>` UTF-16, `>>` a UTF-16 tail on a UTF-8
+  file, which strict UTF-8 accepts, and `Set-Content` and `Add-Content` the PC's code page). Rules
+  never drop out, the result is the same on every system, and it's about 10 lines. UTF-16 is
+  reported because git counts a file with NUL bytes as binary, and `git merge-file` refuses it.
+- Size: Codex reads the global file first and silently drops what passes its budget, 32 KiB by
+  default. Claude Code loads files up to 4 MiB and advises under 200 lines per file, about 12.6 KiB
+  at 63 bytes a line, and its own length warning doesn't show in the desktop app's or VS Code's
+  `/status` (the developer's screenshots, 2026-10-18). 32 KiB is Codex's whole default budget, and
+  about twice Claude Code's advice. Measured 2026-10-18: the operating rules 2,439 bytes, one
+  end user's global rules 13,832, and Codex's joined file 16,289.
+- Path length: Windows refuses a path over 260 characters by default, counting dev-home's own
+  folder; Git for Windows won't check out a longer one without `core.longpaths`; and macOS and Linux
+  cap each name at 255. Windows' own long-path switch needs admin rights, so setup leaves it alone.
+  With these caps the longest rules path is about 140 characters, so dev-home's folder can be about
+  90 characters long. A handoff's path, `handoffs/github/<owner>/<repo>/HANDOFF.md`, can reach about
+  170, since GitHub allows 39-character owners and 100-character repository names.
+- `os:` in a note: agents are limited by folder, operating systems by declaration, as built-in
+  rules declare theirs, and one file covers every Windows PC. A misspelled name loads the rule,
+  since dropping a needed rule costs more than loading an extra one.
+
+**Options set aside:**
+
+- One file per level with notes and end notes inside it (too complex); the end user's files
+  directly in each level folder (the developer chose `mine/`); `global-rules/` ("global rules for
+  one PC" contradicts itself), `always-on-rules/`, `my-rules/`; an `agents/` subfolder, dotted
+  names, and prefixes; per-PC files in each agent's own folder; `all-agents` and `0-all-agents`;
+  `claude`. Per-account rules end for Codex homes, while Claude Code's own files stay; a level for
+  them can come later.
+- A placeholder with a note in every folder; a README in `rules/`; leaving a renamed or deleted
+  `my-rules.md` alone.
+- A "later rule wins" sentence; headings per level (they'd stop headings combining, and cost
+  tokens); keeping the last line with a new path; removing it.
+- Leaving a file that isn't clean UTF-8 out (one bad line drops every rule in it); reading the
+  whole file as Windows-1252 (garbles a mixed file's UTF-8 part, tested); repairing it line by line
+  (about 30 more lines of guessing for unlikely cases); converting the file.
+- Removing only setup's notes; also removing comments in the middle of a line (needs inline-code
+  parsing); keeping an unclosed comment's text; collapsing runs of blank lines.
+- A fixed 64 KiB; growing the budget automatically; Codex's default; no warning; a warning at
+  16 KiB.
+- Limits worked out per PC (rule files sync between PCs, so names would be renamed back and
+  forth); relying on long-path support alone; no caps and no check.
+- No OS limit for the end user's rules (a Windows rule loads on every Mac, or is copied into each
+  Windows PC's folder); per-OS folders such as `rules/os/windows/` (more levels and folders, and
+  built-in rules declare their systems instead).
+
+**Look again if:** an agent gains a way to load several global rules files, end users ask for a
+level per account, or Windows turns on long paths by default.
