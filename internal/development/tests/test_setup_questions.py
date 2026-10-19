@@ -376,6 +376,9 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_codex(
         out = capsys.readouterr().out
         written = json.loads(settings.read_text(encoding="utf-8"))
         allowed = json.loads((second / "settings.json").read_text(encoding="utf-8"))
+        default = json.loads(
+            (box.profile / ".claude" / "settings.json").read_text(encoding="utf-8")
+        )
         linked = link_target(second / "skills" / "handoff")
         work_rules = (work / "AGENTS.md").exists()
         work_config = tomllib.loads((work / "config.toml").read_text(encoding="utf-8"))
@@ -411,9 +414,17 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_codex(
     # Each yes approved the settings change its folder or home needs, and the questions said so
     # first.
     assert len(allowed["permissions"]["additionalDirectories"]) == 2
+    # A folder other than ~/.claude also keeps ~/.claude's instructions out; ~/.claude doesn't.
+    name = box.profile.name
+    assert allowed["claudeMdExcludes"] == [
+        f"**/{name}/.claude/CLAUDE.md",
+        f"**/{name}/.claude/rules/**",
+    ], allowed
+    assert "claudeMdExcludes" not in default, default
     pattern = (
         r"^SET\s+Claude Code settings in \.claude-second: added dev-home and dev-home-toolkit to "
-        r"permissions\.additionalDirectories in .*settings\.json \(new file\)$"
+        r"permissions\.additionalDirectories, and added patterns to claudeMdExcludes that keep the "
+        r"CLAUDE\.md and rules in \.claude out of its sessions in .*settings\.json \(new file\)$"
     )
     assert re.search(pattern, out, re.M), out
     # The list, then what a yes does, then the question; and for Codex, the homes first.
@@ -422,8 +433,11 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_codex(
         f"{box.profile / '.claude-third'} A 'yes' sets up dev-home's skills and rules in each. "
         "It also adds your dev-home and dev-home-toolkit folders to "
         "permissions.additionalDirectories in each folder's settings.json, so Claude Code can use "
-        "them from any project. A 'no' removes all of that, if it's there. Setup backs up each "
-        "file first."
+        "them from any project. In each folder other than .claude, it also adds two patterns to "
+        "claudeMdExcludes. Claude Code loads the CLAUDE.md and rules in .claude, the default "
+        "account's folder, into a session started anywhere under your user folder, as if they "
+        "were the project's own instructions, and the patterns keep them out of that folder's "
+        "sessions. A 'no' removes all of that, if it's there. Setup backs up each file first."
     )
     assert claude in words, out
     codex = (

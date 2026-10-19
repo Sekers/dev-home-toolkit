@@ -49,13 +49,14 @@ internal/.generated/, at the same paths they have under templates/, and links th
 rules into the tools. Pre-approved commands must match the command text exactly, so the paths
 can't be variables.
 
-Each Claude Code folder and Codex home setup sets up needs one change in its settings file, so
-the tool can reach dev-home from any project. The yes to setting up the folder approves it, and
-the question says so, so every run, quiet ones included, makes the change when it's missing: it
-saves a dated backup of the file, then writes the change, and says so. A no to the folder takes
-that access back out the same way. It never edits a file it can't fully parse (a settings.json
-with comments, for example), or a read-only one; it reports it, and a run by hand prints what to
-change by hand.
+Each Claude Code folder and Codex home setup sets up needs a change in its settings file, so the
+tool can reach dev-home from any project, and in a Claude Code folder other than ~/.claude, so its
+sessions skip ~/.claude's instructions (see home_claude_excludes). The yes to setting up the
+folder approves it, and the question says so, so every run, quiet ones included, makes the change
+when it's missing: it saves a dated backup of the file, then writes the change, and says so. A no
+to the folder takes it back out the same way. It never edits a file it can't fully parse (a
+settings.json with comments, for example), or a read-only one; it reports it, and a run by hand
+prints what to change by hand.
 
 Run it by hand once per PC. After that, each sync runs it with --quiet, so changes to the
 skills, and skills added on another PC, reach this one.
@@ -66,8 +67,8 @@ local-settings.json. Setup offers each Claude Code folder it finds, in a list, e
 ~/.claude-<name>; and the folder in CLAUDE_CONFIG_DIR. It saves a no there too. A folder nobody
 has answered for isn't set up: setup adds no links there and removes none, and a quiet run names
 it. In a folder answered no, setup removes the links it made, and takes dev-home and
-dev-home-toolkit back out of its settings.json, and leaves the rest alone. One answered yes that no
-longer exists is skipped.
+dev-home-toolkit, and its claudeMdExcludes patterns, back out of its settings.json, and leaves the
+rest alone. One answered yes that no longer exists is skipped.
 
 Codex homes are saved the same way, under codex.homes, but every home reads the same skills, from
 ~/.agents/skills, so every home has the same answer: setup sets up all of them, or none, and asks
@@ -231,6 +232,9 @@ CODEX_DOC_BYTES = 65536
 # What each folder Claude Code's settings.json gets in additionalDirectories is called, in the
 # order settings_checks lists them.
 ALLOWED_NAMES = ("dev-home", "dev-home-toolkit")
+# Characters a claudeMdExcludes pattern reads as more than themselves. A backslash doesn't escape
+# them on Windows, so home_claude_excludes writes ? for each, which matches any one character.
+GLOB_SPECIAL = "*?[]{}()!@+\\"
 GENERATED_ROOT = TOOLKIT_ROOT / "internal" / ".generated"
 PYTHON_LINK = TOOLKIT_ROOT / "internal" / ".python"
 GENERATED_FOLDERS = ("skills", "shared-skill-scripts", "operating-rules")
@@ -470,9 +474,15 @@ class Setup:
         self.line()
         self.line(f"{kind}: {folder_list(folders) or 'none found yet'}")
         self.line()
-        for text in textwrap.wrap(yes_does(tool, several=len(folders) > 1), console.LINE_WIDTH):
+        does = yes_does(tool, several=len(folders) > 1, guarded=self.any_guarded(tool, folders))
+        for text in textwrap.wrap(does, console.LINE_WIDTH):
             self.line(text)
         self.line()
+
+    def any_guarded(self, tool: Tool, folders: Sequence[Path]) -> bool:
+        """Whether any of the folders a question is about gets home_claude_excludes (see
+        guarded)."""
+        return tool == CLAUDE_CODE and any(self.guarded(folder) for folder in folders)
 
     def ask_folder(self, tool: Tool, folder: Path, current: bool | None) -> bool | None:
         """Whether to set up one of a tool's folders. Enter keeps its answer, and takes yes for one
@@ -1378,7 +1388,7 @@ class Setup:
         except OSError as error:
             self.status("PROBLEM", f"{label}: could not link {PYTHON_LINK} to {folder}. {error}")
 
-    # Settings changes. Each is the one change a folder setup sets up needs in its settings file,
+    # Settings changes. Each is the change a folder setup sets up needs in its settings file,
     # which the yes to setting up that folder approved, so no run asks about it, and every run,
     # quiet ones included, makes it again if it goes missing. Each is planned in full first,
     # checked by reading the new text back, and written with a backup, while the file is as it
@@ -1744,7 +1754,7 @@ class Setup:
                             console.ListItem(str(f), True, folder_question(tool, f))
                             for f in unanswered
                         ],
-                        yes_does(tool, several=True),
+                        yes_does(tool, several=True, guarded=self.any_guarded(tool, unanswered)),
                     )
                 if answer is not None:
                     for folder in unanswered:
@@ -2153,8 +2163,8 @@ class Setup:
         # where setup's links point, so one of the person's own stays, as does anything that
         # isn't a link. A folder that is really one setup sets up, through a junction, such as
         # ~/.claude/skills made a junction to ~/.agents/skills to share skills, keeps its links.
-        # The access a yes added to the tools' settings files is taken out last, with the other
-        # settings changes (see settings_checks).
+        # What a yes added to the tools' settings files is taken out last, with the other settings
+        # changes (see settings_checks).
         set_up: set[str] = set()
         if tools.declined_claude_dirs or tools.declined_codex_homes:
             set_up = {real_path(folder) for folder in tool_skill_folders}
@@ -2236,8 +2246,8 @@ class Setup:
 
     def settings_checks(self, content_root: Path, tools: ToolFolders) -> list[SettingsCheck]:
         """What each tool's settings file needs, planned from the file as it is now: each Claude
-        Code folder's and each Codex home's set up, and the access a yes added taken back out of
-        each one answered no, which that no approves as the yes approved adding it."""
+        Code folder's and each Codex home's set up, and what a yes added taken back out of each one
+        answered no, which that no approves as the yes approved adding it."""
         wanted_dirs = [comparable(content_root), comparable(TOOLKIT_ROOT)]
         checks: list[SettingsCheck] = [
             self.check_claude_settings(Path(claude_dir), wanted_dirs)
@@ -2255,7 +2265,7 @@ class Setup:
             else set()
         )
         removals: list[SettingsCheck | None] = [
-            self.claude_access_to_remove(Path(claude_dir), wanted_dirs)
+            self.claude_changes_to_remove(Path(claude_dir), wanted_dirs)
             for claude_dir in tools.declined_claude_dirs
             if real_path(Path(claude_dir) / "settings.json") not in set_up
         ]
@@ -2266,10 +2276,25 @@ class Setup:
         checks += [removal for removal in removals if removal is not None]
         return checks
 
+    def guarded(self, claude_dir: Path) -> bool:
+        """Whether a Claude Code folder's settings.json gets home_claude_excludes: every folder
+        but ~/.claude, unless its settings.json is really ~/.claude's, through a link, where the
+        patterns would keep that account's own instructions out."""
+        default = self.home / CLAUDE_CODE.default
+        return real_path(claude_dir) != real_path(default) and real_path(
+            claude_dir / "settings.json"
+        ) != real_path(default / "settings.json")
+
     def check_claude_settings(self, claude_dir: Path, wanted_dirs: list[str]) -> SettingsCheck:
+        """What a Claude Code folder set up needs in its settings.json: dev-home and
+        dev-home-toolkit in permissions.additionalDirectories, and in a folder other than
+        ~/.claude, the patterns in claudeMdExcludes that keep ~/.claude's instructions out of its
+        sessions (see home_claude_excludes)."""
         claude_name = claude_dir.name
         path = claude_dir / "settings.json"
+        wanted_excludes = home_claude_excludes(self.home) if self.guarded(claude_dir) else []
         present: list[str] = []
+        excludes: list[str] = []
         if path.exists():
             try:
                 text = path.read_bytes().decode("utf-8-sig", errors="replace")
@@ -2285,37 +2310,58 @@ class Setup:
                     f"{path} could not be read as JSON, so its settings were not checked.",
                 )
             present = [comparable(resolve_home(folder, self.home)) for folder in folders]
+            excludes = claude_settings.listed(text, claude_settings.EXCLUDES) or []
         missing = [d for d in wanted_dirs if not any(same_path(d, p) for p in present)]
-        added = and_list(
-            [name for d, name in zip(wanted_dirs, ALLOWED_NAMES, strict=True) if d in missing]
-        )
-        if not missing:
+        missing_excludes = [pattern for pattern in wanted_excludes if pattern not in excludes]
+        subject = f"Claude Code settings in {claude_name}"
+        if not missing and not missing_excludes:
+            kept_out = ", and claudeMdExcludes keeps .claude's out" if wanted_excludes else ""
             return (
                 "OK",
-                f"Claude Code settings in {claude_name}: additionalDirectories includes dev-home "
-                "and dev-home-toolkit",
+                f"{subject}: additionalDirectories includes dev-home and "
+                f"dev-home-toolkit{kept_out}",
             )
         try:
-            plan = claude_settings.plan(path, missing)
+            plan = claude_settings.plan(path, missing, missing_excludes)
         except Exception as error:
             plan = Plan(SettingsFile(), reason=f"planning the change failed ({describe(error)})")
-        entries = ", ".join(claude_settings.dump(entry) for entry in missing)
-        snippet = (
-            "          {\n"
-            '            "permissions": {\n'
-            f'              "additionalDirectories": [{entries}]\n'
-            "            }\n"
-            "          }"
-        )
+        needs: list[str] = []
+        dones: list[str] = []
+        merges: list[str] = []
+        hows = ["Merge this into the file."]
+        if missing:
+            entries = ", ".join(claude_settings.dump(entry) for entry in missing)
+            needs.append(f"{' and '.join(missing)} in permissions.additionalDirectories")
+            added = and_list(
+                [name for d, name in zip(wanted_dirs, ALLOWED_NAMES, strict=True) if d in missing]
+            )
+            dones.append(f"added {added} to permissions.additionalDirectories")
+            merges.append(
+                '            "permissions": {\n'
+                f'              "additionalDirectories": [{entries}]\n'
+                "            }"
+            )
+            hows.append(
+                'If it already has "permissions", put additionalDirectories inside that block.'
+            )
+        if missing_excludes:
+            patterns = ", ".join(claude_settings.dump(pattern) for pattern in missing_excludes)
+            needs.append(
+                f"{' and '.join(missing_excludes)} in claudeMdExcludes, to keep the CLAUDE.md and "
+                "rules in .claude out of its sessions"
+            )
+            one = len(missing_excludes) == 1
+            dones.append(
+                f"added {'a pattern' if one else 'patterns'} to claudeMdExcludes that "
+                f"{'keeps' if one else 'keep'} the CLAUDE.md and rules in .claude out of its "
+                "sessions"
+            )
+            merges.append(f'            "claudeMdExcludes": [{patterns}]')
+            hows.append('If it already has "claudeMdExcludes", add these to that list.')
+        how_to = " ".join(hows)[:-1] + ":"
+        snippet = "          {\n" + ",\n".join(merges) + "\n          }"
         return SettingsChange(
-            f"Claude Code settings in {claude_name}",
-            path,
-            f"{' and '.join(missing)} in permissions.additionalDirectories",
-            plan,
-            'Merge this into the file. If it already has "permissions", put '
-            "additionalDirectories inside that block:",
-            snippet,
-            f"added {added} to permissions.additionalDirectories",
+            subject, path, " and ".join(needs), plan, how_to, snippet, ", and ".join(dones)
         )
 
     def check_codex_config(self, home: Path, content_root: str) -> SettingsCheck:
@@ -2362,33 +2408,39 @@ class Setup:
             f"added {added}",
         )
 
-    def claude_access_to_remove(
+    def claude_changes_to_remove(
         self, claude_dir: Path, wanted_dirs: list[str]
     ) -> SettingsCheck | None:
         """What a Claude Code folder answered no needs in its settings.json: dev-home and
         dev-home-toolkit taken back out of permissions.additionalDirectories, written however they
-        are, such as with ~. A problem when the file isn't JSON but names either. None when
-        neither is there, or there's no file to read."""
+        are, such as with ~, and setup's patterns out of claudeMdExcludes. A problem when the file
+        isn't JSON but names any of them. None when none is there, or there's no file to read."""
         path = claude_dir / "settings.json"
         try:
             text = path.read_bytes().decode("utf-8-sig", errors="replace")
         except OSError:
             return None
+        patterns = home_claude_excludes(self.home) if self.guarded(claude_dir) else []
         folders = claude_settings.folders_allowed(text)
         if folders is None:
-            if not mentions_folder(text, wanted_dirs):
+            named = list(ALLOWED_NAMES) if mentions_folder(text, wanted_dirs) else []
+            if any(pattern in text for pattern in patterns):
+                named.append("the patterns setup adds to claudeMdExcludes")
+            if not named:
                 return None
             return (
                 "PROBLEM",
-                f"{path} could not be read as JSON, so setup could not take dev-home and "
-                "dev-home-toolkit out of it, since you said no to this folder.",
+                f"{path} could not be read as JSON, so setup could not take {and_list(named)} out "
+                "of it, since you said no to this folder.",
             )
         found = [
             folder
             for folder in folders
             if any(same_path(resolve_home(folder, self.home), d) for d in wanted_dirs)
         ]
-        if not found:
+        listed = claude_settings.listed(text, claude_settings.EXCLUDES) or []
+        found_patterns = [pattern for pattern in patterns if pattern in listed]
+        if not found and not found_patterns:
             return None
         names = and_list(
             [
@@ -2398,18 +2450,35 @@ class Setup:
             ]
         )
         try:
-            plan = claude_settings.plan_removal(path, found)
+            plan = claude_settings.plan_removal(path, found, found_patterns)
         except Exception as error:
             plan = Plan(SettingsFile(), reason=f"planning the change failed ({describe(error)})")
+        needs: list[str] = []
+        dones: list[str] = []
+        lines: list[str] = []
+        if found:
+            needs.append(f"{names} taken out of permissions.additionalDirectories")
+            dones.append(f"removed {names} from permissions.additionalDirectories")
+            lines.append(
+                "          From permissions.additionalDirectories: "
+                + ", ".join(claude_settings.dump(folder) for folder in found)
+            )
+        if found_patterns:
+            which = "setup's pattern" if len(found_patterns) == 1 else "setup's patterns"
+            needs.append(f"{which} taken out of claudeMdExcludes")
+            dones.append(f"removed {which} from claudeMdExcludes")
+            lines.append(
+                "          From claudeMdExcludes: "
+                + ", ".join(claude_settings.dump(pattern) for pattern in found_patterns)
+            )
         return SettingsChange(
             f"Claude Code settings in {claude_dir.name}",
             path,
-            f"{names} taken out of permissions.additionalDirectories, since you said no to this "
-            "folder",
+            " and ".join(needs) + ", since you said no to this folder",
             plan,
-            "Take these out of permissions.additionalDirectories:",
-            "          " + ", ".join(claude_settings.dump(folder) for folder in found),
-            f"removed {names} from permissions.additionalDirectories",
+            "Take these out:",
+            "\n".join(lines),
+            ", and ".join(dones),
         )
 
     def codex_access_to_remove(self, home: Path, content_root: str) -> SettingsChange | None:
@@ -2439,14 +2508,26 @@ class Setup:
         )
 
 
+def home_claude_excludes(home: Path) -> list[str]:
+    """The claudeMdExcludes patterns that keep ~/.claude's CLAUDE.md and rules out of the sessions
+    of another Claude Code folder's account. Claude Code reads CLAUDE.md, .claude/CLAUDE.md, and
+    .claude/rules/ in every folder above where a session starts, so a session started anywhere in
+    the profile folder takes ~/.claude's for a project's own instructions (anthropics/claude-code
+    issues 80580 and 79233). Each pattern names the profile folder by its name alone, because a
+    whole path has to match the drive letter's case, which differs from session to session."""
+    name = "".join("?" if char in GLOB_SPECIAL else char for char in home.name)
+    return [f"**/{name}/.claude/CLAUDE.md", f"**/{name}/.claude/rules/**"]
+
+
 def folder_question(tool: Tool, folder: Path) -> str:
     return f"Set up {tool.name} in {folder}?"
 
 
-def yes_does(tool: Tool, *, several: bool) -> str:
+def yes_does(tool: Tool, *, several: bool, guarded: bool = False) -> str:
     """What a yes to setting up a tool's folders does, and a no, said before the question: the
-    one change setup also makes in each folder's settings file, which the yes approves (see
-    repair_setting), and its removal, which the no approves, included."""
+    change setup also makes in each folder's settings file, which the yes approves (see
+    repair_setting), and its removal, which the no approves, included. guarded says some of the
+    folders get home_claude_excludes, and why."""
     yes, no = console.key("yes"), console.key("no")
     # Adding an AI agent tool: see AGENTS_SKILLS. A tool that reads ~/.agents/skills, as Codex
     # does, shares that folder's links with Codex, and its question says so.
@@ -2459,16 +2540,37 @@ def yes_does(tool: Tool, *, several: bool) -> str:
             f"{CODEX_DOC_BYTES}, so {tool.name} reads all of your rules. A {no} removes all of "
             "that but project_doc_max_bytes, if it's there. Setup backs up each file first."
         )
-    where, settings_file, backup = (
-        ("in each", f"each {tool.folder}'s settings.json", "each file")
+    where, settings_file, backup, adds, whose = (
+        (
+            "in each",
+            f"each {tool.folder}'s settings.json",
+            "each file",
+            f"In each {tool.folder} other than .claude, it also adds two patterns to "
+            "claudeMdExcludes.",
+            "that",
+        )
         if several
-        else ("there", "its settings.json", "the file")
+        else (
+            "there",
+            "its settings.json",
+            "the file",
+            "It also adds two patterns to claudeMdExcludes there.",
+            "this",
+        )
+    )
+    guard = (
+        f" {adds} {tool.name} loads the CLAUDE.md and rules in .claude, the default account's "
+        "folder, into a session started anywhere under your user folder, as if they were the "
+        f"project's own instructions, and the patterns keep them out of {whose} {tool.folder}'s "
+        "sessions."
+        if guarded
+        else ""
     )
     return (
         f"A {yes} sets up dev-home's skills and rules {where}. It also adds your dev-home and "
         f"dev-home-toolkit folders to permissions.additionalDirectories in {settings_file}, so "
-        f"{tool.name} can use them from any project. A {no} removes all of that, if it's there. "
-        f"Setup backs up {backup} first."
+        f"{tool.name} can use them from any project.{guard} A {no} removes all of that, if it's "
+        f"there. Setup backs up {backup} first."
     )
 
 

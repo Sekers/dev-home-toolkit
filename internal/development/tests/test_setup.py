@@ -511,10 +511,15 @@ def test_a_claude_folder_nobody_has_answered_for_isnt_set_up(box: Sandbox) -> No
         # The yes approved the change its settings.json needs, so a sync makes it.
         pattern = (
             r"^SET\s+Claude Code settings in \.claude-second: added dev-home and dev-home-toolkit "
-            r"to permissions\.additionalDirectories in .*settings\.json\. Backup of the old file: "
+            r"to permissions\.additionalDirectories, and added patterns to claudeMdExcludes that "
+            r"keep the CLAUDE\.md and rules in \.claude out of its sessions in .*settings\.json\. "
+            r"Backup of the old file: "
         )
         assert result.code == 0 and result.has_line(pattern), str(result)
         assert not result.has_line("hasn't asked"), str(result)
+        # Once made, a sync finds nothing to change.
+        again = setup(box)
+        assert again.code == 0 and not again.has_line(r"^SET\s"), str(again)
     finally:
         write_text(settings_path, settings_text)
         for folder in (session, other):
@@ -832,8 +837,9 @@ def test_a_default_folder_with_a_no_is_not_set_up(box: Sandbox) -> None:
 
 def test_a_claude_folder_answered_no_loses_what_setup_set_up_there(box: Sandbox) -> None:
     # Such as a folder set up, then answered no: setup's links go, one at a time, each listed,
-    # and so do dev-home and dev-home-toolkit in its settings.json, with a backup. What's the
-    # person's own there stays, a link to a skill elsewhere and a folder of their own included.
+    # and so do dev-home and dev-home-toolkit in its settings.json, and setup's claudeMdExcludes
+    # patterns, with a backup. What's the person's own there stays, a link to a skill elsewhere,
+    # a folder, and a pattern of their own included.
     folder = box.profile / ".claude-off"
     settings = folder / "settings.json"
     allowed = [
@@ -842,10 +848,16 @@ def test_a_claude_folder_answered_no_loses_what_setup_set_up_there(box: Sandbox)
         str(box.toolkit),
         "D:/shared-notes",
     ]
+    name = box.profile.name
+    excludes = [f"**/{name}/.claude/CLAUDE.md", "**/other/CLAUDE.md", f"**/{name}/.claude/rules/**"]
     write_text(
         settings,
         json.dumps(
-            {"model": "x", "permissions": {"allow": ["Read"], "additionalDirectories": allowed}},
+            {
+                "model": "x",
+                "permissions": {"allow": ["Read"], "additionalDirectories": allowed},
+                "claudeMdExcludes": excludes,
+            },
             indent=2,
         )
         + "\n",
@@ -888,7 +900,8 @@ def test_a_claude_folder_answered_no_loses_what_setup_set_up_there(box: Sandbox)
     assert result.code == 0, str(result)
     pattern = (
         r"^SET\s+Claude Code settings in \.claude-off: removed dev-home and dev-home-toolkit from "
-        rf"permissions\.additionalDirectories in {off}settings\.json\. Backup of the old file: "
+        r"permissions\.additionalDirectories, and removed setup's patterns from claudeMdExcludes "
+        rf"in {off}settings\.json\. Backup of the old file: "
     )
     assert result.has_line(pattern), str(result)
     assert settings_after == {
@@ -897,6 +910,7 @@ def test_a_claude_folder_answered_no_loses_what_setup_set_up_there(box: Sandbox)
             "allow": ["Read"],
             "additionalDirectories": ["~/dev-home-toolkit-elsewhere", "D:/shared-notes"],
         },
+        "claudeMdExcludes": ["**/other/CLAUDE.md"],
     }, settings_after
     assert backups == [settings_before], backups
     for link in (r"skills[\\/]handoff", r"skills[\\/]mine", r"rules[\\/]dev-home-operating-rules"):
@@ -3099,6 +3113,144 @@ def test_claude_settings_refuses_a_removal_it_cant_make_safely(
     path.write_bytes(text.encode("utf-8"))
     plan = shared_module(box, "claude_settings").plan_removal(path, ENTRIES)
     assert plan.reason and reason in plan.reason, plan.reason
+
+
+EXCLUDES = ["**/you/.claude/CLAUDE.md", "**/you/.claude/rules/**"]
+
+
+@pytest.mark.parametrize(
+    ("before", "folders", "after"),
+    [
+        ({}, [], {"claudeMdExcludes": EXCLUDES}),
+        (
+            {"claudeMdExcludes": ["**/other/CLAUDE.md"], "model": "x"},
+            ENTRIES,
+            {
+                "claudeMdExcludes": ["**/other/CLAUDE.md", *EXCLUDES],
+                "model": "x",
+                "permissions": {"additionalDirectories": ENTRIES},
+            },
+        ),
+        (
+            {"permissions": {}},
+            ENTRIES,
+            {"permissions": {"additionalDirectories": ENTRIES}, "claudeMdExcludes": EXCLUDES},
+        ),
+    ],
+    ids=["patterns alone", "after a pattern of the person's own", "into an empty permissions"],
+)
+def test_claude_settings_adds_patterns_to_claude_md_excludes(
+    box: Sandbox, before: dict[str, object], folders: list[str], after: dict[str, object]
+) -> None:
+    path = box.root / "plans" / "excludes.json"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps(before, indent=2) + "\n", encoding="utf-8")
+    plan = shared_module(box, "claude_settings").plan(path, folders, EXCLUDES)
+    assert not plan.reason, plan.reason
+    assert json.loads(plan.new_text) == after
+
+
+@pytest.mark.parametrize(
+    ("text", "reason"),
+    [
+        ('{"claudeMdExcludes": "**/x"}\n', '"claudeMdExcludes" is not a list'),
+        ('{"claudeMdExcludes": null}\n', '"claudeMdExcludes" is null'),
+    ],
+    ids=["a single string", "null"],
+)
+def test_claude_settings_refuses_patterns_it_cant_add_safely(
+    box: Sandbox, text: str, reason: str
+) -> None:
+    path = box.root / "plans" / "excludes-refused.json"
+    path.parent.mkdir(exist_ok=True)
+    path.write_bytes(text.encode("utf-8"))
+    plan = shared_module(box, "claude_settings").plan(path, [], EXCLUDES)
+    assert plan.reason and reason in plan.reason, plan.reason
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        (
+            {"claudeMdExcludes": [*EXCLUDES, "**/other/CLAUDE.md"]},
+            {"claudeMdExcludes": ["**/other/CLAUDE.md"]},
+        ),
+        ({"model": "x", "claudeMdExcludes": EXCLUDES}, {"model": "x"}),
+    ],
+    ids=["keeps a pattern of the person's own", "takes out the emptied list"],
+)
+def test_claude_settings_takes_out_only_the_patterns_named(
+    box: Sandbox, before: dict[str, object], after: dict[str, object]
+) -> None:
+    path = box.root / "plans" / "excludes-remove.json"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps(before, indent=2) + "\n", encoding="utf-8")
+    plan = shared_module(box, "claude_settings").plan_removal(path, [], EXCLUDES)
+    assert not plan.reason, plan.reason
+    assert json.loads(plan.new_text) == after
+
+
+@pytest.mark.parametrize(
+    ("name", "written"),
+    [("you", "you"), ("first.last", "first.last"), ("a(b) {c}!@d+e", "a?b? ?c???d?e")],
+    ids=["plain", "a dot", "characters a pattern reads as more than themselves"],
+)
+def test_the_patterns_name_the_profile_folder(box: Sandbox, name: str, written: str) -> None:
+    # A backslash doesn't escape those characters on Windows, and ? matches any one character:
+    # both tested in Claude Code 2.1.301 (docs/development/research/claude-md-excludes.md).
+    patterns = shared_module(box, "setup").home_claude_excludes(Path("C:/Users") / name)
+    assert patterns == [f"**/{written}/.claude/CLAUDE.md", f"**/{written}/.claude/rules/**"]
+
+
+def test_a_folder_with_one_pattern_gets_the_other(box: Sandbox, settings_kept: Path) -> None:
+    # Such as a folder where the person already wrote the CLAUDE.md pattern by hand.
+    folder = box.profile / ".claude-hand"
+    name = box.profile.name
+    write_text(
+        folder / "settings.json",
+        json.dumps(
+            {
+                "permissions": {"additionalDirectories": [str(box.content), str(box.toolkit)]},
+                "claudeMdExcludes": [f"**/{name}/.claude/CLAUDE.md"],
+            },
+            indent=2,
+        )
+        + "\n",
+    )
+    saved = json.loads(read(settings_kept))
+    saved["claudeCode"]["folders"]["~/.claude-hand"] = {"setUp": True}
+    write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
+    try:
+        result = setup(box)
+        written = json.loads(read(folder / "settings.json"))
+    finally:
+        remove_claude_folder(folder)
+    pattern = (
+        r"^SET\s+Claude Code settings in \.claude-hand: added a pattern to claudeMdExcludes that "
+        r"keeps the CLAUDE\.md and rules in \.claude out of its sessions in .*settings\.json\. "
+    )
+    assert result.code == 0 and result.has_line(pattern), str(result)
+    assert written["claudeMdExcludes"] == [
+        f"**/{name}/.claude/CLAUDE.md",
+        f"**/{name}/.claude/rules/**",
+    ], written
+
+
+def test_a_folder_that_is_really_claude_gets_no_patterns(box: Sandbox, settings_kept: Path) -> None:
+    # ~/.claude-alias, a junction to ~/.claude, answered yes: its settings.json is ~/.claude's,
+    # where the patterns would keep that account's own CLAUDE.md out.
+    alias = box.profile / ".claude-alias"
+    make_junction(alias, box.profile / ".claude")
+    saved = json.loads(read(settings_kept))
+    saved["claudeCode"]["folders"]["~/.claude-alias"] = {"setUp": True}
+    write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
+    try:
+        result = setup(box)
+        written = json.loads(read(box.profile / ".claude" / "settings.json"))
+    finally:
+        remove_link(alias)
+    assert result.code == 0, str(result)
+    assert "claudeMdExcludes" not in written, written
 
 
 SANDBOX = "[sandbox_workspace_write]\n"

@@ -132,5 +132,11 @@ in one line, noting that the end user's rules are still in dev-home. Nothing in 
 and setup stops creating `my-rules.md` for that agent on that PC. How another tool is added is in
 [Agents added later work like Claude Code and Codex](agents-added-later-work-like-claude-code-and-codex.md).
 
+**Changed on 2026-10-19,** with the reasons in
+[Other Claude Code folders skip ~/.claude's instructions](other-claude-code-folders-skip-claudes-instructions.md):
+in a Claude Code folder other than `~/.claude`, a no also takes setup's two patterns out of
+`claudeMdExcludes`, and the list once it's empty. Every other pattern stays, though one written
+exactly like setup's goes too.
+
 **Look again if:** setup sets up another tool that reads `~/.agents/skills`, Claude Code starts
 reading it, or Codex gets a skills folder for each home that isn't deprecated.

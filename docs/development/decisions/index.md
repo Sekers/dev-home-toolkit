@@ -78,3 +78,4 @@ Research a decision rests on has its own page in `../research/`.
 - [The knowledge index lists subjects, and each subject lists its notes](the-knowledge-index-lists-subjects-and-each-subject-lists-its-notes.md)
 - [Skill and rule files share their fields](skill-and-rule-files-share-their-fields.md)
 - [Agents added later work like Claude Code and Codex](agents-added-later-work-like-claude-code-and-codex.md)
+- [Other Claude Code folders skip ~/.claude's instructions](other-claude-code-folders-skip-claudes-instructions.md)

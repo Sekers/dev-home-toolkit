@@ -45,6 +45,13 @@ folder link as a directory junction, which needs no admin rights and no Develope
   - `settings.json` gets your dev-home and dev-home-toolkit folders in
     `permissions.additionalDirectories`, so Claude Code can use them from any project. Your yes to
     the folder approves this, and every sync puts it back if it goes missing, with a backup.
+  - In each folder other than `~\.claude`, `settings.json` also gets two patterns in
+    `claudeMdExcludes`. Claude Code loads the `CLAUDE.md` and `rules\` it finds in every folder
+    above where a session starts. So a session of another account, started anywhere under your
+    user folder, loads `~\.claude`'s as if they were the project's own instructions, until Claude
+    Code fixes it ([anthropics/claude-code#79233](https://github.com/anthropics/claude-code/issues/79233)).
+    The patterns keep them out of that folder's sessions. Your yes to the folder approves them
+    too, and every sync puts them back if they go missing.
   - Your own `CLAUDE.md` there is never touched.
 - **For Codex,** once you've said yes to it, in every Codex home (`~\.codex`, and any extra
   ones). Every home reads the same skills, so it's all of them or none:
@@ -62,16 +69,17 @@ folder link as a directory junction, which needs no admin rights and no Develope
     leaves room.
 - **If you say no later,** to a Claude Code folder or to Codex, setup removes what it set up
   there, naming each as it goes:
-  - In a Claude Code folder: its links in `skills\` and `rules\`, and your dev-home and
-    dev-home-toolkit folders in `settings.json`'s `permissions.additionalDirectories`, with a backup.
+  - In a Claude Code folder: its links in `skills\` and `rules\`, your dev-home and
+    dev-home-toolkit folders in `settings.json`'s `permissions.additionalDirectories`, and its two
+    patterns in `claudeMdExcludes`, with a backup.
   - For Codex: the `AGENTS.md` it wrote in each home, its links in `~\.agents\skills\`, and your
     dev-home in each `config.toml`'s `writable_roots`, with a backup.
     `project_doc_max_bytes` stays, since it gives Codex no access.
 
   Your own files, links, and settings there stay, though an entry you added yourself for the same
-  folder goes too; the backup keeps it. Other AI tools that read those skills folders lose
-  dev-home's skills too: GitHub Copilot, Gemini CLI, and Cursor read `~\.agents\skills\`, and
-  Cursor also reads `~\.claude\skills\`.
+  folder, or the same pattern, goes too; the backup keeps it. Other AI tools that read those
+  skills folders lose dev-home's skills too: GitHub Copilot, Gemini CLI, and Cursor read
+  `~\.agents\skills\`, and Cursor also reads `~\.claude\skills\`.
 - **If a skill isn't added to your agents on this PC,** because you said no to it, it's marked as
   not recommended and you haven't said yes, or it works only on another operating system or in
   another agent, setup removes its links from those skills folders, naming each as it goes, and

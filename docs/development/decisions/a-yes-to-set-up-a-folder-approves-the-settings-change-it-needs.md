@@ -32,3 +32,10 @@ user settings change on disk, and reloads them live; its sandbox doesn't run on 
 
 **Look again if:** a tool needs a settings change whose access a person would want to weigh
 apart from setting up the folder.
+
+**Changed on 2026-10-19,** with the reasons in
+[Other Claude Code folders skip ~/.claude's instructions](other-claude-code-folders-skip-claudes-instructions.md):
+in a Claude Code folder other than `~/.claude`, the yes also approves two patterns in
+`claudeMdExcludes`, which keep `~/.claude`'s instructions out of that folder's sessions, and the
+no approves taking them out. They grant no access, so the question above doesn't arise for them,
+and the question for the folder says what they do and why.
