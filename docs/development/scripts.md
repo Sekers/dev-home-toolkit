@@ -47,7 +47,9 @@ points here; its rules apply too.
   - in a Claude Code folder or Codex home the person said no to setting up: the links it made
     there, and the rules file it wrote there, each listed in its output as it goes
   - the links it made in `~/.agents/skills`, once the person has said no to Codex
-  - the `internal/.python/` junction, once the `python.exe` it leads to is gone
+  - the `internal/.python/` junction, once the `python.exe` it leads to is gone, or once a
+    Python that setup ranks ahead of it passes setup's check
+    ([Setup follows the newest suitable Python on every run](decisions/setup-follows-the-newest-suitable-python-on-every-run.md))
   - settings files the person said yes to changing
   - the settings file of a Claude Code folder or Codex home the person said no to setting up,
     to take out what a yes there adds

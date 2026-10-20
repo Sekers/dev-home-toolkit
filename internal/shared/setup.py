@@ -161,7 +161,7 @@ from . import (
     requirements,
 )
 from .git import run_git
-from .links import is_link, link_info, make_folder_link, remove_folder_link
+from .links import LinkInfo, is_link, link_info, make_folder_link, remove_folder_link
 from .output import GREEN, RED, YELLOW, color, describe, first_line, status_line
 from .paths import (
     comparable,
@@ -240,12 +240,16 @@ PYTHON_LINK = TOOLKIT_ROOT / "internal" / ".python"
 GENERATED_FOLDERS = ("skills", "shared-skill-scripts", "operating-rules")
 # What setup decided for each skill on this PC, which facts.py's skills topic shows.
 SKILL_STATES = GENERATED_ROOT / "skill-states.json"
+# The Pythons that didn't run when setup checked them, which syncs skip (see sync_python_link).
+# There only while one is noted.
+FAILED_PYTHONS = GENERATED_ROOT / "failed-pythons.json"
 FOLDER_NOTE = (
     "Setup writes everything in this folder: the files from templates/skills/,\n"
     "templates/shared-skill-scripts/, and templates/operating-rules/, with this PC's paths filled\n"
-    "in, and skill-states.json, what it decided for each skill on this PC. Don't edit it: the\n"
-    "next setup run rewrites it. Python writes the __pycache__ folders when the scripts run, to\n"
-    "start them faster, and setup leaves those alone.\n"
+    "in; skill-states.json, what it decided for each skill on this PC; and, while there are any,\n"
+    "failed-pythons.json, the Pythons that didn't run when setup checked them. Don't edit it:\n"
+    "the next setup run rewrites it. Python writes the __pycache__ folders when the scripts run,\n"
+    "to start them faster, and setup leaves those alone.\n"
 )
 # Each agent setup sets up, by the name a skill's supportedOn gives it, such as claude-code.
 REQUIRES_NAMES = {shown: name for name, shown in requirements.AGENT_NAMES.items()}
@@ -1347,11 +1351,15 @@ class Setup:
     # Python, for the skills' scripts
 
     def sync_python_link(self, local_app_data: Path, *, skip_registry: bool) -> None:
-        """Makes internal/.python a junction to the folder of a Python 3.12 or later, so the
-        skills' commands name the same short path on every PC, with no spaces to quote. Each
-        run only checks that the link's python.exe is there, which starts no process. It looks
-        for a Python, which does, only to make the link, or to re-point it once that python.exe
-        is gone."""
+        """Points internal/.python, a junction, at the folder of the first of
+        python_link.candidates that runs, so the skills' commands name the same short path on
+        every PC, with no spaces to quote, and move on to a newer Python once one is installed.
+        Setup only uses Pythons already installed, and never installs one. Most runs find that
+        the link already points at the first candidate, which starts no process: setup starts a
+        Python only to check it before pointing the link at it. One that doesn't run is noted
+        in FAILED_PYTHONS, and a quiet run with a working link, such as a sync's, skips it until
+        its python.exe changes, so a broken install holds up at most one sync. A run by hand
+        checks it again."""
         label = "Python for the skills"
         existing = link_info(PYTHON_LINK)
         if existing is not None and not existing.is_link:
@@ -1361,34 +1369,101 @@ class Setup:
                 "there to a Python install. Move it aside, then run setup.py again.",
             )
             return
-        if existing is not None and (PYTHON_LINK / "python.exe").is_file():
-            self.status("OK", f"{label}: {existing.target}")
+        current = None
+        if existing is not None and existing.target and (PYTHON_LINK / "python.exe").is_file():
+            current = Path(existing.target)
+        # Read only once a Python would be started.
+        failures: dict[str, list[int]] | None = None
+        for candidate in python_link.candidates(local_app_data, skip_registry=skip_registry):
+            if not (candidate / "python.exe").is_file():
+                continue
+            if current is not None and same_path(candidate, current):
+                break
+            if failures is None:
+                failures = python_link.read_failures(FAILED_PYTHONS)
+            key = python_link.failure_key(candidate)
+            found = python_link.fingerprint(candidate)
+            noted = found is not None and failures.get(key) == found
+            if noted and current is not None and self.quiet:
+                continue
+            version = python_link.python_version(candidate)
+            if version is None:
+                self.status(
+                    "PROBLEM",
+                    f"{label}: the Python in {candidate} didn't run as Python 3.12 or later. "
+                    "Syncs skip it until its python.exe changes, and running setup.py in a "
+                    "terminal checks it again.",
+                )
+                if found is not None and not noted:
+                    failures[key] = found
+                    self.write_failures(failures)
+                continue
+            if failures.pop(key, None) is not None:
+                self.write_failures(failures)
+            self.point_python_link(existing, current, candidate, version, skip_registry)
             return
-        folder = next(
-            (
-                candidate
-                for candidate in python_link.candidates(local_app_data, skip_registry=skip_registry)
-                if python_link.is_new_enough(candidate)
-            ),
-            None,
+        if current is not None:
+            self.status("OK", f"{label}: {current}")
+            return
+        self.status(
+            "PROBLEM",
+            f"{label}: no Python 3.12 or later was found, and the skills run their scripts "
+            "with it. Install it with the Python install manager (see the README's "
+            "Requirements), then run setup.py again.",
         )
-        if folder is None:
-            self.status(
-                "PROBLEM",
-                f"{label}: no Python 3.12 or later was found, and the skills run their scripts "
-                "with it. Install it with the Python install manager (see the README's "
-                "Requirements), then run setup.py again.",
-            )
-            return
+
+    def point_python_link(
+        self,
+        existing: LinkInfo | None,
+        current: Path | None,
+        folder: Path,
+        version: str,
+        skip_registry: bool,
+    ) -> None:
+        """Points internal/.python at folder, whose Python is version, and says so. A switch from
+        current, a Python that still works, names both versions."""
+        label = "Python for the skills"
         if not self.should(PYTHON_LINK, f"Link to the Python in {folder}"):
             return
         try:
             if existing is not None:
                 remove_folder_link(PYTHON_LINK)
             kind = make_folder_link(PYTHON_LINK, folder)
-            self.status("LINKED", f"{label} ({kind}): {PYTHON_LINK} -> {folder}")
         except OSError as error:
             self.status("PROBLEM", f"{label}: could not link {PYTHON_LINK} to {folder}. {error}")
+            return
+        if current is None:
+            self.status("LINKED", f"{label} ({kind}): {PYTHON_LINK} -> {folder}")
+            return
+        # The registry has the version of the Python it switched from, unless that one isn't
+        # registered, or this is a test profile, which doesn't read it.
+        was = None if skip_registry else python_link.registered_version(current)
+        self.status(
+            "LINKED",
+            f"{label} ({kind}): now {version}, was {was or f'the Python in {current}'}. "
+            f"{PYTHON_LINK} -> {folder}",
+        )
+
+    def write_failures(self, failures: dict[str, list[int]]) -> None:
+        """Saves the note of Pythons that didn't run, or removes it once none is left."""
+        if linked_folder(GENERATED_ROOT) is not None or not self.should(
+            FAILED_PYTHONS, "Note which Pythons didn't run"
+        ):
+            return
+        try:
+            if FAILED_PYTHONS.is_file():
+                make_writable(FAILED_PYTHONS)
+            if not failures:
+                FAILED_PYTHONS.unlink(missing_ok=True)
+            else:
+                FAILED_PYTHONS.parent.mkdir(parents=True, exist_ok=True)
+                FAILED_PYTHONS.write_text(
+                    json.dumps(failures, indent=2) + "\n", encoding="utf-8", newline="\n"
+                )
+        except OSError as error:
+            self.status("PROBLEM", f"Could not write {FAILED_PYTHONS}. {error}")
+            return
+        self.generated_changes += 1
 
     # Settings changes. Each is the change a folder setup sets up needs in its settings file,
     # which the yes to setting up that folder approved, so no run asks about it, and every run,

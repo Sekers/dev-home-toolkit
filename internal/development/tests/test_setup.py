@@ -287,6 +287,95 @@ def test_the_python_link(box: Sandbox) -> None:
     assert link_target(link) == box.python_bin, "linked again once the folder is gone"
 
 
+def test_the_python_link_moves_to_a_python_that_comes_first(box: Sandbox) -> None:
+    # As when a newer Python is installed: the link leads to a Python that works, but isn't the
+    # first suitable one. A test profile doesn't read the registry, so the line can't give the
+    # old version.
+    link = box.toolkit / "internal" / ".python"
+    remove_link(link)
+    make_junction(link, Path(sys.base_prefix))
+    moved = setup(box)
+    again = setup(box)
+    version = re.escape(".".join(str(part) for part in sys.version_info[:3]))
+    pattern = rf"^LINKED\s+Python for the skills \(junction\): now {version}, was the Python in "
+    assert moved.code == 0 and moved.has_line(pattern), str(moved)
+    assert link_target(link) == box.python_bin
+    assert again.code == 0 and not again.has_line("^LINKED"), str(again)
+
+
+def test_a_python_that_doesnt_run_is_noted_and_syncs_skip_it(
+    box: Sandbox, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The first suitable Python fails its check while the link leads to one that works. Setup
+    # says so, keeps the link, and notes it, so the next quiet run doesn't start it again. A
+    # changed python.exe, or a run by hand, checks it again, and once it runs, the link moves to
+    # it and the note goes.
+    code = shared_module(box, "setup")
+    pythons = shared_module(box, "python_link")
+    link = box.toolkit / "internal" / ".python"
+    note = box.generated / "failed-pythons.json"
+    checked: list[Path] = []
+    broken = True
+    real_check = pythons.python_version
+
+    def check(folder: Path) -> str | None:
+        checked.append(folder)
+        return None if broken else real_check(folder)
+
+    monkeypatch.setattr(pythons, "python_version", check)
+    remove_link(link)
+    make_junction(link, Path(sys.base_prefix))
+    failed = r"^PROBLEM\s+Python for the skills: the Python in .* didn't run as Python 3\.12"
+    try:
+        first = code.main(["--quiet"])
+        first_out = capsys.readouterr().out
+        noted = json.loads(read(note))
+        second = code.main(["--quiet"])
+        second_out = capsys.readouterr().out
+        write_text(note, json.dumps({key: [0, 0] for key in noted}) + "\n")
+        changed = code.main(["--quiet"])
+        changed_out = capsys.readouterr().out
+        broken = False
+        code.main([])
+        by_hand_out = capsys.readouterr().out
+        note_left = note.exists()
+    finally:
+        if link_target(link) != box.python_bin:
+            remove_link(link)
+            make_junction(link, box.python_bin)
+        note.unlink(missing_ok=True)
+    assert first == 1 and re.search(failed, first_out, re.M), first_out
+    assert list(noted) == [os.path.normcase(str(box.python_bin))], noted
+    assert second == 0 and not re.search(failed, second_out, re.M), second_out
+    assert changed == 1 and re.search(failed, changed_out, re.M), changed_out
+    # Checked by the first run, the one after the change, and the run by hand.
+    assert checked == [box.python_bin] * 3, checked
+    pattern = r"^LINKED\s+Python for the skills \(junction\): now "
+    assert re.search(pattern, by_hand_out, re.M), by_hand_out
+    assert link_target(link) == box.python_bin
+    assert not note_left, "the note goes once nothing in it is left"
+
+
+@pytest.mark.parametrize(
+    ("version", "sys_version", "expected"),
+    [
+        ("3.14.8", "3.14", (3, 14, 8)),
+        ("3.16.0a1", "3.16", None),
+        ("3.15.0b2", "3.15", None),
+        ("3.15.0rc1", "3.15", None),
+        ("3.15.0dev123", "3.15", None),
+        # SysVersion stands in when Version is missing, or in a form of its own.
+        ("", "3.13", (3, 13)),
+        ("3.12.1 (64-bit)", "3.12", (3, 12)),
+    ],
+)
+def test_a_registered_pythons_version_leaves_out_test_releases(
+    box: Sandbox, version: str, sys_version: str, expected: tuple[int, ...] | None
+) -> None:
+    found = shared_module(box, "python_link").release_version(version, sys_version)
+    assert found == expected
+
+
 def test_the_generated_folder(box: Sandbox) -> None:
     # Python's bytecode cache stays beside the scripts, a link that isn't setup's stays and
     # nothing behind it changes, and a folder whose templates are gone goes, cache and all.

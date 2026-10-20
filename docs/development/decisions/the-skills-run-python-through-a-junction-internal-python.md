@@ -48,6 +48,11 @@ alone. Without it, compiling a 600-line module took about 8 ms on every run.
 - One root folder for everything that belongs to the PC (the settings, the generated files, and
   the link): a bigger change, for files that had no need to move.
 
+**Changed on 2026-10-20:** every run, not only one that makes the junction or finds its
+`python.exe` gone, checks that the junction leads to the first suitable Python, and re-points it
+when another comes first, with the reasons in
+[Setup follows the newest suitable Python on every run](setup-follows-the-newest-suitable-python-on-every-run.md).
+
 **Not tested yet:** the install manager's shortcut after its runtime is uninstalled
 (`py install --refresh` repairs it); a junction on a Dev Drive, which is ReFS and documented as
 supporting junctions; and symbolic links on macOS and Linux.

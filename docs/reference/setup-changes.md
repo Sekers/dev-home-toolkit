@@ -19,15 +19,23 @@ folder link as a directory junction, which needs no admin rights and no Develope
     instead, because an agent working in another project sees only this copy. Python adds
     `__pycache__` folders beside the scripts when they run, so they start faster next time;
     setup leaves those alone. Setup also writes `skill-states.json` there: whether it added each
-    skill to your agents on this PC, and if not, why, which `/dev-home skills` shows.
+    skill to your agents on this PC, and if not, why, which `/dev-home skills` shows. And when a
+    Python doesn't run as setup checks it, setup notes it in `failed-pythons.json` there, so
+    syncs don't wait for it again until that Python changes.
   - `internal\.python\`: a directory junction to the folder of the Python the skills' scripts
     run with, so every skill command can name `internal\.python\python.exe` here: a short path,
-    the same on every PC, with no spaces to quote. Setup looks first for the Python install
-    manager's shortcuts, in `%LocalAppData%\Python\bin`, whose `python.exe` moves on to newer
-    Pythons as you install them, and then for the newest Python 3.12 or later in the registry,
-    which is where the traditional installer records one. It looks only when it makes the
-    junction, or when the `python.exe` the junction leads to is gone; other runs just check that
-    it's there.
+    the same on every PC, with no spaces to quote. Setup only uses a Python you've installed,
+    and never installs one. It picks the first of these that runs:
+    1. The Python install manager's commands, in `%LocalAppData%\Python\bin`, whose
+       `python.exe` runs the install manager's default Python, and moves on to newer ones as
+       you install them.
+    2. The newest Python 3.12 or later in the registry, which is where the traditional installer
+       records one, leaving out test releases such as 3.16.0a1.
+
+    Every run checks that the junction still leads to the first of those, which starts no
+    program. When another comes first, such as a newer Python you installed with the
+    traditional installer, setup starts it once to check that it runs, then points the junction
+    at it and says so in a `LINKED` line.
   - `local-settings.json`: this PC's answers to setup's questions: where your dev-home is,
     whether to install updates automatically, which Claude Code folders to set up, and which not
     to, whether to set up Codex, which skills to add to your agents, and the skills' preferences.
