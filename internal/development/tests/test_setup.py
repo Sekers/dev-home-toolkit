@@ -15,6 +15,7 @@ import time
 import tomllib
 from collections.abc import Iterator
 from dataclasses import dataclass
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -570,28 +571,32 @@ def test_a_claude_folder_nobody_has_answered_for_isnt_set_up(box: Sandbox) -> No
     settings_path = box.toolkit / "local-settings.json"
     settings_text = read(settings_path)
     unasked = (
-        r"^PROBLEM\s+Setup hasn't asked yet whether to set up the Claude Code folder "
-        r".*\.claude-second, so it leaves it as it is\. Run .*setup\.py in a terminal, and it asks"
+        r"^NEW\s+Setup has no answer yet about setting up the Claude Code folder "
+        r".*\.claude-second, so it leaves it as it is\. Answer with /dev-home configure: set it "
+        r"up, no, or remind me in N days\. Or run .*setup\.py in a terminal, and it asks\.$"
     )
     try:
         result = setup(box, env={"CLAUDE_CONFIG_DIR": str(outside)})
         assert not (outside / "skills").exists(), str(result)
         assert not result.has_line("outside-claude"), str(result)
-        # Every quiet run names a folder setup finds that nobody has answered for.
-        assert result.code == 1 and result.has_line(unasked), str(result)
+        # Every quiet run names a folder setup finds that nobody has answered for. Nothing is
+        # wrong, so it's a NEW line, not a PROBLEM.
+        assert result.code == 0 and result.has_line(unasked), str(result)
         result = setup(box, env={"CLAUDE_CONFIG_DIR": str(session)})
         assert not (session / "skills").exists(), str(result)
-        assert result.code == 1 and result.has_line(unasked), str(result)
+        assert result.code == 0 and result.has_line(unasked), str(result)
         # A terminal usually has no CLAUDE_CONFIG_DIR, so a folder only it names is set up
         # through --configure.
         result = setup(box, env={"CLAUDE_CONFIG_DIR": str(other)})
         assert not (other / "skills").exists(), str(result)
         pattern = (
-            r"^PROBLEM\s+Setup hasn't asked yet whether to set up the Claude Code folder "
+            r"^NEW\s+Setup has no answer yet about setting up the Claude Code folder "
             r".*claude-alt, the session's own, in CLAUDE_CONFIG_DIR, so it leaves it as it is\. "
-            r".* to set it up, run .*setup\.py --configure 'claudeCode\.folders\+=~/claude-alt'\.$"
+            r"Answer with /dev-home configure: set it up, no, or remind me in N days\. Setup in a "
+            r"terminal usually can't see it: to set it up there, run .*setup\.py --configure "
+            r"'claudeCode\.folders\+=~/claude-alt'\.$"
         )
-        assert result.code == 1 and result.has_line(pattern), str(result)
+        assert result.code == 0 and result.has_line(pattern), str(result)
         listed = json.loads(settings_text)
         listed["claudeCode"]["folders"]["~/.claude-second"] = {"setUp": True}
         write_text(settings_path, json.dumps(listed, indent=2) + "\n")
@@ -605,7 +610,7 @@ def test_a_claude_folder_nobody_has_answered_for_isnt_set_up(box: Sandbox) -> No
             r"Backup of the old file: "
         )
         assert result.code == 0 and result.has_line(pattern), str(result)
-        assert not result.has_line("hasn't asked"), str(result)
+        assert not result.has_line("has no answer yet"), str(result)
         # Once made, a sync finds nothing to change.
         again = setup(box)
         assert again.code == 0 and not again.has_line(r"^SET\s"), str(again)
@@ -636,12 +641,47 @@ def test_a_claude_folder_with_links_but_no_answer_keeps_them_and_gets_no_new_one
     finally:
         write_text(settings_path, settings_text)
         shutil.rmtree(new_skill)
-    pattern = (
-        r"^PROBLEM\s+Setup hasn't asked yet whether to set up the Claude Code folder .*\.claude, "
-    )
-    assert result.code == 1 and result.has_line(pattern), str(result)
+    pattern = r"^NEW\s+Setup has no answer yet about setting up the Claude Code folder .*\.claude, "
+    assert result.code == 0 and result.has_line(pattern), str(result)
     assert kept == box.generated / "skills" / "handoff", str(result)
     assert added is None, str(result)
+
+
+def in_days(days: int) -> str:
+    """The date a reminder for that many days from today gives, as saved."""
+    return (date.today() + timedelta(days=days)).isoformat()
+
+
+@pytest.mark.parametrize(
+    ("reminder", "named"),
+    [
+        ({"$state": "remind", "on": "2999-01-01"}, False),
+        ({"$state": "remind", "on": "2000-01-01"}, True),
+        ({"$state": "remind"}, True),
+    ],
+    ids=["not due", "due", "no date"],
+)
+def test_a_folder_with_a_reminder_waits_for_its_date_then_is_named_again(
+    box: Sandbox, settings_kept: Path, reminder: dict[str, str], named: bool
+) -> None:
+    # Until its date it's left as it is, with no NEW line; from then on, it's named as a folder
+    # with no answer is. A reminder with no date is due the next time. A sync writes nothing.
+    later = box.profile / ".claude-later"
+    write_text(later / "settings.json", "{}\n")
+    edited = json.loads(read(settings_kept))
+    edited["claudeCode"]["folders"]["~/.claude-later"] = {"setUp": reminder}
+    text = json.dumps(edited, indent=2) + "\n"
+    write_text(settings_kept, text)
+    try:
+        result = setup(box)
+        linked = (later / "skills").exists()
+        kept = read(settings_kept)
+    finally:
+        remove_claude_folder(later)
+    pattern = r"^NEW\s+Setup has no answer yet about setting up the Claude Code folder .*later, "
+    assert result.code == 0 and result.has_line(pattern) == named, str(result)
+    assert not linked, str(result)
+    assert kept == text
 
 
 def test_a_profile_without_claude_code_or_codex_gets_neither(box: Sandbox) -> None:
@@ -686,7 +726,7 @@ def test_a_codex_home_found_later_gets_the_main_homes_answer(
         assert not (plain / "AGENTS.md").exists(), str(result)
         pattern = r"^SET\s+Codex config in \.codex-second: added dev-home to writable_roots, and "
         assert result.code == 0 and result.has_line(pattern), str(result)
-        assert not result.has_line("hasn't asked"), str(result)
+        assert not result.has_line("has no answer yet"), str(result)
         assert result.has_line(
             r"^SET\s+dev-home is now set up for Codex in ~/\.codex-second and ~/codex-alt, to "
             r"match ~/\.codex\. Codex only supports one set of skills for all your Codex homes, "
@@ -746,16 +786,18 @@ def test_codex_with_no_answer_keeps_its_rules_and_links_and_gets_nothing_new(
         if link_target(box.profile / ".claude" / "skills" / "unanswered-home") is not None:
             remove_link(box.profile / ".claude" / "skills" / "unanswered-home")
     pattern = (
-        r"^PROBLEM\s+Setup hasn't asked yet whether to set up Codex, so it leaves the Codex homes "
-        r".*\.codex, .*\.codex-second as they are\. Run .*setup\.py in a terminal, and it asks\.$"
+        r"^NEW\s+Setup has no answer yet about setting up Codex, so it leaves the Codex homes "
+        r".*\.codex, .*\.codex-second as they are\. Answer with /dev-home configure: set it up, "
+        r"no, or remind me in N days\. Or run .*setup\.py in a terminal, and it asks\.$"
     )
-    assert result.code == 1 and result.has_line(pattern), str(result)
+    assert result.code == 0 and result.has_line(pattern), str(result)
     # The session's own home, which a terminal usually can't see, is named on a line of its own,
     # with the change that sets up Codex from the session.
     pattern = (
-        r"^PROBLEM\s+Setup hasn't asked yet whether to set up Codex, so it leaves the Codex home "
-        r".*codex-alt, the session's own, in CODEX_HOME, as it is\. Setup in a terminal usually "
-        r"can't see it: to set up Codex, run .*setup\.py --configure "
+        r"^NEW\s+Setup has no answer yet about setting up Codex, so it leaves the Codex home "
+        r".*codex-alt, the session's own, in CODEX_HOME, as it is\. Answer with /dev-home "
+        r"configure: set it up, no, or remind me in N days\. Setup in a terminal usually can't "
+        r"see it: to set up Codex there, run .*setup\.py --configure "
         r"'codex\.homes\+=~/codex-alt'\.$"
     )
     assert result.has_line(pattern), str(result)
@@ -763,6 +805,31 @@ def test_codex_with_no_answer_keeps_its_rules_and_links_and_gets_nothing_new(
     assert not second_rules and not other_rules, str(result)
     assert kept == box.generated / "skills" / "handoff", str(result)
     assert added is None, str(result)
+
+
+def test_one_reminder_covers_every_codex_home(box: Sandbox, settings_kept: Path) -> None:
+    # Such as one saved before ~/.codex-second appeared: every home waits for the date, the new one
+    # included, with no NEW line, and setup adds nothing and removes nothing in any of them.
+    second = box.profile / ".codex-second"
+    write_text(second / "config.toml", "")
+    edited = json.loads(read(settings_kept))
+    edited["codex"] = {"homes": {"~/.codex": {"setUp": {"$state": "remind", "on": "2999-01-01"}}}}
+    text = json.dumps(edited, indent=2) + "\n"
+    write_text(settings_kept, text)
+    rules = box.profile / ".codex" / "AGENTS.md"
+    rules_before = rules.read_bytes()
+    try:
+        result = setup(box)
+        kept = read(settings_kept)
+        second_rules = (second / "AGENTS.md").exists()
+        rules_after = rules.read_bytes()
+    finally:
+        shutil.rmtree(second)
+    assert result.code == 0, str(result)
+    assert not result.has_line(r"^NEW\s+Setup has no answer yet about setting up Codex"), result
+    assert not result.has_line("dev-home is now"), str(result)
+    assert kept == text
+    assert not second_rules and rules_after == rules_before, str(result)
 
 
 def test_every_codex_home_gets_the_main_homes_answer_and_one_thats_gone_keeps_its_own(
@@ -1605,7 +1672,14 @@ def test_reports_a_value_of_the_wrong_kind_and_what_it_counts_as(box: Sandbox) -
     edited["updates"].update({"checkEveryHours": "6", "installAutomatically": "yes"})
     # A state the setting doesn't take: nobody is asked about a check interval.
     edited["devHome"]["checkEveryHours"] = {"$state": "unanswered"}
-    edited["claudeCode"] = {"folders": {"~/.claude-x": {"setUp": 1}}}
+    # A folder takes yes, no, or a reminder, with a real date as YYYY-MM-DD, if any.
+    edited["claudeCode"] = {
+        "folders": {
+            "~/.claude-x": {"setUp": 1},
+            "~/.claude-y": {"setUp": {"$state": "remind", "on": "2026-13-01"}},
+            "~/.claude-z": {"setUp": {"$state": "default"}},
+        }
+    }
     write_text(settings, json.dumps(edited, indent=2) + "\n")
     try:
         result = setup(box)
@@ -1613,11 +1687,24 @@ def test_reports_a_value_of_the_wrong_kind_and_what_it_counts_as(box: Sandbox) -
         write_text(settings, before)
     assert result.code == 1, str(result)
     hours = "a whole number of hours, 0 or more"
+    folder = r'true, false, or a reminder, \{"\$state": "remind", "on": "YYYY-MM-DD"\}'
     for path, value, wanted, counts_as in (
         (r"updates\.checkEveryHours", '"6"', hours, "every 24 hours"),
         (r"devHome\.checkEveryHours", r'\{"\$state": "unanswered"\}', hours, "every 12 hours"),
         (r"updates\.installAutomatically", '"yes"', "true or false", "true, its default"),
-        (r"claudeCode\.folders ~/\.claude-x: setUp", "1", "true or false", "not answered yet"),
+        (r"claudeCode\.folders ~/\.claude-x: setUp", "1", folder, "not answered yet"),
+        (
+            r"claudeCode\.folders ~/\.claude-y: setUp",
+            r'\{"\$state": "remind", "on": "2026-13-01"\}',
+            folder,
+            "not answered yet",
+        ),
+        (
+            r"claudeCode\.folders ~/\.claude-z: setUp",
+            r'\{"\$state": "default"\}',
+            folder,
+            "not answered yet",
+        ),
     ):
         pattern = (
             rf"^PROBLEM\s+{path} in local-settings\.json is {value}, which isn't {wanted}, so it "
@@ -1777,6 +1864,12 @@ def test_configure_alone_shows_the_settings_and_how_to_change_them(
         result
     )
     pattern = r"^\s+answer: a change to the main one, ~/\.codex when it's there,$"
+    assert result.has_line(pattern), str(result)
+    # A reminder, for a folder with no answer yet, and for Codex in every home.
+    assert result.has_line(r"^\s+claudeCode\.folders\?=<folder>@<days>$"), str(result)
+    pattern = r"^\s+Ask again in that many days whether to set up a folder with no$"
+    assert result.has_line(pattern), str(result)
+    pattern = r"^\s+codex\.homes\?=<folder>@<days>\s+Ask again in that many days whether to set up"
     assert result.has_line(pattern), str(result)
     pattern = r"^\s+7\s+Copies of dev-home in active use\s+several \(multi-PC mode\)$"
     assert result.has_line(pattern), str(result)
@@ -2041,6 +2134,30 @@ def test_the_dev_home_skills_configure_commands_work_as_written(
             r"updates\.installAutomatically=<value>\.",
         ),
         ("claudeCode.folders+=~/.claude-missing", r"There is no Claude Code folder at "),
+        ("claudeCode.folders?=~/.claude-missing@7", r"There is no Claude Code folder at "),
+        # A reminder brings back a question nobody has answered, so an answer stays yes or no.
+        (
+            "claudeCode.folders?=~/.claude@7",
+            r"~/\.claude already has an answer, yes, and a reminder is only for a folder with no "
+            r"answer yet\. To change the answer, use claudeCode\.folders\+=~/\.claude or "
+            r"claudeCode\.folders-=~/\.claude\.",
+        ),
+        (
+            "codex.homes?=~/.codex@7",
+            r"Codex already has an answer, yes, for every Codex home, and a reminder is only for "
+            r"one with no answer yet\. To change the answer, use codex\.homes\+=~/\.codex or "
+            r"codex\.homes-=~/\.codex\.",
+        ),
+        (
+            "claudeCode.folders?=~/.claude",
+            r"claudeCode\.folders\?= takes a folder and a whole number of days, 1 or more, as in "
+            r"claudeCode\.folders\?=~/\.claude-second@7\.",
+        ),
+        (
+            "codex.homes?=~/.codex@0",
+            r"codex\.homes\?= takes a folder and a whole number of days, 1 or more, as in "
+            r"codex\.homes\?=~/\.codex-second@7\.",
+        ),
         ("nothing", r"--configure takes one setting as <name>=<value>, not nothing\."),
         (
             "skills.handoff=true",
@@ -2895,6 +3012,55 @@ def test_configure_answers_codex_for_every_home_while_none_has_an_answer(
         shutil.rmtree(work)
     assert on.code == 0, str(on)
     assert homes == {"~/.codex": {"setUp": True}, "~/.codex-work": {"setUp": True}}, homes
+
+
+def test_configure_sets_a_reminder_for_a_folder_with_no_answer(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    # Setup works out the date from this PC's clock, and --what-if shows it before the change.
+    # Until then, the folder is left as it is, and syncs don't name it. A yes later replaces it.
+    later = box.profile / ".claude-later"
+    write_text(later / "settings.json", "{}\n")
+    try:
+        preview = setup_configure(box, "claudeCode.folders?=~/.claude-later@7", "--what-if")
+        result = setup_configure(box, "claudeCode.folders?=~/.claude-later@7")
+        saved = json.loads(read(settings_kept))["claudeCode"]["folders"]
+        quiet = setup(box)
+        linked = (later / "skills").exists()
+        answered = setup_configure(box, "claudeCode.folders+=~/.claude-later")
+        replaced = json.loads(read(settings_kept))["claudeCode"]["folders"]
+    finally:
+        remove_claude_folder(later)
+    on = in_days(7)
+    assert preview.has_line(rf'^\s+\+\s+"on": "{on}"$'), str(preview)
+    assert result.code == 0 and result.has_line(r"^SET\s+This PC's settings"), str(result)
+    assert saved["~/.claude-later"] == {"setUp": {"$state": "remind", "on": on}}, saved
+    assert quiet.code == 0 and not quiet.has_line(r"^NEW\s+Setup has no answer"), str(quiet)
+    assert not linked, str(quiet)
+    assert answered.code == 0, str(answered)
+    assert replaced["~/.claude-later"] == {"setUp": True}, replaced
+
+
+def test_configure_sets_one_reminder_for_every_codex_home(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    # Through any home, as a yes or a no goes, while Codex has no answer.
+    work = box.profile / ".codex-work"
+    write_text(work / "config.toml", "")
+    edited = json.loads(read(settings_kept))
+    del edited["codex"]
+    write_text(settings_kept, json.dumps(edited, indent=2) + "\n")
+    try:
+        result = setup_configure(box, "codex.homes?=~/.codex-work@3")
+        homes = json.loads(read(settings_kept))["codex"]["homes"]
+        quiet = setup(box)
+    finally:
+        shutil.rmtree(work)
+    reminder = {"setUp": {"$state": "remind", "on": in_days(3)}}
+    assert result.code == 0, str(result)
+    assert homes == {"~/.codex": reminder, "~/.codex-work": reminder}, homes
+    assert quiet.code == 0, str(quiet)
+    assert not quiet.has_line(r"^NEW\s+Setup has no answer yet about setting up Codex"), str(quiet)
 
 
 def test_configure_switches_copies_then_commits_and_pushes_it(box: Sandbox) -> None:

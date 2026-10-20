@@ -36,7 +36,10 @@ for optional lists, each one recommended, so a first setup is still one Enter. S
 a folder without an answer, the session's own included: it adds no links there and removes none,
 so a folder linked before setup asked about it keeps working until a run by hand answers. A quiet
 run names each folder nobody has answered for, on every run, since a missed work account is easy
-to overlook. Every folder's `setUp` is written once it's answered.
+to overlook. Every folder's `setUp` is written once it's answered. (Later changed by
+[New items reach the person at a terminal, or in a NEW line](new-items-reach-the-person-at-a-terminal-or-in-a-new-line.md):
+it names them in a `NEW` line, not a `PROBLEM`, and a folder can hold a reminder, which setup
+doesn't ask about until its date.)
 
 Codex gets one question for every Codex home it finds, recommended: `~/.codex` once Codex has
 made it, each `~/.codex-*` folder that holds a `config.toml` or an `auth.json`, the folder in

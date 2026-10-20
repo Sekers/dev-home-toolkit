@@ -17,4 +17,19 @@ doesn't recommend.
 **Options set aside:** a question for each item (a long run of questions as the lists grow); all
 or nothing (no way to pick); and no default (a hurried Enter would only ask again).
 
-**Look again if:** a list needs answers other than yes or no for each item.
+**Changed on 2026-10-20,** built with the reminders for folders, as
+[Offers use the same answers](offers-use-the-same-answers.md) set out: the prompt also takes `s`,
+to skip every item for now, or a number of days, for a reminder about every item, and Ask for each
+asks each item the same: yes, no, skip, or a number of days. A list of one asks those for its
+item. Setup says back the date a number gives, as `Setup asks again from YYYY-MM-DD.`, so a typo
+shows at once. What skip and a reminder save is each list's own; for a folder, see
+[Settings record answers, not just values](settings-record-answers-not-just-values.md). In the
+settings menu, the question about an item that has a reminder offers no skip: Enter keeps the
+reminder there, which is what saying nothing does.
+
+- Why a number typed straight in: one step, and a number can't clash with a letter, as `r`
+  already means the recommended ones in a mixed list. The developer's choice.
+- Set aside: a letter for later, then a question asking how many days (two steps, and one more
+  letter to learn).
+
+**Look again if:** a list needs answers other than these for each item.

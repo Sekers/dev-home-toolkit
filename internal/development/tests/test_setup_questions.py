@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tomllib
 from collections.abc import Callable, Iterator
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -170,8 +171,18 @@ def test_output_to_a_file_is_no_console(box: Sandbox) -> None:
         assert not console.is_console_stream(file)
 
 
-# The shared prompt for a list of optional items. Nothing calls it yet, so these call it
-# directly.
+# The shared prompt for a list of optional items, and the question about one offer. These call
+# them directly.
+
+# How an offer's question ends, besides its letters: skip, or a number of days for a reminder.
+LATER = "'s' to skip for now, or a number of days until setup asks again"
+# The same, in the question about one offer, recommended: yes, no, skip, or a number of days.
+OFFER = rf"'y', 'n', {LATER} \[Y/n/s/<days>\]"
+
+
+def in_days(days: int) -> str:
+    """The date a reminder for that many days from today gives, as saved."""
+    return (date.today() + timedelta(days=days)).isoformat()
 
 
 def items(box: Sandbox, *recommended: bool) -> list[Any]:
@@ -193,16 +204,20 @@ def choose_from_list(box: Sandbox, *recommended: bool) -> Any:
 def test_a_list_all_recommended_offers_all_none_or_each_and_enter_takes_all(
     box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    person.answers[r"^Add them\?"] = ["", "a", "all", "a", "n"]
+    person.answers[r"^Add them\?"] = ["", "a", "all", "a", "0", "a", "n"]
     enter = choose_from_list(box, True, True)
     assert capsys.readouterr().out == "These items are new:\n  one\n  two\n"
-    assert person.asked == ["Add them? 'a' for all, 'n' for none, or 'e' to ask for each [A/n/e]: "]
+    assert person.asked == [
+        f"Add them? 'a' for all, 'n' for none, 'e' to ask for each, {LATER} [A/n/e/s/<days>]: "
+    ]
     assert (enter.choice, enter.answers) == ("recommended", {"one": True, "two": True})
     # a is All recommended here, as Enter is, so the two can never be saved differently.
     assert choose_from_list(box, True, True).choice == "recommended"
-    # Only the letters count.
+    # Only the letters count, and a number of days from 1 up.
     assert choose_from_list(box, True, True).choice == "recommended"
-    assert "Type 'a', 'n', or 'e'." in capsys.readouterr().out
+    assert choose_from_list(box, True, True).choice == "recommended"
+    typed_again = capsys.readouterr().out
+    assert typed_again.count("Type 'a', 'n', 'e', 's', or a number of days, 1 or more.") == 2
     none = choose_from_list(box, True, True)
     assert (none.choice, none.answers) == ("none", {"one": False, "two": False})
 
@@ -220,8 +235,8 @@ def test_a_mixed_list_marks_each_item_and_enter_takes_the_recommended_ones(
         "  three    recommended\n"
     )
     assert person.asked == [
-        "Add them? 'a' for all, 'r' for the recommended ones, 'n' for none, or 'e' to ask for "
-        "each [a/R/n/e]: "
+        "Add them? 'a' for all, 'r' for the recommended ones, 'n' for none, 'e' to ask for each, "
+        f"{LATER} [a/R/n/e/s/<days>]: "
     ]
     assert (enter.choice, enter.answers) == (
         "recommended",
@@ -246,7 +261,9 @@ def test_a_key_to_type_stands_apart_from_the_words_around_it(
 def test_a_list_with_nothing_recommended_takes_enter_as_none(box: Sandbox, person: Person) -> None:
     person.answers[r"^Add them\?"] = ["", "n", "a"]
     enter = choose_from_list(box, False, False)
-    assert person.asked == ["Add them? 'a' for all, 'n' for none, or 'e' to ask for each [a/N/e]: "]
+    assert person.asked == [
+        f"Add them? 'a' for all, 'n' for none, 'e' to ask for each, {LATER} [a/N/e/s/<days>]: "
+    ]
     assert (enter.choice, enter.answers) == ("recommended", {"one": False, "two": False})
     assert choose_from_list(box, False, False).choice == "recommended"
     every = choose_from_list(box, False, False)
@@ -254,19 +271,65 @@ def test_a_list_with_nothing_recommended_takes_enter_as_none(box: Sandbox, perso
 
 
 def test_asking_for_each_item_defaults_to_its_recommendation(box: Sandbox, person: Person) -> None:
+    # Each item's question offers skip and a reminder too.
     person.answers[r"^Add them\?"] = "e"
     person.answers[r"^Add (one|two|three)\?"] = ["", "", "y"]
     answer = choose_from_list(box, True, False, False)
-    assert person.asked[1:] == ["Add one? [Y/n]: ", "Add two? [y/N]: ", "Add three? [y/N]: "]
+    assert person.asked[1:] == [
+        f"Add one? 'y', 'n', {LATER} [Y/n/s/<days>]: ",
+        f"Add two? 'y', 'n', {LATER} [y/N/s/<days>]: ",
+        f"Add three? 'y', 'n', {LATER} [y/N/s/<days>]: ",
+    ]
     assert (answer.choice, answer.answers) == ("each", {"one": True, "two": False, "three": True})
+
+
+def test_a_list_can_be_skipped_or_get_a_reminder_whole_or_for_each_item(
+    box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    console = shared_module(box, "console")
+    person.answers[r"^Add them\?"] = ["s", "7", "e"]
+    person.answers[r"^Add (one|two)\?"] = ["s", "x", "30"]
+    skipped = choose_from_list(box, True, True)
+    assert (skipped.choice, skipped.answers) == ("skip", {"one": "skip", "two": "skip"})
+    assert capsys.readouterr().out.endswith("  two\n")
+    # A number of days is said back as the date it gives, so a typo shows right away.
+    later = choose_from_list(box, True, True)
+    week = console.RemindIn(7, date.fromisoformat(in_days(7)))
+    assert (later.choice, later.answers) == ("remind", {"one": week, "two": week})
+    assert f"Setup asks again from {in_days(7)}.\n" in capsys.readouterr().out
+    each = choose_from_list(box, True, True)
+    month = console.RemindIn(30, date.fromisoformat(in_days(30)))
+    assert (each.choice, each.answers) == ("each", {"one": "skip", "two": month})
+    out = capsys.readouterr().out
+    assert "Type 'y', 'n', 's', or a number of days, 1 or more." in out, out
+    assert f"Setup asks again from {in_days(30)}.\n" in out, out
+
+
+def test_an_offer_with_a_reminder_keeps_it_at_enter_and_offers_no_skip(
+    box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Saying nothing there is Enter, which keeps the reminder, so skip would only end it.
+    console = shared_module(box, "console")
+    question = r"^Set up this\?"
+    person.answers[question] = ["", "s", "n", "2"]
+    keep = "the reminder for 2999-01-01"
+    assert console.choose_offer("Set up this?", True, keep) == "keep"
+    assert person.asked == [
+        "Set up this? 'y', 'n', a number of days until setup asks again, or Enter to keep the "
+        "reminder for 2999-01-01 [y/n/<days>]: "
+    ]
+    assert console.choose_offer("Set up this?", True, keep) is False
+    assert "Type 'y', 'n', or a number of days, 1 or more." in capsys.readouterr().out
+    later = console.choose_offer("Set up this?", True, keep)
+    assert later == console.RemindIn(2, date.fromisoformat(in_days(2))), later
 
 
 def test_a_list_of_one_asks_only_its_items_question(
     box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    person.answers[r"^Add one\?"] = ["", "n", "y"]
+    person.answers[r"^Add one\?"] = ["", "n", "y", "s", "3"]
     answer = choose_from_list(box, False)
-    assert person.asked == ["Add one? [y/N]: "]
+    assert person.asked == [f"Add one? 'y', 'n', {LATER} [y/N/s/<days>]: "]
     assert capsys.readouterr().out == ""
     # Its answer is the choice the list's letters would give, so one item is saved as several
     # would be: the recommendation, typed or by Enter, is All recommended.
@@ -274,6 +337,8 @@ def test_a_list_of_one_asks_only_its_items_question(
     assert choose_from_list(box, False).choice == "recommended"
     every = choose_from_list(box, False)
     assert (every.choice, every.answers) == ("all", {"one": True})
+    assert choose_from_list(box, False).choice == "skip"
+    assert choose_from_list(box, False).choice == "remind"
     person.answers[r"^Add one\?"] = "n"
     none = choose_from_list(box, True)
     assert (none.choice, none.answers) == ("none", {"one": False})
@@ -290,7 +355,7 @@ def test_a_list_answered_only_partway_gives_no_answer(box: Sandbox, person: Pers
     person.answers[r"^Add one\?"] = "y"
     # The question about two ends the input, as when a person closes the console.
     assert choose_from_list(box, True, True) is None
-    assert person.asked[-1] == "Add two? [Y/n]: "
+    assert person.asked[-1] == f"Add two? 'y', 'n', {LATER} [Y/n/s/<days>]: "
     person.answers.clear()
     assert choose_from_list(box, True, True) is None
 
@@ -319,21 +384,24 @@ def test_asks_for_the_dev_home_folder_when_none_is_saved(
 # The question about each Claude Code folder, and about all of them at once.
 FOLDERS = (
     r"^Set up Claude Code in them with dev-home's skills and rules\? 'a' for all, 'n' for none, "
-    r"or 'e' to ask for each \[A/n/e\]: $"
+    rf"'e' to ask for each, {LATER} \[A/n/e/s/<days>\]: $"
 )
 
 
-def folder_question(folder: Path, hint: str = r"\[Y/n\]") -> str:
-    """One folder's question, in a list asked about one at a time, or in the menu."""
+def folder_question(folder: Path, hint: str = OFFER) -> str:
+    """One folder's question: an offer, in a list asked about one at a time, or in the menu for a
+    folder with no answer; or with the hint [Y/n], in the menu for one answered already."""
     return rf"^Set up Claude Code in {re.escape(str(folder))}\? {hint}: $"
 
 
-# The question about the only Claude Code folder setup hasn't asked about, after a line naming it.
-THIS_FOLDER = r"^Set up Claude Code in this folder\? \[Y/n\]: $"
+# The question about the only Claude Code folder with no answer, after a line naming it.
+THIS_FOLDER = rf"^Set up Claude Code in this folder\? {OFFER}: $"
 
 
-# The one question for Codex, which covers every Codex home, since they all read the same skills.
-CODEX = r"^Set up Codex in every Codex home\? \[Y/n\]: $"
+# The one question for Codex, which covers every Codex home, since they all read the same skills:
+# an offer while it has no answer, and in the menu once it has one, yes or no.
+CODEX = rf"^Set up Codex in every Codex home\? {OFFER}: $"
+CODEX_ANSWERED = r"^Set up Codex in every Codex home\? \[Y/n\]: $"
 
 
 def test_a_first_run_asks_about_updates_each_claude_folder_and_codex(
@@ -391,7 +459,7 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_codex(
     assert returned == 0, out
     assert any(re.search(FOLDERS, asked) for asked in person.asked), person.asked
     assert sum(1 for asked in person.asked if re.search(CODEX, asked)) == 1, person.asked
-    assert re.search(r"^Claude Code folders setup hasn't asked about yet", out, re.M), out
+    assert re.search(r"^Claude Code folders with no answer yet, one for each ", out, re.M), out
     homes = f"{box.profile / '.codex'}, {work}"
     pattern = rf"^Codex homes: {re.escape(homes)}$"
     assert re.search(pattern, out, re.M), out
@@ -512,6 +580,70 @@ def test_asks_each_question_whose_answer_isnt_saved_yet_then_never_again(
         "~/.claude": {"setUp": True},
         "~/.claude-later": {"setUp": False},
     }
+
+
+def test_a_number_of_days_at_a_folders_question_saves_a_reminder_and_s_skips(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Until the date, setup leaves the folder as it is and doesn't ask. Skip saves nothing, and
+    # ends a reminder that's due, so the folder has no answer again; the run says nothing more.
+    later = box.profile / ".claude-later"
+    later.mkdir()
+    person.answers[THIS_FOLDER] = ["7", "s"]
+    try:
+        returned = setup_here(box)
+        out = capsys.readouterr().out
+        written = json.loads(settings.read_text(encoding="utf-8"))
+        linked = (later / "skills").exists()
+        first = list(person.asked)
+        again = setup_here(box)
+        second = person.asked[len(first) :]
+        due = json.loads(settings.read_text(encoding="utf-8"))
+        due["claudeCode"]["folders"]["~/.claude-later"]["setUp"]["on"] = "2000-01-01"
+        write_text(settings, json.dumps(due, indent=2) + "\n")
+        skipped = setup_here(box)
+        skipped_out = capsys.readouterr().out
+        left = json.loads(settings.read_text(encoding="utf-8"))
+    finally:
+        shutil.rmtree(later)
+    assert returned == 0 and again == 0 and skipped == 0, out
+    assert any(re.search(THIS_FOLDER, asked) for asked in first), first
+    assert f"Setup asks again from {in_days(7)}." in out, out
+    reminder = {"$state": "remind", "on": in_days(7)}
+    assert written["claudeCode"]["folders"]["~/.claude-later"] == {"setUp": reminder}, written
+    assert not linked, out
+    assert not any(re.search(THIS_FOLDER, asked) for asked in second), second
+    assert "~/.claude-later" not in left["claudeCode"]["folders"], left
+    assert not re.search(r"^NEW\s+Setup has no answer", skipped_out, re.M), skipped_out
+
+
+def test_no_answer_about_a_claude_folder_gives_the_new_line_a_sync_gives(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Such as a console closed at the question: nothing is saved, and nothing is wrong.
+    later = box.profile / ".claude-later"
+    later.mkdir()
+    try:
+        returned = setup_here(box)
+        out = capsys.readouterr().out
+        saved = json.loads(settings.read_text(encoding="utf-8"))
+    finally:
+        shutil.rmtree(later)
+    assert returned == 0, out
+    assert any(re.search(THIS_FOLDER, asked) for asked in person.asked), person.asked
+    pattern = (
+        r"^NEW\s+Setup has no answer yet about setting up the Claude Code folder .*\.claude-later, "
+        r"so it leaves it as it is\. Answer with /dev-home configure: set it up, no, or remind me "
+        r"in N days\. Or run .*setup\.py in a terminal, and it asks\.$"
+    )
+    assert re.search(pattern, out, re.M), out
+    assert "~/.claude-later" not in saved["claudeCode"]["folders"], saved
+    # The menu after the questions says the same: setup asked, but has no answer.
+    row = (
+        r"^\s+5\s+Claude Code folders to set up\s+~/\.claude: yes, ~/\.claude-later: no answer "
+        r"yet$"
+    )
+    assert re.search(row, out, re.M), out
 
 
 def test_enter_at_the_first_updates_question_follows_the_default(
@@ -1115,6 +1247,8 @@ def test_a_copies_answer_that_cant_be_saved_leaves_dev_home_as_it_is(
 # --configure's menu at a console.
 
 MENU = r"^Number to change, 'a' to go through them all, or Enter to go on: $"
+# The menu's question about ~/.claude, which the sandbox answers yes.
+ANSWERED_CLAUDE = r"^Set up Claude Code in .*\.claude\? \[Y/n\]: $"
 UPDATE_HOURS = r"^Check GitHub for dev-home-toolkit updates every how many hours .*\[24\]: $"
 CONTENT_HOURS = r"^Check GitHub for dev-home's changes every how many hours .*\[12\]: $"
 
@@ -1152,8 +1286,8 @@ def test_the_menu_goes_through_every_setting_with_its_answer_as_the_default(
             UPDATES: "",
             UPDATE_HOURS: ["six", "6"],
             CONTENT_HOURS: "",
-            folder_question(box.profile / ".claude"): "",
-            CODEX: "",
+            ANSWERED_CLAUDE: "",
+            CODEX_ANSWERED: "",
             ELSEWHERE_YES: "",
         }
     )
@@ -1168,8 +1302,9 @@ def test_the_menu_goes_through_every_setting_with_its_answer_as_the_default(
     assert saved["updates"]["installAutomatically"] is False, saved
     assert saved["claudeCode"]["folders"] == {"~/.claude": {"setUp": True}}, saved
     assert saved["codex"] == {"homes": {"~/.codex": {"setUp": True}}}, saved
-    assert any(re.search(folder_question(box.profile / ".claude"), p) for p in person.asked)
-    assert any(re.search(CODEX, p) for p in person.asked), person.asked
+    # Each is answered already, so it's asked yes or no: a reminder is only for no answer yet.
+    assert any(re.search(ANSWERED_CLAUDE, p) for p in person.asked), person.asked
+    assert any(re.search(CODEX_ANSWERED, p) for p in person.asked), person.asked
 
 
 def test_the_menu_answers_codex_once_for_every_home(
@@ -1183,14 +1318,14 @@ def test_the_menu_answers_codex_once_for_every_home(
         write_text(backups_removed, json.dumps(start, indent=2) + "\n")
         remove = rf"^{re.escape(str(gone))} no longer exists\. Remove it from the settings\? "
         remove += r"\[y/N\]: $"
-        person.answers.update({MENU: ["6", ""], remove: "y", CODEX: "n"})
+        person.answers.update({MENU: ["6", ""], remove: "y", CODEX_ANSWERED: "n"})
         returned = setup_here(box, "--configure")
         out = capsys.readouterr().out
         saved = json.loads(backups_removed.read_text(encoding="utf-8"))
     assert returned == 0, out
     row = r"^\s+6\s+Codex homes to set up\s+~/\.codex: yes, ~/\.codex-gone: yes \(not found\)$"
     assert re.search(row, out, re.M), out
-    asked = [p for p in person.asked if re.search(remove, p) or re.search(CODEX, p)]
+    asked = [p for p in person.asked if re.search(remove, p) or re.search(CODEX_ANSWERED, p)]
     assert len(asked) == 2 and re.search(remove, asked[0]), person.asked
     assert saved["codex"] == {"homes": {"~/.codex": {"setUp": False}}}, saved
 
@@ -1198,7 +1333,8 @@ def test_the_menu_answers_codex_once_for_every_home(
 def test_no_answer_about_codex_leaves_every_home_as_it_is(
     box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # Such as a console closed at the question: nothing is saved, so the next run asks again.
+    # Such as a console closed at the question: nothing is saved, so the next run asks again, and
+    # the NEW line a sync would print says so. Nothing is wrong, so it's no PROBLEM.
     unanswered = json.loads(settings.read_text(encoding="utf-8"))
     del unanswered["codex"]
     write_text(settings, json.dumps(unanswered, indent=2) + "\n")
@@ -1206,14 +1342,127 @@ def test_no_answer_about_codex_leaves_every_home_as_it_is(
     returned = setup_here(box)
     out = capsys.readouterr().out
     saved = json.loads(settings.read_text(encoding="utf-8"))
-    assert returned == 1, out
+    assert returned == 0, out
     assert any(re.search(CODEX, asked) for asked in person.asked), person.asked
     pattern = (
-        r"^PROBLEM\s+No answer came about Codex, so setup left it as it is\. Run setup\.py again "
-        r"to answer\.$"
+        r"^NEW\s+Setup has no answer yet about setting up Codex, so it leaves the Codex home "
+        r".*\.codex as it is\. Answer with /dev-home configure: set it up, no, or remind me in N "
+        r"days\. Or run .*setup\.py in a terminal, and it asks\.$"
     )
     assert re.search(pattern, out, re.M), out
     assert "codex" not in saved, saved
+
+
+def test_a_number_of_days_at_the_codex_question_saves_one_reminder_for_every_home(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    unanswered = json.loads(settings.read_text(encoding="utf-8"))
+    del unanswered["codex"]
+    write_text(settings, json.dumps(unanswered, indent=2) + "\n")
+    work = box.profile / ".codex-work"
+    write_text(work / "auth.json", "{}\n")
+    person.answers[CODEX] = "7"
+    try:
+        returned = setup_here(box)
+        out = capsys.readouterr().out
+        saved = json.loads(settings.read_text(encoding="utf-8"))
+        work_rules = (work / "AGENTS.md").exists()
+    finally:
+        shutil.rmtree(work)
+    reminder = {"setUp": {"$state": "remind", "on": in_days(7)}}
+    assert returned == 0, out
+    assert saved["codex"] == {"homes": {"~/.codex": reminder, "~/.codex-work": reminder}}, saved
+    assert not work_rules, out
+    assert not re.search(r"^NEW\s+Setup has no answer", out, re.M), out
+
+
+def test_the_menu_shows_a_folders_reminder_and_enter_keeps_it(
+    box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A reminder is an answer, so Enter keeps it, as it keeps a yes or a no. A yes later takes the
+    # reminder's place, so the entry stays where it was in the file.
+    later = box.profile / ".claude-later"
+    later.mkdir()
+    start = json.loads(backups_removed.read_text(encoding="utf-8"))
+    reminder = {"$state": "remind", "on": "2999-01-01"}
+    folders = start["claudeCode"]["folders"]
+    start["claudeCode"]["folders"] = {"~/.claude-later": {"setUp": reminder}, **folders}
+    write_text(backups_removed, json.dumps(start, indent=2) + "\n")
+    keep = (
+        rf"^Set up Claude Code in {re.escape(str(later))}\? 'y', 'n', a number of days until "
+        r"setup asks again, or Enter to keep the reminder for 2999-01-01 \[y/n/<days>\]: $"
+    )
+    person.answers.update({MENU: ["5", "5", ""], ANSWERED_CLAUDE: ["", ""], keep: ["", "y"]})
+    try:
+        returned = setup_here(box, "--configure")
+        out = capsys.readouterr().out
+        saved = json.loads(backups_removed.read_text(encoding="utf-8"))
+    finally:
+        for folder in (later / "skills", later / "rules"):
+            for link in folder.iterdir() if folder.is_dir() else []:
+                remove_link(link)
+        shutil.rmtree(later)
+    assert returned == 0, out
+    row = (
+        r"^\s+5\s+Claude Code folders to set up\s+~/\.claude: yes, ~/\.claude-later: remind me "
+        r"on 2999-01-01$"
+    )
+    assert re.search(row, out, re.M), out
+    assert sum(1 for asked in person.asked if re.search(keep, asked)) == 2, person.asked
+    assert saved["claudeCode"]["folders"] == {
+        "~/.claude-later": {"setUp": True},
+        "~/.claude": {"setUp": True},
+    }, saved
+    assert list(saved["claudeCode"]["folders"]) == ["~/.claude-later", "~/.claude"], saved
+
+
+def test_the_menu_keeps_codexs_reminder_at_enter_and_a_yes_reaches_every_home(
+    box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Every home, a home that's gone included, as for a yes or a no.
+    gone = box.profile / ".codex-gone"
+    keep = (
+        r"^Set up Codex in every Codex home\? 'y', 'n', a number of days until setup asks again, "
+        r"or Enter to keep the reminder for 2999-01-01 \[y/n/<days>\]: $"
+    )
+    remove = rf"^{re.escape(str(gone))} no longer exists\. Remove it from the settings\? "
+    remove += r"\[y/N\]: $"
+    with profile_kept(box):
+        start = json.loads(backups_removed.read_text(encoding="utf-8"))
+        reminder = {"setUp": {"$state": "remind", "on": "2999-01-01"}}
+        start["codex"]["homes"] = {"~/.codex": reminder, "~/.codex-gone": reminder}
+        write_text(backups_removed, json.dumps(start, indent=2) + "\n")
+        person.answers.update({MENU: ["6", "6", ""], remove: ["", ""], keep: ["", "y"]})
+        returned = setup_here(box, "--configure")
+        out = capsys.readouterr().out
+        saved = json.loads(backups_removed.read_text(encoding="utf-8"))
+    assert returned == 0, out
+    row = (
+        r"^\s+6\s+Codex homes to set up\s+~/\.codex: remind me on 2999-01-01, ~/\.codex-gone: "
+        r"remind me on 2999-01-01 \(not found\)$"
+    )
+    assert re.search(row, out, re.M), out
+    assert sum(1 for asked in person.asked if re.search(keep, asked)) == 2, person.asked
+    homes = {"~/.codex": {"setUp": True}, "~/.codex-gone": {"setUp": True}}
+    assert saved["codex"] == {"homes": homes}, saved
+
+
+def test_the_menu_removes_a_gone_folder_with_its_reminder(
+    box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    gone = box.profile / ".claude-gone"
+    start = json.loads(backups_removed.read_text(encoding="utf-8"))
+    reminder = {"$state": "remind", "on": "2999-01-01"}
+    start["claudeCode"]["folders"]["~/.claude-gone"] = {"setUp": reminder}
+    write_text(backups_removed, json.dumps(start, indent=2) + "\n")
+    remove = rf"^{re.escape(str(gone))} no longer exists\. Remove it from the settings\? "
+    remove += r"\[y/N\]: $"
+    person.answers.update({MENU: ["5", ""], remove: "y", ANSWERED_CLAUDE: ""})
+    returned = setup_here(box, "--configure")
+    out = capsys.readouterr().out
+    saved = json.loads(backups_removed.read_text(encoding="utf-8"))
+    assert returned == 0, out
+    assert saved["claudeCode"]["folders"] == {"~/.claude": {"setUp": True}}, saved
 
 
 def test_the_menu_says_when_setup_finds_no_codex_home(
@@ -1244,7 +1493,7 @@ def test_a_no_in_the_menu_replaces_the_answer_a_new_codex_home_got_from_the_main
     # So the line saying the new home was set up to match never shows.
     work = box.profile / ".codex-work"
     write_text(work / "config.toml", (box.profile / ".codex" / "config.toml").read_text("utf-8"))
-    person.answers.update({MENU: ["6", ""], CODEX: "n"})
+    person.answers.update({MENU: ["6", ""], CODEX_ANSWERED: "n"})
     with profile_kept(box):
         try:
             returned = setup_here(box, "--configure")

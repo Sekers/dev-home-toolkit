@@ -69,6 +69,22 @@ setting, which in practice an agent reads and sums up for the person:
   why a "yes" skill is missing); the state on a second, indented line (an agent summing up the
   list could split one skill's two lines apart).
 
+**Changed on 2026-10-20,** with the reminders for folders: `claudeCode.folders?=<folder>@<days>`,
+and the same for `codex.homes`, saves a reminder for a folder with no answer yet, to ask again in
+that many days. Setup works out the date from the PC's clock, and `--what-if` shows it before the
+yes. A folder already answered is refused, with the `+=` and `-=` that change its answer.
+
+- Why days, not a date: the offer in the `NEW` line reads "remind me in N days", so the usual
+  request is a number the agent passes on as it is, with no date to work out, and no extra turn
+  to fix one it got wrong; it matches what a person types in a terminal; and one form is one
+  thing to check and document. A request for a date makes the agent count days, and `--what-if`
+  shows the date that gives before the yes. The developer's choice.
+- Set aside: `@<date>` (the agent works out the date for the usual request, from its own idea of
+  today); both forms, as uv's `exclude-newer` and Docker's `--since` take a duration or a
+  timestamp (two forms for one thing, and more usage text that agents read on every
+  `/dev-home configure`).
+- Look again if people often ask for a reminder on a date rather than in a number of days.
+
 **Options set aside:**
 
 - At a console, every question again with the current answers as defaults: six or more

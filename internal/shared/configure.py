@@ -43,12 +43,14 @@ from .settings import (
     TOOLKIT_ROOT,
     Agent,
     LocalSettings,
+    Reminder,
     Setting,
     find_skill,
     folder_rank,
     get,
     local_settings_text,
     put,
+    put_folder_state,
     read_dev_home_settings,
     read_value,
     setting_value,
@@ -64,7 +66,7 @@ NAMES = (*(setting.path for setting in SETTINGS), *FOLDER_SETTINGS, "multiMachin
 AGENT_FOR = {agent.setting: agent for agent in AGENTS}
 # A name is a path, which may hold dots and, in a skill's name, hyphens. The shortest name that
 # leaves an operator after it, so claudeCode.folders-=<folder> reads as -=.
-ASSIGNMENT = re.compile(r"([A-Za-z][\w.-]*?)(\+=|-=|=)(.*)", re.DOTALL)
+ASSIGNMENT = re.compile(r"([A-Za-z][\w.-]*?)(\+=|-=|\?=|=)(.*)", re.DOTALL)
 # What each type of setting takes, as USAGE shows it.
 PLACEHOLDERS = {"folder": "<folder>", "hours": "<hours>", "yes-no": "true|false"}
 USAGE_COLUMN = 36
@@ -82,6 +84,20 @@ def usage_entry(name: str, text: str) -> list[str]:
     else:
         lines = [first]
     return lines + [" " * USAGE_COLUMN + line for line in wrapped]
+
+
+def reminder_help(agent: Agent) -> str:
+    """What a reminder about one of an agent's folders does, as USAGE says."""
+    if agent.shared:
+        return (
+            f"Ask again in that many days whether to set up {agent.name}, while it has no answer "
+            f"yet, for every {agent.name} {agent.folder}. Until then, setup leaves them as they "
+            "are, and syncs don't mention them."
+        )
+    return (
+        f"Ask again in that many days whether to set up a {agent.folder} with no answer yet. "
+        "Until then, setup leaves it as it is, and syncs don't mention it."
+    )
 
 
 def usage() -> str:
@@ -108,6 +124,7 @@ def usage() -> str:
                 f"{agent.setting}-=<folder>",
                 "Stop setting one up, and remove what setup set up there.",
             ),
+            (f"{agent.setting}?=<folder>@<days>", reminder_help(agent)),
         ]
     entries += [
         (
@@ -205,11 +222,13 @@ def value_shown(setting: Setting, saved: object, default_note: str = "the defaul
 
 def folder_answers(
     run: "Setup", settings: LocalSettings, agent: Agent
-) -> list[tuple[str, bool | None]]:
-    """Each of an agent's folders setup knows of, as written in the settings, with its answer: each
-    one there (see known_folders), then any other folder with an answer."""
-    saved = settings.folders[agent.setting]
-    answers: list[tuple[str, bool | None]] = []
+) -> list[tuple[str, bool | Reminder | None]]:
+    """Each of an agent's folders setup knows of, as written in the settings, with its answer, a
+    reminder included: each one there (see known_folders), then any other folder with an
+    answer."""
+    saved: dict[str, bool | Reminder] = {**settings.folders[agent.setting]}
+    saved.update(run.reminders(agent, settings))
+    answers: list[tuple[str, bool | Reminder | None]] = []
     for folder in run.known_folders(agent, settings):
         entry = run.entry_named(folder, saved)
         answers.append((entry or run.folder_entry(folder), None if entry is None else saved[entry]))
@@ -220,11 +239,17 @@ def folder_answers(
     return answers
 
 
+def answer_text(answer: bool | Reminder | None) -> str:
+    """A folder's answer as the menu shows it."""
+    if isinstance(answer, Reminder):
+        return f"remind me on {answer.on.isoformat()}" if answer.on else "remind me"
+    return {True: "yes", False: "no", None: "no answer yet"}[answer]
+
+
 def folders_text(run: "Setup", settings: LocalSettings, agent: Agent) -> str:
     """An agent's folders as the menu shows them, each with its answer."""
-    words = {True: "yes", False: "no", None: "not asked yet"}
     folders = ", ".join(
-        f"{name}: {words[answer]}"
+        f"{name}: {answer_text(answer)}"
         + ("" if Path(resolve_home(name, run.home)).is_dir() else " (not found)")
         for name, answer in folder_answers(run, settings, agent)
     )
@@ -500,9 +525,67 @@ def set_shared(settings: LocalSettings, run: "Setup", agent: Agent, full: Path, 
         )
 
 
+def changes_answer(answer: console.OfferAnswer | None, current: bool | Reminder | None) -> bool:
+    """Whether an answer to a folder's question in the menu changes its saved answer: not when
+    none came, Enter kept a reminder, the folder was skipped, which leaves one with no answer as
+    it is, or it's the same yes or no."""
+    if answer is None or answer in (console.KEEP, console.SKIP):
+        return False
+    return not (isinstance(answer, bool) and answer is current)
+
+
+def reminder_value(name: str, agent: Agent, value: str) -> tuple[str, int]:
+    """The folder and the days of a reminder's assignment, <folder>@<days>. Raises SettingError
+    for one without a folder, or without a whole number of days, 1 or more."""
+    folder, at, typed = value.rpartition("@")
+    days = console.reminder_days(typed) if at else None
+    if not folder.strip() or days is None:
+        raise SettingError(
+            f"{name}?= takes a folder and a whole number of days, 1 or more, as in "
+            f"{name}?=~/{agent.default}-second@7."
+        )
+    return folder.strip(), days
+
+
+def remind_folder(
+    settings: LocalSettings, run: "Setup", agent: Agent, full: Path, days: int
+) -> None:
+    """Saves a reminder for one of an agent's folders, by its full path, which has no yes or no:
+    setup asks about it again in that many days. A shared agent's reminder goes to every folder,
+    as its answer would. Raises SettingError for a folder with an answer: a reminder brings back a
+    question nobody has answered."""
+    later = console.RemindIn.after(days)
+    answers = settings.folders[agent.setting]
+    if not agent.shared:
+        entry = run.entry_named(full, answers)
+        if entry is not None:
+            raise SettingError(
+                f"{entry} already has an answer, {'yes' if answers[entry] else 'no'}, and a "
+                f"reminder is only for a {agent.folder} with no answer yet. To change the answer, "
+                f"use {agent.setting}+={entry} or {agent.setting}-={entry}."
+            )
+        run.answer_offer(agent, settings, full, later)
+        return
+    folders = run.known_folders(agent, settings)
+    if not any(same_path(full, folder) for folder in folders):
+        folders = sorted([*folders, full], key=lambda f: folder_rank(agent, f, run.home))
+    answer, _ = run.shared_answer(agent, settings, folders)
+    if answer is not None:
+        main = run.entry_named(folders[0], answers) or run.folder_entry(folders[0])
+        raise SettingError(
+            f"{agent.name} already has an answer, {'yes' if answer else 'no'}, for every "
+            f"{agent.name} {agent.folder}, and a reminder is only for one with no answer yet. To "
+            f"change the answer, use {agent.setting}+={main} or {agent.setting}-={main}."
+        )
+    run.answer_offer_every_folder(agent, settings, later)
+    run.answer_offer(agent, settings, full, later)
+
+
 def change_folders(run: "Setup", settings: LocalSettings, agent: Agent) -> bool:
     """Asks about each of an agent's folders, after offering to remove each one that's gone; for a
-    shared agent, one question, whose answer goes to every folder."""
+    shared agent, one question, whose answer goes to every folder. A folder answered yes or no is
+    asked yes or no; one with no answer, or a reminder, is asked as an offer, as on a first run,
+    where Enter keeps a reminder."""
     answers = folder_answers(run, settings, agent)
     if not answers:
         run.line(f"Setup found no {agent.name} {agent.folder}s.")
@@ -515,6 +598,7 @@ def change_folders(run: "Setup", settings: LocalSettings, agent: Agent) -> bool:
             # A folder that's gone keeps its answer, in case it comes back, until it's removed.
             if run.choose(f"{folder} no longer exists. Remove it from the settings?", False):
                 settings.folders[agent.setting].pop(entry, None)
+                put_folder_state(settings.data, agent.setting, entry, None)
                 changed = True
             continue
         if agent.shared:
@@ -524,18 +608,24 @@ def change_folders(run: "Setup", settings: LocalSettings, agent: Agent) -> bool:
             run.introduce_folders(agent, [f for f in present if f.is_dir()])
             explained = True
         answer = run.ask_folder(agent, folder, current)
-        if answer is not None and answer != current:
-            set_folder(settings, run, agent, Path(comparable(folder)), answer)
+        if answer is not None and changes_answer(answer, current):
+            run.answer_offer(agent, settings, Path(comparable(folder)), answer)
             changed = True
     folders = run.known_folders(agent, settings)
     if not agent.shared or not folders:
         return changed
-    current, _ = run.shared_answer(agent, settings, folders)
-    answer = run.ask_codex(folders, current)
-    saved = settings.folders[agent.setting].values()
-    if answer is None or (answer is current and all(value is answer for value in saved)):
+    shared, _ = run.shared_answer(agent, settings, folders)
+    every: bool | Reminder | None = shared
+    if shared is None:
+        every = run.reminder_of(agent, settings, folders[0], folders)
+    answer = run.ask_codex(folders, every)
+    if answer is None or answer in (console.KEEP, console.SKIP):
         return changed
-    run.answer_every_folder(agent, settings, answer)
+    # The same yes or no still goes to every folder when one has another answer.
+    saved = settings.folders[agent.setting].values()
+    if answer is every and all(value is answer for value in saved):
+        return changed
+    run.answer_offer_every_folder(agent, settings, answer)
     return True
 
 
@@ -628,13 +718,18 @@ def assign(run: "Setup", settings: LocalSettings, text: str) -> None:
     else:
         assert agent is not None
         kind = f"{agent.name} {agent.folder}"
+        days = None
+        if operator == "?=":
+            value, days = reminder_value(name, agent, value)
         if not value:
             raise SettingError(f"Name the {kind}, such as ~/{agent.default}-second.")
         # A folder as typed, such as ..\.claude-second, means one from where the command runs.
         full = Path(comparable(resolve_home(value, run.home)))
-        if operator == "+=" and not full.is_dir():
+        if operator != "-=" and not full.is_dir():
             raise SettingError(f"There is no {kind} at {full}.")
-        if agent.shared:
+        if days is not None:
+            remind_folder(settings, run, agent, full, days)
+        elif agent.shared:
             set_shared(settings, run, agent, full, operator == "+=")
         else:
             set_folder(settings, run, agent, full, operator == "+=")

@@ -15,7 +15,10 @@ skills. Codex homes are saved exactly as Claude Code folders are, an entry for e
   [Setup removes what it set up in a folder answered no](setup-removes-what-it-set-up-in-a-folder-answered-no.md):
   a no also removes the rules file setup wrote in each home and its links in `~/.agents/skills`,
   and takes dev-home back out of each home's `writable_roots`.) Until it's answered, setup adds no
-  links and removes none, and a quiet run names the homes.
+  links and removes none, and a quiet run names the homes. (Later changed on 2026-10-20: it names
+  them in a `NEW` line, as it does a folder, and one reminder covers every home, as one answer
+  does: it goes in every home's entry, through any home while Codex has no answer, and a home
+  found later waits with the rest.)
 - The main home is `~/.codex` when it's there; otherwise the first other `~/.codex-<name>` there,
   by folder name; otherwise the first home elsewhere, by full path. Its answer is every home's.
   When it has none, the next home there, in that order, that has one gives it. With none, Codex

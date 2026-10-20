@@ -12,8 +12,10 @@ docs/development/settings.md has the rules."""
 import copy
 import json
 import os
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -327,6 +329,79 @@ def listed_entries(value: object) -> list[str]:
     if not isinstance(value, dict):
         return []
     return [folder for folder, entry in value.items() if folder.strip() and isinstance(entry, dict)]
+
+
+# A reminder's date, as written: YYYY-MM-DD, which date.fromisoformat alone would widen.
+REMINDER_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+@dataclass(frozen=True)
+class Reminder:
+    """An answer to an offer, such as a folder setup hasn't set up, to ask again later: on that
+    date, or with none, the next time it would be asked. Saved as {"$state": "remind"}, with the
+    date as "on"."""
+
+    on: date | None
+
+    def due(self, today: date) -> bool:
+        """Whether it's time to ask again."""
+        return self.on is None or self.on <= today
+
+    @property
+    def saved(self) -> dict[str, str]:
+        """The reminder as the settings file holds it."""
+        return {STATE: "remind", **({"on": self.on.isoformat()} if self.on else {})}
+
+
+def read_reminder(value: object) -> Reminder | None:
+    """The reminder a saved value holds, or None when it holds none setup can use."""
+    if not isinstance(value, dict) or value.get(STATE) != "remind" or set(value) - {STATE, "on"}:
+        return None
+    on = value.get("on")
+    if on is None and "on" not in value:
+        return Reminder(None)
+    if not isinstance(on, str) or not REMINDER_DATE.fullmatch(on):
+        return None
+    try:
+        return Reminder(date.fromisoformat(on))
+    except ValueError:
+        return None
+
+
+def folder_reminders(value: object) -> dict[str, Reminder]:
+    """Each folder in an agent's folders whose answer is a reminder, as written, with it."""
+    if not isinstance(value, dict):
+        return {}
+    found: dict[str, Reminder] = {}
+    for folder, entry in value.items():
+        if folder.strip() and isinstance(entry, dict):
+            reminder = read_reminder(entry.get("setUp"))
+            if reminder is not None:
+                found[folder] = reminder
+    return found
+
+
+def put_folder_state(
+    data: dict[str, Any], path: str, entry: str, state: dict[str, str] | None
+) -> None:
+    """Saves the answer of one of an agent's folders, by its entry as written, as a state, such as
+    a reminder; or with None, takes the state back out, and the entry once nothing is left in it.
+    A yes or a no goes in LocalSettings.folders instead, which a save writes over any state."""
+    current = get(data, path)
+    folders = dict(current) if isinstance(current, dict) else {}
+    found = folders.get(entry)
+    if state is None and not (isinstance(found, dict) and "setUp" in found):
+        return
+    kept = dict(found) if isinstance(found, dict) else {}
+    if state is not None:
+        kept["setUp"] = state
+    else:
+        kept.pop("setUp", None)
+    if kept:
+        folders[entry] = kept
+    else:
+        folders.pop(entry, None)
+    put(data, path, folders)
 
 
 @dataclass(frozen=True)
@@ -650,7 +725,8 @@ def check_settings(
                 remove(value, name, path, (key, name))
 
     def check_folders(path: str, value: object, agent: Agent) -> None:
-        """An agent's folders, each with an entry, which holds its answer, setUp."""
+        """An agent's folders, each with an entry, which holds its answer, setUp: yes, no, or a
+        reminder."""
         unset = "not answered yet"
         if not isinstance(value, dict):
             wrong(path, value, f"a JSON object of {agent.folder}s", "none")
@@ -664,8 +740,9 @@ def check_settings(
                 if entry_key != "setUp":
                     keys = (*path.split("."), folder, entry_key)
                     remove(entry, entry_key, f"{where}: {entry_key}", keys)
-                elif not isinstance(answer, bool):
-                    wrong(f"{where}: setUp", answer, "true or false", unset)
+                elif not isinstance(answer, bool) and read_reminder(answer) is None:
+                    wanted = 'true, false, or a reminder, {"$state": "remind", "on": "YYYY-MM-DD"}'
+                    wrong(f"{where}: setUp", answer, wanted, unset)
 
     def move_renamed_skills(value: dict[str, Any]) -> None:
         """Moves a skill's answers to its name as its folder spells it now: from the same name in
@@ -760,7 +837,8 @@ def check_settings(
 @dataclass
 class LocalSettings:
     """The settings setup asks for, with defaults for anything missing. folders holds, for each
-    agent, each folder with an answer, as written, so setup asks about it only once. data holds
+    agent, each folder answered yes or no, as written, so setup asks about it only once; a folder
+    whose answer is a reminder has it in data instead (see folder_reminders). data holds
     everything the file had, so a save keeps the keys setup doesn't know, and each setting in the
     form it was saved in: setting_value reads one, such as whether automatic updates are answered
     yet. found says the file had settings in it. test_home_dir is only ever in a test sandbox's

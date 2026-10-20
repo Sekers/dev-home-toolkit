@@ -23,10 +23,16 @@ Each setting is one of four kinds, and accepts only the forms that fit it:
 | No default | `devHome.folder`, `multiMachine` | missing, plain | Whatever the setting says: with `multiMachine` unanswered every sync fetches, and without a dev-home folder setup stops |
 | Offer | each folder's `setUp`, recommended settings, update notices | missing, `remind`, plain | Offered again, as [Offers use the same answers](offers-use-the-same-answers.md) says. An unanswered folder isn't set up |
 
-(Changed on 2026-10-16, not built yet: each folder's `setUp` was a setting with no default. A
-folder setup hasn't asked about is offered in a `NEW` line with the standard answers, "remind me
+(Changed on 2026-10-16, built on 2026-10-20: each folder's `setUp` was a setting with no default.
+A folder setup hasn't asked about is offered in a `NEW` line with the standard answers, "remind me
 in N days" among them, so it moved to the offer kind, which can hold a reminder. Until the date,
-the folder isn't set up, its `NEW` line is quiet, and a run of setup by hand doesn't ask.)
+the folder isn't set up, its `NEW` line is quiet, and a run of setup by hand doesn't ask. Only a
+person's answer saves a reminder, at a question in a terminal, in the settings menu, or through
+`--configure`, and only for a folder with no yes or no: a folder already answered stays yes or no,
+since a reminder brings back a question nobody has answered, and a folder answered yes that took
+one would keep its links but get no new skills until the date, with nothing saying so. The
+developer's choice; set aside: a reminder replacing an answer. A shared agent's reminder goes in
+every folder's entry, as its answer does.)
 
 A form a setting doesn't accept, or a plain value of the wrong type, is a `PROBLEM`, and the
 setting counts as missing.

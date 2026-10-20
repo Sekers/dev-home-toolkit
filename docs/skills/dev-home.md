@@ -20,6 +20,11 @@ skill itself: [`SKILL.md`](../../templates/skills/dev-home/SKILL.md).
   setting you agreed on, such as `devHome.checkEveryHours=6`: first with `--what-if`, to show you the
   change, then for real after your yes. Setup checks the value, and keeps a dated backup of
   `local-settings.json`.
+- **A Claude Code folder or Codex home setup has no answer for** is left as it is, and a `NEW`
+  line names it on every sync until you answer: set it up, no, or remind me in N days, such as
+  `/dev-home configure remind me about ~/.claude-second in a week`. Setup works out the date, and
+  until then doesn't ask about the folder, and syncs don't name it. A reminder is only for a
+  folder with no answer yet: one you've answered stays yes or no, and you change it the same way.
 - **One setting is shared by every copy:** whether dev-home is in active use anywhere besides
   this PC. It's kept in your dev-home's `dev-home.json`, so a change to it is committed and
   pushed, and the agent's question says so. Before a switch to one copy, the agent asks whether

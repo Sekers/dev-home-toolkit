@@ -64,11 +64,13 @@ skills, and skills added on another PC, reach this one.
 Claude Code gets the links and rules in each folder answered yes under claudeCode.folders in
 local-settings.json. Setup offers each Claude Code folder it finds, in a list, each recommended:
 ~/.claude, once Claude Code has made it; each extra one, one per account, such as
-~/.claude-<name>; and the folder in CLAUDE_CONFIG_DIR. It saves a no there too. A folder nobody
-has answered for isn't set up: setup adds no links there and removes none, and a quiet run names
-it. In a folder answered no, setup removes the links it made, and takes dev-home and
-dev-home-toolkit, and its claudeMdExcludes patterns, back out of its settings.json, and leaves the
-rest alone. One answered yes that no longer exists is skipped.
+~/.claude-<name>; and the folder in CLAUDE_CONFIG_DIR. It saves a no there too, and a reminder,
+the answer to ask again in a number of days. A folder with no yes or no isn't set up: setup adds
+no links there and removes none. A sync names each one with no answer yet, or a reminder that's
+due, in a NEW line, which says how to answer; until a reminder is due, setup doesn't ask about
+its folder, and syncs don't name it. In a folder answered no, setup removes the links it made,
+and takes dev-home and dev-home-toolkit, and its claudeMdExcludes patterns, back out of its
+settings.json, and leaves the rest alone. One answered yes that no longer exists is skipped.
 
 Codex homes are saved the same way, under codex.homes, but every home reads the same skills, from
 ~/.agents/skills, so every home has the same answer: setup sets up all of them, or none, and asks
@@ -81,8 +83,8 @@ gets the main home's answer, with a line saying so; when the main home has none,
 there in that order that has one gives it. A yes gets each home its
 rules and settings, and the skills linked into ~/.agents/skills. A no removes the rules file setup
 wrote in each home and the links it made in ~/.agents/skills, and takes dev-home back out of each
-home's writable_roots. Until Codex is answered, setup
-adds no links and removes none, and a quiet run names its homes.
+home's writable_roots. Until Codex is answered yes or no, setup adds no links and removes none,
+and a sync names its homes in a NEW line, as for a folder. One reminder covers every home.
 
 Each skill is added to the agents on this PC, or not, by its answer in
 skills.<name>.addedToAgents, and dev-home always. A skill this PC has no answer for follows its
@@ -148,6 +150,7 @@ import subprocess
 import textwrap
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -188,6 +191,7 @@ from .settings import (
     Agent,
     Checked,
     LocalSettings,
+    Reminder,
     Setting,
     Skill,
     SkillDeclarations,
@@ -196,6 +200,7 @@ from .settings import (
     check_settings,
     dev_home_text,
     folder_rank,
+    folder_reminders,
     get,
     layout,
     listed_entries,
@@ -204,6 +209,7 @@ from .settings import (
     local_settings_text,
     order_folders,
     put,
+    put_folder_state,
     read_dev_home_settings,
     read_value,
     same_apart_from_order,
@@ -447,6 +453,15 @@ class Setup:
             return None
         return console.choose_from_list(intro, question, items, details)
 
+    def choose_offer(
+        self, question: str, recommended: bool, reminder: Reminder | None = None
+    ) -> console.OfferAnswer | None:
+        """The question about one offer (see console.choose_offer), or None without a console.
+        With a reminder, Enter keeps it."""
+        if not self.can_ask:
+            return None
+        return console.choose_offer(question, recommended, keep_text(reminder))
+
     def choose_or_default(self, question: str, setting: Setting, data: dict[str, Any]) -> object:
         """Asks about a yes-or-no setting with a default, one of dev-home-toolkit's own or a
         skill's preference, saved in data: yes, no, or follow the default. Returns the answer as
@@ -488,16 +503,26 @@ class Setup:
         guarded)."""
         return agent == CLAUDE_CODE and any(self.guarded(folder) for folder in folders)
 
-    def ask_folder(self, agent: Agent, folder: Path, current: bool | None) -> bool | None:
-        """Whether to set up one of an agent's folders. Enter keeps its answer, and takes yes for
-        one with no answer yet. None when no answer came."""
-        return self.choose(folder_question(agent, folder), True if current is None else current)
+    def ask_folder(
+        self, agent: Agent, folder: Path, current: bool | Reminder | None
+    ) -> console.OfferAnswer | None:
+        """Whether to set up one of an agent's folders: yes or no for one answered already, with
+        Enter keeping its answer; otherwise an offer, recommended, where Enter keeps a reminder,
+        and takes yes for one with no answer yet. None when no answer came."""
+        question = folder_question(agent, folder)
+        if isinstance(current, bool):
+            return self.choose(question, current)
+        return self.choose_offer(question, True, current)
 
-    def ask_codex(self, homes: Sequence[Path], current: bool | None) -> bool | None:
-        """Whether to set up Codex, in every Codex home, which all read the same skills. Enter
-        keeps its answer, and takes yes with no answer yet. None when no answer came."""
+    def ask_codex(
+        self, homes: Sequence[Path], current: bool | Reminder | None
+    ) -> console.OfferAnswer | None:
+        """Whether to set up Codex, in every Codex home, which all read the same skills, asked as
+        ask_folder asks about a folder. None when no answer came."""
         self.introduce_folders(CODEX, homes)
-        return self.choose(CODEX_QUESTION, True if current is None else current)
+        if isinstance(current, bool):
+            return self.choose(CODEX_QUESTION, current)
+        return self.choose_offer(CODEX_QUESTION, True, current)
 
     def ask_copies(self, current: bool | None) -> bool | None:
         """Whether dev-home is in active use anywhere besides this PC. With no answer yet, there's
@@ -849,15 +874,76 @@ class Setup:
 
     def answer_every_folder(self, agent: Agent, settings: LocalSettings, answer: bool) -> None:
         """Gives a shared agent's answer, from a person, to every one of its folders: each entry,
-        those for folders that are gone included, and each folder there without one. That replaces
-        any answer the folders got from the main one in this run, so its line goes."""
+        those for folders that are gone and those with a reminder included, and each folder there
+        without one. That replaces any answer the folders got from the main one in this run, so
+        its line goes."""
         self.matched.pop(agent.setting, None)
         answers = settings.folders[agent.setting]
-        for entry in answers:
+        for entry in [*answers, *self.reminders(agent, settings)]:
             answers[entry] = answer
         for folder in self.known_folders(agent, settings):
             if self.entry_named(folder, answers) is None:
                 answers[self.entry_for(agent, settings, folder)] = answer
+
+    def reminders(self, agent: Agent, settings: LocalSettings) -> dict[str, Reminder]:
+        """Each of an agent's folders whose answer is a reminder, by its entry as written, with
+        it. A yes or a no given in this run wins over a reminder its entry still holds."""
+        answers = settings.folders[agent.setting]
+        found = folder_reminders(get(settings.data, agent.setting))
+        return {entry: reminder for entry, reminder in found.items() if entry not in answers}
+
+    def reminder_of(
+        self,
+        agent: Agent,
+        settings: LocalSettings,
+        folder: Path,
+        known: Sequence[Path] | None = None,
+    ) -> Reminder | None:
+        """A folder's reminder, if its answer is one. A shared agent has one for all its folders:
+        the first of those there, in order, that has one (see shared_answer), from known, when the
+        caller has them already."""
+        found = self.reminders(agent, settings)
+        if not agent.shared:
+            folders: Sequence[Path] = [folder]
+        else:
+            folders = self.known_folders(agent, settings) if known is None else known
+        for each in folders:
+            entry = self.entry_named(each, found)
+            if entry is not None:
+                return found[entry]
+        return None
+
+    def answer_offer(
+        self, agent: Agent, settings: LocalSettings, folder: Path, answer: console.OfferAnswer
+    ) -> None:
+        """Saves a person's answer to the offer to set up one of an agent's folders, in the entry
+        that names it, or a new one: a yes or a no, which the save writes over a reminder, in its
+        place; a reminder; or skip, which ends a reminder that was due, so it's unanswered again.
+        KEEP changes nothing."""
+        entry = self.entry_for(agent, settings, folder)
+        if isinstance(answer, bool):
+            settings.folders[agent.setting][entry] = answer
+        elif isinstance(answer, console.RemindIn):
+            settings.folders[agent.setting].pop(entry, None)
+            put_folder_state(settings.data, agent.setting, entry, Reminder(answer.on).saved)
+        elif answer == console.SKIP:
+            put_folder_state(settings.data, agent.setting, entry, None)
+
+    def answer_offer_every_folder(
+        self, agent: Agent, settings: LocalSettings, answer: console.OfferAnswer
+    ) -> None:
+        """Saves a person's answer to the offer to set up a shared agent for every one of its
+        folders (see answer_offer): each entry, and each folder there without one, as
+        answer_every_folder gives a yes or a no."""
+        if isinstance(answer, bool):
+            self.answer_every_folder(agent, settings, answer)
+            return
+        if answer == console.KEEP:
+            return
+        entries = [*settings.folders[agent.setting], *self.reminders(agent, settings)]
+        folders = [Path(comparable(resolve_home(entry, self.home))) for entry in entries]
+        for folder in [*folders, *self.known_folders(agent, settings)]:
+            self.answer_offer(agent, settings, folder, answer)
 
     def match_shared_answer(self, agent: Agent, settings: LocalSettings) -> None:
         """Gives each of a shared agent's folders that's there the shared answer (see
@@ -1794,25 +1880,34 @@ class Setup:
         self.ask_about_copies(settings, content_root, first_setup=first_setup)
 
     def ask_about_folders(self, agent: Agent, settings: LocalSettings) -> None:
-        """Asks about each of an agent's folders that setup knows of with no answer yet, and keeps
-        every answer, a no included, so it's asked about once: in the shared prompt for optional
-        lists, a list of the agent's own, each one recommended, or for a shared agent, one question
-        for them all, whose answer goes to every folder. Once one of a shared agent's folders has an
-        answer, the others have it too (see match_shared_answer), so it asks only while none has.
-        A folder nobody has answered for isn't set up: setup adds no links there and removes none.
-        A quiet run names those folders instead."""
+        """Asks about each of an agent's folders that setup knows of with no answer yet, or a
+        reminder that's due, and keeps every answer, a no included, so it's asked about once: in
+        the shared prompt for optional lists, a list of the agent's own, each one recommended, or
+        for a shared agent, one question for them all, whose answer goes to every folder. Once one
+        of a shared agent's folders has an answer, the others have it too (see
+        match_shared_answer), so it asks only while none has. A reminder covers a shared agent's
+        folders together too. A folder with a reminder that isn't due isn't asked about.
+
+        A folder with no yes or no isn't set up: setup adds no links there and removes none. A
+        quiet run names those it would ask about in a NEW line instead, on every run, and so does
+        one where no answer came; one where the person skipped them says nothing more."""
         answers = settings.folders[agent.setting]
         known = self.known_folders(agent, settings)
-        unanswered = [f for f in known if self.entry_named(f, answers) is None]
+        today = date.today()
+
+        def waiting(folder: Path) -> bool:
+            reminder = self.reminder_of(agent, settings, folder, known)
+            return reminder is not None and not reminder.due(today)
+
+        unanswered = [f for f in known if self.entry_named(f, answers) is None and not waiting(f)]
         if not unanswered:
             return
         if self.can_ask:
             if agent.shared:
                 shared = self.ask_codex(known, None)
                 if shared is not None:
-                    self.answer_every_folder(agent, settings, shared)
+                    self.answer_offer_every_folder(agent, settings, shared)
                     return
-                which = f"{agent.name}, so setup left it as it is"
             else:
                 if len(unanswered) == 1:
                     # A list of one asks its item's question alone, so the folder and what a
@@ -1824,7 +1919,7 @@ class Setup:
                 else:
                     self.line()
                     answer = self.choose_from_list(
-                        f"{agent.name} {agent.folder}s setup hasn't asked about yet, one for each "
+                        f"{agent.name} {agent.folder}s with no answer yet, one for each "
                         f"{agent.account} account:",
                         f"Set up {agent.name} in them with dev-home's skills and rules?",
                         [
@@ -1835,14 +1930,20 @@ class Setup:
                     )
                 if answer is not None:
                     for folder in unanswered:
-                        entry = self.entry_for(agent, settings, folder)
-                        answers[entry] = answer.answers[str(folder)]
+                        self.answer_offer(agent, settings, folder, answer.answers[str(folder)])
                     return
-                which = (
-                    " and ".join(str(f) for f in unanswered) + ", so setup left them as they are"
-                )
-            self.status("PROBLEM", f"No answer came about {which}. Run setup.py again to answer.")
-            return
+        self.name_unanswered(agent, settings, known, unanswered)
+
+    def name_unanswered(
+        self,
+        agent: Agent,
+        settings: LocalSettings,
+        known: Sequence[Path],
+        unanswered: Sequence[Path],
+    ) -> None:
+        """The NEW lines naming an agent's folders with no answer yet, which setup leaves as they
+        are, with how to answer: in chat, or in a terminal. A NEW line, not a PROBLEM, since
+        nothing is wrong: the folder waits for an answer."""
         # The session's own folder, when it's in the profile folder under another name or outside
         # it, comes only from the agent's variable, which a terminal usually doesn't have.
         visible = self.profile_folders(agent) + [
@@ -1853,17 +1954,20 @@ class Setup:
         set_up = f"set up {agent.name}" if agent.shared else "set it up"
         for folder in unseen:
             self.status(
-                "PROBLEM",
-                f"Setup hasn't asked yet {unasked_text(agent, [folder], session=True)}. Setup in a "
-                f"terminal usually can't see it: to {set_up}, run {by_hand('setup.py')} "
-                f"--configure '{agent.setting}+={self.folder_entry(folder)}'.",
+                "NEW",
+                f"Setup has no answer yet {unanswered_text(agent, [folder], session=True)}. "
+                f"{answer_in_chat()}. Setup in a terminal usually can't see it: to {set_up} "
+                f"there, run {by_hand('setup.py')} --configure "
+                f"'{agent.setting}+={self.folder_entry(folder)}'.",
             )
         seen = [f for f in unanswered if f not in unseen]
         if seen:
+            for_each = len(seen) > 1 and not agent.shared
             self.status(
-                "PROBLEM",
-                f"Setup hasn't asked yet {unasked_text(agent, seen)}. Run {by_hand('setup.py')} in "
-                "a terminal, and it asks.",
+                "NEW",
+                f"Setup has no answer yet {unanswered_text(agent, seen)}. "
+                f"{answer_in_chat(for_each=for_each)}. Or run {by_hand('setup.py')} in a "
+                "terminal, and it asks.",
             )
 
     def agent_folders(self, settings: LocalSettings) -> AgentFolders:
@@ -2667,9 +2771,10 @@ def and_list(items: Sequence[str]) -> str:
     return ", ".join(items[:-1]) + ", and " + items[-1]
 
 
-def unasked_text(agent: Agent, folders: Sequence[Path], *, session: bool = False) -> str:
-    """What setup hasn't asked about an agent's folders, and that it leaves them as they are, as
-    in "Setup hasn't asked yet <this>". session marks the one folder as the session's own."""
+def unanswered_text(agent: Agent, folders: Sequence[Path], *, session: bool = False) -> str:
+    """Which of an agent's folders setup has no answer for yet, and that it leaves them as they
+    are, as in "Setup has no answer yet <this>". session marks the one folder as the session's
+    own."""
     if agent.shared:
         own = f", the session's own, in {agent.variable}," if session else ""
         which = (
@@ -2677,16 +2782,32 @@ def unasked_text(agent: Agent, folders: Sequence[Path], *, session: bool = False
             if len(folders) == 1
             else f"the {agent.name} {agent.folder}s {folder_list(folders)} as they are"
         )
-        return f"whether to set up {agent.name}, so it leaves {which}"
+        return f"about setting up {agent.name}, so it leaves {which}"
     kind = f"{agent.name} {agent.folder}"
     if session:
         return (
-            f"whether to set up the {kind} {folders[0]}, the session's own, in {agent.variable}, "
+            f"about setting up the {kind} {folders[0]}, the session's own, in {agent.variable}, "
             "so it leaves it as it is"
         )
     if len(folders) == 1:
-        return f"whether to set up the {kind} {folders[0]}, so it leaves it as it is"
-    return f"whether to set up these {kind}s: {folder_list(folders)}, so it leaves them as they are"
+        return f"about setting up the {kind} {folders[0]}, so it leaves it as it is"
+    return f"about setting up these {kind}s: {folder_list(folders)}, so it leaves them as they are"
+
+
+def answer_in_chat(*, for_each: bool = False) -> str:
+    """How a NEW line about folders with no answer says to answer in chat, with the answers it
+    offers, for each folder when it names several. "Remind me next session" isn't one: the line
+    comes back every session anyway."""
+    each = ", for each" if for_each else ""
+    return f"Answer with /dev-home configure{each}: set it up, no, or remind me in N days"
+
+
+def keep_text(reminder: Reminder | None) -> str:
+    """How a question about an item names the reminder it has, which Enter keeps, such as "the
+    reminder for 2026-10-27", or "" for none."""
+    if reminder is None:
+        return ""
+    return f"the reminder for {reminder.on.isoformat()}" if reminder.on else "the reminder"
 
 
 def setup_link_target(entry: Path, targets: Sequence[Path]) -> str | None:

@@ -38,7 +38,8 @@ folder link as a directory junction, which needs no admin rights and no Develope
     at it and says so in a `LINKED` line.
   - `local-settings.json`: this PC's answers to setup's questions: where your dev-home is,
     whether to install updates automatically, which Claude Code folders to set up, and which not
-    to, whether to set up Codex, which skills to add to your agents, and the skills' preferences.
+    to, whether to set up Codex, the date to ask again about a folder you're to be reminded of,
+    which skills to add to your agents, and the skills' preferences.
     The scripts read it to find your dev-home.
     Setup removes a setting nothing declares any more, such as one misspelled in a hand edit,
     and says so, after a backup of the file. It never overwrites a file it can't read as JSON,
