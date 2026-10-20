@@ -32,7 +32,7 @@ rules apply too.
     "Skills" below.
 - `templates/operating-rules/`, `templates/skills/`, and `templates/shared-skill-scripts/` are
   filled in on every setup run and written to `internal/.generated/`, at the same paths. The
-  skills and rules there are what gets linked into the tools, and the skills run the shared
+  skills and rules there are what gets linked into the agents, and the skills run the shared
   scripts from there. The starter has no copy there, because setup fills it in only once (see
   AGENTS.md's "The two repos"). Python adds `__pycache__` folders there when the scripts run,
   and setup leaves those, and any link, alone.

@@ -13,4 +13,4 @@ computer's name. Running two commands in one call also saves a round trip. Since
 skill command that syncs starts with one script anyway (see
 [Every skill command that syncs starts with one call: prepare.py](every-skill-command-that-syncs-starts-with-one-call-prepare-py.md)).
 
-**Look again if:** a tool starts asking about joined commands whose parts are all pre-approved.
+**Look again if:** an agent starts asking about joined commands whose parts are all pre-approved.

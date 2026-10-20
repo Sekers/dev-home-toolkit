@@ -7,7 +7,7 @@ change that makes an item plainly obsolete. Facts learned locally belong to the 
 environment by default, and a session never infers one environment's state from another.
 
 **Why:** limiting a session to its current environment prevents guesses about another one, but
-it also blocks corrections the end user supplies, facts checked through a remote tool, retiring or
+it also blocks corrections the end user supplies, facts checked remotely, retiring or
 renaming an environment, and removal of notes that a project-wide change made obsolete. The
 source of the evidence is the useful safety boundary; the session's location is not.
 

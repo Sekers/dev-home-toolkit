@@ -94,7 +94,7 @@ read. The tests check both scripts in two layers.
 - Running the tests inside an operating system's sandbox, with a read-only file system and no
   network: the established way to make sure code can't change anything, and the one that would
   catch everything. But as of October 2026, the Windows options are alpha or experimental, or
-  need administrator setup and a new tool, it needs separate work for each operating system,
+  need administrator setup and new software, it needs separate work for each operating system,
   and macOS's `sandbox-exec` is deprecated.
 
 **Look again if:** a cross-platform operating system sandbox works on Windows without

@@ -58,10 +58,10 @@ Every section carries one, with its own date and versions:
 
 ## Content
 
-- The general test: it helps any project that uses the same language, platform, tool, library,
-  or service, whoever makes it, your own included, and it names no tenant, personal path, or
-  other private detail. Judge the fact, not the project where it came up. What only helps work
-  on one project's own code stays in that project. Anything that fails the test stays out of the
+- The general test: it helps any project that uses the same language, platform, program, extension,
+  library, or service, whoever makes it, your own included, and it names no tenant, personal path,
+  or other private detail. Judge the fact, not the project where it came up. What only helps work on
+  one project's own code stays in that project. Anything that fails the test stays out of the
   knowledge base.
 - Worth its cost: the index is read on every lookup, and a file is read whole when it's opened.
   Keep entries short, add to an existing file before creating one, and remove what no longer

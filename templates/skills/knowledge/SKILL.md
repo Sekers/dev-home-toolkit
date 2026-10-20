@@ -1,6 +1,6 @@
 ---
 name: knowledge
-description: Private general knowledge base for coding and AI work (languages, tools, libraries, platforms, and AI agents such as Claude Code and Codex), kept in the private dev-home repo. Check it before researching or testing a general question about these, or asking the user to test one, even partway through other work. Also use when the user runs /knowledge, asks to look something up in or add something to the knowledge base, or when a hard-won general finding comes up during work.
+description: Private general knowledge base for coding and AI work (languages, programs, extensions, libraries, platforms, and AI agents such as Claude Code and Codex), kept in the private dev-home repo. Check it before researching or testing a general question about these, or asking the user to test one, even partway through other work. Also use when the user runs /knowledge, asks to look something up in or add something to the knowledge base, or when a hard-won general finding comes up during work.
 allowed-tools: "Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch when-due) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch when-due) Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch auto) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch auto) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *)"
 ---
 
@@ -141,12 +141,12 @@ one, that repo's own rules, and the user's global rules.
 The typed command is `/knowledge add <what you learned>`. Go ahead only as "When to change,
 commit, and push" says, or after a yes to a candidate you offered.
 
-1. Apply the general test: it helps any project that uses the same language, platform, tool,
-   library, or service, whoever makes it, the user's own included, and it names no tenant,
-   personal path, or other private detail. Judge the fact, not the project where it came up.
-   What only helps work on one project's own code, such as its internals or why it was built
-   that way, fails: it goes where that project's AGENTS.md says research goes. If it fails, it
-   doesn't belong in the knowledge base: tell the user why, and add nothing.
+1. Apply the general test: it helps any project that uses the same language, platform, program,
+   extension, library, or service, whoever makes it, the user's own included, and it names no
+   tenant, personal path, or other private detail. Judge the fact, not the project where it came up.
+   What only helps work on one project's own code, such as its internals or why it was built that
+   way, fails: it goes where that project's AGENTS.md says research goes. If it fails, it doesn't
+   belong in the knowledge base: tell the user why, and add nothing.
 2. Read `{{SKILL_DIR}}/filing-rules.md`, unless you already did this session.
 3. Sync with GitHub, with the `--fetch auto` command above, unless that already ran this turn.
 4. Add the finding to the matching topic file, or create one by the rules. Label its evidence

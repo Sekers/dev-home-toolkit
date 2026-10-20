@@ -24,8 +24,8 @@ AGENTS.md's rules apply too.
   Enter as yes, though a folder nobody has answered for isn't set up; and `multiMachine`'s
   question has no Enter answer, since either wrong answer costs something. Once a question is
   answered, Enter always keeps the saved answer.
-- A tool setup sets up, such as Claude Code or Codex, keeps its folders in one shape: an entry for
-  each folder by its path, in the tool's group, named in the tool's own words, such as
+- An agent setup sets up, such as Claude Code or Codex, keeps its folders in one shape: an entry
+  for each folder by its path, in the agent's group, named in the agent's own words, such as
   `claudeCode.folders` or `codex.homes`, each with its own answer, `setUp`. When every folder
   reads the same skills, as Codex's homes do, setup's code keeps their answers the same, and the
   file's shape doesn't change
@@ -46,7 +46,7 @@ AGENTS.md's rules apply too.
 - Write a plain value only when the end user chose that value, and `{"$state": "default"}` only
   when they chose the default. Never write a default as a plain value: that pins it.
 - Quiet runs never ask, and the only state they write is `unanswered`, for something they
-  announce. The one exception: a run gives each of a shared tool's folders the main folder's
+  announce. The one exception: a run gives each of a shared agent's folders the main folder's
   answer, with a line saying so
   ([Codex is set up in every Codex home, or in none](decisions/codex-is-set-up-in-every-codex-home-or-in-none.md)).
 - Save `local-settings.json` only through setup's save, which holds the sync's lock while it

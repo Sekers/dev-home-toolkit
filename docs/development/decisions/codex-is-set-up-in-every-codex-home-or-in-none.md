@@ -50,7 +50,7 @@ skills. Codex homes are saved exactly as Claude Code folders are, an entry for e
 - The rules and the settings are per home in Codex, but setting those up per home while the
   skills are shared would leave a home answered no listing skills that work without the rules or
   write access to dev-home.
-- Both tools are saved the same way, as far as possible, in a shape that won't need redesigning
+- Both agents are saved the same way, as far as possible, in a shape that won't need redesigning
   (the developer, 2026-10-15): if Codex ever reads skills per home, only setup's code changes,
   never the settings file.
 - A sync makes the homes match, rather than naming a mismatch on every sync, because the answer

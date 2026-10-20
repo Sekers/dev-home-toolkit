@@ -13,7 +13,7 @@ discussion are in [Skill requirements](../research/skill-requirements.md).
     entry's `description` says what the skill uses it for. Setup looks where a newly started
     shell would: in its own `PATH`, and on Windows also in the saved one, read from the registry
     with no process, so a program installed after the agents started still counts. It's wrong
-    only for a program that one shell alone adds, such as Git Bash's tools, and a wrong hint
+    only for a program that one shell alone adds, such as Git Bash's programs, and a wrong hint
     never changes a link.
   - In `/dev-home skills`, checked again each time in the agent's own shell. Setup records each
     skill's programs and Python minimum in `internal/.generated/skill-states.json`, and
@@ -79,7 +79,7 @@ recorded needs that `/dev-home skills` checks again are dev-home-toolkit's own d
 - Keeping a skill off for a missing program, with setup looking:
   - in each run's own `PATH`, as first built: it flips between syncs from Bash and from
     PowerShell, and after an install;
-  - in Windows' saved `PATH` alone: it misses Git Bash's tools, and works only on Windows;
+  - in Windows' saved `PATH` alone: it misses Git Bash's programs, and works only on Windows;
   - in both: the flip between Bash and PowerShell stays;
   - wherever it once found the program: new stored state, and still a guess about the agent's
     shell.

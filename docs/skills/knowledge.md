@@ -14,10 +14,10 @@ the skill itself: [`SKILL.md`](../../templates/skills/knowledge/SKILL.md).
 - They offer a "Knowledge candidate", with its evidence, only for a finding checked in that
   session, or a pitfall agents keep hitting. Most sessions have none. The offer ends "Add it,
   commit, and push?", and nothing is added without your yes.
-- A note has to help any project that uses the same tool, library, or service, whoever makes it,
-  your own projects included. What only helps work on one project's own code stays in that
-  project. When a finding is a normal docs item for a project whose docs you can change, the
-  offer asks whether it goes there instead.
+- A note has to help any project that uses the same program, extension, library, or service, whoever
+  makes it, your own projects included. What only helps work on one project's own code stays in that
+  project. When a finding is a normal docs item for a project whose docs you can change, the offer
+  asks whether it goes there instead.
 - Adding a note syncs first. With dev-home in active use on several copies, such as two PCs,
   that sync checks GitHub every time, so the note goes into the latest knowledge base; with one,
   only once 12 hours have passed, since nothing else changes it. See

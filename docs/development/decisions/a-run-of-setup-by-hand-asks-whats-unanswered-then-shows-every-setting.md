@@ -28,7 +28,7 @@
 A run with no console, such as a quiet one, asks nothing and shows no menu, and does the rest in
 the same order, its work holding the lock too, unless a sync that runs it holds the lock already.
 
-Setup also detects which tools a PC has, Claude Code when `~/.claude` exists and Codex when
+Setup also detects which agents a PC has, Claude Code when `~/.claude` exists and Codex when
 `~/.codex` does, instead of always setting up `~/.claude`.
 
 Every Claude Code folder setup finds is asked about, `~/.claude` included, in the shared prompt
@@ -65,7 +65,7 @@ Asking about every folder, the default one included, means dev-home-toolkit does
 may not want: an extra account is often kept apart on purpose, such as a work one; the
 `~/.claude-*` match also catches folders that aren't accounts, such as a backup; and someone who
 doesn't want their default account set up sees the choice. It's one rule for every folder, and
-for both tools. A folder linked before setup asked about it gets no special case, `~/.codex`
+for both agents. A folder linked before setup asked about it gets no special case, `~/.codex`
 included: only PCs set up before this change are in that state, and one run by hand answers.
 
 This changes three other decisions: the menu from
@@ -93,12 +93,12 @@ held the lock only while it saved, now runs inside the work's lock.
 - A sync setting up a folder it finds right away, then asking to confirm: it would link dev-home
   into a backup copy or a work account before the person says anything.
 - An off switch on the default folders: hidden from the people who need it, and two rules.
-- Leaving it to the tools' own switches for skills: the always-on rules would still load.
+- Leaving it to the agents' own switches for skills: the always-on rules would still load.
 - A separate dev-home per account: a different need, and a much bigger change, since one dev-home
   per PC is filled into the generated files.
 - Writing `setUp: true` for the default folders without asking: the file would claim choices
-  nobody made, quiet runs would have to write it, and a tool uninstalled later would leave a stale
-  entry.
+  nobody made, quiet runs would have to write it, and an agent uninstalled later would leave a
+  stale entry.
 - Treating a folder already linked as set up until it's answered: code kept for a state no new
   install reaches.
 

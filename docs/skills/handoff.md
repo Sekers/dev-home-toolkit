@@ -104,7 +104,7 @@ behind. Neither can find something nobody wrote down.
 
 **When it's worth running:**
 
-- before someone else, another PC, or another AI tool picks up the work
+- before someone else, another PC, or another agent picks up the work
 - after many sessions since the last audit, or when the handoff has grown long
 - when a session was misled by something wrong in the handoff
 

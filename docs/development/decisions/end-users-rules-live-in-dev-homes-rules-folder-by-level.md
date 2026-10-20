@@ -80,9 +80,9 @@ Not built yet. Decided by the developer on 2026-10-17 and 2026-10-18.
 - `mine/` and `my-rules.md`: an agent asked to add a rule for, say, Codex on this PC always knows
   which file to open. There's no `rules/README.md`: dev-home's root README, which setup keeps
   current, explains the layout, and a README an end user adds is theirs.
-- No sentence says which rule wins: tools that combine rule files, such as Ruler and Cursor, add
-  none; a conflict is better fixed than ranked; and a later, more specific rule is usually
-  followed.
+- No sentence says which rule wins: programs and agents that combine rule files, such as Ruler
+  and Cursor, add none; a conflict is better fixed than ranked; and a later, more specific rule
+  is usually followed.
 - Comments: Claude Code's memory docs (read 2026-10-18) strip "Block-level HTML comments" and keep
   "Comments inside code blocks", so both agents see the same rules, and comments cost no tokens in
   Codex. An unclosed comment kept would likely hide every later file from Claude Code (inferred

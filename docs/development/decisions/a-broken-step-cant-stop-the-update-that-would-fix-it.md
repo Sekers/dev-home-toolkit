@@ -10,7 +10,7 @@
   is a `PROBLEM` line, and the steps after it still run. A commit that stops still ends the
   sync, so nothing half done is pushed.
 - When the code can't load or run at all, the entry points and `prepare.py` print a `PROBLEM`
-  line with the commands that install a fix by hand (`git -C <tools> pull --ff-only`, then
+  line with the commands that install a fix by hand (`git -C <toolkit> pull --ff-only`, then
   setup), and the README's troubleshooting says the same. `prepare.py` still prints the facts.
 
 **Why:** an update is how fixes arrive, so a bug in the sync must not stop the check that would

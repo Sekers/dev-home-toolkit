@@ -83,4 +83,4 @@ setting, which in practice an agent reads and sums up for the person:
   (a JSON typo stops setup).
 - No pre-approval.
 
-**Look again if:** an agent's tool can answer setup's questions, or the settings outgrow a menu.
+**Look again if:** an agent can answer setup's questions, or the settings outgrow a menu.

@@ -43,7 +43,7 @@ xhigh. There is no setting for either.
   2.1.295, 2026-10-08). The session's own effort can't be read by a script, so the skill can't
   carry it over to another model.
 - The name: Claude Code uses "audit" for the same kind of check; "check" is used loosely across
-  the skill; and "review" is both tools' command for reviewing code.
+  the skill; and "review" is both agents' command for reviewing code.
 
 **Options set aside:**
 
@@ -52,9 +52,10 @@ xhigh. There is no setting for either.
 - Two second agents at once, with their findings merged: about a third more found in the same
   time, at twice the cost. Running the audit again does the same when wanted.
 - A setting for the audit's model and effort: the command's options cover the occasional change,
-  and each tool has a default for every second agent (Claude Code's `CLAUDE_CODE_SUBAGENT_MODEL`;
-  Codex's `agents.default_subagent_model` and `agents.default_subagent_reasoning_effort`).
-- A fixed model for each tool: names go stale, and none was tested in Codex.
+  and each agent product has a default for every second agent (Claude Code's
+  `CLAUDE_CODE_SUBAGENT_MODEL`; Codex's `agents.default_subagent_model` and
+  `agents.default_subagent_reasoning_effort`).
+- A fixed model for each agent product: names go stale, and none was tested in Codex.
 - Asking before starting: the typed command is the go-ahead, and the message says the cost.
 - The names `check`, `review`, and `fresh-read`.
 

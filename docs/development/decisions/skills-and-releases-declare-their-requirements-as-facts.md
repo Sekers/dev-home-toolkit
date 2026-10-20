@@ -108,8 +108,8 @@ a skill off, and which only warn, is a decision of its own:
   `value`, `description`), the same shape, which lets each entry grow. The Agent Skills
   standard's `compatibility` field is free text, so nothing can check it (both read
   2026-10-16).
-- Per skills folder, not per tool: `~/.agents/skills` is read by Codex and, per their docs, by
-  GitHub Copilot, Gemini CLI, and Cursor, so that folder can't hold a choice for one tool alone.
+- Per skills folder, not per agent: `~/.agents/skills` is read by Codex and, per their docs, by
+  GitHub Copilot, Gemini CLI, and Cursor, so that folder can't hold a choice for one agent alone.
 - Recording setup's result means only setup decides, and `/dev-home skills` shows exactly what it
   did. `facts.py` checks again only what setup warns about, a program or a Python version, where
   the agent runs, and decides nothing
@@ -154,7 +154,7 @@ never changes meaning.
   `xclip`).
 - A check for a known type under the other list, with a line saying where it belongs: once a
   type gains a use in the other list, an older copy would call a correct file wrong.
-- Other names: `limits` (reads as usage or rate limits in AI tools), `onlyOn` (reads as the
+- Other names: `limits` (reads as usage or rate limits in agents), `onlyOn` (reads as the
   events that start something, as `on:` does in GitHub Actions), `platforms` (around Claude it
   means Anthropic's API platform), `runsOn` (picks a machine, rather than ruling others out),
   `compatibleWith` (too close to the standard's `compatibility`, which nothing checks); `needs`

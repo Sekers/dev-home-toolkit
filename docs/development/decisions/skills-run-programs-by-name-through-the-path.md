@@ -22,8 +22,8 @@ on 2026-10-17.
 - Programs installed the usual way are on the `PATH` of every shell: on 2026-10-17, `gh`, `uv`,
   `node`, and `python` were found as the same file from Claude Code's Bash and PowerShell tools
   ([Skill requirements](../research/skill-requirements.md)).
-- The cases it leaves have fixes end users already know: a program on no `PATH`, a tool only Git
-  Bash provides, and a session not restarted after an install. The warning says which applies.
+- The cases it leaves have fixes end users already know: a program on no `PATH`, a program only
+  Git Bash provides, and a session not restarted after an install. The warning says which applies.
 - Fixed paths would cost about a whole part of setup's work, for skills nothing has yet.
 
 **Options set aside:**
@@ -35,7 +35,7 @@ on 2026-10-17.
   - it reaches only skills setup generates, so skills made elsewhere still run programs by name;
   - it needs finding programs on each OS, a per-PC setting for a program pointed at by hand, and
     links re-pointed when a program moves, which some do on every update;
-  - it doesn't fix a program that itself needs the `PATH`, such as a tool installed with npm that
+  - it doesn't fix a program that itself needs the `PATH`, such as a program installed with npm that
     runs `node`;
   - its placeholder would be public, and frozen from 1.0.0;
   - nothing uses it yet.

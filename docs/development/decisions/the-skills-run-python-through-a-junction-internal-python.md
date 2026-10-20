@@ -12,9 +12,9 @@ symbolic link will do the same job on macOS and Linux.
 **Why a junction:** dev-home-toolkit's path has no spaces, so the command is the same unquoted text
 in Claude Code's Bash and PowerShell tools and in Codex, and each is pre-approved as both
 `Bash(...)` and `PowerShell(...)`. Python's own path is usually under the end user's profile, which
-can have a space, and a quoted path needs a different text in each tool (a probe skill showed
-both tools pre-approving a Python command). Python runs normally through a junction, which added
-3 to 5 ms to a start of about 32 ms.
+can have a space, and a quoted path needs a different text in the Bash tool and the PowerShell
+tool (a probe skill showed both pre-approving a Python command). Python runs normally through a
+junction, which added 3 to 5 ms to a start of about 32 ms.
 
 **Why the install manager's shortcuts first:** each runs the default runtime and moves on to newer
 ones as they're installed, with no work for setup. They ignore a virtual environment and a

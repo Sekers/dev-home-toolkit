@@ -18,4 +18,4 @@ loads its new text and its new pre-approvals, with no need for a new session (te
 that invokes the skill again itself is asked first outside auto mode, so the skill asks the end
 user instead.
 
-**Look again if:** the tools reload a skill by themselves when its file changes.
+**Look again if:** the agents reload a skill by themselves when its file changes.

@@ -195,7 +195,8 @@ def test_the_readme_links_to_each_skills_page_never_its_skill_file() -> None:
 
 
 def written_files() -> list[Path]:
-    """Every Markdown and Python file in the repo, leaving out what tools and setup make."""
+    """Every Markdown and Python file in the repo, leaving out what git, the development tools,
+    and setup make."""
     made = {".git", ".venv", ".test-sandbox", ".generated", ".python", "__pycache__"}
     return sorted(
         path
@@ -225,6 +226,70 @@ def test_no_file_calls_the_developer_anything_but_the_developer() -> None:
                 found.append(f"{name(path)}:{number}: {line.strip()}")
     assert len(written_files()) > 10
     assert found == []
+
+
+# Wording that uses "tool" for an agent or a program, which the glossary rules out, such as "both
+# tools" for Claude Code and Codex, "a tool's settings file", or "the tools are on the PATH". An
+# agent's own tools keep the word, such as Claude Code's Bash tool, and so do the development
+# tools.
+TOOL_FOR_AN_AGENT = re.compile(
+    r"\b(?:both|either|neither|each|every|another|other|any|all|your|their|those|these|which"
+    r"|most|some|many|the|an?)\s+(?:AI\s+(?:agent\s+)?)?tools?\b"
+    r"|\bAI\s+(?:agent\s+)?tools?\b"
+    r"|\b(\w+)\s+tool(?:'s|s')",
+    re.IGNORECASE,
+)
+# The words before "tools'" or "tool's" that name an agent's own tools, or the development tools.
+OWN_TOOLS = {"bash", "powershell", "shell", "file", "development"}
+# Text in double quotes or in a code span is talked about, not used, such as "both tools" here.
+# Either may wrap onto the next line, but never past a blank one.
+MENTIONED = re.compile(r'"(?:[^"\n]|\n(?!\s*\n))*"|`(?:[^`\n]|\n(?!\s*\n))*`')
+
+
+def tool_mix_ups(text: str, *, markdown: bool) -> list[str]:
+    """Each place in a file's text that uses "tool" for an agent or a program, as its line number
+    and the words, such as 3: both tools."""
+    if markdown:
+        text = MENTIONED.sub(lambda match: re.sub(r"\S", " ", match.group()), text)
+    found: list[str] = []
+    for match in TOOL_FOR_AN_AGENT.finditer(text):
+        if match.group(1) and match.group(1).lower() in OWN_TOOLS:
+            continue
+        number = text.count("\n", 0, match.start()) + 1
+        found.append(f"{number}: {' '.join(match.group().split())}")
+    return found
+
+
+def test_no_file_uses_tool_for_an_agent_or_a_program() -> None:
+    # The glossary and this file name the words they rule out.
+    naming = {"docs/development/glossary.md", "internal/development/tests/test_docs.py"}
+    found = [
+        f"{name(path)}:{place}"
+        for path in written_files()
+        if name(path) not in naming
+        for place in tool_mix_ups(path.read_text(encoding="utf-8"), markdown=path.suffix == ".md")
+    ]
+    assert all((REPO_ROOT / file).is_file() for file in naming)
+    assert found == []
+
+
+def test_the_tool_search_tells_a_mix_up_from_a_name() -> None:
+    sample = (
+        "Both tools read it, and each\ntool's settings file changes. Claude Code's Bash tool, its\n"
+        "PowerShell tool's rules, the development tools' settings, and \"both tools\" stay.\n"
+        "`allowed-tools` and dev-home-tools stay too, but an AI tool and the tools don't.\n"
+    )
+    assert tool_mix_ups(sample, markdown=True) == [
+        "1: Both tools",
+        "1: each tool",
+        "4: an AI tool",
+        "4: the tools",
+    ]
+    # A quote can wrap onto the next line, but a stray one doesn't hide the next paragraph.
+    wrapped = 'The "both\ntools" phrase, and a stray " mark.\n\nThen each tool.\n'
+    assert tool_mix_ups(wrapped, markdown=True) == ["4: each tool"]
+    # In Python, quotes hold strings that get printed, so they're checked too.
+    assert tool_mix_ups('print("both tools")', markdown=False) == ["1: both tools"]
 
 
 def test_every_skills_page_links_to_its_skill_file() -> None:

@@ -1,9 +1,9 @@
 # What setup changes on your PC
 
 Setup doesn't copy the skills and rules into Claude Code's and Codex's folders. It adds links
-there instead: a link is a folder entry that points to a folder somewhere else, and the tools
+there instead: a link is a folder entry that points to a folder somewhere else, and the agents
 read through it as if the files were right there. So when a sync or an update changes a skill
-or a rule, the tools see the change at once, with nothing to copy. On Windows, setup makes each
+or a rule, the agents see the change at once, with nothing to copy. On Windows, setup makes each
 folder link as a directory junction, which needs no admin rights and no Developer Mode.
 
 - **In your dev-home-toolkit folder,** three things that belong to this PC only. Git ignores them,
@@ -12,7 +12,7 @@ folder link as a directory junction, which needs no admin rights and no Develope
     operating rules, at the same paths they have under `templates/`. In this repo, they hold a
     placeholder wherever a folder path goes, because everyone keeps their folders in different
     places. Setup writes a copy with this PC's real paths filled in, and that copy is what the
-    tools use. The paths have to be written out in full, because the commands a skill may run
+    agents use. The paths have to be written out in full, because the commands a skill may run
     without asking you are matched by their exact text. Setup rewrites this folder whenever it
     runs, so don't edit it; put skills of your own in your dev-home. Each skill's `SKILL.md` and
     the operating rules carry a note saying so, with the path of the template to change
@@ -77,7 +77,7 @@ folder link as a directory junction, which needs no admin rights and no Develope
     `project_doc_max_bytes` stays, since it gives Codex no access.
 
   Your own files, links, and settings there stay, though an entry you added yourself for the same
-  folder, or the same pattern, goes too; the backup keeps it. Other AI tools that read those
+  folder, or the same pattern, goes too; the backup keeps it. Other agents that read those
   skills folders lose dev-home's skills too: GitHub Copilot, Gemini CLI, and Cursor read
   `~\.agents\skills\`, and Cursor also reads `~\.claude\skills\`.
 - **If a skill isn't added to your agents on this PC,** because you said no to it, it's marked as

@@ -181,7 +181,7 @@ links can't, because a wrong one flips the skill in and out, or leaves the agent
 | Option | How it works | Pros | Cons |
 | --- | --- | --- | --- |
 | A. Each run's own `PATH` (as built) | Setup checks the `PATH` of whatever started it | Simple | Flips between Bash and PowerShell syncs, and after an install until the agents restart; worse on macOS and Linux |
-| B. Windows' saved `PATH` | Alone, or with the run's own | A new install counts at once | Alone, it misses Git Bash's tools; with the run's own, the Bash-versus-PowerShell flip stays; Windows only |
+| B. Windows' saved `PATH` | Alone, or with the run's own | A new install counts at once | Alone, it misses Git Bash's programs; with the run's own, the Bash-versus-PowerShell flip stays; Windows only |
 | C. Remember where it was found | Once found, it counts while that file exists | Never flips; any OS | New stored state; still a guess about the agent's shell, such as `grep` from PowerShell |
 | D. Add, but never remove | A found program adds the skill; a lost one doesn't remove it | Three lines; never flips | Keeps a skill after its program is uninstalled; reverses the decided removal |
 | E. Setup stops checking programs | `program` becomes a stated need | Simplest; never wrong | Tells the end user nothing up front |
@@ -207,7 +207,7 @@ links can't, because a wrong one flips the skill in and out, or leaves the agent
 - **Once, when the skill is new:** the `NEW` line, such as "'zork-tickets' (added to your
   agents; it uses the zorkcli program, which setup didn't find)". The hint comes from setup's own
   `PATH` together with Windows' saved `PATH`, so a program installed after the agents started
-  still counts; it's wrong only for a program that only one shell adds, such as Git Bash's tools.
+  still counts; it's wrong only for a program that only one shell adds, such as Git Bash's programs.
   A wrong hint never changes a link.
 - **When they ask:** `/dev-home skills` lists each skill's needs, and checks each program in the
   shell the agent runs it from, which is the one that matters at that moment. Today it shows only
@@ -406,9 +406,12 @@ because there "tools" means development tools.
   change and need approving again, and every new page adds to the sweep); both before 6b's commit
   (6b, uncommitted and live on the developer's PC, would wait longer).
 
-**Still waiting:** the decisions about generating the end user's own skills and the words get
-their decision files when each is built; the rename's is
-[The product is named dev-home-toolkit](../decisions/the-product-is-named-dev-home-toolkit.md). 6b, reworked to these decisions, is committed
+**Still waiting:** the decision about generating the end user's own skills gets its decision file
+when it's built. The rename's is
+[The product is named dev-home-toolkit](../decisions/the-product-is-named-dev-home-toolkit.md),
+and the words' is
+[One word for each idea, in a glossary](../decisions/one-word-for-each-idea-in-a-glossary.md).
+6b, reworked to these decisions, is committed
 (`408ae14`), with the decision
 [Setup keeps a skill off only for its operating system or agent](../decisions/setup-keeps-a-skill-off-only-for-its-operating-system-or-agent.md)
 and changes to the decisions it touches.

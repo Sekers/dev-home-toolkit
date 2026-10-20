@@ -12,4 +12,4 @@ option could make a command ask first. Every command's text changed in phase 2 a
 **Option set aside:** PowerShell's form, `-Message` and `-Quiet`. Python can take it, and it
 would look familiar, but it's unusual for Python and out of place on macOS and Linux.
 
-**Look again if:** a tool the skills run in can't pass an option that starts with two dashes.
+**Look again if:** an agent the skills run in can't pass an option that starts with two dashes.

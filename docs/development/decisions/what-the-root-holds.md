@@ -3,14 +3,15 @@
 **Decision:** the root holds only what must be there, and the scripts a person runs by hand.
 AGENTS.md lists them, with the rule to ask before adding anything there. The rest of what used to
 be there lives under `internal/`: the generated files in `internal/.generated/`, the Python link
-in `internal/.python/`, and everything for development in `internal/development/` (the tools'
-settings, the tests, and what the tools write: `.venv`, caches, and the test sandboxes).
+in `internal/.python/`, and everything for development in `internal/development/` (the
+development tools' settings, the tests, and what they write: `.venv`, caches, and the test
+sandboxes).
 
 **Why each item stays:**
 
 - `.gitattributes` and `.gitignore`: git applies them to the whole repo only from the root.
 - `AGENTS.md` and `CLAUDE.md`: Codex and Claude Code read them from the root.
-- `CHANGELOG.md`: Keep a Changelog names it so and puts it in the root, where people and tools
+- `CHANGELOG.md`: Keep a Changelog names it so and puts it in the root, where people and programs
   look for one.
 - `LICENSE`: GitHub's docs put it in the root.
 - `README.md`: GitHub's front page, and where people look first. GitHub would also show one from
@@ -24,7 +25,7 @@ settings, the tests, and what the tools write: `.venv`, caches, and the test san
   on every Windows account's PATH by default (aliases arrived in Windows 10 version 1709), and
   as `python3` on macOS and Linux. An entry point checks the Python version before anything
   else, so an older Python gets a message instead of a syntax error.
-- `templates/`: the repo's main content, what setup fills in and links into the tools.
+- `templates/`: the repo's main content, what setup fills in and links into the agents.
 - `internal/`: there to keep everything else out of the root.
 - `docs/`: GitHub Pages, without a build workflow, publishes only from the root or `docs/`.
 - `local-settings.json`: people edit it by hand to change a setting.
@@ -48,9 +49,9 @@ decision.
 
 **Options set aside:**
 
-- `pyproject.toml` and `uv.lock` in the root, where Python projects usually keep them: the tools
-  would find them without flags, but they and what the tools write would add seven entries to
-  the root, and dev-home-toolkit isn't a package.
+- `pyproject.toml` and `uv.lock` in the root, where Python projects usually keep them: the
+  development tools would find them without flags, but the two files, and what the development
+  tools write, would add seven entries to the root, and dev-home-toolkit isn't a package.
 - The whole of sync's and update's code in the root, with `prepare.py` loading it without
   writing a cache: it would be compiled again on every skill command, and the code they share
   would still need a folder elsewhere.

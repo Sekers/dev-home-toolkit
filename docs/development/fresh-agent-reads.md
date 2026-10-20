@@ -5,7 +5,7 @@ offer; its rules apply too.
 
 - A fresh agent is a second agent with no context from your session, walking through scenarios
   you give it. Include edge cases, a no to each question the text asks, and, for text that runs
-  in both tools, how Claude Code and Codex would each handle it. For text an end user's agent
+  in both agents, how Claude Code and Codex would each handle it. For text an end user's agent
   reads, such as a skill, the operating rules, or the lines the scripts print, tell it to judge
   the text as that agent would, without AGENTS.md, which that agent never sees. Ask it what it
   would do at each step, what it could misread, and what conflicts with other rules, and to say
@@ -17,5 +17,5 @@ offer; its rules apply too.
   Offer it once for a piece of work, when its text is ready to approve, saying what it will read
   and which model and effort you'd use (the decision
   [/handoff audit has a fresh agent check the handoff](decisions/handoff-audit-has-a-fresh-agent-check-the-handoff.md)
-  has measurements of both). If your tool can't start one, say so rather than offering it; if it
-  can't set the model or effort, say which it will run on. A no covers that piece of work.
+  has measurements of both). If your agent product can't start one, say so rather than offering
+  it; if it can't set the model or effort, say which it will run on. A no covers that piece of work.

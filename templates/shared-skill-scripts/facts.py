@@ -7,7 +7,7 @@ Name the topics you want. It prints each topic's lines, as key: value, in the or
     handoff         where the current project's handoff lives in dev-home (six lines)
     environment     the name of the computer the session is on (one line)
     newer-commits   the project's commits since the one its handoff says was checked
-    skills          the skills setup sets up: dev-home-toolkit's own, then the user's
+    skills          each skill and its state on this PC: dev-home-toolkit's own, then the user's
     preferences     the running skill's preferences on this PC (one line each)
 
 It only reports, and only from this PC: it changes nothing and never uses the network, which is
@@ -123,11 +123,12 @@ latest one.
 
 THE SKILLS TOPIC
 
-Prints one line for each skill setup sets up: dev-home-toolkit's own, from the generated skills
-beside this script, then the user's, from the skills folder in dev-home, each in name order. A
-skill is a folder with a SKILL.md, as setup sees one. Each line says whose the skill is and its
-state on this PC, as setup last recorded it beside the generated skills, then its description
-from the frontmatter, on one line, and its compatibility text from there, if it has any:
+Prints one line for each skill: dev-home-toolkit's own, from the generated skills beside this
+script, then the user's, from the skills folder in dev-home, each in
+name order. A skill is a folder with a SKILL.md, as setup sees one. Each line says whose the skill
+is and its state on this PC, as setup last recorded it beside the generated skills, then its
+description from the frontmatter, on one line, and its compatibility text from there, if it has
+any:
 
     skill: handoff (dev-home-toolkit, added to your agents): Read or update this project's ...
     skill: mac-notes (yours, not added: works only on macOS): Keeps notes in Apple Notes.
@@ -145,10 +146,10 @@ here, where the agent runs, and the state says what's missing:
 A program counts when it's in a folder that this process's PATH, the one the agent's commands
 get, names by its full path, and the Python is the one running this script, the skills' own.
 
-One of the user's skills with the same name as one of dev-home-toolkit's isn't set up, and its line
+One of the user's skills with the same name as one of dev-home-toolkit's isn't added, and its line
 says so, as setup does:
 
-    skill: handoff (yours, not set up: it has the same name as a dev-home-toolkit skill): ...
+    skill: handoff (yours, not added: it has the same name as a dev-home-toolkit skill): ...
 
 It reads only this PC's copy of dev-home, so a skill added on another PC shows up after the next
 sync. It runs anywhere: no project folder is needed.
@@ -741,7 +742,7 @@ def skills_lines() -> list[str]:
         whose = "dev-home-toolkit" if folder in ours else "yours"
         entry = states.get(folder.name.lower()) if states is not None else None
         if whose == "yours" and os.path.normcase(folder.name) in taken:
-            whose += ", not set up: it has the same name as a dev-home-toolkit skill"
+            whose += ", not added: it has the same name as a dev-home-toolkit skill"
         elif entry is not None:
             whose += f", {'; '.join([entry['state'], *missing_needs(entry)])}"
         elif states is not None:

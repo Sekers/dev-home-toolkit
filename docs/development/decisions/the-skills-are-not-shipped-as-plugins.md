@@ -4,12 +4,12 @@
 them into Claude Code and Codex.
 
 **The option:** ship the skills, and perhaps hooks, as Claude Code and Codex plugins. That could
-bring each tool's own install and updates, no junctions or Windows-only steps, and hooks that
+bring each agent's own install and updates, no junctions or Windows-only steps, and hooks that
 enforce a rule instead of asking agents to follow it, such as blocking an edit under
 `internal/.generated/`.
 
 **Why not:** Codex would gain nothing, and Claude Code would gain little that setup can't
-already do. Checked on 2026-09-30 against both tools' plugin docs, and with a test plugin in
+already do. Checked on 2026-09-30 against both agents' plugin docs, and with a test plugin in
 Claude Code 2.1.284. Claude Code's mods docs were read on 2026-10-03, for 2.1.287:
 
 - **Claude Code.** `${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_SKILL_DIR}` are filled in inside

@@ -13,7 +13,7 @@ points here; its rules apply too.
 - `internal/.generated/` and `internal/.python/`: what setup makes on each PC (see
   [skills.md](skills.md)). Git ignores both.
 - `internal/development/`: everything only people changing dev-home-toolkit use: the development
-  tools' settings (`pyproject.toml`, `uv.lock`), the tests, and what the tools write there, such
+  tools' settings (`pyproject.toml`, `uv.lock`), the tests, and what they write there, such
   as `.venv/`, their caches, and the tests' `.test-sandbox/`.
 
 ## Rules for the scripts
@@ -70,8 +70,8 @@ points here; its rules apply too.
   running. sync.py never stages, commits, or discards a file it wasn't given, and runs no
   destructive git command: no `add -A`, stash, `reset`, `checkout`, `clean`, or rebase.
 - Never remove a link, or a folder that may hold one, with a recursive delete such as
-  `Remove-Item -Recurse` or `shutil.rmtree`: whether it stops at a junction depends on the tool
-  and its version, and one that doesn't deletes what the link points to. Remove each link by
+  `Remove-Item -Recurse` or `shutil.rmtree`: whether it stops at a junction depends on the
+  command and its version, and one that doesn't deletes what the link points to. Remove each link by
   itself first (`links.py` does, and so does the tests' `remove_sandbox`), or use
   `cmd /c rmdir`.
 - Agents run setup.py only with `--quiet`, which never prompts: no settings changes beyond the

@@ -59,7 +59,7 @@ two when an issue closed as not planned.
 - The closer and comments in the first request, for every issue: more data on every update, for
   issues that are mostly open.
 - The agent running `gh issue view` for what it needs: the skill's steps would grow with each
-  host, and the script is the one place that learns each host's tool.
+  host, and the script is the one place that learns each host's program.
 - Keeping the closed duplicate's link beside the original's: GitHub already links them.
 - A note in the item that its issue moved: history, which the handoff leaves to git.
 - Cutting comments at 500 or 800 characters instead of naming what the cut part references:

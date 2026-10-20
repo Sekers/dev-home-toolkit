@@ -51,10 +51,10 @@ Whenever you tell the user about the handoff (a summary, Next up, or what an `up
 as printed, so they can open it. Link the project files you name, too: the target is `project`
 from the facts, a slash, and the file's path in the project, with each space written as
 `%20`, such as `./docs/setup%20guide.md`. `facts.py` gives both in the form that opens where
-you're running, so never rewrite them: a relative path in most tools, because some editors
-can't open a link whose path has a drive letter, and a `file:///` URL in Claude Code's CLI,
-whose terminal can't open a relative path. Some tools also can't open a link with `%20` in it
-yet; link it anyway, since the link itself is right.
+you're running, so never rewrite them: a `file:///` URL in Claude Code's CLI, whose terminal
+can't open a relative path, and a relative path everywhere else, because some editors can't open
+a link whose path has a drive letter. Some editors and terminals also can't open a link with
+`%20` in it yet; link it anyway, since the link itself is right.
 
 ## When to change, commit, and push
 
@@ -244,7 +244,7 @@ config. That is not bypassing signing, and the project repos keep signing as usu
 Follow "Changing the handoff". While updating:
 
 - Before editing, go through what this session did, not only what the handoff says: a new
-  session, on another PC or in another tool, has only the handoff and the project's files. List
+  session, on another PC or in another agent, has only the handoff and the project's files. List
   what this session decided, built, changed, and learned, and what it left unfinished, from the
   conversation and the `newer-commit` lines. For each entry the work still needs, check that a
   new session would find it:
@@ -326,9 +326,9 @@ only if any qualify (see "Issue candidates"); most updates have none. File none 
 new session would, and report what a new session couldn't act on. This session then fixes what
 it can. It follows "Changing the handoff", with these steps for the edit:
 
-1. Anything after `audit` must be a model or an effort level your tool accepts, in either order,
-   such as `/handoff audit sonnet xhigh`. If anything else follows, treat it as a question:
-   answer it, and ask before starting an audit.
+1. Anything after `audit` must be a model or an effort level your agent product accepts, in
+   either order, such as `/handoff audit sonnet xhigh`. If anything else follows, treat it as a
+   question: answer it, and ask before starting an audit.
 2. Tell the user, word for word: "I'm having a fresh agent read the handoff the way a new session
    would, and list anything that's out of date, contradictory, or missing a next step. This can
    take several minutes and cost more than most commands, more for a long handoff." Then add, in
@@ -336,11 +336,12 @@ it can. It follows "Changing the handoff", with these steps for the edit:
    done." When the command named a model or effort, put it after "a fresh agent", such as "a
    fresh agent, on Sonnet at xhigh effort,".
 3. Start the second agent (a subagent) fresh, without this conversation: in Claude Code, a
-   general-purpose agent, never a fork. Start it in the background where your tool allows it.
+   general-purpose agent, never a fork. Start it in the background where your agent product
+   allows it.
    - Neither named: name neither, so it runs on the session's model and effort.
    - A model named: that model, at the named effort, or at xhigh when none was named. Without an
-     effort, the tool would run another model at that model's own saved or default level, which
-     can be as low as medium.
+     effort, the agent product would run another model at that model's own saved or default
+     level, which can be as low as medium.
    - Only an effort named: that effort, and no model.
 
    Give it this task, with the handoff's full path and the project's folder filled in:
@@ -350,7 +351,7 @@ it can. It follows "Changing the handoff", with these steps for the edit:
    > commands are fine. The handoff is `<handoff>`, and the project is in `<folder>`. Start with
    > the project's AGENTS.md, or its README if it has none, for where it keeps its decisions and
    > rules. Go through every section of the handoff, and report each item that a new session, on
-   > another PC or in another tool, couldn't act on without asking the user something already
+   > another PC or in another agent, couldn't act on without asking the user something already
    > answered:
    >
    > - out of date: the project's files, or a later item or decision, have overtaken it

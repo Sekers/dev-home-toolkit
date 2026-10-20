@@ -88,8 +88,8 @@ path, as in git config and Codex's `-c`:
 This changes "Setup asks each question whose answer isn't saved yet", whose two lists become
 `claudeCode.folders`; the names used in "How often the sync checks GitHub", "setup.py
 --configure changes every setting", and "Setup finds extra Codex homes as it finds extra Claude
-folders"; where "Setup offers recommended settings for Claude Code and Codex" and "Setup installs
-skills per PC, and the tools show or hide them" save their answers; and the schema version that
+folders"; where "Setup offers recommended settings for Claude Code and Codex" and "Setup adds
+skills per PC, and the agents show or hide them" save their answers; and the schema version that
 "A dev-home has one active copy, or several" set aside until the format changed.
 
 **Changed on 2026-10-18,** not built yet: `dev-home.json` gains the newest dev-home-toolkit

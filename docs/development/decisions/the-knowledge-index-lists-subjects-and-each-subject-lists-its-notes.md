@@ -38,8 +38,8 @@ knowledge/
   them), then only the note it needs.
 - **Filing a note** adds its line to its subject's list in the same commit. A new subject adds its
   folder, its `README.md`, and a line in the subject list. Subjects stay one level deep, as before.
-- **Lines:** a subject's line stays as broad as the subject. A note's line names the tools the note
-  covers, and changes with the note.
+- **Lines:** a subject's line stays as broad as the subject. A note's line names the agents and
+  programs the note covers, and changes with the note.
 - **Owner:** the indexes are the end user's, kept by the knowledge skill. Setup never changes
   them; it only creates `knowledge/README.md`, with its title, when it's missing ([Every file in dev-home belongs to dev-home-toolkit or to the end user](every-file-in-dev-home-belongs-to-dev-home-toolkit-or-to-the-end-user.md)).
   The explanation of what belongs in the knowledge base lives in the knowledge skill, where its
@@ -61,9 +61,9 @@ knowledge/
 - It follows two established patterns, adapted: Claude Code's auto memory keeps one index of short
   lines and opens each file only when needed, and Anthropic's skill authoring guide splits
   reference material by domain, so an agent reads only the part it needs.
-- A note's line names the tools it covers so an agent can skip a note that doesn't apply, rather
-  than open it and find nothing. A subject's line stays broad so the subject list doesn't go stale
-  as notes are added.
+- A note's line names the agents and programs it covers so an agent can skip a note that doesn't
+  apply, rather than open it and find nothing. A subject's line stays broad so the subject list
+  doesn't go stale as notes are added.
 - GitHub shows a folder's `README.md` below its file list, so each level reads on GitHub too
   (checked on a live folder on 2026-10-18). It doesn't show an `index.md`, checked the same way,
   so the files keep the name `README.md`.
@@ -81,8 +81,8 @@ agent may read two subject lists.
 - The old table without its intro: about 6,000 tokens per lookup, growing by about 85 per note.
 - Splitting the old file between dev-home-toolkit's text and the end user's rows, with setup
   rewriting the top: two owners in one file, and the repeated text stays.
-- A hook that names no tool, such as "AI agents' instruction files": an agent would open a note
-  about other tools and find nothing.
+- A hook that names no agent, such as "AI agents' instruction files": an agent would open a note
+  about other agents and find nothing.
 - `index.md` in place of `README.md`: GitHub doesn't show it.
 
 **This changes:**

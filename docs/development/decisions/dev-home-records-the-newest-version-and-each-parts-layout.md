@@ -53,7 +53,7 @@ Decided by the developer on 2026-10-18.
 - The early check: PCs differ in version only until the next sync. Nothing is added to ordinary
   syncs: it's one GitHub check, about 0.4 s for dev-home-toolkit (measured 2026-10-06), on the sync
   that first sees a newer version, approved by the developer under AGENTS.md's Speed rule. Git's
-  record counts every tool's fetch.
+  record counts every program's fetch.
 - Layout versions: a PC that's behind can't tell whether a newer release changed a layout. One
   number per part stops it only where the layout changed, and different code writes different
   parts: setup writes `rules/`, and the skills write `handoffs/` and `knowledge/`.
@@ -70,7 +70,7 @@ version numbers are needed before built-in rules ship.
   churn, and developers must remember to raise it); comparing rules at
   update time (it misses a `git pull` by hand).
 - For the early check: `dev-home.json`'s file time (other changes to it would trigger checks); a
-  `lastChecked` of its own (it ignores other tools' fetches, and repeats git's record); a time
+  `lastChecked` of its own (it ignores other programs' fetches, and repeats git's record); a time
   limit (a PC that stays behind would check every hour); keeping the record in
   `local-settings.json`, or in git's config; the names `checkedEarlyFor` and `checkedForVersion`.
 - Every release counting as a layout change (a PC with automatic updates off would stop applying

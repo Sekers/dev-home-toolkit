@@ -17,15 +17,15 @@ from PC to PC.
     anywhere). Automated setup for GitLab, Bitbucket, and Azure DevOps is coming.
 - **Privacy.** It tells every session never to copy dev-home into your project repos, or even
   mention it there, so your projects can stay public.
-- **Skills.** It comes with ready-made skills, listed below, and sets up any you add to your own
-  dev-home.
+- **Skills.** It comes with ready-made skills, listed below, and adds any you put in your own
+  dev-home to your agents too.
 
 This repo never holds anyone's own content: that stays in each person's private dev-home.
 
 **What's a skill?** It's like a custom command for your agent: a folder of instructions that
 teaches it one task. Type its name to run it, such as `/handoff` in Claude Code or `$handoff` in
 Codex, or just ask in your own words, and the agent uses the matching skill on its own. Both
-tools support skills in the shared [Agent Skills](https://agentskills.io) format. To learn more,
+agents support skills in the shared [Agent Skills](https://agentskills.io) format. To learn more,
 see skills in the [Claude Code docs](https://code.claude.com/docs/en/skills) and the
 [Codex docs](https://learn.chatgpt.com/docs/build-skills).
 
@@ -34,8 +34,8 @@ see skills in the [Claude Code docs](https://code.claude.com/docs/en/skills) and
 | Skill | What it does |
 | --- | --- |
 | [`handoff`](docs/skills/handoff.md) | Keeps one private note per project in your dev-home: what's next, what's in progress, what's waiting on you or on others, and what's left to do. Start a session with `/handoff`, and the agent picks up where the last one stopped, on any of your PCs. |
-| [`knowledge`](docs/skills/knowledge.md) | Keeps your own knowledge base in your dev-home: general things you've learned about languages, tools, and AI agents, so no session has to work them out twice. Agents check it before researching or testing a general question, even partway through other work. |
-| [`dev-home`](docs/skills/dev-home.md) | Syncs your dev-home with GitHub when you ask, lists the skills it sets up, and shows and changes dev-home-toolkit's settings, such as how often syncs check GitHub. |
+| [`knowledge`](docs/skills/knowledge.md) | Keeps your own knowledge base in your dev-home: general things you've learned about languages, programs, extensions, and AI agents, so no session has to work them out twice. Agents check it before researching or testing a general question, even partway through other work. |
+| [`dev-home`](docs/skills/dev-home.md) | Syncs your dev-home with GitHub when you ask, lists each skill and whether it's added to your agents, and shows and changes dev-home-toolkit's settings, such as how often syncs check GitHub. |
 
 Works with Claude Code, Codex, or both. Windows only, for now. To start, see
 [Set up a PC](#set-up-a-pc).
@@ -47,9 +47,9 @@ Works with Claude Code, Codex, or both. Windows only, for now. To start, see
 | Python 3.12 or later | Runs setup, the sync, updates, and the scripts the skills use. Only Python itself: nothing else to install. | The Python install manager: `winget install 9NQ7512CXL7T -e --accept-package-agreements --disable-interactivity`, then `py install 3.14` (or the latest version). |
 | Git 2.31 or later | Every sync with GitHub. | `winget install --id Git.Git --source winget` |
 | GitHub CLI (`gh`) | Creates or clones your dev-home on GitHub, and files issues for `/handoff issue`. | `winget install --id GitHub.cli --source winget` |
-| Claude Code, Codex, or both | The agents the skills and rules are for. | Each tool's own installer. |
+| Claude Code, Codex, or both | The agents the skills and rules are for. | Each agent's own installer. |
 
-Open a new terminal window after installing, so the tools are on the PATH. Nothing here needs
+Open a new terminal window after installing, so the programs are on the PATH. Nothing here needs
 admin rights. You start setup with the install manager's `py`, and after that the skills find
 Python on their own (see [What setup changes](docs/reference/setup-changes.md)).
 
@@ -213,7 +213,7 @@ A typical day with the included skills:
 
 ## Your own rules and skills
 
-- **Rules.** Every session, in both tools and on every PC, loads two sets of always-on rules:
+- **Rules.** Every session, in both agents and on every PC, loads two sets of always-on rules:
   - **Your global rules**, in `global-rules/global-rules.md` in your dev-home: your own
     preferences for every project. The file starts as the empty template from
     `templates/dev-home-starter/`, and after that it's yours to edit.
@@ -224,7 +224,7 @@ A typical day with the included skills:
 
   Your global rules win where the two conflict, because the operating rules say so. Keep yours
   short: every line costs tokens in every session.
-  - **How they load.** Setup hooks both into each tool's standard place for always-on
+  - **How they load.** Setup hooks both into each agent's standard place for always-on
     instructions: Claude Code's
     [user-level rules](https://code.claude.com/docs/en/memory#user-level-rules) folder, as the
     links `dev-home-global-rules` and `dev-home-operating-rules`, and Codex's
@@ -279,6 +279,7 @@ Everything beyond getting started is in the `docs/` folder:
 | Development | [Testing](docs/development/testing.md) | How the tests work, and the rules for writing them. |
 | Development | [Writing the docs](docs/development/writing-docs.md) | Where each page goes, and the rules for the README and `docs/`. |
 | Development | [A fresh agent's read](docs/development/fresh-agent-reads.md) | How to have a second agent, with no context, check a change. |
+| Development | [Glossary](docs/development/glossary.md) | The one word for each idea in dev-home-toolkit, and the words to avoid. |
 | Development | [Skill requirements](docs/development/research/skill-requirements.md) | What keeps a skill off a PC: why a missing program can't decide it reliably, the options weighed, and a recommended design, with the words "tool", "agent", and "program". |
 | Development | [Pylance comparison](docs/development/research/pylance-comparison.md) | Pylance's standard and strict type checking compared on this repo's code, with the data, so it needn't be run again. |
 | Development | [claudeMdExcludes for another Claude Code folder](docs/development/research/claude-md-excludes.md) | Tests of which `claudeMdExcludes` patterns keep `~\.claude`'s instructions out of another account's sessions on Windows, and which fail. |
@@ -296,7 +297,7 @@ Everything beyond getting started is in the `docs/` folder:
   deletes a git lock file.
 - **`setup.py` replaces only its own work:** its generated files, links whose target is gone,
   and links it made to skills that no longer exist. Anything else in its way is reported, not
-  changed. It changes a tool's settings file only in a folder you said yes to, after saying what
+  changed. It changes an agent's settings file only in a folder you said yes to, after saying what
   that yes changes, and keeps a backup.
 - **Tooling updates install themselves,** as most apps' do, unless you turn off
   `updates.installAutomatically`. Whoever controls this repo on GitHub controls code that runs on
@@ -358,10 +359,10 @@ uv run --directory internal/development ruff format --check --config pyproject.t
 uv run --directory internal/development mypy
 ```
 
-The tools run from `internal/development/`, so their environment and caches stay there. The
-tests check the working tree in throwaway copies under `internal/development/.test-sandbox/`,
-never your real profile or dev-home, and need no network. Never point this folder's scripts at
-a test dev-home: they would rewrite the files your real links depend on.
+The development tools run from `internal/development/`, so their environment and caches stay there.
+The tests check the working tree in throwaway copies under `internal/development/.test-sandbox/`,
+never your real profile or dev-home, and need no network. Never point this folder's scripts at a
+test dev-home: they would rewrite the files your real links depend on.
 
 ## License
 

@@ -11,7 +11,7 @@ for each link with one.
 
 **Why:** reading a link and checking its state takes no judgment, so it belongs in a script (see
 [skills.md](../skills.md)). One call covers any number of links. When issues on GitLab, Bitbucket,
-or Azure DevOps come, it's the one place that learns each host's tool, so the skill's steps don't
+or Azure DevOps come, it's the one place that learns each host's program, so the skill's steps don't
 grow with each host. Its lines can be tested with a faked `gh`.
 
 **Options set aside:**

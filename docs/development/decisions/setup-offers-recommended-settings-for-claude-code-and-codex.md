@@ -1,10 +1,10 @@
 # Setup offers recommended settings for Claude Code and Codex
 
-**Decision:** setup offers settings that dev-home-toolkit recommends for the tools, from a list in
+**Decision:** setup offers settings that dev-home-toolkit recommends for the agents, from a list in
 `templates/recommended-settings/recommended-settings.json`. Each entry has an id that is never
-reused, what it does, why it's recommended, and the setting for each tool that has one. The first
+reused, what it does, why it's recommended, and the setting for each agent that has one. The first
 two are for Claude Code: `"attribution": false` (id `attribution-off`), which leaves commits and
-pull requests without a line naming the tool, and `"feedbackSurveyRate": 0` (id
+pull requests without a line naming the agent, and `"feedbackSurveyRate": 0` (id
 `feedback-survey-off`), which stops the session quality survey and its request to upload the
 session's transcript.
 

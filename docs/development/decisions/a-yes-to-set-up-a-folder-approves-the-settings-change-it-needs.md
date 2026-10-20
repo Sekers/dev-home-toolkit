@@ -30,7 +30,7 @@ user settings change on disk, and reloads them live; its sandbox doesn't run on 
   set up only partway.
 - A clearer `PROBLEM` line alone: the folder stays half set up.
 
-**Look again if:** a tool needs a settings change whose access a person would want to weigh
+**Look again if:** an agent needs a settings change whose access a person would want to weigh
 apart from setting up the folder.
 
 **Changed on 2026-10-19,** with the reasons in

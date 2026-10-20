@@ -208,7 +208,7 @@ def test_the_skills_topic_reads_each_description_form_and_says_what_isnt_set_up(
         f"skill: bare ({unseen}): no description",
         f"skill: carried ({unseen}): Starts here and carries on.",
         f"skill: folded ({unseen}): Folded onto one line.",
-        "skill: handoff (yours, not set up: it has the same name as a dev-home-toolkit skill): "
+        "skill: handoff (yours, not added: it has the same name as a dev-home-toolkit skill): "
         "Mine too.",
         "skill: mine (yours, added to your agents): A personal test skill.",
         f'skill: quoted ({unseen}): Quoted: with a "colon".',

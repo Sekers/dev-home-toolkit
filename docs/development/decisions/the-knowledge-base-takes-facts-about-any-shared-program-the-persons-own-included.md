@@ -1,13 +1,13 @@
-# The knowledge base takes facts about any shared tool, the person's own included
+# The knowledge base takes facts about any shared program, the person's own included
 
 **Decision:** a fact belongs in the knowledge base when it helps any project that uses the same
-language, platform, tool, library, or service, whoever makes it, the person's own projects
-included, and it names no tenant, personal path, or other private detail. Judge the fact, not
-the project where it came up. What only helps work on one project's own code (its internals, its
+language, platform, program, extension, library, or service, whoever makes it, the person's own
+projects included, and it names no tenant, personal path, or other private detail. Judge the fact,
+not the project where it came up. What only helps work on one project's own code (its internals, its
 tests, why it was built that way) goes where that project's AGENTS.md says research goes. When a
-finding is a normal docs item for a project whose docs the person can change, their own or one
-they contribute to, the candidate asks whether it goes in those docs instead. A minor note that
-would clutter the docs goes in the knowledge base without asking.
+finding is a normal docs item for a project whose docs the person can change, their own or one they
+contribute to, the candidate asks whether it goes in those docs instead. A minor note that would
+clutter the docs goes in the knowledge base without asking.
 
 **Why:** the old general test ("still true in a brand-new project, and names none of your
 functions, files, or tenants") shut out a person's own module even when other projects use it,

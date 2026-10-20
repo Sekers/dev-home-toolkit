@@ -7,7 +7,7 @@
   didn't change.
 - Project status belongs in the handoff, and lasting decisions in the project's own files, never
   in auto memory.
-- Create new personal skills in `{{CONTENT_DIR}}/skills/`, never in a tool's own skills folder,
+- Create new personal skills in `{{CONTENT_DIR}}/skills/`, never in an agent's own skills folder,
   so every PC gets them. If a skill seems to be missing, run
   `{{PYTHON}} -I {{TOOLKIT_DIR}}/setup.py --quiet`, then try again.
 - Treat my project repos as public. In their files, commits, PRs, and issues, never quote
@@ -15,8 +15,8 @@
   steps that have me approve the exact words first, and even those never name dev-home.
 - Knowledge candidate: only a general finding we checked this session (a test or the docs), or
   a pitfall agents keep hitting in my setup with a checked fix, worth its token cost. General:
-  it would help any project using the same tool, library, or service, even one of mine, and
-  names no tenant or private detail. Offer `Knowledge candidate: <folder/file>: <what>.
+  it would help any project using the same program, extension, library, or service, even one of
+  mine, and names no tenant or private detail. Offer `Knowledge candidate: <folder/file>: <what>.
   Evidence: <what we ran or read>. Add it, commit, and push?` For a normal docs item of a project
   whose docs I can change, replace that last question with `It may belong in <project>'s docs
   instead. Docs, or add it to the knowledge base, commit, and push?` Most sessions have none;

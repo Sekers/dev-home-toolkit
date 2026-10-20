@@ -11,31 +11,31 @@ complete file, in two parts. Not built yet.
   `<!-- skill: handoff -->`, holding only how to use that skill: for `handoff`, that project
   status and private details go in the handoff; for `knowledge`, the knowledge-candidate offer.
 
-Setup writes each tool's rules with the general part and the block of each skill added for that
-tool, and leaves the other blocks out. It turns each marker into the heading "When the
+Setup writes each agent's rules with the general part and the block of each skill added for that
+agent, and leaves the other blocks out. It turns each marker into the heading "When the
 `<skill>` skill is available", worded in setup alone. Claude Code's folders still share one
-generated file, and each Codex home still gets one `AGENTS.md`: skills are answered per PC, and a
-tool requirement covers a whole tool
+generated file, and each Codex home still gets one `AGENTS.md`: skills are answered per PC, and an
+agent requirement covers a whole agent
 ([Skills and releases declare their requirements as facts](skills-and-releases-declare-their-requirements-as-facts.md)),
-so there's one version per tool.
+so there's one version per agent.
 
-- A skill hidden with a tool's own switch, at any level, keeps its block, and the agent skips it
-  because it can't see the skill. Setup never reads or writes the tools' switches.
-- A skill a tool leaves out of its list, as Codex does when shortening descriptions isn't enough
+- A skill hidden with an agent's own switch, at any level, keeps its block, and the agent skips it
+  because it can't see the skill. Setup never reads or writes the agents' switches.
+- A skill an agent leaves out of its list, as Codex does when shortening descriptions isn't enough
   to fit its skills into 2% of the context window, at most 10,000 tokens, loses only its offers
   and its "use me" lines, since every protection is in the general part.
 - A skill gets always-on lines only when agents must act without being asked, such as making an
   offer or keeping something out of auto memory. Everything else goes in its description or its
   steps. Only dev-home-toolkit's own skills have blocks: an end user's own rules go in their global
   rules. `docs/development/skills.md` says so.
-- Tests check that each tool's rules hold the block of each skill added for it and no other,
+- Tests check that each agent's rules hold the block of each skill added for it and no other,
   that every marker names a skill that exists, and that the heading "Private repo: dev-home
   (rules loaded)" stays first, since the handoff skill checks for it.
 
 **Why:** the rules held lines about `handoff` and `knowledge` when every PC had every skill. Once
 skills are a choice per PC
-([Setup installs skills per PC, and the tools show or hide them](setup-installs-skills-per-pc-and-the-tools-show-or-hide-them.md)),
-and the tools can hide a skill per account or project, those lines can send an agent toward a
+([Setup adds skills per PC, and the agents show or hide them](setup-adds-skills-per-pc-and-the-agents-show-or-hide-them.md)),
+and the agents can hide a skill per account or project, those lines can send an agent toward a
 skill it doesn't have. It may then improvise, such as writing a work project's status into
 dev-home in an account where `handoff` is hidden, which is what hiding it was meant to prevent.
 Leaving a block out where its skill isn't added saves its words, and the heading covers hiding by
@@ -52,19 +52,19 @@ Measured on 2026-10-16: the rules are 317 words, about 150 general, 50 for `hand
   agent to do that skill's job without its rules.
 - Answering skills per account instead of per PC: the questions multiply, Codex can't do it,
   since every Codex home reads `~/.agents/skills`, and it reverses the split in which
-  dev-home-toolkit decides what a PC has and the tools decide what each account shows.
-- Setup reading the tools' switches and leaving a hidden skill's lines out: Claude Code's
+  dev-home-toolkit decides what a PC has and the agents decide what each account shows.
+- Setup reading the agents' switches and leaving a hidden skill's lines out: Claude Code's
   `/skills` menu writes its switch to the project's `.claude/settings.local.json` (its settings
   reference, read 2026-10-07), which setup can't see, so the most common way of hiding a skill
   would still leave its lines. It also needs a rules file per account, and the most code.
 - One sentence in the general part, telling agents to skip the lines of any skill they don't
   have: about 25 more words in every session, and unused lines still load.
-- Leaving blocks out where a skill isn't added, with no heading: a skill hidden with a tool's
+- Leaving blocks out where a skill isn't added, with no heading: a skill hidden with an agent's
   switch still has its lines applied.
-- Moving the lines into each skill's description: both tools shorten or drop descriptions when
-  many skills are installed, so rules there aren't reliable.
+- Moving the lines into each skill's description: both agents shorten or drop descriptions when
+  they have many skills, so rules there aren't reliable.
 - A file of lines in each skill's folder, which setup assembles: the rules stop being one file to
-  read whole, and the file is linked into the tools with the skill.
+  read whole, and the file is linked into the agents with the skill.
 
 **Changed on 2026-10-18,** not built yet, with the reasons in
 [Each agent gets its rules as one file setup writes in its own folder](each-agent-gets-its-rules-as-one-file-setup-writes-in-its-own-folder.md):
@@ -73,4 +73,4 @@ links, so the one generated file every Claude Code folder shared goes. Each agen
 operating rules, with the blocks of the skills added for that agent, and the end user's rules for
 that agent on that PC. The blocks, their heading, and the tests work as above.
 
-**Look again if:** many skills need always-on lines, or a tool starts loading rules per skill.
+**Look again if:** many skills need always-on lines, or an agent starts loading rules per skill.

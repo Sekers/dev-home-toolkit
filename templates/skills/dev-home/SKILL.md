@@ -1,6 +1,6 @@
 ---
 name: dev-home
-description: Sync the private dev-home repo with GitHub, list the skills it sets up, or see and change dev-home-toolkit's settings on this PC, such as how often syncs check GitHub, whether updates install themselves, or whether dev-home is in use on more than one PC. Use when the user runs /dev-home or $dev-home, asks to sync dev-home (their handoffs and knowledge base) with GitHub, asks which skills dev-home gives them, or asks about or wants to change a dev-home-toolkit setting.
+description: Sync the private dev-home repo with GitHub, list each skill and whether it's added to the user's agents, or see and change dev-home-toolkit's settings on this PC, such as how often syncs check GitHub, whether updates install themselves, or whether dev-home is in use on more than one PC. Use when the user runs /dev-home or $dev-home, asks to sync dev-home (their handoffs and knowledge base) with GitHub, asks which skills dev-home gives them, or asks about or wants to change a dev-home-toolkit setting.
 allowed-tools: "Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill dev-home --stamp {{SKILL_STAMP}} --fetch always) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill dev-home --stamp {{SKILL_STAMP}} --fetch always) Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py --skill dev-home --stamp {{SKILL_STAMP}} skills) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py --skill dev-home --stamp {{SKILL_STAMP}} skills) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/setup.py --configure) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/setup.py --configure *) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/setup.py --configure) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/setup.py --configure *) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *)"
 ---
 
@@ -8,9 +8,9 @@ allowed-tools: "Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --ski
 
 dev-home is the user's private repo, at `{{CONTENT_DIR}}`, which keeps their handoffs, knowledge
 base, global rules, and own skills on GitHub. dev-home-toolkit, at `{{TOOLKIT_DIR}}`, is the tooling
-that syncs it and sets it up on each PC. This skill syncs dev-home when the user asks, lists the
-skills dev-home sets up, and shows and changes dev-home-toolkit's settings. Run the commands below
-exactly as written; in Claude Code they are pre-approved.
+that syncs it and sets it up on each PC. This skill syncs dev-home when the user asks, lists each
+skill and whether it's added to the user's agents, and shows and changes dev-home-toolkit's
+settings. Run the commands below exactly as written; in Claude Code they are pre-approved.
 
 Sessions in other projects, and Codex, use dev-home at the same time, so a file there that you
 didn't change may be someone's work in progress. Run git in dev-home only through
@@ -28,7 +28,7 @@ or `skills`.
 | `/dev-home sync` | Syncs dev-home with GitHub: brings in commits from its other copies, pushes this PC's, and lists the files left uncommitted. Also checks for dev-home-toolkit updates, and runs setup. |
 | `/dev-home configure` | Shows dev-home-toolkit's settings, and changes one after the user's yes to the exact change. |
 | `/dev-home configure <change>` | The same, starting from the change the user describes, such as "check GitHub every 6 hours". |
-| `/dev-home skills` | Lists the skills dev-home sets up: dev-home-toolkit's own, then the user's. Changes nothing. |
+| `/dev-home skills` | Lists each skill, dev-home-toolkit's own and then the user's, and whether it's added to the user's agents. Changes nothing. |
 
 With `/dev-home` alone, list these commands in a short reply and run nothing, so typing the
 skill's name never reaches GitHub. Any other text is a question or a request: answer it, and when
@@ -118,13 +118,12 @@ backup of this PC's settings, and commits and pushes the shared one.
 1. Run
    `{{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py --skill dev-home --stamp {{SKILL_STAMP}} skills`.
    It only reads files on this PC: no sync, and no network. It prints a `skill:` line for each
-   skill setup sets up, dev-home-toolkit's own first, then the user's own from
-   `{{CONTENT_DIR}}/skills/`, each with whose it is, its state, and its description. The state
-   says whether the skill is added to the user's agents on this PC, and if not, why, then what it
-   needs that's missing here, such as a program that isn't on the PATH. A line may end with the
-   skill's compatibility text. One of the user's that setup doesn't set up says why. If it prints
-   anything else, show it and stop; when it says this skill has changed since you loaded it, the
-   user runs the command again to load the new steps.
+   skill, dev-home-toolkit's own first, then the user's own from `{{CONTENT_DIR}}/skills/`, each
+   with whose it is, its state, and its description. The state says whether the skill is added
+   to the user's agents on this PC, and if not, why, then what it needs that's missing here, such
+   as a program that isn't on the PATH. A line may end with the skill's compatibility text. If it
+   prints anything else, show it and stop; when it says this skill has changed since you loaded
+   it, the user runs the command again to load the new steps.
 2. Show the skills in a table: the command that runs each (`/<name>`, or `$<name>` in Codex),
    whose it is, its state in full, and what it's for in one short sentence from its description.
    Below the table, give each compatibility text. When a program is missing, add that one

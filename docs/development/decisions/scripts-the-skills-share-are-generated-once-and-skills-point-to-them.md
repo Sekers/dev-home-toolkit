@@ -24,7 +24,7 @@ when setup runs, in the same run that rewrites the skill text that calls it, so 
 are never out of step. A session that loaded the skill before that run still has the old text
 until the end user runs the skill's command again, and the skill's stamp tells it so (see
 [A stamp tells a session that its skill has changed](a-stamp-tells-a-session-that-its-skill-has-changed.md)).
-`templates/` is also where everything the tools get from this repo already lives.
+`templates/` is also where everything the agents get from this repo already lives.
 
 **Why one script with topics, not one that does everything:** `facts.py` is safe to pre-approve
 because it only reports, and only from this PC. A script that also changed things would lose

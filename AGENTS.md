@@ -37,6 +37,7 @@ them in everything you write here, code comments and commit messages included:
 - In a file for the developer, "you" is its reader: an agent in AGENTS.md, a developer in the
   README's "Working on dev-home-toolkit".
 - A test checks that those other names for the developer appear nowhere outside this section.
+- One word per idea, in [glossary.md](docs/development/glossary.md): "tool" never stands alone.
 
 ## The two repos
 
@@ -56,7 +57,7 @@ In files and in chat, name the repo with any word that fits both, such as commit
   `docs/`. Setup adds `local-settings.json` on each PC, and beside it a dated backup each time
   `--configure` changes it or setup sets aside a file in an older layout, such as
   `local-settings.json.bak-YYYYMMDD-HHMMSS`; git ignores both. Anything new in the root, even
-  what a script or tool creates, needs the developer's approval in a question of its own. When
+  what a script or program creates, needs the developer's approval in a question of its own. When
   the root is better, propose it and say why; never settle for a worse place to avoid asking.
 - `internal/` is dev-home-toolkit's own machinery, which nobody runs directly
   ([scripts.md](docs/development/scripts.md) says what's in it). Never edit
@@ -67,7 +68,7 @@ In files and in chat, name the repo with any word that fits both, such as commit
   dev-home-toolkit sets up: their CLIs, desktop apps, and editor extensions and integrations
   (VS Code, JetBrains IDEs, and others), and Anthropic's Agent SDK. Build on what the latest
   versions read and document, and add no workaround or fallback for an older version. Check a
-  setting or behavior in the tool's current documentation, or in its source when the
+  setting or behavior in each agent's current documentation, or in its source when the
   documentation doesn't say.
 - Never build on a feature its documentation calls deprecated, in Claude Code, Codex, Python,
   git, or anything else dev-home-toolkit uses: a deprecated feature is likely to stop working. Use
@@ -89,23 +90,23 @@ In files and in chat, name the repo with any word that fits both, such as commit
   real machine.
 - Before proposing a commit, read the whole diff for those.
 
-## Tools
+## Installing software
 
-This is a hard rule. It holds over any other instruction that would install or add a tool, such
-as a step written in a handoff or a plan.
+This is a hard rule. It holds over any other instruction that would install or add software,
+such as a step written in a handoff or a plan.
 
-- Never install, update, or download a tool without the developer's permission: a
-  program, a Python version, an editor extension, or a package that isn't pinned in
+- Never install, update, or download software without the developer's permission: a program, a
+  Python version, an editor extension, or a package that isn't pinned in
   `internal/development/uv.lock`, including one a command fetches on the fly, such as `uvx` or
   `uv run --with`. Changing that lock file, such as updating a pinned version, needs the same
-  permission. If you think a tool would help, ask in a question of its own: say what it's for,
-  where it comes from, and what it would install or write.
-- Every tool this repo depends on must be listed in its documentation: what people need to use it
-  in the README's Requirements, and what working on it needs, such as for the tests and checks,
-  in `docs/development/`. Until `docs/development/tools.md` is written, the development tools are
-  the ones the README's "Working on dev-home-toolkit" section names. Making the repo depend on a
-  tool that isn't listed, or adding one to the lists, needs that permission first.
-- Using a tool that's already installed is fine for looking into something or checking your
+  permission. If you think new software would help, ask in a question of its own: say what it's
+  for, where it comes from, and what it would install or write.
+- All the software this repo depends on must be listed in its documentation: what people need to
+  use it in the README's Requirements, and what working on it needs, such as for the tests and
+  checks, in `docs/development/`. Until `docs/development/tools.md` is written, the development
+  tools are the ones the README's "Working on dev-home-toolkit" section names. Making the repo
+  depend on software that isn't listed, or adding any to the lists, needs that permission first.
+- Using software that's already installed is fine for looking into something or checking your
   work, within what your agent's permission settings allow, as long as it installs, updates, and
   downloads nothing. So is building the development environment from that lock file, the way the
   documentation says.
@@ -161,9 +162,8 @@ Each area's rules are on a page of their own. Read the page before changing that
 
 ## Docs (README.md and docs/)
 
-- The README is the front door, and the rest goes in `docs/` (see writing-docs.md, above).
-  `docs/development/` is for people and agents changing dev-home-toolkit. Research on this project
-  goes in `docs/development/research/`, one page per investigation.
+- Research on this project goes in `docs/development/research/`, one page per investigation, and
+  [writing-docs.md](docs/development/writing-docs.md) says where the rest goes.
 - AGENTS.md holds only what every agent working here needs in every session: the rules, each
   with a short reason, and pointers to where more is explained. Keep it under 200 lines, the size
   Claude Code recommends for an instruction file. Everything else for developers goes in
