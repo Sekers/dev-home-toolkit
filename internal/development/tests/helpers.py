@@ -386,7 +386,7 @@ def run_python(
 @contextlib.contextmanager
 def profile_kept(box: Sandbox) -> Iterator[None]:
     """For a test that answers no for ~/.claude or Codex in the sandbox's own profile, which
-    removes what setup set up there: afterwards, puts local-settings.json and both tools'
+    removes what setup set up there: afterwards, puts local-settings.json and both agents'
     settings files back as they were, removes the backups the test left beside them, and runs
     setup, which sets the profile up again for the tests after it."""
     files = [

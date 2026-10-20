@@ -1,4 +1,4 @@
-"""Filling in templates: the placeholders, the note that opens each generated file a tool loads,
+"""Filling in templates: the placeholders, the note that opens each generated file an agent loads,
 and each skill's stamp."""
 
 import hashlib
@@ -65,7 +65,7 @@ def render(path: Path, values: Mapping[str, str], note_text: str = "") -> Render
         if not FRONTMATTER_START.match(text):
             text = note_text + "\n\n" + text
         else:
-            # Frontmatter has to stay first, or the tools stop reading it, so the note goes right
+            # Frontmatter has to stay first, or the agents stop reading it, so the note goes right
             # after the line that ends it.
             close = FRONTMATTER_END.search(text, 3)
             if close is None:

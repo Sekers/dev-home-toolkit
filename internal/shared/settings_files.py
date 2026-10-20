@@ -1,4 +1,4 @@
-"""Changing another tool's settings file safely: reading it with how it's saved, showing a change
+"""Changing an agent's settings file safely: reading it with how it's saved, showing a change
 as a line diff, and writing it with a backup."""
 
 import difflib

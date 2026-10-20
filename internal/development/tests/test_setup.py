@@ -556,11 +556,11 @@ def test_a_claude_folder_with_links_but_no_answer_keeps_them_and_gets_no_new_one
 
 
 def test_a_profile_without_claude_code_or_codex_gets_neither(box: Sandbox) -> None:
-    # Each tool makes its folder, ~/.claude or ~/.codex, when it first runs, which is how setup
+    # Each agent makes its folder, ~/.claude or ~/.codex, when it first runs, which is how setup
     # knows it's there.
     settings_path = box.toolkit / "local-settings.json"
     settings_text = read(settings_path)
-    profile = box.root / "no-tools-profile"
+    profile = box.root / "no-agents-profile"
     profile.mkdir()
     other = json.loads(settings_text)
     del other["claudeCode"], other["codex"]
@@ -1777,10 +1777,10 @@ def test_the_settings_definitions_declare_what_setup_needs(box: Sandbox) -> None
         "updates.checkEveryHours",
         "devHome.checkEveryHours",
     ]
-    # The folders of each tool, all in one shape, an entry for each with its answer. Only Codex's
+    # The folders of each agent, all in one shape, an entry for each with its answer. Only Codex's
     # homes share one answer, which only setup's code knows.
     assert settings.FOLDER_SETTINGS == ("claudeCode.folders", "codex.homes")
-    assert [tool.shared for tool in settings.TOOLS] == [False, True]
+    assert [agent.shared for agent in settings.AGENTS] == [False, True]
     for setting in declared.values():
         assert setting.label and setting.help, setting
         assert not setting.has_default or settings.is_valid(setting.type, setting.default), setting
@@ -2206,10 +2206,10 @@ def test_the_requirements_checker_applies_each_types_rule(box: Sandbox) -> None:
         assert check(broken) == [unmet(mistake, keeps_off=True, can_act=True, per_folder=False)]
     broken_ones = [needs("os", mistake=True), needs("", mistake=True)]
     assert requirements.warned_about([*met, *broken_ones]) == tuple(met[2:])
-    names = requirements.either(["windows", "macos", "linux"], requirements.OPERATING_SYSTEMS)
+    names = requirements.either(["windows", "macos", "linux"], requirements.OS_NAMES)
     assert names == "Windows, macOS, or Linux"
-    # Every tool setup sets up has a name a requirement can give it.
-    assert set(requirements.AGENTS.values()) == {tool.name for tool in settings.TOOLS}
+    # Every agent setup sets up has a name a requirement can give it.
+    assert set(requirements.AGENT_NAMES.values()) == {agent.name for agent in settings.AGENTS}
 
 
 def test_this_pcs_facts_find_a_program_as_a_shell_does(
@@ -2461,14 +2461,14 @@ def test_a_skills_folder_shared_through_a_junction_is_one_folder_both_tools_read
     make_junction(claude / "skills", home / ".agents" / "skills")
     run = setup_module.Setup(quiet=True, what_if=True)
     run.home = home
-    tools = setup_module.ToolFolders([str(claude)], [str(home / ".codex")], [], [])
+    agent_folders = setup_module.AgentFolders([str(claude)], [str(home / ".codex")], [], [])
     only = (requirements.Requirement("agent", ("claude-code",)),)
     claude_only = settings.Skill("claude-only", own=True, requires=only)
     plain = settings.SkillDeclarations(skills={"plain": settings.Skill("plain", own=True)})
-    with_tool = settings.SkillDeclarations(skills={"claude-only": claude_only})
+    with_agent = settings.SkillDeclarations(skills={"claude-only": claude_only})
     try:
-        apart = run.skills_folders(tools, plain)
-        together = run.skills_folders(tools, with_tool)
+        apart = run.skills_folders(agent_folders, plain)
+        together = run.skills_folders(agent_folders, with_agent)
     finally:
         remove_link(claude / "skills")
     both = frozenset({"claude-code", "codex"})

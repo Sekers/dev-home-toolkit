@@ -28,6 +28,7 @@ from .output import CYAN, GREEN, color, status_line
 from .paths import comparable, forward, is_inside, resolve_home, same_path, unsafe_reason
 from .settings import (
     ADDED_TO_AGENTS,
+    AGENTS,
     AUTO_UPDATE,
     BY_PATH,
     CLAUDE_CODE,
@@ -40,10 +41,9 @@ from .settings import (
     SETTINGS_PATH,
     STATE,
     TOOLKIT_ROOT,
-    TOOLS,
+    Agent,
     LocalSettings,
     Setting,
-    Tool,
     find_skill,
     folder_rank,
     get,
@@ -60,8 +60,8 @@ if TYPE_CHECKING:
     from .setup import Setup
 
 NAMES = (*(setting.path for setting in SETTINGS), *FOLDER_SETTINGS, "multiMachine")
-# Each tool by the name of its folders' setting.
-TOOL_FOR = {tool.setting: tool for tool in TOOLS}
+# Each agent by the name of its folders' setting.
+AGENT_FOR = {agent.setting: agent for agent in AGENTS}
 # A name is a path, which may hold dots and, in a skill's name, hyphens. The shortest name that
 # leaves an operator after it, so claudeCode.folders-=<folder> reads as -=.
 ASSIGNMENT = re.compile(r"([A-Za-z][\w.-]*?)(\+=|-=|=)(.*)", re.DOTALL)
@@ -90,21 +90,22 @@ def usage() -> str:
     entries = [
         (f"{setting.path}={PLACEHOLDERS[setting.type]}", setting.help) for setting in SETTINGS
     ]
-    for tool in TOOLS:
+    for agent in AGENTS:
         shared = (
-            f" Every {tool.name} {tool.folder} reads the same skills, so all of them share one "
-            f"answer: a change to the main one, ~/{tool.default} when it's there, changes them all."
-            if tool.shared
+            f" Every {agent.name} {agent.folder} reads the same skills, so all of them share one "
+            f"answer: a change to the main one, ~/{agent.default} when it's there, changes them "
+            "all."
+            if agent.shared
             else ""
         )
         entries += [
             (
-                f"{tool.setting}+=<folder>",
-                f"Set up a {tool.name} {tool.folder}, such as ~/{tool.default} or "
-                f"~/{tool.default}-second.{shared}",
+                f"{agent.setting}+=<folder>",
+                f"Set up a {agent.name} {agent.folder}, such as ~/{agent.default} or "
+                f"~/{agent.default}-second.{shared}",
             ),
             (
-                f"{tool.setting}-=<folder>",
+                f"{agent.setting}-=<folder>",
                 "Stop setting one up, and remove what setup set up there.",
             ),
         ]
@@ -201,13 +202,13 @@ def value_shown(setting: Setting, saved: object) -> str:
 
 
 def folder_answers(
-    run: "Setup", settings: LocalSettings, tool: Tool
+    run: "Setup", settings: LocalSettings, agent: Agent
 ) -> list[tuple[str, bool | None]]:
-    """Each of a tool's folders setup knows of, as written in the settings, with its answer: each
+    """Each of an agent's folders setup knows of, as written in the settings, with its answer: each
     one there (see known_folders), then any other folder with an answer."""
-    saved = settings.folders[tool.setting]
+    saved = settings.folders[agent.setting]
     answers: list[tuple[str, bool | None]] = []
-    for folder in run.known_folders(tool, settings):
+    for folder in run.known_folders(agent, settings):
         entry = run.entry_named(folder, saved)
         answers.append((entry or run.folder_entry(folder), None if entry is None else saved[entry]))
     for entry, answer in saved.items():
@@ -217,13 +218,13 @@ def folder_answers(
     return answers
 
 
-def folders_text(run: "Setup", settings: LocalSettings, tool: Tool) -> str:
-    """A tool's folders as the menu shows them, each with its answer."""
+def folders_text(run: "Setup", settings: LocalSettings, agent: Agent) -> str:
+    """An agent's folders as the menu shows them, each with its answer."""
     words = {True: "yes", False: "no", None: "not asked yet"}
     folders = ", ".join(
         f"{name}: {words[answer]}"
         + ("" if Path(resolve_home(name, run.home)).is_dir() else " (not found)")
-        for name, answer in folder_answers(run, settings, tool)
+        for name, answer in folder_answers(run, settings, agent)
     )
     return folders or "none found"
 
@@ -246,8 +247,8 @@ def overview(run: "Setup", settings: LocalSettings) -> list[str]:
         for setting in SETTINGS
     ]
     this_pc += [
-        (f"{tool.name} {tool.folder}s to set up", folders_text(run, settings, tool))
-        for tool in TOOLS
+        (f"{agent.name} {agent.folder}s to set up", folders_text(run, settings, agent))
+        for agent in AGENTS
     ]
     shared = [("Copies of dev-home in active use", copies)]
     width = max(len(label) for label, _ in this_pc + shared) + 2
@@ -334,7 +335,7 @@ def menu(run: "Setup", settings: LocalSettings) -> bool:
         "devHome.checkEveryHours": change_content_hours,
     }
     # Numbered as overview numbers the rows: dev-home-toolkit's own settings in the order
-    # setting-definitions.json has them, then each tool's folders, then the shared setting.
+    # setting-definitions.json has them, then each agent's folders, then the shared setting.
     order = [changers[setting.path] for setting in SETTINGS]
     order += [change_claude_folders, change_codex_homes, change_copies]
     steps = {str(number): step for number, step in enumerate(order, 1)}
@@ -430,45 +431,45 @@ def change_content_hours(run: "Setup", settings: LocalSettings) -> bool:
     )
 
 
-def set_folder(settings: LocalSettings, run: "Setup", tool: Tool, full: Path, yes: bool) -> None:
-    """Saves the answer for one of a tool's folders, by its full path, in the entry that already
+def set_folder(settings: LocalSettings, run: "Setup", agent: Agent, full: Path, yes: bool) -> None:
+    """Saves the answer for one of an agent's folders, by its full path, in the entry that already
     names it when there is one, and otherwise in a new one, written as setup writes folders."""
-    settings.folders[tool.setting][run.entry_for(tool, settings, full)] = yes
+    settings.folders[agent.setting][run.entry_for(agent, settings, full)] = yes
 
 
-def set_shared(settings: LocalSettings, run: "Setup", tool: Tool, full: Path, yes: bool) -> None:
-    """Saves the answer for one of a shared tool's folders, by its full path. For the main
+def set_shared(settings: LocalSettings, run: "Setup", agent: Agent, full: Path, yes: bool) -> None:
+    """Saves the answer for one of a shared agent's folders, by its full path. For the main
     folder, or while no folder has an answer, it goes to every folder. For another folder, it must
     match the answer they share: one that doesn't is refused, raising SettingError, since every
     folder reads the same skills."""
-    folders = run.known_folders(tool, settings)
+    folders = run.known_folders(agent, settings)
     if full.is_dir() and not any(same_path(full, folder) for folder in folders):
-        folders = sorted([*folders, full], key=lambda f: folder_rank(tool, f, run.home))
-    answer, _ = run.shared_answer(tool, settings, folders)
+        folders = sorted([*folders, full], key=lambda f: folder_rank(agent, f, run.home))
+    answer, _ = run.shared_answer(agent, settings, folders)
     if answer is None or (folders and same_path(full, folders[0])):
-        run.answer_every_folder(tool, settings, yes)
-        set_folder(settings, run, tool, full, yes)
+        run.answer_every_folder(agent, settings, yes)
+        set_folder(settings, run, agent, full, yes)
     elif answer is yes:
-        set_folder(settings, run, tool, full, yes)
+        set_folder(settings, run, agent, full, yes)
     else:
-        main = run.entry_named(folders[0], settings.folders[tool.setting]) or run.folder_entry(
+        main = run.entry_named(folders[0], settings.folders[agent.setting]) or run.folder_entry(
             folders[0]
         )
         done = "set up" if answer else "not set up"
         operator = "-=" if yes is False else "+="
         raise SettingError(
-            f"Every {tool.name} {tool.folder} reads the same skills, so all of them share one "
-            f"answer, the main {tool.folder}'s: {main}, which is {done}. To change them all, "
-            f"change it: {tool.setting}{operator}{main}."
+            f"Every {agent.name} {agent.folder} reads the same skills, so all of them share one "
+            f"answer, the main {agent.folder}'s: {main}, which is {done}. To change them all, "
+            f"change it: {agent.setting}{operator}{main}."
         )
 
 
-def change_folders(run: "Setup", settings: LocalSettings, tool: Tool) -> bool:
-    """Asks about each of a tool's folders, after offering to remove each one that's gone; for a
-    shared tool, one question, whose answer goes to every folder."""
-    answers = folder_answers(run, settings, tool)
+def change_folders(run: "Setup", settings: LocalSettings, agent: Agent) -> bool:
+    """Asks about each of an agent's folders, after offering to remove each one that's gone; for a
+    shared agent, one question, whose answer goes to every folder."""
+    answers = folder_answers(run, settings, agent)
     if not answers:
-        run.line(f"Setup found no {tool.name} {tool.folder}s.")
+        run.line(f"Setup found no {agent.name} {agent.folder}s.")
         return False
     changed = False
     explained = False
@@ -477,28 +478,28 @@ def change_folders(run: "Setup", settings: LocalSettings, tool: Tool) -> bool:
         if not folder.is_dir():
             # A folder that's gone keeps its answer, in case it comes back, until it's removed.
             if run.choose(f"{folder} no longer exists. Remove it from the settings?", False):
-                settings.folders[tool.setting].pop(entry, None)
+                settings.folders[agent.setting].pop(entry, None)
                 changed = True
             continue
-        if tool.shared:
+        if agent.shared:
             continue
         if not explained:
             present = [Path(resolve_home(name, run.home)) for name, _ in answers]
-            run.introduce_folders(tool, [f for f in present if f.is_dir()])
+            run.introduce_folders(agent, [f for f in present if f.is_dir()])
             explained = True
-        answer = run.ask_folder(tool, folder, current)
+        answer = run.ask_folder(agent, folder, current)
         if answer is not None and answer != current:
-            set_folder(settings, run, tool, Path(comparable(folder)), answer)
+            set_folder(settings, run, agent, Path(comparable(folder)), answer)
             changed = True
-    folders = run.known_folders(tool, settings)
-    if not tool.shared or not folders:
+    folders = run.known_folders(agent, settings)
+    if not agent.shared or not folders:
         return changed
-    current, _ = run.shared_answer(tool, settings, folders)
+    current, _ = run.shared_answer(agent, settings, folders)
     answer = run.ask_codex(folders, current)
-    saved = settings.folders[tool.setting].values()
+    saved = settings.folders[agent.setting].values()
     if answer is None or (answer is current and all(value is answer for value in saved)):
         return changed
-    run.answer_every_folder(tool, settings, answer)
+    run.answer_every_folder(agent, settings, answer)
     return True
 
 
@@ -548,16 +549,16 @@ def assign(run: "Setup", settings: LocalSettings, text: str) -> None:
     name, operator, value = match.group(1), match.group(2), match.group(3).strip()
     if name not in NAMES and not name.startswith("skills."):
         raise SettingError(f"There is no setting named {name}.")
-    tool = TOOL_FOR.get(name)
-    if tool is not None and operator == "=":
+    agent = AGENT_FOR.get(name)
+    if agent is not None and operator == "=":
         raise SettingError(
-            f"{name} changes one {tool.folder} at a time: {name}+=<folder> sets one up, and "
+            f"{name} changes one {agent.folder} at a time: {name}+=<folder> sets one up, and "
             f"{name}-=<folder> stops."
         )
-    if tool is None and operator != "=":
+    if agent is None and operator != "=":
         raise SettingError(f"{name} is set with =, as in {name}=<value>.")
     before = copy.deepcopy(settings)
-    if value == "default" and tool is None:
+    if value == "default" and agent is None:
         setting = None if name == "multiMachine" else declared_setting(settings, name)
         if setting is None or not setting.has_default:
             raise SettingError(f"{name} has no default, so it can't be set to default.")
@@ -589,18 +590,18 @@ def assign(run: "Setup", settings: LocalSettings, text: str) -> None:
     elif name == "devHome.folder":
         settings.content_dir = checked_dev_home(value)
     else:
-        assert tool is not None
-        kind = f"{tool.name} {tool.folder}"
+        assert agent is not None
+        kind = f"{agent.name} {agent.folder}"
         if not value:
-            raise SettingError(f"Name the {kind}, such as ~/{tool.default}-second.")
+            raise SettingError(f"Name the {kind}, such as ~/{agent.default}-second.")
         # A folder as typed, such as ..\.claude-second, means one from where the command runs.
         full = Path(comparable(resolve_home(value, run.home)))
         if operator == "+=" and not full.is_dir():
             raise SettingError(f"There is no {kind} at {full}.")
-        if tool.shared:
-            set_shared(settings, run, tool, full, operator == "+=")
+        if agent.shared:
+            set_shared(settings, run, agent, full, operator == "+=")
         else:
-            set_folder(settings, run, tool, full, operator == "+=")
+            set_folder(settings, run, agent, full, operator == "+=")
     old_text, new_text = local_settings_text(before), local_settings_text(settings)
     if old_text == new_text:
         status_line("OK", f"{name} is already set that way, so nothing changed.")

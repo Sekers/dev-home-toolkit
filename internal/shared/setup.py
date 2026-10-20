@@ -46,11 +46,11 @@ copy agrees.
 The templates in this repo hold placeholders where paths go. Setup writes copies of the skills,
 the scripts they share, and the operating rules, with this PC's paths filled in, to
 internal/.generated/, at the same paths they have under templates/, and links the skills and
-rules into the tools. Pre-approved commands must match the command text exactly, so the paths
+rules into the agents. Pre-approved commands must match the command text exactly, so the paths
 can't be variables.
 
 Each Claude Code folder and Codex home setup sets up needs a change in its settings file, so the
-tool can reach dev-home from any project, and in a Claude Code folder other than ~/.claude, so its
+agent can reach dev-home from any project, and in a Claude Code folder other than ~/.claude, so its
 sessions skip ~/.claude's instructions (see home_claude_excludes). The yes to setting up the
 folder approves it, and the question says so, so every run, quiet ones included, makes the change
 when it's missing: it saves a dated backup of the file, then writes the change, and says so. A no
@@ -185,12 +185,12 @@ from .settings import (
     SETTINGS_PATH,
     STATE,
     TOOLKIT_ROOT,
+    Agent,
     Checked,
     LocalSettings,
     Setting,
     Skill,
     SkillDeclarations,
-    Tool,
     answered,
     apply_changes,
     check_settings,
@@ -247,16 +247,16 @@ FOLDER_NOTE = (
     "next setup run rewrites it. Python writes the __pycache__ folders when the scripts run, to\n"
     "start them faster, and setup leaves those alone.\n"
 )
-# Each tool setup sets up, by the name a skill's supportedOn gives it, such as claude-code.
-REQUIRES_NAMES = {shown: name for name, shown in requirements.AGENTS.items()}
+# Each agent setup sets up, by the name a skill's supportedOn gives it, such as claude-code.
+REQUIRES_NAMES = {shown: name for name, shown in requirements.AGENT_NAMES.items()}
 # Files every dev-home starts with, from templates/dev-home-starter/.
 DEV_HOME_FILES = ("global-rules/global-rules.md", "knowledge/README.md")
-# The skills folder every Codex home reads, in the profile folder. Of the tools setup sets up, only
+# The skills folder every Codex home reads, in the profile folder. Of the agents setup sets up, only
 # Codex reads it, so setup links the skills here for a yes to Codex, and removes its links here
 # for a no.
-# Adding an AI agent tool: other tools read this folder too, such as GitHub Copilot, Gemini CLI,
+# Adding an agent: other agents read this folder too, such as GitHub Copilot, Gemini CLI,
 # and Cursor (their docs, read 2026-10-16). If setup ever sets up one of them, a no to Codex alone
-# must no longer remove these links: setup links here while any tool that reads the folder is
+# must no longer remove these links: setup links here while any agent that reads the folder is
 # answered yes, and removes its links only once every one of them is answered no. See
 # docs/development/decisions/setup-removes-what-it-set-up-in-a-folder-answered-no.md.
 AGENTS_SKILLS = Path(".agents") / "skills"
@@ -268,7 +268,7 @@ class CannotGoOnError(Exception):
 
 @dataclass(frozen=True)
 class SettingsChange:
-    """A change one of the tools' settings files needs: what it's for, the file, what the file
+    """A change one of the agents' settings files needs: what it's for, the file, what the file
     needs, the plan, what to change by hand where setup can't make it, and what the change does,
     as the line saying it's made puts it, such as "added dev-home to writable_roots"."""
 
@@ -307,8 +307,8 @@ class SkillPlan:
 
 
 @dataclass(frozen=True)
-class ToolFolders:
-    """Where setup sets up each tool, by full path: each Claude Code folder and Codex home answered
+class AgentFolders:
+    """Where setup sets up each agent, by full path: each Claude Code folder and Codex home answered
     yes. And where it removes what it set up: each one answered no."""
 
     claude_dirs: list[str]
@@ -320,11 +320,11 @@ class ToolFolders:
 @dataclass(frozen=True)
 class Settled:
     """This PC's settings as the work saves them and acts on them (see Setup.settle). changes is
-    what the check of the file moved and removed; matched has, by each shared tool's setting, the
+    what the check of the file moved and removed; matched has, by each shared agent's setting, the
     line saying which of its folders got the main folder's answer; new_skills names each skill
     marked as new to this PC; answered says whether a person changed a setting in this run;
     problem is why the settings can't be saved, or "" when they can; and out_of_order says the
-    file as it is now lists a shared tool's folders out of order."""
+    file as it is now lists a shared agent's folders out of order."""
 
     settings: LocalSettings
     changes: Checked
@@ -383,9 +383,9 @@ class Setup:
         self.unknown_placeholders: list[str] = []
         self.unplaced_notes: list[str] = []
         self.generated_changes = 0
-        # The line saying which of a shared tool's folders got the main folder's answer, by the
-        # tool's setting, printed once the settings are saved, unless a person answers for the
-        # tool's folders first.
+        # The line saying which of a shared agent's folders got the main folder's answer, by the
+        # agent's setting, printed once the settings are saved, unless a person answers for the
+        # agent's folders first.
         self.matched: dict[str, str] = {}
         # What a person changed in this PC's settings in this run, as the settings before and
         # after each step that takes their answers, apart from setup's own changes in between,
@@ -466,28 +466,28 @@ class Setup:
         self.line("so you can look at them first and pull them with update.py.")
         return self.choose_or_default("Pull updates automatically?", BY_PATH[AUTO_UPDATE], data)
 
-    def introduce_folders(self, tool: Tool, folders: Sequence[Path]) -> None:
-        """Before a question about a tool's folders: which they are, then what a yes does (see
+    def introduce_folders(self, agent: Agent, folders: Sequence[Path]) -> None:
+        """Before a question about an agent's folders: which they are, then what a yes does (see
         yes_does), each after a blank line."""
-        several = len(folders) > 1 or tool.shared
-        kind = f"{tool.name} {tool.folder}{'s' if several else ''}"
+        several = len(folders) > 1 or agent.shared
+        kind = f"{agent.name} {agent.folder}{'s' if several else ''}"
         self.line()
         self.line(f"{kind}: {folder_list(folders) or 'none found yet'}")
         self.line()
-        does = yes_does(tool, several=len(folders) > 1, guarded=self.any_guarded(tool, folders))
+        does = yes_does(agent, several=len(folders) > 1, guarded=self.any_guarded(agent, folders))
         for text in textwrap.wrap(does, console.LINE_WIDTH):
             self.line(text)
         self.line()
 
-    def any_guarded(self, tool: Tool, folders: Sequence[Path]) -> bool:
+    def any_guarded(self, agent: Agent, folders: Sequence[Path]) -> bool:
         """Whether any of the folders a question is about gets home_claude_excludes (see
         guarded)."""
-        return tool == CLAUDE_CODE and any(self.guarded(folder) for folder in folders)
+        return agent == CLAUDE_CODE and any(self.guarded(folder) for folder in folders)
 
-    def ask_folder(self, tool: Tool, folder: Path, current: bool | None) -> bool | None:
-        """Whether to set up one of a tool's folders. Enter keeps its answer, and takes yes for one
-        with no answer yet. None when no answer came."""
-        return self.choose(folder_question(tool, folder), True if current is None else current)
+    def ask_folder(self, agent: Agent, folder: Path, current: bool | None) -> bool | None:
+        """Whether to set up one of an agent's folders. Enter keeps its answer, and takes yes for
+        one with no answer yet. None when no answer came."""
+        return self.choose(folder_question(agent, folder), True if current is None else current)
 
     def ask_codex(self, homes: Sequence[Path], current: bool | None) -> bool | None:
         """Whether to set up Codex, in every Codex home, which all read the same skills. Enter
@@ -607,9 +607,9 @@ class Setup:
         save says so in one line, which names what was moved or removed, and backs the file up
         first when a person changed a setting, through the menu or --configure, or a setting was
         removed. When the only changes are what setup records by itself, the answers a shared
-        tool's folders got from the main one and the skills new to this PC, it keeps no backup,
+        agent's folders got from the main one and the skills new to this PC, it keeps no backup,
         since nobody changed a setting, and the lines saying what it records stand for its own.
-        With no change at all, it only puts a shared tool's folders back in order."""
+        With no change at all, it only puts a shared agent's folders back in order."""
         changes = settled.changes
         changed = settled.answered or bool(changes.moved or changes.removed)
         if not (changed or settled.matched or settled.new_skills):
@@ -640,7 +640,7 @@ class Setup:
         return True
 
     def put_in_order(self) -> None:
-        """Puts a shared tool's folders back in order in this PC's settings, after a hand edit,
+        """Puts a shared agent's folders back in order in this PC's settings, after a hand edit,
         with no backup and no line, once it's sure only their order changes."""
         try:
             text = SETTINGS_PATH.read_text(encoding="utf-8-sig")
@@ -684,7 +684,7 @@ class Setup:
         this run (see answering), which win over the other run's where both changed a setting.
         Then it works out again from that each change setup makes by itself, so none comes from an
         earlier read: the check's moves and removals (see check_settings, which removes only what
-        read held), the answer a shared tool's folders share (see match_shared_answer), and the
+        read held), the answer a shared agent's folders share (see match_shared_answer), and the
         marks for skills new to this PC (see note_new_skills).
 
         A sync's setup reads nothing again: it has held the lock since before it read the file,
@@ -733,9 +733,9 @@ class Setup:
             apply_changes(start, before, after)
         result = settings_in(start)
         self.matched = {}
-        for tool in (CLAUDE_CODE, CODEX):
-            if tool.shared:
-                self.match_shared_answer(tool, result)
+        for agent in (CLAUDE_CODE, CODEX):
+            if agent.shared:
+                self.match_shared_answer(agent, result)
         new_skills = self.note_new_skills(result, declared)
         return Settled(
             settings_in(local_settings_data(result)),
@@ -746,24 +746,24 @@ class Setup:
             out_of_order=order_folders(copy.deepcopy(newer.data), self.home),
         )
 
-    # The tools' folders: Claude Code folders and Codex homes
+    # The agents' folders: Claude Code folders and Codex homes
 
-    def found_folders(self, tool: Tool) -> list[Path]:
-        """Each of a tool's folders setup finds, to offer: those in the profile folder (see
+    def found_folders(self, agent: Agent) -> list[Path]:
+        """Each of an agent's folders setup finds, to offer: those in the profile folder (see
         profile_folders), then the session's own (see session_folder)."""
-        found = self.profile_folders(tool)
-        session = self.session_folder(tool)
+        found = self.profile_folders(agent)
+        session = self.session_folder(agent)
         if session is not None and not any(same_path(session, folder) for folder in found):
             found.append(session)
         return found
 
-    def profile_folders(self, tool: Tool) -> list[Path]:
-        """A tool's folders in the profile folder: its default one, such as ~/.claude, once the
-        tool has made it, which is how setup knows the tool is on this PC, then each extra one,
-        such as ~/.claude-<name>, for another account, which the tool's variable, such as
+    def profile_folders(self, agent: Agent) -> list[Path]:
+        """An agent's folders in the profile folder: its default one, such as ~/.claude, once the
+        agent has made it, which is how setup knows the agent is on this PC, then each extra one,
+        such as ~/.claude-<name>, for another account, which the agent's variable, such as
         CLAUDE_CONFIG_DIR, points a session to. A profile folder that can't be listed has only the
         default one to offer."""
-        default = self.home / tool.default
+        default = self.home / agent.default
         found = [default] if default.is_dir() else []
         if self.profile_entries is None:
             try:
@@ -774,16 +774,16 @@ class Setup:
         return found + sorted(
             f
             for f in self.profile_entries
-            if f.name.lower().startswith(tool.default + "-")
+            if f.name.lower().startswith(agent.default + "-")
             and f.is_dir()
-            and (not tool.marks or any((f / mark).is_file() for mark in tool.marks))
+            and (not agent.marks or any((f / mark).is_file() for mark in agent.marks))
         )
 
-    def session_folder(self, tool: Tool) -> Path | None:
-        """The folder in the tool's variable, such as CLAUDE_CONFIG_DIR, when that's set and the
+    def session_folder(self, agent: Agent) -> Path | None:
+        """The folder in the agent's variable, such as CLAUDE_CONFIG_DIR, when that's set and the
         folder exists: the one the session running setup uses. A test profile takes it only from
         inside itself, so the real one is never touched."""
-        value = os.environ.get(tool.variable)
+        value = os.environ.get(agent.variable)
         if not value:
             return None
         folder = Path(comparable(resolve_home(value, self.home)))
@@ -794,17 +794,17 @@ class Setup:
             return None
         return folder
 
-    def known_folders(self, tool: Tool, settings: LocalSettings) -> list[Path]:
-        """Each of a tool's folders setup knows of that's there, each once: those it finds (see
-        found_folders), then the others with an entry. A shared tool's come in order, the main one
+    def known_folders(self, agent: Agent, settings: LocalSettings) -> list[Path]:
+        """Each of an agent's folders setup knows of that's there, each once: those it finds (see
+        found_folders), then the others with an entry. A shared agent's come in order, the main one
         first (see folder_rank)."""
-        folders = self.found_folders(tool)
-        for entry in listed_entries(get(settings.data, tool.setting)):
+        folders = self.found_folders(agent)
+        for entry in listed_entries(get(settings.data, agent.setting)):
             folder = Path(comparable(resolve_home(entry, self.home)))
             if folder.is_dir() and not any(same_path(folder, f) for f in folders):
                 folders.append(folder)
-        if tool.shared:
-            folders.sort(key=lambda folder: folder_rank(tool, folder, self.home))
+        if agent.shared:
+            folders.sort(key=lambda folder: folder_rank(agent, folder, self.home))
         return folders
 
     def entry_named(self, folder: str | Path, entries: Iterable[str]) -> str | None:
@@ -819,63 +819,63 @@ class Setup:
             None,
         )
 
-    def entry_for(self, tool: Tool, settings: LocalSettings, folder: Path) -> str:
+    def entry_for(self, agent: Agent, settings: LocalSettings, folder: Path) -> str:
         """The entry to write a folder's answer in: the one that names it already, with an answer
         or not, as written, or a new one, as setup writes folders (see folder_entry)."""
         entries = [
-            *settings.folders[tool.setting],
-            *listed_entries(get(settings.data, tool.setting)),
+            *settings.folders[agent.setting],
+            *listed_entries(get(settings.data, agent.setting)),
         ]
         return self.entry_named(folder, entries) or self.folder_entry(folder)
 
     def shared_answer(
-        self, tool: Tool, settings: LocalSettings, folders: Sequence[Path] | None = None
+        self, agent: Agent, settings: LocalSettings, folders: Sequence[Path] | None = None
     ) -> tuple[bool | None, Path | None]:
-        """A shared tool's answer for all its folders, and the folder that gives it: the first
+        """A shared agent's answer for all its folders, and the folder that gives it: the first
         of the folders there, in order (see known_folders), that has an answer, which is the main
         folder unless it has none. None, None when none has one."""
-        answers = settings.folders[tool.setting]
-        for folder in self.known_folders(tool, settings) if folders is None else folders:
+        answers = settings.folders[agent.setting]
+        for folder in self.known_folders(agent, settings) if folders is None else folders:
             entry = self.entry_named(folder, answers)
             if entry is not None:
                 return answers[entry], folder
         return None, None
 
-    def answer_every_folder(self, tool: Tool, settings: LocalSettings, answer: bool) -> None:
-        """Gives a shared tool's answer, from a person, to every one of its folders: each entry,
+    def answer_every_folder(self, agent: Agent, settings: LocalSettings, answer: bool) -> None:
+        """Gives a shared agent's answer, from a person, to every one of its folders: each entry,
         those for folders that are gone included, and each folder there without one. That replaces
         any answer the folders got from the main one in this run, so its line goes."""
-        self.matched.pop(tool.setting, None)
-        answers = settings.folders[tool.setting]
+        self.matched.pop(agent.setting, None)
+        answers = settings.folders[agent.setting]
         for entry in answers:
             answers[entry] = answer
-        for folder in self.known_folders(tool, settings):
+        for folder in self.known_folders(agent, settings):
             if self.entry_named(folder, answers) is None:
-                answers[self.entry_for(tool, settings, folder)] = answer
+                answers[self.entry_for(agent, settings, folder)] = answer
 
-    def match_shared_answer(self, tool: Tool, settings: LocalSettings) -> None:
-        """Gives each of a shared tool's folders that's there the shared answer (see
+    def match_shared_answer(self, agent: Agent, settings: LocalSettings) -> None:
+        """Gives each of a shared agent's folders that's there the shared answer (see
         shared_answer), when its own differs or it has none, such as a new folder, or one whose
         answer was changed by hand, and keeps a line saying so for after the save."""
-        folders = self.known_folders(tool, settings)
-        answer, source = self.shared_answer(tool, settings, folders)
+        folders = self.known_folders(agent, settings)
+        answer, source = self.shared_answer(agent, settings, folders)
         if answer is None or source is None:
             return
-        answers = settings.folders[tool.setting]
+        answers = settings.folders[agent.setting]
         changed: list[str] = []
         for folder in folders:
             entry = self.entry_named(folder, answers)
             if entry is None or answers[entry] is not answer:
-                entry = entry or self.entry_for(tool, settings, folder)
+                entry = entry or self.entry_for(agent, settings, folder)
                 answers[entry] = answer
                 changed.append(entry)
         if not changed:
             return
         done = "set up" if answer else "turned off"
-        self.matched[tool.setting] = (
-            f"dev-home is now {done} for {tool.name} in {and_list(changed)}, to match "
-            f"{self.entry_named(source, answers)}. {tool.name} only supports one set of skills for "
-            f"all your {tool.name} {tool.folder}s, so they share one setting."
+        self.matched[agent.setting] = (
+            f"dev-home is now {done} for {agent.name} in {and_list(changed)}, to match "
+            f"{self.entry_named(source, answers)}. {agent.name} only supports one set of skills "
+            f"for all your {agent.name} {agent.folder}s, so they share one setting."
         )
 
     def folder_entry(self, folder: Path) -> str:
@@ -1445,7 +1445,7 @@ class Setup:
 
     # The run, in order: where things are; dev-home; the questions not answered yet; at a
     # console, the settings menu; the change to dev-home.json to confirm; then the work, which
-    # asks nothing and holds the sync's lock, the tools' settings files last, since a sync makes
+    # asks nothing and holds the sync's lock, the agents' settings files last, since a sync makes
     # their changes too.
 
     def run(self, content_dir_option: str) -> None:
@@ -1462,12 +1462,12 @@ class Setup:
                     raise CannotGoOnError from error
             if self.just_showing:
                 raise CannotGoOnError
-        # Each of a shared tool's folders gets the answer they share, so the questions and the
+        # Each of a shared agent's folders gets the answer they share, so the questions and the
         # menu show it. It's setup's own change, not an answer, so the work works it out again
         # (see settle).
-        for tool in (CLAUDE_CODE, CODEX):
-            if tool.shared:
-                self.match_shared_answer(tool, settings)
+        for agent in (CLAUDE_CODE, CODEX):
+            if agent.shared:
+                self.match_shared_answer(agent, settings)
 
         with self.answering(settings):
             # 1. dev-home first: its folder, then, when it's missing, clone or create it. Nothing
@@ -1506,19 +1506,19 @@ class Setup:
                     self.line(f"What if: {matched}")
                 elif saved:
                     self.status("SET", matched)
-            tools = self.tool_folders(settled.settings)
-            folders = self.skills_folders(tools, declared)
+            agent_folders = self.agent_folders(settled.settings)
+            folders = self.skills_folders(agent_folders, declared)
             plans = self.plan_skills(settled.settings.data, declared, folders)
             told = new_skills_text(settled.new_skills, plans)
             if told and self.what_if:
                 self.line(f"What if: {told}")
             elif told and saved:
                 self.status("NEW", told)
-            self.set_up(settled.settings, content_root, tools, folders, plans)
-            # The tools' settings files: the change each folder set up needs, which its yes
+            self.set_up(settled.settings, content_root, agent_folders, folders, plans)
+            # The agents' settings files: the change each folder set up needs, which its yes
             # approved, and the access taken back out of each one answered no, which the no
             # approved, each made with a backup. See repair_setting.
-            for check in self.settings_checks(content_root, tools):
+            for check in self.settings_checks(content_root, agent_folders):
                 if isinstance(check, SettingsChange):
                     self.repair_setting(check)
                 else:
@@ -1712,53 +1712,53 @@ class Setup:
             updates = self.ask_auto_update(settings.data)
             if updates is not MISSING:
                 put(settings.data, AUTO_UPDATE, updates)
-        for tool in (CLAUDE_CODE, CODEX):
-            self.ask_about_folders(tool, settings)
+        for agent in (CLAUDE_CODE, CODEX):
+            self.ask_about_folders(agent, settings)
         self.ask_about_copies(settings, content_root, first_setup=first_setup)
 
-    def ask_about_folders(self, tool: Tool, settings: LocalSettings) -> None:
-        """Asks about each of a tool's folders that setup knows of with no answer yet, and keeps
+    def ask_about_folders(self, agent: Agent, settings: LocalSettings) -> None:
+        """Asks about each of an agent's folders that setup knows of with no answer yet, and keeps
         every answer, a no included, so it's asked about once: in the shared prompt for optional
-        lists, a list of the tool's own, each one recommended, or for a shared tool, one question
-        for them all, whose answer goes to every folder. Once one of a shared tool's folders has an
+        lists, a list of the agent's own, each one recommended, or for a shared agent, one question
+        for them all, whose answer goes to every folder. Once one of a shared agent's folders has an
         answer, the others have it too (see match_shared_answer), so it asks only while none has.
         A folder nobody has answered for isn't set up: setup adds no links there and removes none.
         A quiet run names those folders instead."""
-        answers = settings.folders[tool.setting]
-        known = self.known_folders(tool, settings)
+        answers = settings.folders[agent.setting]
+        known = self.known_folders(agent, settings)
         unanswered = [f for f in known if self.entry_named(f, answers) is None]
         if not unanswered:
             return
         if self.can_ask:
-            if tool.shared:
+            if agent.shared:
                 shared = self.ask_codex(known, None)
                 if shared is not None:
-                    self.answer_every_folder(tool, settings, shared)
+                    self.answer_every_folder(agent, settings, shared)
                     return
-                which = f"{tool.name}, so setup left it as it is"
+                which = f"{agent.name}, so setup left it as it is"
             else:
                 if len(unanswered) == 1:
                     # A list of one asks its item's question alone, so the folder and what a
                     # yes does come first, as for Codex.
-                    self.introduce_folders(tool, unanswered)
-                    question = f"Set up {tool.name} in this {tool.folder}?"
+                    self.introduce_folders(agent, unanswered)
+                    question = f"Set up {agent.name} in this {agent.folder}?"
                     items = [console.ListItem(str(unanswered[0]), True, question)]
                     answer = self.choose_from_list("", "", items)
                 else:
                     self.line()
                     answer = self.choose_from_list(
-                        f"{tool.name} {tool.folder}s setup hasn't asked about yet, one for each "
-                        f"{tool.account} account:",
-                        f"Set up {tool.name} in them with dev-home's skills and rules?",
+                        f"{agent.name} {agent.folder}s setup hasn't asked about yet, one for each "
+                        f"{agent.account} account:",
+                        f"Set up {agent.name} in them with dev-home's skills and rules?",
                         [
-                            console.ListItem(str(f), True, folder_question(tool, f))
+                            console.ListItem(str(f), True, folder_question(agent, f))
                             for f in unanswered
                         ],
-                        yes_does(tool, several=True, guarded=self.any_guarded(tool, unanswered)),
+                        yes_does(agent, several=True, guarded=self.any_guarded(agent, unanswered)),
                     )
                 if answer is not None:
                     for folder in unanswered:
-                        entry = self.entry_for(tool, settings, folder)
+                        entry = self.entry_for(agent, settings, folder)
                         answers[entry] = answer.answers[str(folder)]
                     return
                 which = (
@@ -1767,30 +1767,30 @@ class Setup:
             self.status("PROBLEM", f"No answer came about {which}. Run setup.py again to answer.")
             return
         # The session's own folder, when it's in the profile folder under another name or outside
-        # it, comes only from the tool's variable, which a terminal usually doesn't have.
-        visible = self.profile_folders(tool) + [
-            f for f in known if self.listed(f, listed_entries(get(settings.data, tool.setting)))
+        # it, comes only from the agent's variable, which a terminal usually doesn't have.
+        visible = self.profile_folders(agent) + [
+            f for f in known if self.listed(f, listed_entries(get(settings.data, agent.setting)))
         ]
         unseen = [f for f in unanswered if not any(same_path(f, v) for v in visible)]
-        # A shared tool's yes covers every folder.
-        set_up = f"set up {tool.name}" if tool.shared else "set it up"
+        # A shared agent's yes covers every folder.
+        set_up = f"set up {agent.name}" if agent.shared else "set it up"
         for folder in unseen:
             self.status(
                 "PROBLEM",
-                f"Setup hasn't asked yet {unasked_text(tool, [folder], session=True)}. Setup in a "
+                f"Setup hasn't asked yet {unasked_text(agent, [folder], session=True)}. Setup in a "
                 f"terminal usually can't see it: to {set_up}, run {by_hand('setup.py')} "
-                f"--configure '{tool.setting}+={self.folder_entry(folder)}'.",
+                f"--configure '{agent.setting}+={self.folder_entry(folder)}'.",
             )
         seen = [f for f in unanswered if f not in unseen]
         if seen:
             self.status(
                 "PROBLEM",
-                f"Setup hasn't asked yet {unasked_text(tool, seen)}. Run {by_hand('setup.py')} in "
+                f"Setup hasn't asked yet {unasked_text(agent, seen)}. Run {by_hand('setup.py')} in "
                 "a terminal, and it asks.",
             )
 
-    def tool_folders(self, settings: LocalSettings) -> ToolFolders:
-        """Where setup sets up each tool, from the answers: each Claude Code folder and Codex home
+    def agent_folders(self, settings: LocalSettings) -> AgentFolders:
+        """Where setup sets up each agent, from the answers: each Claude Code folder and Codex home
         answered yes. And each one answered no, unless a yes covers it too: a folder saved under
         two names, or reached through a junction, or a Codex home while another is answered yes,
         since every home shares one answer."""
@@ -1808,15 +1808,15 @@ class Setup:
             if codex_homes
             else [full for _, full in self.folders_answered(CODEX, settings, False)]
         )
-        return ToolFolders(claude_dirs, codex_homes, declined_claude_dirs, declined_codex_homes)
+        return AgentFolders(claude_dirs, codex_homes, declined_claude_dirs, declined_codex_homes)
 
     def folders_answered(
-        self, tool: Tool, settings: LocalSettings, answer: bool
+        self, agent: Agent, settings: LocalSettings, answer: bool
     ) -> list[tuple[str, str]]:
-        """Each of a tool's folders with that answer that's there, each once: its entry in the
+        """Each of an agent's folders with that answer that's there, each once: its entry in the
         settings, and its full path."""
         folders: list[tuple[str, str]] = []
-        for entry in answered(settings.folders[tool.setting], answer):
+        for entry in answered(settings.folders[agent.setting], answer):
             if not entry.strip():
                 continue
             full = comparable(resolve_home(entry, self.home))
@@ -1875,20 +1875,20 @@ class Setup:
         return new
 
     def skills_folders(
-        self, tools: ToolFolders, declared: SkillDeclarations
+        self, agent_folders: AgentFolders, declared: SkillDeclarations
     ) -> list[tuple[Path, frozenset[str]]]:
-        """Each skills folder setup links skills into, with the tools it sets up that read it,
+        """Each skills folder setup links skills into, with the agents it sets up that read it,
         each by its name in a skill's supportedOn: each Claude Code folder's skills/, and for Codex,
-        ~/.agents/skills. Adding an AI agent tool: see AGENTS_SKILLS, which other tools read too,
-        so its set of tools would grow.
+        ~/.agents/skills. Adding an agent: see AGENTS_SKILLS, which other agents read too,
+        so its set of agents would grow.
 
         A folder that is really another one, through a junction, such as ~/.claude/skills made a
-        junction to ~/.agents/skills to share skills, is one folder that both tools read, under
+        junction to ~/.agents/skills to share skills, is one folder that both agents read, under
         the first name it has here. Only a skill supported on one agent tells them apart, so only
         then does setup follow the links, which takes a little time."""
         claude_code = frozenset({REQUIRES_NAMES[CLAUDE_CODE.name]})
-        folders = [(Path(d) / "skills", claude_code) for d in tools.claude_dirs]
-        if tools.codex_homes:
+        folders = [(Path(d) / "skills", claude_code) for d in agent_folders.claude_dirs]
+        if agent_folders.codex_homes:
             folders.append((self.home / AGENTS_SKILLS, frozenset({REQUIRES_NAMES[CODEX.name]})))
         if not any(r.kind == "agent" for s in declared.skills.values() for r in s.requires):
             return folders
@@ -1960,11 +1960,11 @@ class Setup:
         self,
         settings: LocalSettings,
         content_root: Path,
-        tools: ToolFolders,
+        agent_folders: AgentFolders,
         folders: Sequence[tuple[Path, frozenset[str]]],
         plans: dict[str, SkillPlan],
     ) -> None:
-        """Everything setup sets up besides this PC's settings and the tools' settings files, in
+        """Everything setup sets up besides this PC's settings and the agents' settings files, in
         order: dev-home's git config and its dev-home.json, Python for the skills' scripts, the
         generated files and each skill's state, the skills' links in each skills folder in
         folders, as plans says, and the always-on rules."""
@@ -2000,7 +2000,7 @@ class Setup:
 
         # 3. Generated files: the skills, the scripts they share, and the operating rules, with
         # this PC's paths filled in, at the same paths they have under templates/. The file each
-        # tool loads, a skill's SKILL.md or the operating rules, gets a note naming its
+        # agent loads, a skill's SKILL.md or the operating rules, gets a note naming its
         # template, because an agent in another project only ever sees this copy, and an edit
         # here is lost at the next setup run. No other file gets one: the handoff template, for
         # one, is copied into every new handoff.
@@ -2080,7 +2080,7 @@ class Setup:
         else:
             self.status("OK", label)
 
-        # 4. Skills, linked into each tool's personal skills folder: the dev-home-toolkit skills,
+        # 4. Skills, linked into each agent's personal skills folder: the dev-home-toolkit skills,
         # then the personal skills in dev-home, each where its plan adds it. Every Codex home
         # reads ~/.agents/skills.
         tool_skill_folders = [folder for folder, _ in folders]
@@ -2133,7 +2133,7 @@ class Setup:
         # two joined there.
         operating_rules = GENERATED_ROOT / "operating-rules"
         global_rules = global_rules_file.parent
-        for claude_dir in tools.claude_dirs:
+        for claude_dir in agent_folders.claude_dirs:
             claude_name = Path(claude_dir).name
             rules = Path(claude_dir) / "rules"
             self.sync_link(
@@ -2152,7 +2152,7 @@ class Setup:
             "Put rules of your own in the second file; changing the first changes "
             "dev-home-toolkit itself.",
         )
-        for home in tools.codex_homes:
+        for home in agent_folders.codex_homes:
             self.sync_codex_rules(
                 Path(home), operating_template, global_rules_file, values, codex_note
             )
@@ -2163,14 +2163,14 @@ class Setup:
         # where setup's links point, so one of the person's own stays, as does anything that
         # isn't a link. A folder that is really one setup sets up, through a junction, such as
         # ~/.claude/skills made a junction to ~/.agents/skills to share skills, keeps its links.
-        # What a yes added to the tools' settings files is taken out last, with the other settings
+        # What a yes added to the agents' settings files is taken out last, with the other settings
         # changes (see settings_checks).
         set_up: set[str] = set()
-        if tools.declined_claude_dirs or tools.declined_codex_homes:
+        if agent_folders.declined_claude_dirs or agent_folders.declined_codex_homes:
             set_up = {real_path(folder) for folder in tool_skill_folders}
-            set_up |= {real_path(Path(d) / "rules") for d in tools.claude_dirs}
+            set_up |= {real_path(Path(d) / "rules") for d in agent_folders.claude_dirs}
         rules_targets = (operating_rules, global_rules)
-        for claude_dir in tools.declined_claude_dirs:
+        for claude_dir in agent_folders.declined_claude_dirs:
             for subfolder, targets in (("skills", skill_targets), ("rules", rules_targets)):
                 self.remove_links_in(
                     Path(claude_dir) / subfolder,
@@ -2179,11 +2179,11 @@ class Setup:
                     "Remove a link in a folder you said no to",
                     "Link in a folder you said no to",
                 )
-        for home in tools.declined_codex_homes:
+        for home in agent_folders.declined_codex_homes:
             self.remove_codex_rules(Path(home))
-        # Adding an AI agent tool: see AGENTS_SKILLS. Only Codex reads that folder today, of the
-        # tools setup sets up, so a no to Codex is enough to remove the links there.
-        if tools.declined_codex_homes:
+        # Adding an agent: see AGENTS_SKILLS. Only Codex reads that folder today, of the
+        # agents setup sets up, so a no to Codex is enough to remove the links there.
+        if agent_folders.declined_codex_homes:
             self.remove_links_in(
                 self.home / AGENTS_SKILLS,
                 skill_targets,
@@ -2244,34 +2244,36 @@ class Setup:
         except OSError as error:
             self.status("PROBLEM", f"Could not remove {path}. {error}")
 
-    def settings_checks(self, content_root: Path, tools: ToolFolders) -> list[SettingsCheck]:
-        """What each tool's settings file needs, planned from the file as it is now: each Claude
+    def settings_checks(
+        self, content_root: Path, agent_folders: AgentFolders
+    ) -> list[SettingsCheck]:
+        """What each agent's settings file needs, planned from the file as it is now: each Claude
         Code folder's and each Codex home's set up, and what a yes added taken back out of each one
         answered no, which that no approves as the yes approved adding it."""
         wanted_dirs = [comparable(content_root), comparable(TOOLKIT_ROOT)]
         checks: list[SettingsCheck] = [
             self.check_claude_settings(Path(claude_dir), wanted_dirs)
-            for claude_dir in tools.claude_dirs
+            for claude_dir in agent_folders.claude_dirs
         ]
         checks += [
             self.check_codex_config(Path(home), comparable(content_root))
-            for home in tools.codex_homes
+            for home in agent_folders.codex_homes
         ]
         # A file that is really one a folder set up uses, through a link, keeps what that folder
         # needs.
         set_up = (
-            {real_path(Path(d) / "settings.json") for d in tools.claude_dirs}
-            if tools.declined_claude_dirs
+            {real_path(Path(d) / "settings.json") for d in agent_folders.claude_dirs}
+            if agent_folders.declined_claude_dirs
             else set()
         )
         removals: list[SettingsCheck | None] = [
             self.claude_changes_to_remove(Path(claude_dir), wanted_dirs)
-            for claude_dir in tools.declined_claude_dirs
+            for claude_dir in agent_folders.declined_claude_dirs
             if real_path(Path(claude_dir) / "settings.json") not in set_up
         ]
         removals += [
             self.codex_access_to_remove(Path(home), comparable(content_root))
-            for home in tools.declined_codex_homes
+            for home in agent_folders.declined_codex_homes
         ]
         checks += [removal for removal in removals if removal is not None]
         return checks
@@ -2519,33 +2521,33 @@ def home_claude_excludes(home: Path) -> list[str]:
     return [f"**/{name}/.claude/CLAUDE.md", f"**/{name}/.claude/rules/**"]
 
 
-def folder_question(tool: Tool, folder: Path) -> str:
-    return f"Set up {tool.name} in {folder}?"
+def folder_question(agent: Agent, folder: Path) -> str:
+    return f"Set up {agent.name} in {folder}?"
 
 
-def yes_does(tool: Tool, *, several: bool, guarded: bool = False) -> str:
-    """What a yes to setting up a tool's folders does, and a no, said before the question: the
+def yes_does(agent: Agent, *, several: bool, guarded: bool = False) -> str:
+    """What a yes to setting up an agent's folders does, and a no, said before the question: the
     change setup also makes in each folder's settings file, which the yes approves (see
     repair_setting), and its removal, which the no approves, included. guarded says some of the
     folders get home_claude_excludes, and why."""
     yes, no = console.key("yes"), console.key("no")
-    # Adding an AI agent tool: see AGENTS_SKILLS. A tool that reads ~/.agents/skills, as Codex
+    # Adding an agent: see AGENTS_SKILLS. An agent that reads ~/.agents/skills, as Codex
     # does, shares that folder's links with Codex, and its question says so.
-    if tool.shared:
+    if agent.shared:
         return (
-            f"Every {tool.name} {tool.folder} reads the same skills, so they share one answer. A "
-            f"{yes} sets up dev-home's skills and rules in each {tool.folder}. In each "
-            f"{tool.folder}'s config.toml, it also adds your dev-home folder to writable_roots, "
-            f"so {tool.name} can write there from any project, and sets project_doc_max_bytes to "
-            f"{CODEX_DOC_BYTES}, so {tool.name} reads all of your rules. A {no} removes all of "
+            f"Every {agent.name} {agent.folder} reads the same skills, so they share one answer. A "
+            f"{yes} sets up dev-home's skills and rules in each {agent.folder}. In each "
+            f"{agent.folder}'s config.toml, it also adds your dev-home folder to writable_roots, "
+            f"so {agent.name} can write there from any project, and sets project_doc_max_bytes to "
+            f"{CODEX_DOC_BYTES}, so {agent.name} reads all of your rules. A {no} removes all of "
             "that but project_doc_max_bytes, if it's there. Setup backs up each file first."
         )
     where, settings_file, backup, adds, whose = (
         (
             "in each",
-            f"each {tool.folder}'s settings.json",
+            f"each {agent.folder}'s settings.json",
             "each file",
-            f"In each {tool.folder} other than .claude, it also adds two patterns to "
+            f"In each {agent.folder} other than .claude, it also adds two patterns to "
             "claudeMdExcludes.",
             "that",
         )
@@ -2559,9 +2561,9 @@ def yes_does(tool: Tool, *, several: bool, guarded: bool = False) -> str:
         )
     )
     guard = (
-        f" {adds} {tool.name} loads the CLAUDE.md and rules in .claude, the default account's "
+        f" {adds} {agent.name} loads the CLAUDE.md and rules in .claude, the default account's "
         "folder, into a session started anywhere under your user folder, as if they were the "
-        f"project's own instructions, and the patterns keep them out of {whose} {tool.folder}'s "
+        f"project's own instructions, and the patterns keep them out of {whose} {agent.folder}'s "
         "sessions."
         if guarded
         else ""
@@ -2569,7 +2571,7 @@ def yes_does(tool: Tool, *, several: bool, guarded: bool = False) -> str:
     return (
         f"A {yes} sets up dev-home's skills and rules {where}. It also adds your dev-home and "
         f"dev-home-toolkit folders to permissions.additionalDirectories in {settings_file}, so "
-        f"{tool.name} can use them from any project.{guard} A {no} removes all of that, if it's "
+        f"{agent.name} can use them from any project.{guard} A {no} removes all of that, if it's "
         f"there. Setup backs up {backup} first."
     )
 
@@ -2588,21 +2590,21 @@ def and_list(items: Sequence[str]) -> str:
     return ", ".join(items[:-1]) + ", and " + items[-1]
 
 
-def unasked_text(tool: Tool, folders: Sequence[Path], *, session: bool = False) -> str:
-    """What setup hasn't asked about a tool's folders, and that it leaves them as they are, as
+def unasked_text(agent: Agent, folders: Sequence[Path], *, session: bool = False) -> str:
+    """What setup hasn't asked about an agent's folders, and that it leaves them as they are, as
     in "Setup hasn't asked yet <this>". session marks the one folder as the session's own."""
-    if tool.shared:
-        own = f", the session's own, in {tool.variable}," if session else ""
+    if agent.shared:
+        own = f", the session's own, in {agent.variable}," if session else ""
         which = (
-            f"the {tool.name} {tool.folder} {folders[0]}{own} as it is"
+            f"the {agent.name} {agent.folder} {folders[0]}{own} as it is"
             if len(folders) == 1
-            else f"the {tool.name} {tool.folder}s {folder_list(folders)} as they are"
+            else f"the {agent.name} {agent.folder}s {folder_list(folders)} as they are"
         )
-        return f"whether to set up {tool.name}, so it leaves {which}"
-    kind = f"{tool.name} {tool.folder}"
+        return f"whether to set up {agent.name}, so it leaves {which}"
+    kind = f"{agent.name} {agent.folder}"
     if session:
         return (
-            f"whether to set up the {kind} {folders[0]}, the session's own, in {tool.variable}, "
+            f"whether to set up the {kind} {folders[0]}, the session's own, in {agent.variable}, "
             "so it leaves it as it is"
         )
     if len(folders) == 1:
@@ -2640,7 +2642,7 @@ def skill_templates() -> list[Path]:
 def skill_links(
     content_root: Path, skill_sources: Sequence[Path]
 ) -> tuple[list[tuple[str, Path]], list[str]]:
-    """Each skill setup links into the tools, by its name and the folder its link points to:
+    """Each skill setup links into the agents, by its name and the folder its link points to:
     dev-home-toolkit's skills, generated with this PC's paths from skill_sources, the same list the
     generated files come from, then the person's own in dev-home. Also the name of each of the
     person's own that has the same name as one of dev-home-toolkit's, which isn't linked."""
@@ -2714,7 +2716,7 @@ def plan_skill(
     for folder, agents in folders:
         unmet = keeping_off(agents)
         names = agents_left if unmet else agents_added
-        for name in (requirements.AGENTS[agent] for agent in sorted(agents)):
+        for name in (requirements.AGENT_NAMES[agent] for agent in sorted(agents)):
             if name not in names:
                 names.append(name)
         if not unmet:

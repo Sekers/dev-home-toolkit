@@ -381,7 +381,8 @@ def test_the_handoff_skill_checks_issue_links_with_its_script_alone() -> None:
 
 @pytest.mark.parametrize("script", python_files(), ids=repo_path)
 def test_each_script_uses_only_the_standard_library(script: Path) -> None:
-    # People install only Python, and the test tools are importable when the tests run them.
+    # People install only Python, and the development tools are importable when the tests run
+    # them.
     assert non_standard_imports(parse(script)) == []
 
 

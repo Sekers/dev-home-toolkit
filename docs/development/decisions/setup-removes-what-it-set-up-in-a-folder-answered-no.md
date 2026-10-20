@@ -74,29 +74,29 @@ SET       Codex config in .codex: removed dev-home from writable_roots in C:\Use
   checking on every sync also catches anything setup removed that comes back (accepted by the
   developer, 2026-10-16).
 
-**Other tools read the same folders,** checked in each tool's docs on 2026-10-16:
+**Other agents read the same folders,** checked in each agent's docs on 2026-10-16:
 
 - `~/.agents/skills`: Codex; GitHub Copilot, beside `~/.copilot/skills`; Gemini CLI, beside
   `~/.gemini/skills`, where the copy in `~/.agents/skills` wins for a name in both; and Cursor,
   beside `~/.cursor/skills`. Claude Code doesn't read it.
 - Cursor also reads `~/.claude/skills` and `~/.codex/skills`, for compatibility.
 
-So on a PC with those tools, a no to Codex takes dev-home's skills from Copilot, Gemini CLI, and
-Cursor too, and a no to `~/.claude` takes them from Cursor. dev-home-toolkit doesn't set those tools
-up, so they had the skills only because those folders were set up for Claude Code or Codex.
+So on a PC with those agents, a no to Codex takes dev-home's skills from Copilot, Gemini CLI, and
+Cursor too, and a no to `~/.claude` takes them from Cursor. dev-home-toolkit doesn't set those
+agents up, so they had the skills only because those folders were set up for Claude Code or Codex.
 
-**Adding an AI agent tool:** a folder that several tools read can't hold a different answer for
-each. If setup ever sets up another tool that reads `~/.agents/skills`:
+**Adding an agent:** a folder that several agents read can't hold a different answer for each. If
+setup ever sets up another agent that reads `~/.agents/skills`:
 
-- Setup links the skills there while any tool that reads it is answered yes, and removes its links
-  only once every one of them is answered no.
+- Setup links the skills there while any agent that reads it is answered yes, and removes its
+  links only once every one of them is answered no.
 - A no to one of them can't hide the skills from it while another is answered yes. Only that
-  tool's own switch for skills could, if it has one: a decision to make then.
+  agent's own switch for skills could, if it has one: a decision to make then.
 - Its question says that it shares the folder, as Codex's says that every Codex home shares one
   answer.
 
-The code that has to change then carries a comment starting "Adding an AI agent tool": search for
-it, starting at `TOOLS` in `internal/shared/settings.py`.
+The code that has to change then carries a comment starting "Adding an agent": search for it,
+starting at `AGENTS` in `internal/shared/settings.py`.
 
 **Options set aside:**
 
@@ -113,7 +113,7 @@ it, starting at `TOOLS` in `internal/shared/settings.py`.
   a no given in chat would leave the access until the next run by hand, a no to the removal would
   be asked again on every run unless it was saved, and it would bring back the prompt that
   decision took away for these same entries.
-- Code for several tools sharing a folder, written now: of the tools setup sets up, only Codex
+- Code for several agents sharing a folder, written now: of the agents setup sets up, only Codex
   reads `~/.agents/skills`, so the rule is the same today, and the comments mark where it changes.
 
 This changes [Codex is set up in every Codex home, or in none](codex-is-set-up-in-every-codex-home-or-in-none.md),
@@ -129,7 +129,7 @@ setup's rules file in each agent's folder replaces the links in `rules\`, and se
 `AGENTS.md` in a Codex home by its last-written copy, not by a note. A no first saves any lines
 added to that file, as every run does, then removes the file and setup's copy of it, and says so
 in one line, noting that the end user's rules are still in dev-home. Nothing in dev-home changes,
-and setup stops creating `my-rules.md` for that agent on that PC. How another tool is added is in
+and setup stops creating `my-rules.md` for that agent on that PC. How another agent is added is in
 [Agents added later work like Claude Code and Codex](agents-added-later-work-like-claude-code-and-codex.md).
 
 **Changed on 2026-10-19,** with the reasons in
@@ -138,5 +138,5 @@ in a Claude Code folder other than `~/.claude`, a no also takes setup's two patt
 `claudeMdExcludes`, and the list once it's empty. Every other pattern stays, though one written
 exactly like setup's goes too.
 
-**Look again if:** setup sets up another tool that reads `~/.agents/skills`, Claude Code starts
+**Look again if:** setup sets up another agent that reads `~/.agents/skills`, Claude Code starts
 reading it, or Codex gets a skills folder for each home that isn't deprecated.

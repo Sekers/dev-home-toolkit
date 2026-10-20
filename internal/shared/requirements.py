@@ -26,8 +26,8 @@ if sys.platform == "win32":
 
 # The operating systems and agents a requirement can name, each by the name a skill's file uses,
 # with the name people know it by.
-OPERATING_SYSTEMS = {"windows": "Windows", "macos": "macOS", "linux": "Linux"}
-AGENTS = {"claude-code": "Claude Code", "codex": "Codex"}
+OS_NAMES = {"windows": "Windows", "macos": "macOS", "linux": "Linux"}
+AGENT_NAMES = {"claude-code": "Claude Code", "codex": "Codex"}
 # The lists a dev-home-skill.json declares requirements in, each with the types it takes. A type
 # under the other list is one that list doesn't know.
 SUPPORTED_ON = "supportedOn"
@@ -138,9 +138,7 @@ RULES: dict[str, Rule] = {
         can_act=False,
         per_folder=False,
         met=lambda requirement, pc, _agents: pc.os in requirement.names,
-        reason=lambda requirement, _pc: (
-            f"works only on {either(requirement.names, OPERATING_SYSTEMS)}"
-        ),
+        reason=lambda requirement, _pc: f"works only on {either(requirement.names, OS_NAMES)}",
     ),
     # Every agent setup sets up that reads the folder has to be one the skill works in.
     "agent": Rule(
@@ -148,7 +146,7 @@ RULES: dict[str, Rule] = {
         can_act=True,
         per_folder=True,
         met=lambda requirement, _pc, agents: agents <= set(requirement.names),
-        reason=lambda requirement, _pc: f"works only in {either(requirement.names, AGENTS)}",
+        reason=lambda requirement, _pc: f"works only in {either(requirement.names, AGENT_NAMES)}",
     ),
     "program": Rule(
         keeps_off=False,
@@ -269,7 +267,7 @@ def parse_entry(entry: object, number: int, listed: str) -> tuple[Requirement | 
         return unusable(kind, [*mistakes, f"{where} needs {needs}, so {outcome(listed)}."])
 
     if kind in ("os", "agent"):
-        known = OPERATING_SYSTEMS if kind == "os" else AGENTS
+        known = OS_NAMES if kind == "os" else AGENT_NAMES
         needs = f"anyOf: a list of one or more of {quoted(known)}"
         names = entry.get("anyOf")
         if (

@@ -16,9 +16,9 @@ with it:
 
 The sync's lines come first, then the RELOAD line or the facts. It always exits 0. Everything it
 has to say is in its lines: the sync's status lines, RELOAD, the facts, and a PROBLEM line when
-the sync, facts.py, or this script stops. A failing exit code would make a tool report the whole
-call as failed, and an agent could stop or retry instead of doing what the skill says about each
-line.
+the sync, facts.py, or this script stops. A failing exit code would make the agent product report
+the whole call as failed, and the agent could stop or retry instead of doing what the skill says
+about each line.
 
 The sync runs inside this process: it's the code of sync.py in dev-home-toolkit's root, which this
 script loads from internal/shared/ there, as sync.py does, and the sync runs update's and

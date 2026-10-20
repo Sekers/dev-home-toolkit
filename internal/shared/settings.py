@@ -6,7 +6,7 @@ beside this file, declares the ones with a single value, as SETTINGS, and each s
 preferences in its dev-home-skill.json, which skill_declarations reads whole, with what the skill
 needs to run (see requirements.py). A saved value is missing, a state such as
 {"$state": "default"}, or a plain value, the person's own answer; read_value says what each counts
-as. check_settings checks every value against the declarations and the folders each tool sets up.
+as. check_settings checks every value against the declarations and each agent's folders.
 docs/development/settings.md has the rules."""
 
 import copy
@@ -117,23 +117,23 @@ BY_PATH = {setting.path: setting for setting in SETTINGS}
 # say: for dev-home itself, and for dev-home-toolkit's updates.
 DEFAULT_HOURS = {s.path: s.default for s in SETTINGS if s.type == "hours" and s.has_default}
 AUTO_UPDATE = "updates.installAutomatically"
-# Each tool's folders setup knows of, an entry for each with its answer, setUp, in the same shape
-# for both tools, such as {"~/.claude": {"setUp": true}}.
+# Each agent's folders setup knows of, an entry for each with its answer, setUp, in the same shape
+# for both agents, such as {"~/.claude": {"setUp": true}}.
 CLAUDE_FOLDERS = "claudeCode.folders"
 CODEX_HOMES = "codex.homes"
 
 
 @dataclass(frozen=True)
-class Tool:
-    """A tool setup sets up in each of its folders, as each tool's docs call one, answered yes in
-    its entry at setting. default is the folder in the profile that the tool makes when it first
+class Agent:
+    """An agent setup sets up in each of its folders, as each agent's docs call one, answered yes in
+    its entry at setting. default is the folder in the profile that the agent makes when it first
     runs; an extra one is named after it, such as ~/.claude-second, one for each account, and
-    counts only when it holds one of marks, if the tool has any. variable names the folder a
-    session of the tool uses.
+    counts only when it holds one of marks, if the agent has any. variable names the folder a
+    session of the agent uses.
 
     shared says every folder reads the same skills, as every Codex home reads ~/.agents/skills,
     so every folder's entry holds the same answer: the main folder's (see folder_rank). Only
-    setup's code knows this, so once a tool reads skills per folder, nothing saved changes."""
+    setup's code knows this, so once an agent reads skills per folder, nothing saved changes."""
 
     name: str
     folder: str
@@ -145,11 +145,11 @@ class Tool:
     shared: bool = False
 
 
-CLAUDE_CODE = Tool(
+CLAUDE_CODE = Agent(
     "Claude Code", "folder", "Claude", CLAUDE_FOLDERS, ".claude", "CLAUDE_CONFIG_DIR"
 )
 # A ~/.codex-* folder Codex has used holds its settings or its sign-in.
-CODEX = Tool(
+CODEX = Agent(
     "Codex",
     "home",
     "Codex",
@@ -159,40 +159,40 @@ CODEX = Tool(
     ("config.toml", "auth.json"),
     shared=True,
 )
-# Adding an AI agent tool: if it reads a skills folder another tool here reads too, such as
+# Adding an agent: if it reads a skills folder another agent here reads too, such as
 # ~/.agents/skills, see AGENTS_SKILLS in setup.py first.
-TOOLS = (CLAUDE_CODE, CODEX)
-# Each tool's folders, which setting-definitions.json can't declare, since a folder's name can hold
+AGENTS = (CLAUDE_CODE, CODEX)
+# Each agent's folders, which setting-definitions.json can't declare, since a folder's name can hold
 # a dot.
-FOLDER_SETTINGS = tuple(tool.setting for tool in TOOLS)
-FOLDERS_FOR = {tool.setting: tool for tool in TOOLS}
+FOLDER_SETTINGS = tuple(agent.setting for agent in AGENTS)
+FOLDERS_FOR = {agent.setting: agent for agent in AGENTS}
 
 
-def folder_rank(tool: Tool, folder: str | Path, home: Path) -> tuple[int, str]:
-    """Where a folder of a shared tool comes, in its entries and in choosing the main one: the
+def folder_rank(agent: Agent, folder: str | Path, home: Path) -> tuple[int, str]:
+    """Where a folder of a shared agent comes, in its entries and in choosing the main one: the
     default one, such as ~/.codex, first, then each other one in the profile named after it, by
     name, then every other folder, by its full path. folder may start with ~."""
     full = comparable(resolve_home(str(folder), home))
     name = Path(full).name.lower()
     if same_path(Path(full).parent, home):
-        if name == tool.default:
+        if name == agent.default:
             return 0, ""
-        if name.startswith(tool.default + "-"):
+        if name.startswith(agent.default + "-"):
             return 1, name
     return 2, os.path.normcase(full)
 
 
 def order_folders(data: dict[str, Any], home: Path) -> bool:
-    """Puts each shared tool's entries in data in order (see folder_rank), and returns whether
+    """Puts each shared agent's entries in data in order (see folder_rank), and returns whether
     their order changed."""
     moved = False
-    for tool in TOOLS:
-        entries = get(data, tool.setting)
-        if not tool.shared or not isinstance(entries, dict):
+    for agent in AGENTS:
+        entries = get(data, agent.setting)
+        if not agent.shared or not isinstance(entries, dict):
             continue
-        ordered = sorted(entries, key=lambda entry: folder_rank(tool, entry, home))
+        ordered = sorted(entries, key=lambda entry: folder_rank(agent, entry, home))
         if ordered != list(entries):
-            put(data, tool.setting, {entry: entries[entry] for entry in ordered})
+            put(data, agent.setting, {entry: entries[entry] for entry in ordered})
             moved = True
     return moved
 
@@ -312,7 +312,7 @@ def hours_setting(data: dict[str, Any], path: str) -> tuple[int, bool]:
 
 
 def folder_answers(value: object) -> dict[str, bool]:
-    """Each folder in a tool's folders that has an answer, as written, with that answer."""
+    """Each folder in an agent's folders that has an answer, as written, with that answer."""
     if not isinstance(value, dict):
         return {}
     return {
@@ -323,7 +323,7 @@ def folder_answers(value: object) -> dict[str, bool]:
 
 
 def listed_entries(value: object) -> list[str]:
-    """Each folder with an entry in a tool's folders, as written, with an answer or not."""
+    """Each folder with an entry in an agent's folders, as written, with an answer or not."""
     if not isinstance(value, dict):
         return []
     return [folder for folder, entry in value.items() if folder.strip() and isinstance(entry, dict)]
@@ -504,7 +504,7 @@ def read_skill_file(folder: Path, *, own: bool) -> tuple[Skill | None, list[str]
 
 def skill_declarations(content_dir: str) -> SkillDeclarations:
     """Every skill and what it declares: dev-home-toolkit's skills, then the person's own in
-    dev-home, where one with the same name as a dev-home-toolkit skill isn't set up, so its file is
+    dev-home, where one with the same name as a dev-home-toolkit skill isn't added, so its file is
     skipped (see SkillDeclarations). The list is complete only when dev-home's folder is a git
     repo, so a PC whose dev-home isn't cloned yet, even into a folder already made for it, or is
     on a drive that's unplugged, loses no answers."""
@@ -641,19 +641,19 @@ def check_settings(
         for name, inner in list(value.items()):
             path = f"{key}.{name}"
             setting = BY_PATH.get(path)
-            tool = FOLDERS_FOR.get(path)
+            agent = FOLDERS_FOR.get(path)
             if setting is not None:
                 check_value(path, inner, setting)
-            elif tool is not None:
-                check_folders(path, inner, tool)
+            elif agent is not None:
+                check_folders(path, inner, agent)
             else:
                 remove(value, name, path, (key, name))
 
-    def check_folders(path: str, value: object, tool: Tool) -> None:
-        """A tool's folders, each with an entry, which holds its answer, setUp."""
+    def check_folders(path: str, value: object, agent: Agent) -> None:
+        """An agent's folders, each with an entry, which holds its answer, setUp."""
         unset = "not answered yet"
         if not isinstance(value, dict):
-            wrong(path, value, f"a JSON object of {tool.folder}s", "none")
+            wrong(path, value, f"a JSON object of {agent.folder}s", "none")
             return
         for folder, entry in value.items():
             where = f"{path} {folder}"
@@ -760,7 +760,7 @@ def check_settings(
 @dataclass
 class LocalSettings:
     """The settings setup asks for, with defaults for anything missing. folders holds, for each
-    tool, each folder with an answer, as written, so setup asks about it only once. data holds
+    agent, each folder with an answer, as written, so setup asks about it only once. data holds
     everything the file had, so a save keeps the keys setup doesn't know, and each setting in the
     form it was saved in: setting_value reads one, such as whether automatic updates are answered
     yet. found says the file had settings in it. test_home_dir is only ever in a test sandbox's
@@ -816,7 +816,7 @@ def settings_in(data: dict[str, Any]) -> LocalSettings:
 
 
 def merge_answers(data: dict[str, Any], path: str, answers: dict[str, bool]) -> None:
-    """Writes a tool's folder answers into data, keeping each entry's other keys. A folder whose
+    """Writes an agent's folder answers into data, keeping each entry's other keys. A folder whose
     answer was taken back loses its setUp, and goes once nothing is left in its entry. A setUp
     that isn't true or false was never an answer, so it's kept as it is."""
     current = get(data, path)
@@ -847,7 +847,7 @@ def merge_answers(data: dict[str, Any], path: str, answers: dict[str, bool]) -> 
 
 def local_settings_data(settings: LocalSettings) -> dict[str, Any]:
     """What the file holds for the settings, with schemaVersion first, keeping every other key the
-    file had where it was, apart from a shared tool's folders, which go in order (see
+    file had where it was, apart from a shared agent's folders, which go in order (see
     order_folders). testHomeDir is kept when the file has it, and never added."""
     data = copy.deepcopy(settings.data)
     data.pop("schemaVersion", None)
