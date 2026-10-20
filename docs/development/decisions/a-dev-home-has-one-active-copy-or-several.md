@@ -17,6 +17,10 @@ root, says which, as `{ "multiMachine": false }` or `true`, and the commands act
 | `/knowledge add` | Add, commit, push | Fetch first, add, commit, push |
 | `/dev-home sync` | Fetch, merge, push | The same |
 
+(Later changed by
+[A dev-home skill syncs and configures](a-dev-home-skill-syncs-and-configures.md): plain
+`/knowledge` fetches first with several copies, as `/handoff` does.)
+
 - A new dev-home starts with `multiMachine: false`. When setup clones one set to false, it asks
   whether another copy will stay in use, with no default: the person types y or n, and Enter
   asks again. One set to true stays true, without a question. An older dev-home with no

@@ -65,38 +65,38 @@ def test_syncs_first_then_prints_the_facts_in_order_and_exits_0(
 
 
 def test_passes_fetch_to_the_sync_and_the_rest_to_facts(box: Sandbox, project: Path) -> None:
-    # The handoff skill's --fetch auto fetches every time here, since the sandbox's dev-home is
-    # set to several copies.
+    # With dev-home set to one copy, the handoff skill's --fetch auto skips the fetch right after
+    # another one.
     command = skill_command(box, "handoff", "prepare.py")
     assert " --fetch auto " in command, command
-    run_command(box, command, cwd=project)
-    when_due = command.replace(" --fetch auto ", " --fetch when-due ")
-    result = run_command(box, when_due, cwd=project)
+    settings = box.content / "dev-home.json"
+    before = settings.read_bytes()
+    write_text(settings, '{\n  "schemaVersion": 1,\n  "multiMachine": false\n}\n')
+    try:
+        run_command(box, command, cwd=project)
+        result = run_command(box, command, cwd=project)
+    finally:
+        settings.write_bytes(before)
     assert result.code == 0, str(result)
-    assert result.has_line(r"^OK\s+dev-home wasn't checked with GitHub this time"), str(result)
+    pattern = r"^OK\s+dev-home is up to date: it's the only active copy"
+    assert result.has_line(pattern), str(result)
     assert result.keys == FACT_KEYS, str(result)
     result = run_command(box, command.replace(" --fetch auto ", " --fetch sometimes "), cwd=project)
     assert result.has_line(r"^PROBLEM\s+--fetch needs one of these after it"), str(result)
     assert result.keys == FACT_KEYS, str(result)
 
 
-@pytest.mark.parametrize(
-    ("fetch", "said"),
-    [
-        # Plain /knowledge, right after another sync's fetch.
-        ("--fetch when-due", r"^OK\s+dev-home wasn't checked with GitHub this time"),
-        # Before adding a note, with several copies.
-        ("--fetch auto", r"^OK\s+dev-home is up to date with GitHub\."),
-    ],
-)
-def test_the_knowledge_skills_two_commands_only_sync(
-    box: Sandbox, project: Path, fetch: str, said: str
+def test_the_knowledge_skills_command_only_syncs_and_fetches_with_several_copies(
+    box: Sandbox, project: Path
 ) -> None:
+    # Plain /knowledge and adding a note share one command. The sandbox's dev-home is set to
+    # several copies, so it fetches even right after another sync's fetch.
     run_command(box, skill_command(box, "handoff", "prepare.py"), cwd=project)
-    command = skill_command(box, "knowledge", "prepare.py", containing=fetch)
+    command = skill_command(box, "knowledge", "prepare.py")
+    assert command.endswith(" --fetch auto"), command
     result = run_command(box, command, cwd=project)
     assert result.code == 0, str(result)
-    assert result.has_line(said), str(result)
+    assert result.has_line(r"^OK\s+dev-home is up to date with GitHub\."), str(result)
     assert result.keys == [], str(result)
 
 

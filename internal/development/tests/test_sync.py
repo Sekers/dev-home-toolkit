@@ -591,7 +591,7 @@ def test_a_tooling_clone_with_no_upstream_is_skipped_quietly(box: Sandbox) -> No
         ([DEMO], r'Give a commit message with --message "<area>: <what>"'),
         (["--message"], r"--message needs the commit message after it"),
         (["--mess", "handoff: demo", DEMO], r"No such option: --mess"),
-        (["--fetch"], r"--fetch needs one of these after it: always, auto, when-due"),
+        (["--fetch"], r"--fetch needs one of these after it: always, auto\."),
         (["--fetch", "sometimes"], r"--fetch needs one of these after it"),
         (["--fetch", "auto", "--message", "handoff: demo", DEMO], r"--fetch is for a sync"),
     ],
@@ -1080,23 +1080,18 @@ def test_one_copy_in_a_layout_it_cant_use_counts_as_no_answer(
     assert not result.has_line(r"^SETTING\s"), str(result)
 
 
-def test_when_due_waits_for_the_check_even_with_several_copies(
+def test_with_one_copy_and_0_hours_it_fetches_every_time(
     box: Sandbox, copies: Callable[[bool | None], None]
 ) -> None:
-    copies(True)
+    copies(False)
     sync(box)
-    result = sync(box, "--fetch", "when-due")
-    pattern = (
-        r"^OK\s+dev-home wasn't checked with GitHub this time: it last checked under a minute "
-        r"ago, and checks every 12 hours\.$"
-    )
-    assert result.has_line(pattern), str(result)
+    push_from_another_copy(box, "Pushed while this copy checks every time.")
     set_setting(box, "devHome.checkEveryHours", 0)
     try:
-        result = sync(box, "--fetch", "when-due")
+        result = sync(box, "--fetch", "auto")
     finally:
         set_setting(box, "devHome.checkEveryHours", None)
-    assert result.has_line(r"^OK\s+dev-home is up to date with GitHub\.$"), str(result)
+    assert result.has_line(r"^PULLED\s+1 commit from GitHub\."), str(result)
 
 
 def test_a_skipped_fetch_still_merges_what_came_in_and_pushes_what_waits(

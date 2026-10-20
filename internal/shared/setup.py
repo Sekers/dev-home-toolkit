@@ -499,10 +499,12 @@ class Setup:
         """Whether dev-home is in active use anywhere besides this PC. With no answer yet, there's
         no default: both wrong answers cost something."""
         self.line(
-            "dev-home can live on one PC, as a private backup with its history on GitHub, or be "
-            "used from several,"
+            "dev-home can live on one PC (single-PC mode), as a private backup with its history on "
+            "GitHub,"
         )
-        self.line("which then check GitHub before each command.")
+        self.line(
+            "or be used from several (multi-PC mode), which then check GitHub before each command."
+        )
         return self.choose(
             "Is dev-home in active use anywhere besides this PC, such as on another PC or in a "
             "cloud session?",

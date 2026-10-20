@@ -20,7 +20,6 @@ conflicts is undone at once, so nothing is lost either way. --fetch says when to
     auto       As dev-home.json in dev-home says: with several active copies, or no answer,
                every time; with one, only when dev-home's last check of GitHub is
                devHome.checkEveryHours old (local-settings.json; 12 by default).
-    when-due   Only when that check is due, however many copies there are.
 
 A sync that skips the fetch still merges what an earlier fetch brought in, pushes commits waiting
 here, and lists the uncommitted files: it skips only the network call. With one active copy, any
@@ -57,7 +56,7 @@ Exits 0 when done, including when GitHub can't be reached, and 1 when the user n
 
 Options:
 
-    --fetch always|auto|when-due When to fetch, for a sync without --message (see above).
+    --fetch always|auto          When to fetch, for a sync without --message (see above).
     --message "<area>: <what>"   The commit message for the paths.
     <path> ...                   The files to commit, relative to dev-home. Name both paths of a
                                  renamed file.
@@ -68,9 +67,10 @@ Examples, in dev-home-toolkit's folder, with Python 3.12 or later:
 
 Syncs with GitHub, and lists the files left uncommitted.
 
-    py sync.py --fetch when-due
+    py sync.py --fetch auto
 
-The same, but checks GitHub for dev-home's changes only when that check is due.
+The same, but with one active copy, checks GitHub for dev-home's changes only when that check
+is due.
 
     py sync.py --message "handoff: you/tool" "handoffs/github/you/tool/HANDOFF.md"
 
@@ -131,7 +131,7 @@ IN_PROGRESS = {
 # Anything else reported about the commit or the sync means "up to date" isn't printed.
 QUIET_STATES = {"OK", "LEFT", "STALE", "UPDATE"}
 # The values --fetch takes, the first being what a sync does without it.
-FETCH_WHEN = ("always", "auto", "when-due")
+FETCH_WHEN = ("always", "auto")
 # The knowledge base's index in dev-home: a table with one row per note, whose first cell links
 # to the note, relative to the index's folder.
 KNOWLEDGE_INDEX = "knowledge/README.md"
@@ -164,10 +164,6 @@ def one_active_copy(root: Path) -> bool:
     in a layout the code doesn't know, or no answer in it, counts as several, so a sync fetches
     rather than risk being behind."""
     return read_dev_home_settings(root).several is False
-
-
-def hours_text(hours: int) -> str:
-    return "1 hour" if hours == 1 else f"{hours} hours"
 
 
 def format_age(seconds: float) -> str:
@@ -231,7 +227,8 @@ def one_run_at_a_time(git_dir: Path) -> Iterator[bool]:
 
 class Sync:
     """One run, on the dev-home at root. fetch_when is one of FETCH_WHEN, and check_hours is
-    devHome.checkEveryHours, how long dev-home goes without checking GitHub when it can (0: never).
+    devHome.checkEveryHours, how long dev-home goes without checking GitHub with one active copy
+    (0: never).
     Without then, it skips the update check and setup that otherwise follow, for a run setup
     itself starts."""
 
@@ -480,7 +477,7 @@ class Sync:
 
     def fetch_is_due(self, age: float | None) -> bool:
         """Whether a sync without --message fetches, given how long ago the last fetch was."""
-        if self.fetch_when == "always" or (self.fetch_when == "auto" and not self.one_copy):
+        if self.fetch_when == "always" or not self.one_copy:
             return True
         return age is None or self.check_hours == 0 or age >= self.check_hours * 60 * 60
 
@@ -660,17 +657,12 @@ class Sync:
         if not self.reported and not paths:
             if fetch_first or age is None:
                 self.status("OK", "dev-home is up to date with GitHub.")
-            elif self.one_copy:
+            else:
+                # Only a sync with one active copy skips the fetch.
                 self.status(
                     "OK",
                     "dev-home is up to date: it's the only active copy, and it last checked "
                     f"GitHub {format_age(age)}.",
-                )
-            else:
-                self.status(
-                    "OK",
-                    f"dev-home wasn't checked with GitHub this time: it last checked "
-                    f"{format_age(age)}, and checks every {hours_text(self.check_hours)}.",
                 )
         self.step("Listing the uncommitted files", self.write_uncommitted)
         # A sync that commits usually comes right after a plain one, which just checked for

@@ -57,6 +57,14 @@ as "both tools" for Claude Code and Codex.
   _Avoid_: Codex folder.
 - **Skills folder**: a folder an agent loads skills from, such as a Claude Code folder's
   `skills/`, or `~/.agents/skills`, which every Codex home reads.
+- **Single-PC mode** and **multi-PC mode**: dev-home's two modes, which `multiMachine` in
+  `dev-home.json` sets: `false` while dev-home is in active use in one copy, and `true` while it's
+  in several, such as on two PCs, or on a PC and in a cloud session. A **copy** is a clone of
+  dev-home in active use on its own; two sessions sharing one clone are one copy. Name the mode
+  where text gives the setting's value, as setup's menu does, and count copies where text explains
+  what a mode means. With no answer, no mode is chosen, and syncs check GitHub as in multi-PC
+  mode.\
+  _Avoid_: one-copy mode, single-machine mode, multi-machine mode.
 
 ## Rules
 

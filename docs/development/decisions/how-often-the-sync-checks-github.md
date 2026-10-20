@@ -45,4 +45,11 @@ updates right away, ignoring `updates.checkEveryHours`, once per newer version. 
 intervals, a last fetch with no line for the upstream branch, only `not-for-merge` lines, no
 longer counts.
 
+**Changed on 2026-10-20,** with the reasons in
+[A dev-home skill syncs and configures](a-dev-home-skill-syncs-and-configures.md): plain
+`/knowledge` no longer has its own interval, so `devHome.checkEveryHours` applies only with one
+active copy, and `--fetch when-due` is gone. Setup's menu names the two answers single-PC mode
+and multi-PC mode, and in multi-PC mode shows this setting as
+`every time (fixed in multi-PC mode)`.
+
 **Look again if:** git changes what a failed fetch does to `FETCH_HEAD`.

@@ -80,3 +80,4 @@ Research a decision rests on has its own page in `../research/`.
 - [Agents added later work like Claude Code and Codex](agents-added-later-work-like-claude-code-and-codex.md)
 - [Other Claude Code folders skip ~/.claude's instructions](other-claude-code-folders-skip-claudes-instructions.md)
 - [One word for each idea, in a glossary](one-word-for-each-idea-in-a-glossary.md)
+- [A PC catches up at its next sync](a-pc-catches-up-at-its-next-sync.md)

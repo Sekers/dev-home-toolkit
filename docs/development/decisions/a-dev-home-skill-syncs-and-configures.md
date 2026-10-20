@@ -20,4 +20,13 @@ rule, with a check at the interval so its list of subjects is never far behind.
 **Options set aside:** a skill only for syncing; plain `/knowledge` syncing as before (a fetch
 when the person only wanted the list of subjects); and plain `/knowledge` never checking at all.
 
+**Changed on 2026-10-20:** plain `/knowledge` syncs as adding a note does, with `--fetch auto`:
+with several active copies it checks GitHub every time, and with one only once
+`devHome.checkEveryHours` has passed. With several copies, the interval left plain `/knowledge`
+up to 12 hours behind another copy after a switch between PCs, the case several copies exist
+for; and it was the one command the setting covered there, which made the setting hard to
+predict. It costs about 0.8 to 1.3 s more per plain `/knowledge` with several copies, measured on
+two developer PCs. Set aside: keeping the interval and rewording only setup's menu, which leaves
+the stale list.
+
 **Look again if:** the skill gathers commands that don't belong together.

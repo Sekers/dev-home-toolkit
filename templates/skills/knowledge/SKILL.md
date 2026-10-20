@@ -1,7 +1,7 @@
 ---
 name: knowledge
 description: Private general knowledge base for coding and AI work (languages, programs, extensions, libraries, platforms, and AI agents such as Claude Code and Codex), kept in the private dev-home repo. Check it before researching or testing a general question about these, or asking the user to test one, even partway through other work. Also use when the user runs /knowledge, asks to look something up in or add something to the knowledge base, or when a hard-won general finding comes up during work.
-allowed-tools: "Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch when-due) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch when-due) Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch auto) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch auto) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *)"
+allowed-tools: "Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch auto) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch auto) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *)"
 ---
 
 # Knowledge base
@@ -18,20 +18,12 @@ Never stage, commit, stash, or discard a file yourself.
 
 ## Sync with GitHub (plain /knowledge, and before adding)
 
-A lookup reads the local copy and never syncs. Plain /knowledge and adding a note sync first,
-each with its own command:
-
-- Plain /knowledge, with nothing after it, runs
-  `{{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch when-due`.
-  It checks GitHub only when dev-home's last check is a few hours old, so the list of subjects
-  is never far behind.
-- Step 3 of Add or update runs
-  `{{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch auto`.
-  When dev-home is in active use on several copies, such as two PCs, it checks GitHub every
-  time, so the note goes into the latest knowledge base; with one, only every few hours, since
-  nothing else changes it.
-
-Either way:
+A lookup reads the local copy and never syncs. Plain /knowledge, with nothing after it, and
+adding a note (step 3 of Add or update) sync first, with
+`{{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch auto`.
+When dev-home is in active use on several copies, such as two PCs, it checks GitHub every time,
+so the list of subjects and the note you add are up to date; with one, only every few hours,
+since nothing else changes it.
 
 1. Run the command. It syncs dev-home and runs setup, then checks that this skill hasn't changed
    since you loaded it. If it can't start because `{{PYTHON}}` doesn't exist, tell the user that
@@ -56,8 +48,7 @@ Either way:
 
 ## With no request
 
-Sync with plain /knowledge's command (see above), then list the subjects in the index and ask
-what to look up or add.
+Sync (see above), then list the subjects in the index and ask what to look up or add.
 
 ## Look something up
 
@@ -148,7 +139,7 @@ commit, and push" says, or after a yes to a candidate you offered.
    way, fails: it goes where that project's AGENTS.md says research goes. If it fails, it doesn't
    belong in the knowledge base: tell the user why, and add nothing.
 2. Read `{{SKILL_DIR}}/filing-rules.md`, unless you already did this session.
-3. Sync with GitHub, with the `--fetch auto` command above, unless that already ran this turn.
+3. Sync (see above), unless that already ran this turn.
 4. Add the finding to the matching topic file, or create one by the rules. Label its evidence
    and date it, with versions. Keep it short, because every line costs tokens each time the file
    is read, and prefer adding to an existing file over creating one. When changing an existing

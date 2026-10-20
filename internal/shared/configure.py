@@ -117,8 +117,9 @@ def usage() -> str:
         ("skills.<skill>.preferences.<name>=true|false", "A preference a skill declares."),
         (
             "multiMachine=true|false",
-            "Whether dev-home is in active use anywhere besides this PC. Every copy shares it, so "
-            "setup commits and pushes the change.",
+            "Whether dev-home is in active use anywhere besides this PC: true for multi-PC mode, "
+            "false for single-PC mode. Every copy shares it, so setup commits and pushes the "
+            "change.",
         ),
     ]
     lines = [
@@ -184,16 +185,17 @@ def setting_text(settings: LocalSettings, path: str) -> str:
     return value_shown(BY_PATH[path], get(settings.data, path, MISSING))
 
 
-def value_shown(setting: Setting, saved: object) -> str:
+def value_shown(setting: Setting, saved: object, default_note: str = "the default") -> str:
     """A setting's value as the menu shows it: its value, and whether that's the default, isn't
-    answered yet, or is a value the file has that setup can't use."""
+    answered yet, or is a value the file has that setup can't use. default_note marks the
+    default."""
     value, answered, usable = read_value(saved, setting)
     if not setting.has_default:
         shown = "not set yet" if value is None else value_text(setting, value)
     elif setting.asked and not answered:
         shown = f"not answered yet (defaults to {value_text(setting, value)})"
     elif saved is MISSING or isinstance(saved, dict):
-        shown = f"{value_text(setting, value)} (the default)"
+        shown = f"{value_text(setting, value)} ({default_note})"
     else:
         shown = value_text(setting, value)
     if not usable:
@@ -229,19 +231,44 @@ def folders_text(run: "Setup", settings: LocalSettings, agent: Agent) -> str:
     return folders or "none found"
 
 
+def several_copies(run: "Setup", settings: LocalSettings) -> tuple[bool | None, str]:
+    """Whether dev-home is in multi-PC mode, as this run leaves it: the answer it's about to save,
+    or else dev-home.json's, with None for no answer setup can use; and that file's layout (see
+    copies_answer), or "" for an answer this run is about to save."""
+    if run.wanted_copies is not None:
+        return run.wanted_copies, ""
+    answer, found = copies_answer(settings)
+    return (None if found in LAYOUT_NOTES else answer), found
+
+
+def content_hours_text(settings: LocalSettings, several: bool | None, found: str) -> str:
+    """devHome.checkEveryHours as the menu shows it. Only single-PC mode uses it: otherwise each
+    sync checks GitHub every time."""
+    if several is False:
+        setting = BY_PATH["devHome.checkEveryHours"]
+        saved = get(settings.data, setting.path, MISSING)
+        return value_shown(setting, saved, "the default in single-PC mode")
+    if several:
+        return "every time (fixed in multi-PC mode)"
+    if found in LAYOUT_NOTES:
+        return f"every time, while {DEV_HOME_SETTINGS} can't be used"
+    return "every time (until you choose a mode)"
+
+
 def overview(run: "Setup", settings: LocalSettings) -> list[str]:
     """Every setting and its value, numbered as the menu numbers them."""
-    answer, found = copies_answer(settings)
-    if run.wanted_copies is not None:
-        copies = "several" if run.wanted_copies else "one"
-    elif found in LAYOUT_NOTES:
+    several, found = several_copies(run, settings)
+    if found in LAYOUT_NOTES:
         copies = f"{DEV_HOME_SETTINGS} {LAYOUT_NOTES[found]}"
-    elif answer is None:
+    elif several is None:
         copies = "not answered yet (until then, each sync checks GitHub)"
     else:
-        copies = "several" if answer else "one"
-    # The dev-home folder shows what this run will use, which --content-dir can change.
-    values = {"devHome.folder": settings.content_dir or "not set yet"}
+        copies = "several (multi-PC mode)" if several else "one (single-PC mode)"
+    values = {
+        # The dev-home folder shows what this run will use, which --content-dir can change.
+        "devHome.folder": settings.content_dir or "not set yet",
+        "devHome.checkEveryHours": content_hours_text(settings, several, found),
+    }
     this_pc = [
         (setting.label, values.get(setting.path) or setting_text(settings, setting.path))
         for setting in SETTINGS
@@ -419,10 +446,19 @@ def change_update_hours(run: "Setup", settings: LocalSettings) -> bool:
 
 
 def change_content_hours(run: "Setup", settings: LocalSettings) -> bool:
-    run.line(
-        "With one active copy, and for a plain /knowledge, a sync checks GitHub for dev-home's "
-        "changes only this often."
-    )
+    several, _ = several_copies(run, settings)
+    commands = "/handoff, plain /knowledge, and /knowledge add"
+    if several is False:
+        run.line(
+            f"In single-PC mode, {commands} check GitHub for dev-home's changes this often. "
+            "/dev-home sync always checks."
+        )
+    else:
+        mode = "is in multi-PC mode" if several else "isn't in single-PC mode"
+        run.line(
+            f"dev-home {mode}, so {commands} check GitHub for its changes every time. The number "
+            "you set here is used only in single-PC mode."
+        )
     return change_hours(
         run,
         settings,

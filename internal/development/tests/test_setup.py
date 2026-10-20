@@ -1689,7 +1689,8 @@ def test_configure_alone_shows_the_settings_and_how_to_change_them(
     )
     pattern = r"^\s+answer: a change to the main one, ~/\.codex when it's there,$"
     assert result.has_line(pattern), str(result)
-    assert result.has_line(r"^\s+7\s+Copies of dev-home in active use\s+several$"), str(result)
+    pattern = r"^\s+7\s+Copies of dev-home in active use\s+several \(multi-PC mode\)$"
+    assert result.has_line(pattern), str(result)
     assert result.has_line(r"^\s+multiMachine=true\|false\s"), str(result)
     # Whether each skill is added, with the name to change it by, but dev-home's, which is fixed.
     assert result.has_line(r"^Skills added to your agents on this PC$"), str(result)
@@ -1708,6 +1709,67 @@ def test_configure_alone_shows_the_settings_and_how_to_change_them(
     assert result.has_line(pattern), str(result)
     assert not result.has_line("All checks passed"), str(result)
     assert read(settings_kept) == before
+
+
+@pytest.mark.parametrize(
+    ("text", "hours", "copies"),
+    [
+        (
+            '{"schemaVersion": 1, "multiMachine": false}',
+            r"every 12 hours \(the default in single-PC mode\)",
+            r"one \(single-PC mode\)",
+        ),
+        (
+            '{"schemaVersion": 1, "multiMachine": true}',
+            r"every time \(fixed in multi-PC mode\)",
+            r"several \(multi-PC mode\)",
+        ),
+        (
+            None,
+            r"every time \(until you choose a mode\)",
+            r"not answered yet \(until then, each sync checks GitHub\)",
+        ),
+        (
+            '{"multiMachine": false}',
+            r"every time, while dev-home\.json can't be used",
+            r"dev-home\.json is in an older layout, so each sync checks GitHub",
+        ),
+    ],
+    ids=["single-PC mode", "multi-PC mode", "no answer", "older layout"],
+)
+def test_configure_alone_shows_how_often_dev_home_is_checked_in_each_mode(
+    box: Sandbox, settings_kept: Path, text: str | None, hours: str, copies: str
+) -> None:
+    # Only single-PC mode uses devHome.checkEveryHours: any other way, each sync checks GitHub.
+    path = box.content / "dev-home.json"
+    before = path.read_bytes()
+    if text is None:
+        path.unlink()
+    else:
+        write_text(path, text + "\n")
+    try:
+        result = run_python(box, "setup.py", "--configure")
+    finally:
+        path.write_bytes(before)
+    assert result.has_line(rf"^\s+4\s+Check GitHub for dev-home's changes\s+{hours}$"), str(result)
+    assert result.has_line(rf"^\s+7\s+Copies of dev-home in active use\s+{copies}$"), str(result)
+
+
+def test_configure_alone_shows_an_interval_of_your_own_without_a_note(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    path = box.content / "dev-home.json"
+    before = path.read_bytes()
+    write_text(path, '{"schemaVersion": 1, "multiMachine": false}\n')
+    edited = json.loads(read(settings_kept))
+    edited["devHome"]["checkEveryHours"] = 6
+    write_text(settings_kept, json.dumps(edited, indent=2) + "\n")
+    try:
+        result = run_python(box, "setup.py", "--configure")
+    finally:
+        path.write_bytes(before)
+    pattern = r"^\s+4\s+Check GitHub for dev-home's changes\s+every 6 hours$"
+    assert result.has_line(pattern), str(result)
 
 
 def test_configure_alone_says_where_a_skill_isnt_added_as_its_answer_says(

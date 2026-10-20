@@ -33,17 +33,21 @@ command passes the one it needs:
 
 | Command | `--fetch` | Checks GitHub for dev-home's changes |
 | --- | --- | --- |
-| Every `/handoff` command, and adding to the knowledge base | `auto` | With dev-home in active use on several copies, such as two PCs, every time. With one, only once `devHome.checkEveryHours` have passed since the last check, since nothing else changes it. |
-| Plain `/knowledge` | `when-due` | Only once `devHome.checkEveryHours` have passed, however many copies are in use, so its list of subjects is never far behind. |
+| Every `/handoff` command, plain `/knowledge`, and adding to the knowledge base | `auto` | In multi-PC mode, when dev-home is in active use on several copies, such as two PCs, every time. In single-PC mode, only once `devHome.checkEveryHours` have passed since the last check, since nothing else changes it. |
 | `/dev-home sync`, and `sync.py` run by hand | `always` | Every time. |
 
 `devHome.checkEveryHours` is 12 unless you set it in `local-settings.json`, where 0 means every
-time. Whether dev-home has one active copy or several is `multiMachine` in your dev-home's
-`dev-home.json`, which every copy shares, and `/dev-home configure` changes it; a missing or
-unreadable file, one in a layout this dev-home-toolkit doesn't know, or one with no answer, counts
-as several. A sync that skips the check still
-merges what an earlier check brought in, pushes commits waiting on this PC, and lists the files
-left uncommitted.
+time, and only single-PC mode uses it. The mode is `multiMachine` in your dev-home's
+`dev-home.json`, `false` for single-PC mode and `true` for multi-PC mode, which every copy shares,
+and `/dev-home configure` changes it; a missing or unreadable file, one in a layout this
+dev-home-toolkit doesn't know, or one with no answer, counts as multi-PC mode. A sync that skips
+the check still merges what an earlier check brought in, pushes commits waiting on this PC, and
+lists the files left uncommitted.
+
+Nothing syncs dev-home between those commands, so in multi-PC mode a PC gets the other copies'
+changes, to your rules, skills, and knowledge, at its next sync. After switching PCs, start with
+`/handoff`, a plain `/knowledge`, or `/dev-home sync`. The rules a sync brings in reach the
+sessions you start after it.
 
 ## What they report
 

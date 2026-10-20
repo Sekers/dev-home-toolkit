@@ -23,7 +23,7 @@
       "type": "hours",
       "default": 12,
       "label": "Check GitHub for dev-home's changes",
-      "help": "How often a sync checks GitHub for dev-home's changes, with one active copy, and for a plain /knowledge. 0 checks every time."
+      "help": "How often /handoff, plain /knowledge, and /knowledge add check GitHub for dev-home's changes in single-PC mode. In multi-PC mode they check every time. 0 checks every time."
     }
   }
 }

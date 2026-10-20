@@ -465,19 +465,16 @@ def run_while_asking(
     return Run(process.returncode, lines)
 
 
-def skill_command(box: Sandbox, skill: str, script: str, *, containing: str = "") -> str:
+def skill_command(box: Sandbox, skill: str, script: str) -> str:
     """The command a sandbox's generated skill gives for a script, word for word: one of the
     shared scripts, or one in the skill's own folder. A skill may give the same command more than
-    once, but only one that contains the text given, such as the knowledge skill's
-    "--fetch auto"."""
+    once, but never two different ones for the same script."""
     text = (box.generated / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
     python = box.python.as_posix()
     folders = (box.generated / "shared-skill-scripts", box.generated / "skills" / skill)
     paths = "|".join(re.escape((folder / script).as_posix()) for folder in folders)
     pattern = rf"`({re.escape(python)} -I (?:{paths})[^`]*)`"
-    commands: set[str] = {
-        match.group(1) for match in re.finditer(pattern, text) if containing in match.group(1)
-    }
+    commands: set[str] = {match.group(1) for match in re.finditer(pattern, text)}
     assert len(commands) == 1, f"{skill} gives {len(commands)} commands for {script}: {commands}"
     return commands.pop()
 

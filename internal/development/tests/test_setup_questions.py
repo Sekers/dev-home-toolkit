@@ -1303,6 +1303,35 @@ def test_the_menu_keeps_several_copies_unless_the_others_are_retired(
     assert git("-C", str(box.remote), "rev-parse", "main") == head
 
 
+def test_the_menu_says_when_dev_homes_check_interval_is_used(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Picked in multi-PC mode, then again after switching to single-PC mode, which isn't saved.
+    person.answers.update(
+        {
+            MENU: ["4", "7", "4", ""],
+            CONTENT_HOURS: ["", ""],
+            ELSEWHERE_YES: "n",
+            RETIRED: "y",
+            SAVE_COPIES: "n",
+        }
+    )
+    head = git("-C", str(box.remote), "rev-parse", "main")
+    setup_here(box, "--configure")
+    out = capsys.readouterr().out
+    multi = (
+        "dev-home is in multi-PC mode, so /handoff, plain /knowledge, and /knowledge add check "
+        "GitHub for its changes every time. The number you set here is used only in single-PC mode."
+    )
+    single = (
+        "In single-PC mode, /handoff, plain /knowledge, and /knowledge add check GitHub for "
+        "dev-home's changes this often. /dev-home sync always checks."
+    )
+    assert multi in out and single in out and out.index(multi) < out.index(single), out
+    assert re.search(r"every 12 hours \(the default in single-PC mode\)", out), out
+    assert git("-C", str(box.remote), "rev-parse", "main") == head
+
+
 def test_a_run_by_hand_makes_a_folders_settings_change_without_asking(
     box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -4,8 +4,8 @@ Called by: dev-home, handoff, knowledge
 
 Every skill command that syncs dev-home starts with this script, so the agent gets what it needs
 before its own work from one call. First it runs sync, which syncs dev-home with GitHub, checks
-dev-home-toolkit for updates, and runs setup. --fetch always, auto, or when-due goes to the sync,
-and says when it fetches dev-home (see sync.py); without it, the sync fetches every time. Then it
+dev-home-toolkit for updates, and runs setup. --fetch always or auto goes to the sync, and says
+when it fetches dev-home (see sync.py); without it, the sync fetches every time. Then it
 loads facts.py, the copy beside this one, which that setup run has just brought up to date, and
 with it:
 
@@ -35,10 +35,10 @@ internal/.python/python.exe in dev-home-toolkit's folder, and of this script.
 Syncs dev-home, checks that the handoff skill hasn't changed, then prints where this project's
 handoff is, the computer's name, and the project's commits since the handoff's last check.
 
-    python.exe -I prepare.py --skill knowledge --stamp 3f9c2ab1d0e4 --fetch when-due
+    python.exe -I prepare.py --skill knowledge --stamp 3f9c2ab1d0e4 --fetch auto
 
-Syncs dev-home, fetching only when its check of GitHub is due, then checks that the knowledge
-skill hasn't changed.
+Syncs dev-home, fetching every time with several active copies, and with one only when its check
+of GitHub is due, then checks that the knowledge skill hasn't changed.
 """
 
 import importlib
