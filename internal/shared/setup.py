@@ -96,7 +96,9 @@ setup removes its links where it isn't added, with a line saying why, and record
 state in internal/.generated/skill-states.json, which /dev-home skills shows. What its dependsOn
 lists that this PC seems to lack, a program or a Python version, never keeps it off: the NEW line
 says so, and /dev-home skills checks again where the agent runs. A skill whose
-dev-home-skill.json can't be read is left as it is.
+dev-home-skill.json can't be read is left as it is. One of the end user's own whose name breaks
+the rule for names is a PROBLEM on every run, and still added, except one named synced, which
+Claude Code keeps for the skills it downloads, and which setup never adds.
 
 Each link to a folder is a junction on Windows, which needs no Developer Mode, and a symbolic link
 elsewhere.
@@ -2039,14 +2041,11 @@ class Setup:
         for name, skill in declared.skills.items():
             if skill.added_setting is None:
                 continue
-            # A setting's name is its path, with dots between its parts.
+            # A setting's name is its path, with dots between its parts, so a skill with a dot in
+            # its name has none, and follows its default. A test keeps dots out of
+            # dev-home-toolkit's skills, and the PROBLEM line for the name says so for the end
+            # user's own (see name_problem in settings.py).
             if "." in name:
-                self.status(
-                    "PROBLEM",
-                    f"The skill {name} has a dot in its folder's name, so setup can't save whether "
-                    "to add it to your agents, and it follows its default. Rename its folder and "
-                    "its name, with lowercase letters, digits, and hyphens.",
-                )
                 continue
             path = saved_skill_path(settings.data, name, ADDED_TO_AGENTS)
             entry = get(settings.data, path.rsplit(".", 1)[0], MISSING)
@@ -2866,8 +2865,9 @@ def plan_skill(
 ) -> SkillPlan:
     """What setup does with one skill on this PC (see SkillPlan): with a yes, its default, or for
     a skill that's always added, it goes into each skills folder whose agents meet its
-    supportedOn, the operating system and the agent; with a no, into none. Its dependsOn, a
-    program or a Python version, never keeps it off: setup only warns about it."""
+    supportedOn, the operating system and the agent; with a no, or a name Claude Code keeps
+    (kept_off), into none. Its dependsOn, a program or a Python version, never keeps it off: setup
+    only warns about it."""
     setting = skill.added_setting
     said_no = False
     wanted = True
@@ -2887,6 +2887,12 @@ def plan_skill(
 
     def keeping_off(agents: frozenset[str]) -> list[requirements.Unmet]:
         return [u for u in requirements.unmet(skill.requires, pc, agents) if u.keeps_off]
+
+    # A name Claude Code keeps, whatever the answer. Its PROBLEM line names it, so the NEW line
+    # doesn't (see name_problem in settings.py).
+    if skill.kept_off:
+        out_of_each = [(f, skill.kept_off) for f, _ in folders]
+        return plan((), out_of_each, f"not added: {skill.kept_off}", told=False)
 
     # What keeps it off this whole PC, with no agents to check: the operating system, or an entry
     # about it or the agent with a mistake. A reason nobody can act on stays unsaid.
@@ -2946,8 +2952,8 @@ def recorded_state(plan: SkillPlan) -> dict[str, Any]:
     for need in plan.needs:
         if need.kind == "program" and need.names[0] not in programs:
             programs[need.names[0]] = {"name": need.names[0]}
-            if need.description:
-                programs[need.names[0]]["description"] = need.description
+            if need.used_for:
+                programs[need.names[0]]["usedFor"] = need.used_for
     if programs:
         entry["programs"] = list(programs.values())
     versions = [need.version for need in plan.needs if need.kind == "python"]

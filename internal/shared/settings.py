@@ -14,7 +14,7 @@ import json
 import os
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -45,6 +45,16 @@ SKILL_FIELDS = (
 PREFERENCE_FIELDS = ("default", "label", "help", "formerNames")
 # Each skill's answer to whether this PC adds it to the agents, at skills.<skill>.addedToAgents.
 ADDED_TO_AGENTS = "addedToAgents"
+# The rule for a skill's name (see name_problem): the Agent Skills standard's longest name; the
+# words claude.ai and Anthropic's API keep out of a skill's name; and the two names Claude Code
+# keeps for the skills it downloads from claude.ai, and skips. It saves them in a skills folder
+# named synced, in any case, so setup never adds a skill of that name: a link there would take
+# those downloads into the skill's own folder.
+NAME_LIMIT = 64
+RESERVED_WORDS = ("anthropic", "claude")
+CLAUDE_DOWNLOADS_FOLDER = "synced"
+CLAUDE_DOWNLOADS_NAME = "anthropic-skills"
+KEPT_OFF_FOR_NAME = "has a name Claude Code keeps for the skills it downloads from claude.ai"
 # The file that declares dev-home-toolkit's own settings with a single value.
 DEFINITIONS_PATH = Path(__file__).parent / "setting-definitions.json"
 # The key of a saved state, such as {"$state": "default"}. No setting's own value uses it.
@@ -439,7 +449,8 @@ class Skill:
     always_added that it's added on every PC, which only dev-home-toolkit's own skills can declare.
     requires is what it needs to run, from its supportedOn and dependsOn (see requirements.py),
     preferences are its preferences, by name, and former_names the names it had before, whose
-    answers setup moves to this one."""
+    answers setup moves to this one. kept_off says why setup never adds it, whatever its answer,
+    said to follow "which", or is empty: only for a name Claude Code keeps (see name_problem)."""
 
     name: str
     own: bool
@@ -448,6 +459,7 @@ class Skill:
     requires: tuple[Requirement, ...] = ()
     preferences: dict[str, Preference] = field(default_factory=dict)
     former_names: tuple[str, ...] = ()
+    kept_off: str = ""
 
     @property
     def added_setting(self) -> Setting | None:
@@ -577,12 +589,151 @@ def read_skill_file(folder: Path, *, own: bool) -> tuple[Skill | None, list[str]
     return skill, list(dict.fromkeys(problems))
 
 
+def normalized(text: str) -> str:
+    """Text after Unicode's NFKC normalizing, as skills-ref compares names. It never changes ASCII
+    text, so the module that does it, which takes a millisecond or two to load, is loaded only
+    for text with other characters."""
+    if text.isascii():
+        return text
+    import unicodedata
+
+    return unicodedata.normalize("NFKC", text)
+
+
+def standard_faults(name: str) -> list[str]:
+    """What the Agent Skills standard's rule for a name asks that a name doesn't do, each said as
+    advice, as its reference validator, skills-ref, checks it: after Unicode's NFKC normalizing,
+    lowercase letters from any alphabet, digits, and hyphens; no hyphen at the start or the end,
+    and no two in a row; and at most NAME_LIMIT characters."""
+    normal = normalized(name)
+    faults: list[str] = []
+    if normal != normal.lower() or not all(c.isalnum() or c == "-" for c in normal):
+        faults.append("use lowercase letters, digits, and hyphens")
+    if normal.startswith("-") or normal.endswith("-") or "--" in normal:
+        faults.append("start and end it with a letter or a digit, with no two hyphens in a row")
+    if len(normal) > NAME_LIMIT:
+        faults.append(f"use at most {NAME_LIMIT} characters")
+    return faults
+
+
+def reserved_words(name: str) -> list[str]:
+    """The words claude.ai and Anthropic's API keep out of a skill's name that a name has in it,
+    in any case."""
+    folded = name.casefold()
+    return [word for word in RESERVED_WORDS if word in folded]
+
+
+def suggested_name(name: str) -> str:
+    """A name close to one that breaks the rule, that the rule allows, such as "my-notes" for
+    "My_Notes", or "" when there's none to suggest, such as for one with a reserved word."""
+    lowered = normalized(name).lower()
+    hyphened = re.sub(r"-{2,}", "-", re.sub(r"[\W_]", "-", lowered)).strip("-")
+    suggestion = hyphened[:NAME_LIMIT].rstrip("-")
+    if not suggestion or standard_faults(suggestion) or reserved_words(suggestion):
+        return ""
+    return suggestion
+
+
+def frontmatter_name(text: str) -> str | None:
+    """The first name: line's value in a SKILL.md's frontmatter, without quotes or a comment, or
+    None when there's no frontmatter, it has no closing --- line, or it has no name: line."""
+    lines = text.replace("\r\n", "\n").split("\n")
+    if lines[0].strip() != "---":
+        return None
+    found: str | None = None
+    for line in lines[1:]:
+        if line.strip() == "---":
+            return found
+        match = re.match(r"name:(.*)$", line)
+        if match and found is None:
+            value = match.group(1).strip()
+            quoted = re.match(r"([\"'])(.*?)\1(\s+#.*)?$", value)
+            found = quoted.group(2) if quoted else re.sub(r"\s+#.*$", "", value)
+    return None
+
+
+def name_problem(folder: Path) -> str:
+    """The PROBLEM line for a skill whose name breaks the rule for names, or "" for one that
+    follows it: the Agent Skills standard's rule (see standard_faults), with no word claude.ai
+    and Anthropic's API keep out, not a name Claude Code keeps, and a name: line in its SKILL.md
+    that matches its folder. Setup checks the end user's own skills, and a test
+    dev-home-toolkit's. The design is in docs/development/decisions/, in "Skill and rule files
+    share their fields"."""
+    name = folder.name
+    dotted = "." in name
+    fix = "Rename its folder and the name: line in its SKILL.md"
+    if not dotted:
+        # A setting's name is its path, with dots between its parts, so a dotted one has none.
+        fix += (
+            f', and add "{name}" to formerNames in its dev-home-skill.json so your answers move '
+            "with it"
+        )
+    if name.casefold() == CLAUDE_DOWNLOADS_FOLDER:
+        kept_off = f"The skill {name} {KEPT_OFF_FOR_NAME}, so setup doesn't add it to your agents."
+        return f"{kept_off} {fix}."
+    said: list[str] = []
+    faults = standard_faults(name)
+    if faults:
+        suggestion = suggested_name(name)
+        such_as = f', such as "{suggestion}"' if suggestion else ""
+        said.append(
+            f"The skill {name} has a name the Agent Skills standard doesn't allow: "
+            f"{'; '.join(faults)}{such_as}."
+        )
+    words = reserved_words(name)
+    if words:
+        quoted = " and ".join(f'"{word}"' for word in words)
+        whose = "Its name also has" if said else f"The skill {name} has"
+        skips = (
+            ", and Claude Code skips a skill with this name"
+            if name.casefold() == CLAUDE_DOWNLOADS_NAME
+            else ""
+        )
+        said.append(
+            f"{whose} {quoted} in it, which claude.ai and Anthropic's API don't allow in a "
+            f"skill's name{skips}."
+        )
+    if said:
+        if dotted:
+            said.append(
+                "Until it's renamed, setup can't save whether to add it to your agents, so it "
+                "follows its default."
+            )
+        return f"{' '.join(said)} {fix}."
+    try:
+        text = (folder / "SKILL.md").read_bytes().decode("utf-8-sig", errors="replace")
+    except OSError:
+        return ""
+    written = frontmatter_name(text)
+    if written is not None and normalized(written) == normalized(name):
+        return ""
+    needs = "but the Agent Skills standard needs one that matches the skill's folder"
+    if written is None:
+        return (
+            f"The skill {name}'s SKILL.md has no name: line in its frontmatter, {needs}. Add "
+            f'"name: {name}" to the frontmatter at the top of the file, between two --- lines.'
+        )
+    if not written:
+        return (
+            f"The skill {name}'s SKILL.md has an empty name: line, {needs}. Change it to "
+            f'"name: {name}".'
+        )
+    return (
+        f'The skill {name}\'s SKILL.md says "name: {written}", but the Agent Skills standard needs '
+        f'its name: line to match the skill\'s folder. Change it to "name: {name}", or rename the '
+        f'folder to match and add "{name}" to formerNames in its dev-home-skill.json so your '
+        "answers move with it."
+    )
+
+
 def skill_declarations(content_dir: str) -> SkillDeclarations:
     """Every skill and what it declares: dev-home-toolkit's skills, then the person's own in
     dev-home, where one with the same name as a dev-home-toolkit skill isn't added, so its file is
-    skipped (see SkillDeclarations). The list is complete only when dev-home's folder is a git
-    repo, so a PC whose dev-home isn't cloned yet, even into a folder already made for it, or is
-    on a drive that's unplugged, loses no answers."""
+    skipped (see SkillDeclarations). Each of the person's own whose name breaks the rule for names
+    is a problem, and one with a name Claude Code keeps is never added (see name_problem). The
+    list is complete only when dev-home's folder is a git repo, so a PC whose dev-home isn't
+    cloned yet, even into a folder already made for it, or is on a drive that's unplugged, loses
+    no answers."""
     found = SkillDeclarations()
     folders = [(TOOLKIT_ROOT / "templates" / "skills", False)]
     if content_dir and (Path(content_dir) / ".git").exists():
@@ -603,6 +754,12 @@ def skill_declarations(content_dir: str) -> SkillDeclarations:
                 continue
             declared, problems = read_skill_file(skill, own=own)
             found.problems += problems
+            if own:
+                named = name_problem(skill)
+                if named:
+                    found.problems.append(named)
+                if declared is not None and skill.name.casefold() == CLAUDE_DOWNLOADS_FOLDER:
+                    declared = replace(declared, kept_off=KEPT_OFF_FOR_NAME)
             if declared is None:
                 found.unread.add(skill.name.lower())
             else:

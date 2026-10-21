@@ -39,7 +39,9 @@ skill itself: [`SKILL.md`](../../templates/skills/dev-home/SKILL.md).
   skill that works only on another operating system isn't added, and one that works only in one
   agent goes only where that agent reads it. One that needs a program or a newer Python this PC
   lacks is still added, and the list says what's missing (see
-  [A skill's dev-home-skill.json](../reference/dev-home-skill-json.md)).
+  [A skill's dev-home-skill.json](../reference/dev-home-skill-json.md)). One of yours named
+  `synced` is never added, since Claude Code keeps that name for the skills it downloads from
+  claude.ai.
 - **In Codex, `sync` and `configure` change nothing,** for the same reason as
   [handoff commands](handoff.md): on Windows, git and `gh` can't use your GitHub credentials
   there. The agent gives you the command to run in a terminal instead.

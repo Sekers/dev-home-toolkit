@@ -14,7 +14,7 @@ nothing.
     { "type": "agent", "anyOf": ["claude-code"] }
   ],
   "dependsOn": [
-    { "type": "program", "name": "jira", "description": "filing and reading Jira issues" }
+    { "type": "program", "name": "jira", "usedFor": "filing and reading Jira issues" }
   ],
   "preferences": {
     "includeClosedIssues": {
@@ -35,8 +35,8 @@ misspelled one, which it otherwise ignores:
 C:\Programming\dev-home\skills\tracker\dev-home-skill.json: "descripton" is a field this dev-home-toolkit doesn't know, so setup ignores it. Check the spelling of "descripton", or update dev-home-toolkit to a newer version.
 ```
 
-When the word is close to one setup knows in that place, such as `descriptoin` in an entry of
-`dependsOn`, the line asks `Did you mean "description"?` before its other advice.
+When the word is close to one setup knows in that place, such as `usedfor` in an entry of
+`dependsOn`, the line asks `Did you mean "usedFor"?` before its other advice.
 
 While setup can't read the file at all, such as when it isn't valid JSON, it leaves the skill as
 it is: it adds no links to it, and removes none.
@@ -62,11 +62,15 @@ both lists applies.
   and tell you what's missing when you ask for the rest. A skill that isn't added anywhere on
   this PC, such as one you said no to, gets no such warning, since no agent uses it.
 
+A skill that works on every operating system has no `os` entry. Listing all three leaves out any
+other, such as Android. Likewise, a skill that works in every agent has no `agent` entry, and so
+works in agents dev-home-toolkit sets up later too.
+
 | List | `type` | Takes | What setup does |
 | --- | --- | --- | --- |
 | `supportedOn` | `os` | `anyOf`: a list of one or more of `windows`, `macos`, and `linux` | Adds the skill only on a PC that runs one of them. On any other, it's left out with no `NEW` line, and `/dev-home skills` still lists it, with why. |
 | `supportedOn` | `agent` | `anyOf`: a list of one or more of `claude-code` and `codex` | Adds the skill only to the skills folders these agents read: each Claude Code folder's `skills\` for `claude-code`, and `~\.agents\skills\` for `codex`. |
-| `dependsOn` | `program` | `name`: the program's name alone, such as `gh`; and, if you like, a `description` of what the skill uses it for, as it would finish "the skill uses it for", such as "filing and reading Jira issues" | Adds the skill either way. When a newly started shell wouldn't find the program on your `PATH`, the `NEW` line says so, and `/dev-home skills` checks again in the agent's own shell. |
+| `dependsOn` | `program` | `name`: the program's name alone, such as `gh`; and, if you like, `usedFor`: what the skill uses it for, worded to finish "the skill uses it for", such as "filing and reading Jira issues" | Adds the skill either way. When a newly started shell wouldn't find the program on your `PATH`, the `NEW` line says so, and `/dev-home skills` checks again in the agent's own shell. |
 | `dependsOn` | `python` | `atLeast`: the lowest Python version, in quotes, such as `"3.13"` | Adds the skill either way. When the installed Python that dev-home-toolkit uses, which runs its own skills, is older, the `NEW` line and `/dev-home skills` say so, with its version. A skill of yours that runs another Python, such as `python` from your `PATH`, may get a warning that doesn't apply to it, so describe its Python version in `compatibility` instead. |
 
 A `type`, and a name in `anyOf`, can be written in any case, such as `Windows` for `windows`.
@@ -138,6 +142,25 @@ PC. Each has a name with no dots, and these fields:
 - `help`, optional: what it does.
 - `formerNames`, optional: the names it had before, as a list, so each PC's answer moves to the
   new name.
+
+## The skill's name
+
+A skill's name is its folder's name, and its `SKILL.md` repeats it on its `name:` line. Name it
+as the Agent Skills standard says: lowercase letters, digits, and hyphens, at most 64 characters,
+with no hyphen at the start or the end, and no two in a row. Leave out `claude` and `anthropic`,
+which claude.ai and Anthropic's API don't allow in a skill's name.
+
+When a skill of yours breaks this rule, or its `name:` line doesn't match its folder, setup says
+what to fix in a `PROBLEM` line on every sync, and still adds the skill to your agents:
+
+```text
+PROBLEM   The skill My_Notes has a name the Agent Skills standard doesn't allow: use lowercase letters, digits, and hyphens, such as "my-notes". Rename its folder and the name: line in its SKILL.md, and add "My_Notes" to formerNames in its dev-home-skill.json so your answers move with it.
+```
+
+- **A dot in the name** also stops setup saving your answers for the skill, so it follows its
+  default until it's renamed.
+- **A skill named `synced`,** in any case, is never added: Claude Code keeps that name for the
+  folder where it saves the skills it downloads from claude.ai.
 
 ## formerNames
 

@@ -90,10 +90,11 @@ folder link as a directory junction, which needs no admin rights and no Develope
   skills folders lose dev-home's skills too: GitHub Copilot, Gemini CLI, and Cursor read
   `~\.agents\skills\`, and Cursor also reads `~\.claude\skills\`.
 - **If a skill isn't added to your agents on this PC,** because you said no to it, it's marked as
-  not recommended and you haven't said yes, or it works only on another operating system or in
-  another agent, setup removes its links from those skills folders, naming each as it goes, and
-  puts them back once that changes. A program or a Python version the skill needs never takes its
-  links out. The skill's copy in `internal\.generated\` stays where it is.
+  not recommended and you haven't said yes, it works only on another operating system or in
+  another agent, or it's one of yours named `synced`, a name Claude Code keeps for the skills it
+  downloads from claude.ai, setup removes its links from those skills folders, naming each as it
+  goes, and puts them back once that changes. A program or a Python version the skill needs
+  never takes its links out. The skill's copy in `internal\.generated\` stays where it is.
 - **In your dev-home's own git config:** commit signing off, and pulls that merge rather than
   rebase. With signing off, a commit never stops in the middle of a sync to ask for your signing
   passphrase. Your project repos keep signing as usual. Setup does this only in a folder that

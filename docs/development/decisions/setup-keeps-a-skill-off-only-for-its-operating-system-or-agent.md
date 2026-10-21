@@ -10,7 +10,7 @@ discussion are in [Skill requirements](../research/skill-requirements.md).
 - The warning comes in three places:
   - Once, in the `NEW` line for a new skill, such as "'jira' (added to your agents; jira isn't
     on the PATH, and the skill uses it for filing and reading Jira issues)", where the program
-    entry's `description` says what the skill uses it for. Setup looks where a newly started
+    entry's `usedFor` says what the skill uses it for. Setup looks where a newly started
     shell would: in its own `PATH`, and on Windows also in the saved one, read from the registry
     with no process, so a program installed after the agents started still counts. It's wrong
     only for a program that one shell alone adds, such as Git Bash's programs, and a wrong hint
@@ -45,6 +45,10 @@ discussion are in [Skill requirements](../research/skill-requirements.md).
   minimum dev-home-toolkit version.
 - `/dev-home skills` shows a skill's `compatibility` text too: the Agent Skills standard's free
   text for what setup can't check.
+- Apart from what the file lists, one name keeps an end user's skill off: `synced`, which Claude
+  Code keeps for the skills it downloads
+  ([Skill and rule files share their fields](skill-and-rule-files-share-their-fields.md), since
+  2026-10-21).
 
 **Why:**
 

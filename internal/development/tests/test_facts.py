@@ -224,7 +224,7 @@ def test_the_skills_topic_checks_again_what_setup_only_warns_about(box: Sandbox)
     recorded, written = states.read_text(encoding="utf-8"), skill.read_text(encoding="utf-8")
     entry = {
         "state": "added to your agents",
-        "programs": [{"name": "no-such-program-here", "description": "testing"}, {"name": "git"}],
+        "programs": [{"name": "no-such-program-here", "usedFor": "testing"}, {"name": "git"}],
         "python": "99.0",
     }
     write_text(states, json.dumps({**json.loads(recorded), "mine": entry}))

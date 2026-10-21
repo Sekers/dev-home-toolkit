@@ -238,7 +238,9 @@ A typical day with the included skills:
     that file for the joined rules, so it leaves yours alone and reports it. Move what you want to
     keep into your global rules, delete the file, and run setup again.
 - **Skills.** Create `skills/<name>/SKILL.md` in your dev-home, with standard frontmatter only:
-  `name` (the same as the folder), `description`, and optionally `allowed-tools`. Run
+  `name` (the same as the folder, following
+  [the rule for names](docs/reference/dev-home-skill-json.md#the-skills-name)), `description`, and
+  optionally `allowed-tools`. Run
   `py C:\Programming\dev-home-toolkit\setup.py --quiet` to link it, and commit it (ask an agent,
   or wait for the next `/handoff` to offer). Your other PCs link it at their next
   sync. A skill can't share a name with one in this repo. Every skill is added to your agents

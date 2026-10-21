@@ -817,10 +817,10 @@ def version_text(version: Sequence[int]) -> str:
     return ".".join(str(part) for part in version)
 
 
-def program_missing(name: str, description: str) -> str:
+def program_missing(name: str, used_for: str) -> str:
     """The warning for a program this process's PATH doesn't have, worded as setup's
     requirements.program_missing words it (a test checks)."""
-    uses = f", and the skill uses it for {description}" if description else ""
+    uses = f", and the skill uses it for {used_for}" if used_for else ""
     return f"{name} isn't on the PATH{uses}"
 
 
@@ -843,8 +843,8 @@ def missing_needs(entry: dict[str, Any]) -> list[str]:
         if not isinstance(program, dict) or not isinstance(program.get("name"), str):
             continue
         if not on_path(program["name"]):
-            description = program.get("description")
-            uses = description if isinstance(description, str) else ""
+            used_for = program.get("usedFor")
+            uses = used_for if isinstance(used_for, str) else ""
             found.append(program_missing(program["name"], uses))
     needs = entry.get("python")
     if isinstance(needs, str) and re.fullmatch(r"\d+(\.\d+)*", needs):

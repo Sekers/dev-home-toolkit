@@ -47,7 +47,9 @@ rules apply too.
 ## Skills (templates/skills/)
 
 - Frontmatter uses only standard fields: `name`, `description`, and `allowed-tools`. The name
-  matches the folder name.
+  matches the folder name, and follows the rule for names in
+  [Skill and rule files share their fields](decisions/skill-and-rule-files-share-their-fields.md)
+  (a test checks).
 - A skill's preferences, declared in a `dev-home-skill.json` in its folder, follow
   [settings.md](settings.md). What it needs to run goes in the same file, as `supportedOn` and
   `dependsOn`
@@ -56,6 +58,8 @@ rules apply too.
   [A skill's dev-home-skill.json](../reference/dev-home-skill-json.md) describes every field.
   Only `dev-home` declares `alwaysAddedToAgents`, since every PC needs it to change its answers
   in chat.
+- A field in `dev-home-skill.json` never changes meaning: a new meaning gets a new name, so the
+  file needs no version number.
 - To rename a skill, rename its folder and its `name`, and add the old name to `formerNames` in
   its `dev-home-skill.json`: each PC's setup moves the old name's answers to the new one, and
   removes the old name's links. Codex records a skill turned off by its path,

@@ -26,8 +26,8 @@ points here; its rules apply too.
   every status line in one format, and small text helpers); `programs.py` (finding a program,
   and running setup); `settings.py` (this PC's `local-settings.json`, dev-home's
   `dev-home.json`, the settings `setting-definitions.json` beside it declares, what skills declare
-  in their `dev-home-skill.json`, and the checks of both); `requirements.py` (what a skill needs
-  to run, and whether this PC meets it);
+  in their `dev-home-skill.json`, the checks of both, and the rule for skills' names);
+  `requirements.py` (what a skill needs to run, and whether this PC meets it);
   and setup's own parts: `paths.py`, `links.py`, `generated.py`, `python_link.py`, `console.py`,
   `settings_files.py`, `claude_settings.py`, `codex_config.py`, and `configure.py`
   (`--configure`'s menu and assignments). They write UTF-8, read git's output as UTF-8, and find
@@ -43,7 +43,9 @@ points here; its rules apply too.
   - links it made to skills that no longer exist
   - links it made to a skill that isn't added to the agents in that skills folder: by this PC's
     answer, or the skill's default, or because its `supportedOn` names another operating system,
-    or another agent than those that read the folder, or has something setup can't use
+    or another agent than those that read the folder, or has something setup can't use, or
+    because it's an end user's skill named `synced`, which Claude Code keeps for the skills it
+    downloads from claude.ai
   - in a Claude Code folder or Codex home the person said no to setting up: the links it made
     there, and the rules file it wrote there, each listed in its output as it goes
   - the links it made in `~/.agents/skills`, once the person has said no to Codex

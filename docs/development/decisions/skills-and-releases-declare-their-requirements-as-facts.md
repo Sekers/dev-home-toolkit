@@ -18,7 +18,7 @@ a skill off, and which only warn, is a decision of its own:
     { "type": "agent", "anyOf": ["claude-code"] }
   ],
   "dependsOn": [
-    { "type": "program", "name": "jira", "description": "filing and reading Jira issues" },
+    { "type": "program", "name": "jira", "usedFor": "filing and reading Jira issues" },
     { "type": "python", "atLeast": "3.13" }
   ]
   ```
@@ -29,7 +29,7 @@ a skill off, and which only warn, is a decision of its own:
   were built:
   - `os` takes `windows`, `macos`, and `linux`, and `agent` takes `claude-code` and `codex`.
   - A `program`'s `name` is the program's name alone, such as `gh`, never a path, and its
-    optional `description` says what the skill uses it for.
+    optional `usedFor` says what the skill uses it for.
   - `python`'s `atLeast` is text, such as `"3.13"` or `"3.13.1"`, since a JSON number would read
     3.10 as 3.1.
 - Anything in a list the reader can't use is reported as a `PROBLEM` line naming the file. Under
@@ -137,12 +137,13 @@ was ignored, and the skill went into agents its writer excluded. With two lists,
 its own rule even for what the reader doesn't know, and either kind can gain types later. Both
 names state facts about the skill, not what setup should do, so they hold for releases too.
 
-**Changed on 2026-10-18,** before any release, not built yet, with the reasons in
+**Changed on 2026-10-18,** before any release, with the reasons in
 [Skill and rule files share their fields](skill-and-rule-files-share-their-fields.md): a
-program's `description` becomes `usedFor`; a built-in rule's `dev-home-rule.json` takes the same
-`supportedOn`, with `os` and `agent`, and no `dependsOn`, since a rule loads whether or not a
-program is there; and neither file gets a format version, with a rule for developers that a field
-never changes meaning.
+program's `description` becomes `usedFor` (built on 2026-10-21); a built-in rule's
+`dev-home-rule.json` takes the same `supportedOn`, with `os` and `agent`, and no `dependsOn`, since
+a rule loads whether or not a program is there (not built yet); and neither file gets a format
+version, with a rule for developers that a field never changes meaning (in
+[skills.md](../skills.md) since 2026-10-21).
 
 **Options set aside:**
 

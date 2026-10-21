@@ -94,8 +94,7 @@ as "both tools" for Claude Code and Codex.
   is for agents deciding when to load it.\
   _Avoid_: description, blurb, tagline.
 - **Used for** (`usedFor`): what a skill uses a program for, in that program's `dependsOn` entry,
-  worded to finish "the skill uses it for" (not built yet: the field is `description` until
-  then).\
+  worded to finish "the skill uses it for".\
   _Avoid_: description, purpose.
 - **Urgency** (`urgency`): how much a release's update notice asks for the end user's attention:
   `low`, `normal`, or `critical` (not built yet).\

@@ -36,7 +36,7 @@ LISTS = {SUPPORTED_ON: ("os", "agent"), "dependsOn": ("program", "python")}
 FIELDS = {
     "os": ("type", "anyOf"),
     "agent": ("type", "anyOf"),
-    "program": ("type", "name", "description"),
+    "program": ("type", "name", "usedFor"),
     "python": ("type", "atLeast"),
 }
 # A program's name alone, such as gh, never a path.
@@ -52,13 +52,13 @@ class Requirement:
     """One entry of a skill's supportedOn or dependsOn, as this copy of dev-home-toolkit reads it.
     kind is its type: os, agent, program, or python, or "" for one this copy doesn't know. names
     holds the operating systems or agents it takes any one of, only ones this copy knows, or the
-    program it needs, whose description says what the skill uses it for, if the entry says.
+    program it needs, and used_for says what the skill uses that program for, if the entry says.
     version is the lowest Python it takes. mistake marks anything under supportedOn that can't be
     used, which nothing meets."""
 
     kind: str
     names: tuple[str, ...] = ()
-    description: str = ""
+    used_for: str = ""
     version: tuple[int, ...] = ()
     mistake: bool = False
 
@@ -115,10 +115,10 @@ def version_text(version: Sequence[int]) -> str:
     return ".".join(str(part) for part in version)
 
 
-def program_missing(name: str, description: str) -> str:
+def program_missing(name: str, used_for: str) -> str:
     """The warning for a program a newly started shell wouldn't find. facts.py's skills topic
     words its own check the same way (a test checks)."""
-    uses = f", and the skill uses it for {description}" if description else ""
+    uses = f", and the skill uses it for {used_for}" if used_for else ""
     return f"{name} isn't on the PATH{uses}"
 
 
@@ -153,9 +153,7 @@ RULES: dict[str, Rule] = {
         can_act=True,
         per_folder=False,
         met=lambda requirement, pc, _agents: requirement.names[0] in pc.programs,
-        reason=lambda requirement, _pc: program_missing(
-            requirement.names[0], requirement.description
-        ),
+        reason=lambda requirement, _pc: program_missing(requirement.names[0], requirement.used_for),
     ),
     "python": Rule(
         keeps_off=False,
@@ -180,7 +178,7 @@ def quoted(names: Iterable[str]) -> str:
 def closest(word: str, known: Iterable[str]) -> str:
     """The known word that a word this copy doesn't know most likely misspells, compared in any
     case, or "" when none is close enough to suggest. The cutoff takes "progam" for "program" and
-    "descripton" for "description", and nothing for an invented word such as "vpn"."""
+    "usedFr" for "usedFor", and nothing for an invented word such as "vpn"."""
     # Imported here, since only a file with a mistake needs it.
     import difflib
 
@@ -293,11 +291,11 @@ def parse_entry(entry: object, number: int, listed: str) -> tuple[Requirement | 
         name = entry.get("name")
         if not isinstance(name, str) or not PROGRAM_NAME.fullmatch(name):
             return wrong('name: the program\'s name alone, such as "gh"')
-        description = entry.get("description", "")
-        if not isinstance(description, str):
-            mistakes.append(f"{where}: description isn't text, so it was left out.")
+        used_for = entry.get("usedFor", "")
+        if not isinstance(used_for, str):
+            mistakes.append(f"{where}: usedFor isn't text, so it was left out.")
             return Requirement(kind, (name,)), mistakes
-        return Requirement(kind, (name,), description.strip()), mistakes
+        return Requirement(kind, (name,), used_for.strip()), mistakes
     at_least = entry.get("atLeast")
     if not isinstance(at_least, str) or not VERSION.fullmatch(at_least):
         return wrong('atLeast: the lowest version it runs on, in quotes, such as "3.13"')

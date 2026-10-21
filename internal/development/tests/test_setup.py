@@ -2291,18 +2291,18 @@ def test_a_skill_file_declares_what_the_skill_needs_and_each_mistake_is_a_proble
             {"type": "agent", "anyOf": ["codex"], "atLeast": "2.2"},
         ],
         "dependsOn": [
-            {"type": "Program", "name": "jira", "description": " filing Jira issues "},
+            {"type": "Program", "name": "jira", "usedFor": " filing Jira issues "},
             {"type": "python", "atLeast": "3.13"},
             # Anything here it can't use is ignored, a type supportedOn takes included.
             {"type": "vpn", "network": "work"},
             {"type": "program", "name": "C:/tools/jira"},
             {"type": "python", "atLeast": 3.13},
-            {"type": "program", "name": "gh", "description": 1, "version": "2"},
+            {"type": "program", "name": "gh", "usedFor": 1, "version": "2"},
             "program",
             {"type": "vpn"},
             # A misspelled word close to one known in its place is answered with that word.
             {"type": "Pythn", "atLeast": "3.13"},
-            {"type": "program", "name": "gh", "descriptoin": "Typo."},
+            {"type": "program", "name": "gh", "usedfor": "Typo."},
             {"type": "os", "anyOf": ["windows"]},
         ],
         "preferences": {"tidy": {"default": True, "label": "Tidy", "descripton": "Typo."}},
@@ -2378,7 +2378,7 @@ def test_a_skill_file_declares_what_the_skill_needs_and_each_mistake_is_a_proble
         return f"{said} Update dev-home-toolkit to a newer version, or {remove}"
 
     # Each is said once, though "descripton" and "vpn" are each in two places. "descripton" is
-    # close to no field known where it is, but "descriptoin", in an entry, is.
+    # close to no field known where it is, but "usedfor", in an entry, is.
     assert [problem.removeprefix(f"{file}: ") for problem in problems] == [
         unknown("madeUpLater"),
         unknown("descripton"),
@@ -2401,10 +2401,10 @@ def test_a_skill_file_declares_what_the_skill_needs_and_each_mistake_is_a_proble
         'entry 5 of dependsOn (type "python") needs atLeast: the lowest version it runs on, in '
         f'quotes, such as "3.13", {ignored}',
         unknown("version"),
-        'entry 6 of dependsOn (type "program"): description isn\'t text, so it was left out.',
+        'entry 6 of dependsOn (type "program"): usedFor isn\'t text, so it was left out.',
         f"entry 7 of dependsOn isn't a JSON object with a type, {ignored}",
         unknown_type("Pythn", "dependsOn", ignored, "python"),
-        meant("descriptoin", "description"),
+        meant("usedfor", "usedFor"),
         unknown_type("os", "dependsOn", ignored),
     ], problems
     assert listed.problems == problems
@@ -2537,9 +2537,9 @@ def skill_links_to(box: Sandbox, name: str) -> tuple[Path | None, Path | None]:
 def test_a_new_skill_follows_its_default_and_is_named_once(
     box: Sandbox, settings_kept: Path
 ) -> None:
-    missing = {"type": "program", "name": "no-such-program-here", "description": "testing"}
+    missing = {"type": "program", "name": "no-such-program-here", "usedFor": "testing"}
     declared: dict[str, dict[str, Any] | None] = {
-        "claude-only": {"supportedOn": [{"type": "agent", "anyOf": ["claude-code"]}]},
+        "one-agent": {"supportedOn": [{"type": "agent", "anyOf": ["claude-code"]}]},
         # What a skill that isn't added depends on is never warned about: no agent uses it.
         "elsewhere": {
             "supportedOn": [{"type": "os", "anyOf": ["macos"]}],
@@ -2564,11 +2564,11 @@ def test_a_new_skill_follows_its_default_and_is_named_once(
     # program or an older Python doesn't keep a skill off: the line says so.
     named = (
         r"^NEW\s+New skills on this PC, following their defaults until you choose: "
-        r"'claude-only' \(added to your agents in Claude Code, not in Codex: works only in Claude "
-        r"Code\), 'fresh' \(added to your agents\), 'needy' \(added to your agents; "
+        r"'fresh' \(added to your agents\), 'needy' \(added to your agents; "
         r"no-such-program-here isn't on the PATH, and the skill uses it for testing\), "
         r"'newer-python' \(added to your agents; the skill needs Python 99\.0 or later, and "
-        r"this PC's is \d+\.\d+\.\d+\), 'offered' \(not added by default\)\. To choose, "
+        r"this PC's is \d+\.\d+\.\d+\), 'offered' \(not added by default\), 'one-agent' \(added "
+        r"to your agents in Claude Code, not in Codex: works only in Claude Code\)\. To choose, "
         r"use /dev-home configure\.$"
     )
     assert first.code == 0 and first.has_line(named), str(first)
@@ -2578,14 +2578,14 @@ def test_a_new_skill_follows_its_default_and_is_named_once(
     for name in ("fresh", "needy", "newer-python"):
         folder = box.content / "skills" / name
         assert links[name] == (folder, folder), links
-    assert links["claude-only"] == (box.content / "skills" / "claude-only", None), links
+    assert links["one-agent"] == (box.content / "skills" / "one-agent", None), links
     for name in ("elsewhere", "offered"):
         assert links[name] == (None, None), links
     assert states["elsewhere"] == {"state": "not added: works only on macOS"}, states
     assert states["offered"] == {"state": "not added by default"}, states
     # What it needs that setup only warns about, for /dev-home skills to check again.
     added = "added to your agents"
-    program = {"name": "no-such-program-here", "description": "testing"}
+    program = {"name": "no-such-program-here", "usedFor": "testing"}
     assert states["needy"] == {"state": added, "programs": [program]}, states
     assert states["newer-python"] == {"state": added, "python": "99.0"}, states
     assert states["dev-home"] == {"state": "always added to your agents"}, states
@@ -2807,10 +2807,147 @@ def test_a_skill_with_a_dot_in_its_name_is_reported_and_follows_its_default(
         saved = json.loads(read(settings_kept))
     finally:
         remove_personal_skill(box, folder)
-    pattern = r"^PROBLEM\s+The skill dotted\.name has a dot in its folder's name, so setup can't "
+    pattern = (
+        r"^PROBLEM\s+The skill dotted\.name has a name the Agent Skills standard doesn't allow: "
+        r'use lowercase letters, digits, and hyphens, such as "dotted-name"\. Until it\'s renamed, '
+        r"setup can't save whether to add it to your agents, so it follows its default\. Rename "
+        r"its folder and the name: line in its SKILL\.md\.$"
+    )
     assert result.code == 1 and result.has_line(pattern), str(result)
+    problems = [line for line in result.lines if line.startswith("PROBLEM")]
+    assert len(problems) == 1, str(result)
     assert "dotted" not in saved.get("skills", {}), saved
     assert links == (folder, folder), links
+
+
+def test_each_of_dev_home_toolkits_skills_follows_the_rule_for_names(box: Sandbox) -> None:
+    settings = shared_module(box, "settings")
+    skills = box.toolkit / "templates" / "skills"
+    folders = sorted(f for f in skills.iterdir() if (f / "SKILL.md").is_file())
+    assert len(folders) >= 3
+    assert {f.name: settings.name_problem(f) for f in folders} == {f.name: "" for f in folders}
+
+
+def test_the_rule_for_names_says_what_to_fix(box: Sandbox) -> None:
+    settings = shared_module(box, "settings")
+
+    def broken(name: str, said: str) -> str:
+        return (
+            f"The skill {name} {said} Rename its folder and the name: line in its SKILL.md, and "
+            f'add "{name}" to formerNames in its dev-home-skill.json so your answers move with it.'
+        )
+
+    standard = "has a name the Agent Skills standard doesn't allow:"
+    lower = "use lowercase letters, digits, and hyphens"
+    ends = "start and end it with a letter or a digit, with no two hyphens in a row"
+    reserved = "in it, which claude.ai and Anthropic's API don't allow in a skill's name"
+    long_name = "x" * 65
+    accented = "notes-" + chr(0xE9) + "t" + chr(0xE9)
+    cases = {
+        # The standard allows lowercase letters from any alphabet, as its own validator does.
+        "my-notes": "",
+        accented: "",
+        "My_Notes": broken("My_Notes", f'{standard} {lower}, such as "my-notes".'),
+        "-edge": broken("-edge", f'{standard} {ends}, such as "edge".'),
+        "a--b": broken("a--b", f'{standard} {ends}, such as "a-b".'),
+        long_name: broken(
+            long_name, f'{standard} use at most 64 characters, such as "{"x" * 64}".'
+        ),
+        "claude-tips": broken("claude-tips", f'has "claude" {reserved}.'),
+        # A name with a reserved word gets no suggestion: none can be made from it.
+        "Claude_Tips": broken(
+            "Claude_Tips", f'{standard} {lower}. Its name also has "claude" {reserved}.'
+        ),
+        "anthropic-skills": broken(
+            "anthropic-skills",
+            f'has "anthropic" {reserved}, and Claude Code skips a skill with this name.',
+        ),
+        "synced": broken(
+            "synced",
+            "has a name Claude Code keeps for the skills it downloads from claude.ai, so setup "
+            "doesn't add it to your agents.",
+        ),
+    }
+    # The name: line, quoted or not, and with a comment or not, matches the folder or doesn't. Only
+    # a frontmatter with a closing line counts, and only a line that isn't indented.
+    texts = {
+        "quoted": '---\nname: "quoted"\n---\n',
+        "commented": "---\nname: commented  # the same as the folder\n---\n",
+        "quoted-note": "---\nname: 'quoted-note'  # the same as the folder\n---\n",
+        "mismatched": "---\nname: other\n---\n",
+        "unnamed": "---\nmetadata:\n  name: unnamed\n---\n",
+        "unclosed": "---\ndescription: No end.\n\nname: unclosed\n",
+        "emptied": "---\nname:\n---\n",
+    }
+    folders = box.root / "names"
+    for name in cases:
+        write_text(folders / name / "SKILL.md", f"---\nname: {name}\ndescription: A test.\n---\n")
+    for name, text in texts.items():
+        write_text(folders / name / "SKILL.md", text)
+    # Claude Code skips a skills folder named synced in any case, and Windows' folder names match
+    # in any case, so this one needs a folder of its own.
+    write_text(box.root / "names-too" / "Synced" / "SKILL.md", "---\nname: Synced\n---\n")
+    found = {name: settings.name_problem(folders / name) for name in [*cases, *texts]}
+    assert {name: found[name] for name in cases} == cases
+    needs = "but the Agent Skills standard needs one that matches the skill's folder."
+
+    def missing(name: str) -> str:
+        return (
+            f"The skill {name}'s SKILL.md has no name: line in its frontmatter, {needs} Add "
+            f'"name: {name}" to the frontmatter at the top of the file, between two --- lines.'
+        )
+
+    assert {name: found[name] for name in texts} == {
+        "quoted": "",
+        "commented": "",
+        "quoted-note": "",
+        "mismatched": 'The skill mismatched\'s SKILL.md says "name: other", but the Agent Skills '
+        "standard needs its name: line to match the skill's folder. Change it to "
+        '"name: mismatched", or rename the folder to match and add "mismatched" to formerNames in '
+        "its dev-home-skill.json so your answers move with it.",
+        "unnamed": missing("unnamed"),
+        "unclosed": missing("unclosed"),
+        "emptied": f"The skill emptied's SKILL.md has an empty name: line, {needs} Change it to "
+        '"name: emptied".',
+    }
+    kept_off = settings.name_problem(box.root / "names-too" / "Synced")
+    assert kept_off.startswith("The skill Synced has a name Claude Code keeps"), kept_off
+
+
+def test_a_skill_named_synced_is_never_added_and_claudes_folder_is_left_alone(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    # Claude Code saves the skills it downloads from claude.ai in its skills folder's synced/.
+    downloads = box.profile / ".claude" / "skills" / "synced"
+    write_text(downloads / "pdf" / "SKILL.md", "---\nname: pdf\n---\n")
+    synced = personal_skill(box, "synced")
+    tips = personal_skill(box, "claude-tips")
+    try:
+        first = setup(box)
+        again = setup_configure(box, "skills.synced.addedToAgents=true")
+        links = skill_links_to(box, "synced"), skill_links_to(box, "claude-tips")
+        states = json.loads(read(box.generated / "skill-states.json"))
+        kept = (downloads / "pdf" / "SKILL.md").is_file() and link_target(downloads) is None
+    finally:
+        remove_personal_skill(box, tips)
+        shutil.rmtree(synced)
+        # Never a recursive delete through a link: only Claude Code's own folder is removed so.
+        if link_target(downloads) is not None:
+            remove_link(downloads)
+        else:
+            shutil.rmtree(downloads)
+    for result in (first, again):
+        assert result.has_line(r"^PROBLEM\s+The skill synced has a name Claude Code keeps"), str(
+            result
+        )
+        assert result.has_line(r'^PROBLEM\s+The skill claude-tips has "claude" in it'), str(result)
+    # The PROBLEM line names it, so the NEW line doesn't, and no answer adds it.
+    assert first.has_line(r"^NEW\s+New skill on this PC, .*'claude-tips'"), str(first)
+    assert not first.has_line(r"^NEW\s.*'synced'"), str(first)
+    assert links == ((None, None), (tips, tips)), links
+    reason = "has a name Claude Code keeps for the skills it downloads from claude.ai"
+    assert states["synced"] == {"state": f"not added: {reason}"}, states
+    assert kept, "setup changed Claude Code's own synced folder"
 
 
 def test_a_renamed_skill_keeps_its_answers(box: Sandbox, settings_kept: Path) -> None:

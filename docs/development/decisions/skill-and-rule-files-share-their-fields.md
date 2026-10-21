@@ -2,8 +2,10 @@
 
 **Decision:** a skill's `dev-home-skill.json` and a built-in rule's `dev-home-rule.json` use the
 same fields for the same facts, read by one reader in `internal/shared/`. Each file holds only what
-its skill or rule needs, and neither has a schema version. Not built yet. Decided by the developer
-on 2026-10-18.
+its skill or rule needs, and neither has a schema version. Decided by the developer on 2026-10-18.
+Built for skills on 2026-10-21: `usedFor`, the rule for names, and the reference page's notes.
+Not built yet: `summary`, which comes with the settings menu's Skills section, the first place
+that shows it, and rules' files, which come with built-in rules.
 
 | Field | Skills | Rules | What it says |
 | --- | --- | --- | --- |
@@ -39,7 +41,9 @@ on 2026-10-18.
   PROBLEM   The skill My_Notes has a name the Agent Skills standard doesn't allow: use lowercase letters, digits, and hyphens, such as "my-notes". Rename its folder and the name: line in its SKILL.md, and add "My_Notes" to formerNames in its dev-home-skill.json so your answers move with it.
   ```
 
-  A dot in a skill's name also still stops setup saving answers for it, as built.
+  A dot in a skill's name also still stops setup saving answers for it, as built. And `synced`,
+  in any case, is ruled out, and an end user's skill of that name is never added (see the change
+  of 2026-10-21 below).
 - **No schema version** in either file. A rule for developers covers what one would catch: a field
   never changes meaning, and a new meaning gets a new name. From 1.0.0 on, a replaced field's old
   name keeps being read, as backwards compatibility requires; before then, a rename such as
@@ -104,6 +108,37 @@ on 2026-10-18.
   to write, and refusing a whole file over one new field hides the skill or drops its preferences.
 - `recommended` meaning the same in the release data file: matching it there was cosmetic, since
   a release's field grades how much it matters ([A release data file holds the version and what end users need to know](a-release-data-file-holds-the-version-and-what-end-users-need-to-know.md)).
+
+**Changed on 2026-10-21,** before any release, when the rule for names was built:
+
+- **`synced` is ruled out,** in any case, and an end user's skill of that name is never added: setup
+  gives it a `PROBLEM` line on every sync, and links it into no skills folder. Claude Code's skills
+  page (read 2026-10-21) says it saves the skills it downloads from claude.ai in
+  `~/.claude/skills/synced/`, and skips a skill an end user names `synced` in any capitalization.
+  On a PC without that folder yet, a link setup made there would take those downloads into the
+  skill's own folder in dev-home, where Claude Code's later downloads can overwrite or remove
+  files. So adding it is what does the harm, unlike any other name.
+- **`anthropic-skills`,** which Claude Code also skips, already breaks the rule through
+  `anthropic`; its `PROBLEM` line says that Claude Code skips it too.
+- **`claude` and `anthropic` stay ruled out** for every skill, the end user's included (the
+  developer's choice). The same page shows that Claude Code doesn't reserve them: they come from
+  Anthropic's skill authoring guide, for skills on claude.ai and its API. They stay for the same
+  reason as the standard's own rule, which Claude Code doesn't enforce either: a skill that
+  follows both can move to claude.ai, where Claude Code then downloads it on every PC.
+- **The standard's characters** are checked as its reference validator, skills-ref, checks them
+  (its `validator.py`, read 2026-10-21): after Unicode's NFKC normalizing, lowercase letters from
+  any alphabet, digits, and hyphens. skills-ref checks no reserved words.
+- **The `name:` line** in `SKILL.md` gets a `PROBLEM` line of its own when it's missing or
+  doesn't match the folder, which the standard asks for. Claude Code's skills page says `name`
+  sets the command a skill runs by, beside the folder's name.
+- **`summary` waits** for the settings menu's Skills section, the first place that shows it
+  (the developer's choice): nothing reads it before then.
+
+Set aside on 2026-10-21: stopping the check for `claude` and `anthropic` in end users' skills
+(fewer `PROBLEM` lines, but it treats that rule unlike the standard's, and drops the warning before
+a skill moves to claude.ai); `synced` as a `PROBLEM` line only, still added (adding it is the
+harm); and showing `summary` now, in `/dev-home skills` and the `NEW` line (its display would be
+designed twice, once now and again with the Skills section).
 
 **This changes:**
 [Skills and releases declare their requirements as facts](skills-and-releases-declare-their-requirements-as-facts.md),
