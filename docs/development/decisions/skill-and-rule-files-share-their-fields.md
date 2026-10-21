@@ -137,8 +137,11 @@ that shows it, and rules' files, which come with built-in rules.
 Set aside on 2026-10-21: stopping the check for `claude` and `anthropic` in end users' skills
 (fewer `PROBLEM` lines, but it treats that rule unlike the standard's, and drops the warning before
 a skill moves to claude.ai); `synced` as a `PROBLEM` line only, still added (adding it is the
-harm); and showing `summary` now, in `/dev-home skills` and the `NEW` line (its display would be
-designed twice, once now and again with the Skills section).
+harm); showing `summary` now, in `/dev-home skills` and the `NEW` line (its display would be
+designed twice, once now and again with the Skills section); and the rule repeated in the
+starter's `AGENTS.md` (setup copies the starter once, so existing dev-homes never get it and its
+copies go stale; only sessions started in dev-home load that file; and the rule's `PROBLEM` line
+already says what to fix).
 
 **This changes:**
 [Skills and releases declare their requirements as facts](skills-and-releases-declare-their-requirements-as-facts.md),
