@@ -143,8 +143,8 @@ def test_links_internal_python_to_the_python_it_finds(box: Sandbox) -> None:
 
 
 def test_adds_nothing_to_the_root(first: First) -> None:
-    # The root holds what must be there (AGENTS.md says what). local-settings.json, setup's one
-    # file there, was already written for the test profile.
+    # The root holds what must be there (the decision "What the root holds" says what).
+    # local-settings.json, setup's one file there, was already written for the test profile.
     added = {entry.name for entry in first.box.toolkit.iterdir()} - first.root_before
     assert added == set()
 

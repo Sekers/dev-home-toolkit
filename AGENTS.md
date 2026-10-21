@@ -2,10 +2,10 @@
 
 **What this repository is:** the public tooling for dev-home, a private repo that each person
 keeps for AI-agent handoffs and a general knowledge base, shared across their PCs through GitHub,
-for Claude Code and Codex. This repo holds the `handoff` and `knowledge` skills and the scripts
-they share, the always-on operating rules, `setup.py`, `sync.py`, `update.py`, and the starter
-files for a new private repo. It never holds anyone's handoffs, knowledge, or global rules.
-README.md and `docs/` describe how people use it.
+for Claude Code and Codex. This repo holds the `dev-home`, `handoff`, and `knowledge` skills and
+the scripts they share, the always-on operating rules, `setup.py`, `sync.py`, `update.py`, and
+the starter files for a new private repo. It never holds anyone's handoffs, knowledge, or global
+rules. README.md and `docs/` describe how people use it.
 
 ## Who's who, and the words for each
 
@@ -42,23 +42,24 @@ them in everything you write here, code comments and commit messages included:
 ## The two repos
 
 "dev-home" always means a person's private repo, and "dev-home-toolkit" always means this one.
-In files and in chat, name the repo with any word that fits both, such as commits, update, or sync.
+Where a word fits both, such as commits, update, sync, rules, or skills, say which repo, in
+files and in chat. When the developer's words could mean either repo, and the work at hand
+doesn't settle it, ask which.
 
 | What | dev-home-toolkit (this repo, public) | dev-home (each person's, private) |
 | --- | --- | --- |
 | Always-on rules | `templates/operating-rules/operating-rules.md`: the operating rules, the same for everyone | `global-rules/global-rules.md`: that person's global rules |
-| Skills | `templates/skills/`: the `handoff` and `knowledge` skills. `templates/shared-skill-scripts/`: the scripts they share | `skills/`: that person's own skills |
+| Skills | `templates/skills/`: the `dev-home`, `handoff`, and `knowledge` skills. `templates/shared-skill-scripts/`: the scripts they share | `skills/`: that person's own skills |
 | `AGENTS.md`, `CLAUDE.md`, `README.md` | About dev-home-toolkit, and working on it | About that dev-home, and working in it |
 | Only here | `setup.py`, `sync.py`, `update.py`, `templates/dev-home-starter/`, `internal/`, `docs/` | `handoffs/`, `knowledge/`, `dev-home.json` (settings every copy shares, which setup writes and commits) |
 
+## Layout and what to build on
+
 - The root holds only what must be there, and the scripts a person runs by hand:
-  `.gitattributes`, `.gitignore`, `AGENTS.md`, `CHANGELOG.md`, `CLAUDE.md`, `LICENSE`, `README.md`,
-  `setup.py`, `sync.py`, `update.py`, and the folders `templates/`, `internal/`, and
-  `docs/`. Setup adds `local-settings.json` on each PC, and beside it a dated backup each time
-  `--configure` changes it or setup sets aside a file in an older layout, such as
-  `local-settings.json.bak-YYYYMMDD-HHMMSS`; git ignores both. Anything new in the root, even
-  what a script or program creates, needs the developer's approval in a question of its own. When
-  the root is better, propose it and say why; never settle for a worse place to avoid asking.
+  [What the root holds](docs/development/decisions/what-the-root-holds.md) lists each file and
+  folder, with why. Anything it doesn't list, even what a script or program creates, needs the
+  developer's approval in a question of its own. When the root is better, propose it and say
+  why; never settle for a worse place to avoid asking.
 - `internal/` is dev-home-toolkit's own machinery, which nobody runs directly
   ([scripts.md](docs/development/scripts.md) says what's in it). Never edit
   `internal/.generated/` or `local-settings.json`, or change `internal/.python/`. Setup

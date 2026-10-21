@@ -1,11 +1,11 @@
 # What the root holds
 
 **Decision:** the root holds only what must be there, and the scripts a person runs by hand.
-AGENTS.md lists them, with the rule to ask before adding anything there. The rest of what used to
-be there lives under `internal/`: the generated files in `internal/.generated/`, the Python link
-in `internal/.python/`, and everything for development in `internal/development/` (the
-development tools' settings, the tests, and what they write: `.venv`, caches, and the test
-sandboxes).
+This page lists them, below, and AGENTS.md has the rule to ask before adding anything there. The
+rest of what used to be there lives under `internal/`: the generated files in
+`internal/.generated/`, the Python link in `internal/.python/`, and everything for development in
+`internal/development/` (the development tools' settings, the tests, and what they write:
+`.venv`, caches, and the test sandboxes).
 
 **Why each item stays:**
 
@@ -28,7 +28,9 @@ sandboxes).
 - `templates/`: the repo's main content, what setup fills in and links into the agents.
 - `internal/`: there to keep everything else out of the root.
 - `docs/`: GitHub Pages, without a build workflow, publishes only from the root or `docs/`.
-- `local-settings.json`: people edit it by hand to change a setting.
+- `local-settings.json`: setup adds it on each PC, and people edit it by hand to change a setting.
+  Beside it goes a dated backup each time `--configure` changes it or setup sets aside a file in
+  an older layout, such as `local-settings.json.bak-YYYYMMDD-HHMMSS`. Git ignores both.
 
 **Why `.generated/` moved, though every PC's links pointed into it:** that was only a reason
 about the cost of moving, and on its merits the folder is machinery nobody runs or edits. It
@@ -62,6 +64,10 @@ decision.
 - The whole of setup's code in the root: setup runs inside the sync's process too, so the same
   `__pycache__` reason applies.
 - The tests staying in `internal/tests/`: ruff wouldn't find its settings for them.
+
+**Changed on 2026-10-21:** the list moved here from AGENTS.md, which keeps the rule to ask before
+adding anything to the root, so that AGENTS.md's "The two repos" section holds only what tells the
+two repos apart.
 
 **Look again if:** dev-home-toolkit becomes a Python package, an editor's settings become worth a
 root folder, or a `--configure` switch means nobody edits `local-settings.json` by hand.
