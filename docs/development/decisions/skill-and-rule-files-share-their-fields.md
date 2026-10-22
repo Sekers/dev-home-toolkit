@@ -45,11 +45,10 @@ that shows it, and rules' files, which come with built-in rules.
   in any case, is ruled out, and an end user's skill of that name is never added (see the change
   of 2026-10-21 below).
 - **No schema version** in either file. A rule for developers covers what one would catch: a field
-  never changes meaning, and a new meaning gets a new name. From 1.0.0 on, a replaced field's old
-  name keeps being read, as backwards compatibility requires; before then, a rename such as
-  `description` to `usedFor` is simply made. The existing handling stays: anything the reader
-  doesn't know under `supportedOn` keeps a skill off, anything else is ignored, and each is named
-  in a `PROBLEM` line.
+  never changes meaning, and a new meaning gets a new name. A replaced field's old name keeps
+  being read, as backwards compatibility requires. The existing handling stays: anything the
+  reader doesn't know under `supportedOn` keeps a skill off, anything else is ignored, and each is
+  named in a `PROBLEM` line.
 - **Built-in rules' files,** which only developers write, are checked by tests, as built-in skills'
   are, so they need no `PROBLEM` lines.
 

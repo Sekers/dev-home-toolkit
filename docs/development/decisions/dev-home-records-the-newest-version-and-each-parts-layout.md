@@ -37,13 +37,13 @@ Decided by the developer on 2026-10-18.
   `layoutVersions`. For each part, a test lists what its code produces: the files, with made-up
   names replaced by placeholders, each note's field names, JSON keys, and template sections. The
   list is saved in dev-home-toolkit's repo for each version. A difference fails the test until the
-  version is raised and the new list saved, and from 1.0.0 on, until a conversion step exists.
+  version is raised, the new list saved, and a conversion step exists.
   Every test counts: a file that matches nothing on its part's list fails the test that wrote it.
   Released lists are locked: the release step refuses if a released version's list changed, or if
   any check fails. Not caught: a change in what a file means, or in which files the code reads; a
   rule in `docs/development/` says those count as layout changes too. `rules/` and the two
   settings files get their tests with the rules work, and `handoffs/` and `knowledge/` before
-  1.0.0. Layout changes before 1.0.0 need no conversion steps.
+  1.0.0.
 
 **Why:**
 

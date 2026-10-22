@@ -48,9 +48,9 @@ knowledge/
 - **Layout:** this is the `knowledge` part's layout, with its own layout version
   ([dev-home records the newest version and each part's layout](dev-home-records-the-newest-version-and-each-parts-layout.md)).
   `merge=union` in dev-home's `.gitattributes` widens to every index in `knowledge/`.
-- **Moving an existing knowledge base:** before 1.0.0, the rows are rewritten into subject lists
-  once, by hand. The knowledge skill's new steps are shown to the developer with their word count
-  before they're built, as AGENTS.md's "AI usage" asks.
+- **Moving an existing knowledge base:** the rows are rewritten into subject lists once, by hand.
+  The knowledge skill's new steps are shown to the developer with their word count before they're
+  built, as AGENTS.md's "AI usage" asks.
 
 **Why:**
 

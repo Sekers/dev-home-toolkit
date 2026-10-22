@@ -74,6 +74,10 @@ doesn't settle it, ask which.
 - Never build on a feature its documentation calls deprecated, in Claude Code, Codex, Python,
   git, or anything else dev-home-toolkit uses: a deprecated feature is likely to stop working. Use
   what replaces it, or ask the developer when nothing does.
+- No compatibility with dev-home-toolkit's own older versions until 1.0.0, its first release: no
+  conversion step, fallback, or reading of an old form, even where a decision describes one
+  (`formerNames` excepted), and tell the developer what PCs already set up need done by hand
+  ([why](docs/development/decisions/no-compatibility-with-older-versions-before-1-0-0.md)).
 
 ## Privacy
 
