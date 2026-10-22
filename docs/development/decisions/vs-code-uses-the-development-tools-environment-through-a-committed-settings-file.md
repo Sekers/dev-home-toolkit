@@ -47,6 +47,9 @@ extension's or the test panel's, would join it once decided. Decided by the deve
 
 - Each developer picking the environment by hand, as before: repeated on every PC, lost on a
   move, and a new developer meets the unresolved imports first.
+- A committed template, such as `settings.template.json`, that each developer copies to
+  `.vscode/settings.json`, as TypeScript and Prettier do: VS Code's own writes would stay out of
+  a tracked file, but every clone needs a step by hand, which this decision set out to avoid.
 - The Python Environments extension's `python-envs.workspaceSearchPaths`, which takes a relative
   path and so works on every OS: that extension is off by default.
 - A `.code-workspace` file in `internal/development/`: no root folder, but everyone would have to
