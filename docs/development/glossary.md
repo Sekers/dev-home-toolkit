@@ -103,3 +103,11 @@ as "both tools" for Claude Code and Codex.
   `knowledge`, in `dev-home.json`'s `layoutVersions`. A part with no number is at layout 1 (not
   built yet).\
   _Avoid_: schema version, which is each settings file's own `schemaVersion`; format version.
+
+## Docs
+
+- **Decision**: one file in `docs/development/decisions/`, cited as "decision 0054", or by number
+  and name, "0054: Removing what setup set up".\
+  _Avoid_: ADR, decision record, record.
+- **Not built yet**: decided, but not in the code yet, as a decision's Built line says.\
+  _Avoid_: planned, pending.

@@ -270,7 +270,7 @@ DEV_HOME_FILES = ("global-rules/global-rules.md", "knowledge/README.md")
 # and Cursor (their docs, read 2026-10-16). If setup ever sets up one of them, a no to Codex alone
 # must no longer remove these links: setup links here while any agent that reads the folder is
 # answered yes, and removes its links only once every one of them is answered no. See
-# docs/development/decisions/setup-removes-what-it-set-up-in-a-folder-answered-no.md.
+# docs/development/decisions/0054-removing-what-setup-set-up.md.
 AGENTS_SKILLS = Path(".agents") / "skills"
 
 

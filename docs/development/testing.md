@@ -19,7 +19,7 @@ proposing a commit, and points here; its rules apply too.
   `testHomeDir`, so every setup run from the copy uses a scratch profile instead of the real
   one. A module's sandbox is deleted when its tests pass, and kept for a look when one fails;
   the next run that passes removes the kept ones that haven't changed for an hour
-  ([why](decisions/a-passing-test-run-removes-the-sandboxes-earlier-runs-kept.md)).
+  ([why](decisions/0079-old-test-sandboxes.md)).
 - Run the skills' commands word for word from the sandbox's generated skills, as `helpers.py`
   does. It starts each with the test environment's Python, by its real path, in place of
   `internal/.python/python.exe`, because a virtual environment's `python.exe` can't run through
@@ -29,7 +29,7 @@ proposing a commit, and points here; its rules apply too.
   through `tests/read_only_launcher.py` whenever `run_command` runs it, and the test fails at
   anything the script changes, or at a kind of audit event the launcher hasn't sorted yet, such
   as one a new Python version raises; the failure says how to sort it
-  ([why](decisions/the-tests-check-the-scripts-that-only-report-in-two-ways.md)).
+  ([why](decisions/0050-testing-scripts-that-only-report.md)).
 - Fake only what needs a person or an outside service, such as a console answer, `gh`,
   Developer Mode, or another platform; git and the file system stay real. Use `monkeypatch` and
   small typed fakes first, and `unittest.mock` only with `autospec`, where recording calls saves

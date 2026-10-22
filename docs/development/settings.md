@@ -2,7 +2,7 @@
 
 The rules for adding or changing a setting: one of dev-home-toolkit's own, in `local-settings.json`
 or `dev-home.json`, or a skill's preference.
-[Settings record answers, not just values](decisions/settings-record-answers-not-just-values.md)
+[0049: Answers in the settings](decisions/0049-answers-in-the-settings.md)
 defines the forms a saved setting takes and the four kinds of setting, with the reasons.
 AGENTS.md's rules apply too.
 
@@ -18,7 +18,7 @@ AGENTS.md's rules apply too.
   such question reads the same: `'y', 'n', or 'd' for the default (<its default>)`, with the
   capital letter showing what Enter gives, such as `[y/n/D]`. Any key or answer a prompt names
   goes through `console.key`
-  ([Keys and answers in setup's prompts stand apart](decisions/keys-and-answers-in-setups-prompts-stand-apart.md)).
+  ([0055: Keys and answers in prompts](decisions/0055-keys-and-answers-in-prompts.md)).
 - Decide what Enter does at its question when nothing is answered yet, apart from its default:
   for a setting with a default, Enter means default; a folder's question, and Codex's, takes
   Enter as yes, though a folder nobody has answered for isn't set up; and `multiMachine`'s
@@ -29,7 +29,7 @@ AGENTS.md's rules apply too.
   `claudeCode.folders` or `codex.homes`, each with its own answer, `setUp`. When every folder
   reads the same skills, as Codex's homes do, setup's code keeps their answers the same, and the
   file's shape doesn't change
-  ([Codex is set up in every Codex home, or in none](decisions/codex-is-set-up-in-every-codex-home-or-in-none.md)).
+  ([0052: Codex homes](decisions/0052-codex-homes.md)).
 - A setting is per PC, in `local-settings.json`, unless it describes dev-home itself, which every
   copy shares in `dev-home.json`. A skill's preferences are always per PC.
 - A skill's preference reaches end users who never run setup by hand through the feature it
@@ -48,14 +48,14 @@ AGENTS.md's rules apply too.
 - Quiet runs never ask, and the only state they write is `unanswered`, for something they
   announce. The one exception: a run gives each of a shared agent's folders the main folder's
   answer, with a line saying so
-  ([Codex is set up in every Codex home, or in none](decisions/codex-is-set-up-in-every-codex-home-or-in-none.md)).
+  ([0052: Codex homes](decisions/0052-codex-homes.md)).
 - Save `local-settings.json` only through setup's save, which holds the sync's lock while it
   reads the file again and makes there only the changes a person made in that run. Anything setup
   works out by itself, such as a mark or an answer moved for a rename, is worked out again in
   `Setup.settle`, in `internal/shared/setup.py`, from the file as it is then, never carried over
   from an earlier read. One that the questions or the menu should show is also made before them,
   as each Codex home's shared answer is, outside `Setup.answering`, which records only a person's
-  changes ([why](decisions/settings-record-answers-not-just-values.md)).
+  changes ([why](decisions/0049-answers-in-the-settings.md)).
 - Make a backup only when a person changes a setting, or answers are deleted.
 
 ## Changing a setting later

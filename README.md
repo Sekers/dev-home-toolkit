@@ -274,7 +274,7 @@ Everything beyond getting started is in the `docs/` folder:
 | Reference | [The scripts](docs/reference/scripts.md) | `setup.py`, `sync.py`, and `update.py`: when each one runs, what their status words mean, how updates are installed, and where they come from. |
 | Reference | [What setup changes on your PC](docs/reference/setup-changes.md) | Every link, file, and setting that setup adds, why, and how to remove it all. |
 | Reference | [A skill's dev-home-skill.json](docs/reference/dev-home-skill-json.md) | The file that says whether a skill is added to your agents unless you say no, what it needs to run, its preferences, and its old names. |
-| Development | [Design decisions](docs/development/decisions/index.md) | For people changing dev-home-toolkit: decisions made and options set aside, with the reasons. |
+| Development | [Design decisions](docs/development/decisions/README.md) | For people changing dev-home-toolkit: decisions made and options set aside, with the reasons. |
 | Development | [Skills and everything else under templates/](docs/development/skills.md) | The rules for changing the skills, the scripts they share, the operating rules, and the starter. |
 | Development | [setup.py, sync.py, and update.py](docs/development/scripts.md) | The rules for changing the scripts and their code in `internal/shared/`. |
 | Development | [Settings](docs/development/settings.md) | The rules for adding or changing a setting, or a skill's preference. |
@@ -282,10 +282,7 @@ Everything beyond getting started is in the `docs/` folder:
 | Development | [Writing the docs](docs/development/writing-docs.md) | Where each page goes, and the rules for the README and `docs/`. |
 | Development | [A fresh agent's read](docs/development/fresh-agent-reads.md) | How to have a second agent, with no context, check a change. |
 | Development | [Glossary](docs/development/glossary.md) | The one word for each idea in dev-home-toolkit, and the words to avoid. |
-| Development | [Skill requirements](docs/development/research/skill-requirements.md) | What keeps a skill off a PC: why a missing program can't decide it reliably, the options weighed, and a recommended design, with the words "tool", "agent", and "program". |
-| Development | [Pylance comparison](docs/development/research/pylance-comparison.md) | Pylance's standard and strict type checking compared on this repo's code, with the data, so it needn't be run again. |
-| Development | [claudeMdExcludes for another Claude Code folder](docs/development/research/claude-md-excludes.md) | Tests of which `claudeMdExcludes` patterns keep `~\.claude`'s instructions out of another account's sessions on Windows, and which fail. |
-| Development | [Syncing at session start](docs/development/research/syncing-at-session-start.md) | A test of whether a session sees the rules its own start-up hook brings in, and how similar projects keep a second PC current. |
+| Development | [Research](docs/development/research/README.md) | Investigations that decisions rest on: what was tested, how, when, and the results. |
 
 ## Safety and privacy
 
@@ -349,7 +346,7 @@ Everything beyond getting started is in the `docs/` folder:
 
 [AGENTS.md](AGENTS.md) has the rules for changing this repo, for developers and agents alike, and
 points to a page in `docs/development/` for each area's own rules.
-[Design decisions](docs/development/decisions/index.md) says why it works the way it does.
+[Design decisions](docs/development/decisions/README.md) says why it works the way it does.
 
 Changing dev-home-toolkit takes [uv](https://docs.astral.sh/uv/), which installs the pinned
 development tools (pytest, ruff, and mypy) the first time you run them. Before committing, run

@@ -16,6 +16,6 @@ offer; its rules apply too.
   or works with, and the scenarios; ask it to read nothing else; and ask for a short report.
   Offer it once for a piece of work, when its text is ready to approve, saying what it will read
   and which model and effort you'd use (the decision
-  [/handoff audit has a fresh agent check the handoff](decisions/handoff-audit-has-a-fresh-agent-check-the-handoff.md)
+  [0042: /handoff audit](decisions/0042-handoff-audit.md)
   has measurements of both). If your agent product can't start one, say so rather than offering
   it; if it can't set the model or effort, say which it will run on. A no covers that piece of work.

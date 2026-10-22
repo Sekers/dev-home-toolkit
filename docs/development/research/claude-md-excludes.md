@@ -3,7 +3,7 @@
 On 2026-10-19, these tests checked whether `claudeMdExcludes` in a second Claude Code folder's
 `settings.json` keeps `~/.claude`'s instructions out of that account's sessions, and which form of
 pattern works on Windows. They are the evidence for the decision
-[Other Claude Code folders skip ~/.claude's instructions](../decisions/other-claude-code-folders-skip-claudes-instructions.md).
+[0074: Instructions in other Claude Code folders](../decisions/0074-instructions-in-other-claude-code-folders.md).
 
 ## Results
 

@@ -10,9 +10,8 @@ whether it's checked for each skills folder or once for the whole PC; whether th
 anything about it; and what it says when it isn't met. settings.py reads a skill's file through
 parse_list, this_pc gathers this PC's facts without starting a process, and unmet says which
 requirements a skill doesn't meet in one skills folder.
-The design and its reasons are in docs/development/decisions/, in "Skills and releases declare
-their requirements as facts" and "Setup keeps a skill off only for its operating system or
-agent"."""
+The design and its reasons are in docs/development/decisions/, in decision 0057, "Requirements",
+and decision 0062, "Keeping a skill off"."""
 
 import os
 import re

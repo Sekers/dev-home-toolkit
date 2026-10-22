@@ -36,7 +36,7 @@ points here; its rules apply too.
 - Adding or changing a setting, or a skill's preference, follows [settings.md](settings.md).
 - The entry points in the root stay short: they check the Python version, load
   `internal/shared/` by its path, and run the module of their own name (a test checks).
-  [What the root holds](decisions/what-the-root-holds.md) says why the code isn't in the root.
+  [0016: The root](decisions/0016-the-root.md) says why the code isn't in the root.
 - Safe to re-run. setup.py overwrites or deletes only these:
   - its own generated files
   - links whose target is gone
@@ -51,21 +51,21 @@ points here; its rules apply too.
   - the links it made in `~/.agents/skills`, once the person has said no to Codex
   - the `internal/.python/` junction, once the `python.exe` it leads to is gone, or once a
     Python that setup ranks ahead of it passes setup's check
-    ([Setup follows the newest suitable Python on every run](decisions/setup-follows-the-newest-suitable-python-on-every-run.md))
+    ([0077: Which Python setup uses](decisions/0077-which-python-setup-uses.md))
   - settings files the person said yes to changing
   - the settings file of a Claude Code folder or Codex home the person said no to setting up,
     to take out what a yes there adds
 
-  [Setup removes what it set up in a folder answered no](decisions/setup-removes-what-it-set-up-in-a-folder-answered-no.md)
+  [0054: Removing what setup set up](decisions/0054-removing-what-setup-set-up.md)
   says which links and entries count as setup's. A change to Claude Code's or Codex's settings
   file is the change a folder setup sets up needs there, and the yes to setting up that folder
   approves it: the question says what the yes changes, including the access it grants, so every
   run, quiet ones included, makes the change when it's missing, with a dated backup and a `SET`
   line
-  ([A yes to set up a folder approves the settings change it needs](decisions/a-yes-to-set-up-a-folder-approves-the-settings-change-it-needs.md)).
+  ([0053: What a folder's yes approves](decisions/0053-what-a-folders-yes-approves.md)).
   In a Claude Code folder other than `~/.claude`, the change includes the `claudeMdExcludes`
   patterns of
-  [Other Claude Code folders skip ~/.claude's instructions](decisions/other-claude-code-folders-skip-claudes-instructions.md).
+  [0074: Instructions in other Claude Code folders](decisions/0074-instructions-in-other-claude-code-folders.md).
   A no to the folder approves taking it back out, the same way. Any other settings change is shown
   as a diff first and waits for a typed yes. Setup never changes a file it can't fully parse, or a
   read-only one. The exception to the backup is
@@ -89,7 +89,7 @@ points here; its rules apply too.
 - A question of setup's that offers something a person can take or turn down uses the standard
   answers, as [skills.md](skills.md) says for every such question. A list of such items, of one
   type, is asked through setup's `choose_from_list`, the one prompt
-  ([One prompt for every optional list](decisions/one-prompt-for-every-optional-list.md)).
+  ([0033: Prompts for optional lists](decisions/0033-prompts-for-optional-lists.md)).
 - update.py pulls exactly the commit it showed the end user, so nothing new can slip in between
   their yes and the pull.
 - Everything about dev-home-toolkit updates happens in update's code, so what the end user is told

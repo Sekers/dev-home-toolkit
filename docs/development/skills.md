@@ -48,12 +48,12 @@ rules apply too.
 
 - Frontmatter uses only standard fields: `name`, `description`, and `allowed-tools`. The name
   matches the folder name, and follows the rule for names in
-  [Skill and rule files share their fields](decisions/skill-and-rule-files-share-their-fields.md)
+  [0072: Fields in skill and rule files](decisions/0072-fields-in-skill-and-rule-files.md)
   (a test checks).
 - A skill's preferences, declared in a `dev-home-skill.json` in its folder, follow
   [settings.md](settings.md). What it needs to run goes in the same file, as `supportedOn` and
   `dependsOn`
-  ([Skills and releases declare their requirements as facts](decisions/skills-and-releases-declare-their-requirements-as-facts.md)).
+  ([0057: Requirements](decisions/0057-requirements.md)).
   A test reads each skill's file, and fails at anything the reader can't use, or doesn't know.
   [A skill's dev-home-skill.json](../reference/dev-home-skill-json.md) describes every field.
   Only `dev-home` declares `alwaysAddedToAgents`, since every PC needs it to change its answers
@@ -100,7 +100,7 @@ rules apply too.
   an agent could misread or slip through: two rules that disagree, a question whose answer is
   unclear, a step the scripts can't do, or wording that only fits Claude Code.
 - Every question that offers something a person can take or turn down uses the answers in
-  [Offers use the same answers](decisions/offers-use-the-same-answers.md). To depart from them,
+  [0040: Answers to offers](decisions/0040-answers-to-offers.md). To depart from them,
   ask the developer first, then add the departure and its reason to that decision.
 - When you propose a commit that changes a skill's `SKILL.md`, say in chat about how many words
   it gained or lost.
@@ -113,7 +113,7 @@ rules apply too.
 
 - These are scripts that only agents run, and that more than one skill may run. Skills point to
   the one generated copy; never copy a script into each skill's folder.
-  [Scripts the skills share are generated once, and skills point to them](decisions/scripts-the-skills-share-are-generated-once-and-skills-point-to-them.md)
+  [0003: Scripts the skills share](decisions/0003-scripts-the-skills-share.md)
   says why, and why they aren't at the root or in `internal/`.
 - One job per script, named for the job. `facts.py` reports facts about where a session is
   running, one topic at a time. `prepare.py` prepares dev-home for a skill command: it runs the
@@ -125,7 +125,7 @@ rules apply too.
   everything in its lines, and it never commits: skills commit through `sync.py --message`.
 - `facts.py` only reports, and only from this PC: it changes nothing and never uses the network.
   That's what makes it safe to pre-approve. The tests read its code, and watch it as it runs (see
-  [The tests check the scripts that only report in two ways](decisions/the-tests-check-the-scripts-that-only-report-in-two-ways.md)).
+  [0050: Testing scripts that only report](decisions/0050-testing-scripts-that-only-report.md)).
   Adding a name to what it may use (`REPORTING_NAMES`, `REPORTING_METHODS`, or
   `REPORTING_ATTRIBUTES` in `internal/development/tests/helpers.py`) is a safety change: say so
   in the commit. Anything a skill needs done, rather than told, goes

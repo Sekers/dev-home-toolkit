@@ -173,12 +173,102 @@ def test_every_link_to_a_heading_points_to_one_that_exists() -> None:
 
 def test_the_readme_links_to_every_page_under_docs() -> None:
     # The README's table lists the pages, and a folder of many, such as the decisions, lists its
-    # own on an index page the README links. A page neither lists can't be found.
+    # own in its README.md, which the README links. A page neither lists can't be found.
     listed = {file for _, file, _ in linked_files(REPO_ROOT / "README.md")}
-    for index in [file for file in listed if file.name == "index.md"]:
+    for index in [file for file in listed if file.name == "README.md"]:
         listed |= {file for _, file, _ in linked_files(index)}
     unlisted = [name(page) for page in pages()[1:] if page.resolve() not in listed]
     assert unlisted == []
+
+
+DECISIONS = DOCS / "development" / "decisions"
+
+
+def file_name_for(decision: str) -> str:
+    """A decision's name as its file names it: lower case, apostrophes dropped, and a hyphen for
+    each run of anything else that isn't a letter or digit."""
+    return re.sub(r"[^a-z0-9]+", "-", decision.lower().replace("'", "")).strip("-")
+
+
+# The values a decision's opening line may have, as decisions/README.md gives them.
+BUILT_LINE = re.compile(
+    r"\*\*Built:\*\* (?:yes\.|not yet\.|nothing to build\.|yes, except: \S.*)"
+    r"|\*\*Replaced by:\*\* \[\d{4}: [^]]+\]\(\d{4}-[a-z0-9-]+\.md\)\.?"
+)
+
+
+def decision_problems(folder: Path) -> list[str]:
+    """What breaks the format decisions/README.md gives: files named NNNN-<name>.md, numbered
+    from 0001 with no gaps, each titled "# NNNN: <name>", where the file's name is the title's
+    name in lower case with hyphens, opening with a Built line of one of the format's values, or
+    a Replaced by line, and listed in the folder's README.md by its number and name."""
+    files = sorted(folder.glob("[0-9]*.md"))
+    problems: list[str] = []
+    expected = [f"{n:04d}" for n in range(1, len(files) + 1)]
+    if [file.name[:4] for file in files] != expected:
+        problems.append("the numbers don't run from 0001 with no gaps")
+    readme = folder / "README.md"
+    listed = {
+        (readme.parent / link[2]).resolve(): link[1]
+        for line in lines_of(readme)
+        for link in re.finditer(r"\[([^]]+)\]\(([^)\s#]+)\)", line)
+    }
+    for file in files:
+        lines = lines_of(file)
+        title = re.fullmatch(r"# (\d{4}): (.+)", lines[0]) if lines else None
+        if not title or file.name != f"{title[1]}-{file_name_for(title[2])}.md":
+            problems.append(f"{file.name}: its name and title don't match NNNN-<name>.md")
+        opening = next((line for line in lines[1:] if line.strip()), "")
+        if not opening.startswith(("**Built:** ", "**Replaced by:** ")):
+            problems.append(f"{file.name}: doesn't open with its Built line")
+        elif not BUILT_LINE.fullmatch(opening):
+            problems.append(f"{file.name}: its Built line isn't one of the format's values")
+        text = listed.get(file.resolve())
+        if text is None:
+            problems.append(f"{file.name}: not listed in README.md")
+        elif title and text != f"{title[1]}: {title[2]}":
+            problems.append(f"{file.name}: README.md lists it as {text!r}")
+    return problems
+
+
+def test_each_decision_is_numbered_named_and_listed() -> None:
+    assert decision_problems(DECISIONS) == []
+
+
+def test_the_decision_check_finds_each_kind_of_problem(tmp_path: Path) -> None:
+    (tmp_path / "README.md").write_text("- [0001: Fine](0001-fine.md)\n", encoding="utf-8")
+    (tmp_path / "0001-fine.md").write_text("# 0001: Fine\n\n**Built:** yes.\n", encoding="utf-8")
+    assert decision_problems(tmp_path) == []
+    (tmp_path / "0003-gap.md").write_text("# 0003: Gap\n\n**Built:** yes.\n", encoding="utf-8")
+    (tmp_path / "0002-wrong-name.md").write_text("# 0002: Right name\n\nText.\n", encoding="utf-8")
+    assert decision_problems(tmp_path) == [
+        "0002-wrong-name.md: its name and title don't match NNNN-<name>.md",
+        "0002-wrong-name.md: doesn't open with its Built line",
+        "0002-wrong-name.md: not listed in README.md",
+        "0003-gap.md: not listed in README.md",
+    ]
+    (tmp_path / "0004-also.md").write_text("# 0004: Also\n\n**Built:** yes.\n", encoding="utf-8")
+    (tmp_path / "0002-wrong-name.md").unlink()
+    assert decision_problems(tmp_path)[0] == "the numbers don't run from 0001 with no gaps"
+
+
+def test_the_decision_check_reads_the_built_line_and_the_list(tmp_path: Path) -> None:
+    readme = "- [0001: Fine](0001-fine.md)\n- [0002: Old name](0002-new-name.md)\n"
+    (tmp_path / "README.md").write_text(readme, encoding="utf-8")
+    fine = "# 0001: Fine\n\n**Built:** yes, except: the part\nthat wraps.\n"
+    (tmp_path / "0001-fine.md").write_text(fine, encoding="utf-8")
+    renamed = "# 0002: New name\n\n**Built:** maybe.\n"
+    (tmp_path / "0002-new-name.md").write_text(renamed, encoding="utf-8")
+    assert decision_problems(tmp_path) == [
+        "0002-new-name.md: its Built line isn't one of the format's values",
+        "0002-new-name.md: README.md lists it as '0002: Old name'",
+    ]
+    for value in ("not yet.", "nothing to build.", "yes."):
+        (tmp_path / "0001-fine.md").write_text(f"# 0001: Fine\n\n**Built:** {value}\n", "utf-8")
+        assert decision_problems(tmp_path)[0].startswith("0002-")
+    replaced = "# 0001: Fine\n\n**Replaced by:** [0002: New name](0002-new-name.md).\n"
+    (tmp_path / "0001-fine.md").write_text(replaced, encoding="utf-8")
+    assert decision_problems(tmp_path)[0].startswith("0002-")
 
 
 def test_every_skill_has_a_page_and_every_page_a_skill() -> None:

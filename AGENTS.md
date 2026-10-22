@@ -56,7 +56,7 @@ doesn't settle it, ask which.
 ## Layout and what to build on
 
 - The root holds only what must be there, and the scripts a person runs by hand:
-  [What the root holds](docs/development/decisions/what-the-root-holds.md) lists each file and
+  [0016: The root](docs/development/decisions/0016-the-root.md) lists each file and
   folder, with why. Anything it doesn't list, even what a script or program creates, needs the
   developer's approval in a question of its own. When the root is better, propose it and say
   why; never settle for a worse place to avoid asking.
@@ -77,7 +77,7 @@ doesn't settle it, ask which.
 - No compatibility with dev-home-toolkit's own older versions until 1.0.0, its first release: no
   conversion step, fallback, or reading of an old form, even where a decision describes one
   (`formerNames` excepted), and tell the developer what PCs already set up need done by hand
-  ([why](docs/development/decisions/no-compatibility-with-older-versions-before-1-0-0.md)).
+  ([why](docs/development/decisions/0080-compatibility-before-1-0-0.md)).
 
 ## Privacy
 

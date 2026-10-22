@@ -335,7 +335,7 @@ because there "tools" means development tools.
 
 - Skills run programs by name, through the `PATH`, with no fixed paths; fixed paths are recorded
   as the option to revisit if a need appears
-  ([Skills run programs by name, through the PATH](../decisions/skills-run-programs-by-name-through-the-path.md)).
+  ([0061: How skills run programs](../decisions/0061-how-skills-run-programs.md)).
 
 - The warning about a missing program: a one-time hint in the `NEW` line worded "isn't on the
   PATH", with what the skill uses the program for (its entry's `description`), looking where a
@@ -358,9 +358,9 @@ because there "tools" means development tools.
   without the file gets no such lines. The reference page explains `compatibility`, with an
   example. How this was reached, from one list called `requires`, with the options and names set
   aside, is in the decisions
-  [Skills and releases declare their requirements as facts](../decisions/skills-and-releases-declare-their-requirements-as-facts.md)
+  [0057: Requirements](../decisions/0057-requirements.md)
   and
-  [Setup keeps a skill off only for its operating system or agent](../decisions/setup-keeps-a-skill-off-only-for-its-operating-system-or-agent.md).
+  [0062: Keeping a skill off](../decisions/0062-keeping-a-skill-off.md).
 
 - A glossary for this repo's words: `docs/development/glossary.md`, in the `domain-modeling`
   format (the word, its meaning here, and an "Avoid:" line), linked from AGENTS.md's "Who's who",
@@ -408,12 +408,12 @@ because there "tools" means development tools.
 
 **Still waiting:** the decision about generating the end user's own skills gets its decision file
 when it's built. The rename's is
-[The product is named dev-home-toolkit](../decisions/the-product-is-named-dev-home-toolkit.md),
+[0063: The product's name](../decisions/0063-the-products-name.md),
 and the words' is
-[One word for each idea, in a glossary](../decisions/one-word-for-each-idea-in-a-glossary.md).
+[0075: Glossary](../decisions/0075-glossary.md).
 6b, reworked to these decisions, is committed
 (`408ae14`), with the decision
-[Setup keeps a skill off only for its operating system or agent](../decisions/setup-keeps-a-skill-off-only-for-its-operating-system-or-agent.md)
+[0062: Keeping a skill off](../decisions/0062-keeping-a-skill-off.md)
 and changes to the decisions it touches.
 
 **The earlier list, kept for its notes:**

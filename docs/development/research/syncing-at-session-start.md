@@ -2,7 +2,7 @@
 
 Whether a sync run by an agent's session-start hook can give that session the rules it brings in,
 and how similar projects keep a second PC current. Researched on 2026-10-20 for
-[A PC catches up at its next sync](../decisions/a-pc-catches-up-at-its-next-sync.md).
+[0076: A PC catching up](../decisions/0076-a-pc-catching-up.md).
 
 ## Test: a session-start hook that rewrites instruction files
 

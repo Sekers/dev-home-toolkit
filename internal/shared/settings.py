@@ -657,8 +657,8 @@ def name_problem(folder: Path) -> str:
     follows it: the Agent Skills standard's rule (see standard_faults), with no word claude.ai
     and Anthropic's API keep out, not a name Claude Code keeps, and a name: line in its SKILL.md
     that matches its folder. Setup checks the end user's own skills, and a test
-    dev-home-toolkit's. The design is in docs/development/decisions/, in "Skill and rule files
-    share their fields"."""
+    dev-home-toolkit's. The design is in docs/development/decisions/, in decision 0072, "Fields in
+    skill and rule files"."""
     name = folder.name
     dotted = "." in name
     fix = "Rename its folder and the name: line in its SKILL.md"
