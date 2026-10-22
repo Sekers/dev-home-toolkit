@@ -17,7 +17,9 @@ proposing a commit, and points here; its rules apply too.
   `internal/development/.test-sandbox/` (git ignores it), leaving out `internal/development/`
   and what's set up for this PC, and run the copy, whose `local-settings.json` sets
   `testHomeDir`, so every setup run from the copy uses a scratch profile instead of the real
-  one.
+  one. A module's sandbox is deleted when its tests pass, and kept for a look when one fails;
+  the next run that passes removes the kept ones that haven't changed for an hour
+  ([why](decisions/a-passing-test-run-removes-the-sandboxes-earlier-runs-kept.md)).
 - Run the skills' commands word for word from the sandbox's generated skills, as `helpers.py`
   does. It starts each with the test environment's Python, by its real path, in place of
   `internal/.python/python.exe`, because a virtual environment's `python.exe` can't run through

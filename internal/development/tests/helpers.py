@@ -26,6 +26,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import time
 import uuid
 from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -333,6 +334,41 @@ def remove_sandbox(box: Sandbox) -> None:
     # Other tests may be running at the same time, and one may have just made its sandbox here.
     with contextlib.suppress(OSError):
         SANDBOX_ROOT.rmdir()
+
+
+# A whole run takes minutes, so a sandbox untouched this long is one an earlier run kept, never
+# one a run going on at the same time is using.
+KEPT_SANDBOX_SECONDS = 60 * 60
+
+
+def remove_kept_sandboxes(
+    root: Path = SANDBOX_ROOT, *, older_than: float = KEPT_SANDBOX_SECONDS
+) -> tuple[int, list[str]]:
+    """Deletes, through remove_sandbox, each sandbox in root that hasn't changed for older_than
+    seconds: those earlier runs kept for a look. Returns how many went, and a line for each that
+    couldn't, such as one a terminal has open, which the next passing run tries again."""
+    try:
+        folders = sorted(root.iterdir())
+    except FileNotFoundError:
+        # None kept, or another run's removal took the last one, and the folder with it.
+        return 0, []
+    cutoff = time.time() - older_than
+    removed = 0
+    problems: list[str] = []
+    for folder in folders:
+        try:
+            if folder.is_symlink() or os.path.isjunction(folder) or not folder.is_dir():
+                continue
+            if folder.stat().st_mtime > cutoff:
+                continue
+            remove_sandbox(Sandbox(folder))
+            removed += 1
+        except FileNotFoundError:
+            # Another run that passed at the same moment got there first.
+            continue
+        except OSError as error:
+            problems.append(f"{folder}: {error}")
+    return removed, problems
 
 
 def check_in_sandbox(argv: list[str]) -> None:

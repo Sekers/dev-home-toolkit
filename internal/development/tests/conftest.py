@@ -1,5 +1,6 @@
 """What every test gets: in this process, the environment the sandboxes' scripts run in, and when
-a worker's tests are done, a check that the real profile has nothing pointing into a sandbox."""
+a worker's tests are done, a check that the real profile has nothing pointing into a sandbox.
+When a whole run passes, the sandboxes earlier runs kept go."""
 
 import json
 import os
@@ -10,7 +11,31 @@ from typing import Any
 
 import pytest
 
-from helpers import SANDBOX_ROOT, link_target
+from helpers import SANDBOX_ROOT, link_target, remove_kept_sandboxes
+
+# What removing kept sandboxes has to report, from the end of the session to its summary.
+KEPT_SANDBOXES_REPORT = pytest.StashKey[list[str]]()
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int | pytest.ExitCode) -> None:
+    """A failing run keeps its sandboxes for a look, and the first run to pass afterwards removes
+    them. Only the main process does it: with xdist, each worker's session ends too."""
+    if hasattr(session.config, "workerinput") or exitstatus != pytest.ExitCode.OK:
+        return
+    removed, problems = remove_kept_sandboxes()
+    report = [f"Could not remove a test sandbox an earlier run kept: {line}" for line in problems]
+    if removed:
+        noun = "sandbox" if removed == 1 else "sandboxes"
+        report.insert(0, f"Removed {removed} test {noun} that earlier runs kept.")
+    session.config.stash[KEPT_SANDBOXES_REPORT] = report
+
+
+def pytest_terminal_summary(
+    terminalreporter: pytest.TerminalReporter, exitstatus: int, config: pytest.Config
+) -> None:
+    # The summary starts on a line of its own, after the progress.
+    for line in config.stash.get(KEPT_SANDBOXES_REPORT, []):
+        terminalreporter.write_line(line)
 
 
 @pytest.fixture(autouse=True)
