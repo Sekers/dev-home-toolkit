@@ -25,16 +25,15 @@ Each setting is one of four kinds, and accepts only the forms that fit it:
 | No default | `devHome.folder`, `multiMachine` | missing, plain | Whatever the setting says: with `multiMachine` unanswered every sync fetches, and without a dev-home folder setup stops |
 | Offer | each folder's `setUp`, recommended settings, update notices | missing, `remind`, plain | Offered again, as [0040: Answers to offers](0040-answers-to-offers.md) says. An unanswered folder isn't set up |
 
-(Changed on 2026-10-16, built on 2026-10-20: each folder's `setUp` was a setting with no default.
 A folder setup hasn't asked about is offered in a `NEW` line with the standard answers, "remind me
-in N days" among them, so it moved to the offer kind, which can hold a reminder. Until the date,
+in N days" among them, which is why each folder's `setUp` is an offer. Until a reminder's date,
 the folder isn't set up, its `NEW` line is quiet, and a run of setup by hand doesn't ask. Only a
 person's answer saves a reminder, at a question in a terminal, in the settings menu, or through
-`--configure`, and only for a folder with no yes or no: a folder already answered stays yes or no,
-since a reminder brings back a question nobody has answered, and a folder answered yes that took
-one would keep its links but get no new skills until the date, with nothing saying so. The
-developer's choice; set aside: a reminder replacing an answer. A shared agent's reminder goes in
-every folder's entry, as its answer does.)
+`--configure`, and only for a folder with no yes or no, the developer's choice: a folder already
+answered stays yes or no, since a reminder brings back a question nobody has answered, and a
+folder answered yes that took one would keep its links but get no new skills until the date, with
+nothing saying so. A shared agent's reminder goes in every folder's entry, as its answer does.
+Changed on 2026-10-14, 2026-10-16, and 2026-10-17.
 
 A form a setting doesn't accept, or a plain value of the wrong type, is a `PROBLEM`, and the
 setting counts as missing.
@@ -61,14 +60,12 @@ setting counts as missing.
 - A change to a file's structure raises its `schemaVersion`, and comes with a conversion step for
   that version, which setup runs, in order, on the first run that sees an older file, with one
   line and a backup.
-- Setup saves `local-settings.json` only while it holds the sync's lock, and only for the moment
-  of saving: it reads the file again, and applies only the answers that run changed, so whatever
-  a sync wrote in the meantime is kept. Where both changed the same setting, the end user's answer
-  wins. Reading the file never waits for the lock. Before there's a dev-home, there's no sync,
-  and no lock to take. (Later changed by
-  [0034: Runs of setup by hand](0034-runs-of-setup-by-hand.md):
-  setup holds the lock for all its work, the save included, which comes after every question, so
-  still no sync waits while a question does.)
+- Setup saves `local-settings.json` while it holds the sync's lock, which it holds for all its
+  work, after every question, so no sync waits while a question does
+  ([0034: Runs of setup by hand](0034-runs-of-setup-by-hand.md)). It reads the file again, and
+  applies only the answers that run changed, so whatever a sync wrote in the meantime is kept.
+  Where both changed the same setting, the end user's answer wins. Reading the file never waits
+  for the lock. Before there's a dev-home, there's no sync, and no lock to take.
 - The answers a run changed are the end user's, given in that run: at a question, in the menu, or
   through `--configure`. What setup works out by itself isn't an answer: the mark for a skill new
   to the PC, an answer moved for a rename or a name's case, a setting nothing declares removed,
@@ -76,8 +73,7 @@ setting counts as missing.
   the file as it reads it then, after making the end user's changes there, and sets up from what
   it saved. It removes only what the file held when the run first read it: anything newer came
   from another run, which may know a declaration this run doesn't, such as one an update brought.
-  A sync's setup reads nothing again: it has held the lock since before it read the file. (Added
-  on 2026-10-17. Until then, the save carried those changes over from the run's first read.)
+  A sync's setup reads nothing again: it has held the lock since before it read the file.
 - A backup is made only when a person changes a setting, or answers are deleted, never for a
   write that only records something, such as `unanswered`.
 
@@ -111,8 +107,9 @@ setting counts as missing.
   wrong for it. Nothing stops a new skill from reusing a removed name, the developer's choice: a
   PC that installs the removal and the reuse in one update gives the new skill the old answers.
 - Syncs write the file too, for an announced skill, a rename, or a removal, while a run of setup
-  by hand can spend minutes on its questions. Holding the lock only to save, after reading the
-  file again, loses neither write, and never holds up a sync while a question waits. It reuses
+  by hand can spend minutes on its questions. Holding the lock for the work, which comes after
+  every question, and reading the file again before saving, loses neither write, and never holds
+  up a sync while a question waits. It reuses
   the sync's lock ([0018: One sync at a time](0018-one-sync-at-a-time.md)),
   which the operating system lets go of when a process ends, however it ends.
 - What setup works out by itself depends on what the file holds, so a change worked out from an
@@ -160,12 +157,10 @@ setting counts as missing.
 - For a skill that's gone: a list of removed skills (the developer turned it down); keeping its
   answers quietly, with a `PROBLEM` on every sync, or deleting them only at a run of setup by
   hand; a test against reusing a removed name.
-
-This changes
-[0046: Settings files' layout and versions](0046-settings-files-layout-and-versions.md):
-a setting may be written before it's answered, a key setup doesn't know is deleted instead of
-kept, preferences are nested under `preferences`, and a change to the structure converts the file
-instead of setting it aside.
+- For a folder: `setUp` as a setting with no default, as until 2026-10-16 (it can't hold a
+  reminder); and a reminder replacing a yes or a no (see above).
+- Carrying the changes setup works out over from the run's first read, as until 2026-10-17: a
+  newer run may have written the file since, with a declaration this run doesn't know.
 
 **Look again if:** settings often need a value and a state at once, so that pairs of settings get
 in the way, or the forms grow past what a person reading the file can follow.

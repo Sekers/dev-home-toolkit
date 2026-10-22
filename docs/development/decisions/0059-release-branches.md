@@ -2,8 +2,8 @@
 
 **Built:** not yet.
 
-**Decision:** `main` holds only releases, and day-to-day work happens on `develop`. Not built
-yet: until it is, work goes to `main` as before.
+**Decision:** `main` holds only releases, and day-to-day work happens on `develop`. Until it's
+built, work goes to `main`.
 
 - A release: on `develop`, set the version and date the changelog; open a pull request from
   `develop` into `main`, and merge it with a merge commit; tag that merge commit with the

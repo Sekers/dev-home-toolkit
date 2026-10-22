@@ -13,14 +13,13 @@ skills. Codex homes are saved exactly as Claude Code folders are, an entry for e
 
 - One question covers every home, recommended, and its answer goes into every home's entry. A
   yes sets up each home: the always-on rules in its `AGENTS.md`, dev-home in its `config.toml`,
-  and dev-home's skills, linked into `~/.agents/skills`. A no sets up none. (Later changed by
-  [0054: Removing what setup set up](0054-removing-what-setup-set-up.md):
-  a no also removes the rules file setup wrote in each home and its links in `~/.agents/skills`,
-  and takes dev-home back out of each home's `writable_roots`.) Until it's answered, setup adds no
-  links and removes none, and a quiet run names the homes. (Later changed on 2026-10-20: it names
-  them in a `NEW` line, as it does a folder, and one reminder covers every home, as one answer
-  does: it goes in every home's entry, through any home while Codex has no answer, and a home
-  found later waits with the rest.)
+  and dev-home's skills, linked into `~/.agents/skills`. A no sets up none, and removes what setup
+  set up: the rules file it wrote in each home, its links in `~/.agents/skills`, and dev-home in
+  each home's `writable_roots`
+  ([0054: Removing what setup set up](0054-removing-what-setup-set-up.md)). Until it's answered,
+  setup adds no links and removes none, and a quiet run names the homes in a `NEW` line, as it
+  does a folder. One reminder covers every home, as one answer does: it goes in every home's
+  entry, through any home while Codex has no answer, and a home found later waits with the rest.
 - The main home is `~/.codex` when it's there; otherwise the first other `~/.codex-<name>` there,
   by folder name; otherwise the first home elsewhere, by full path. Its answer is every home's.
   When it has none, the next home there, in that order, that has one gives it. With none, Codex
@@ -43,6 +42,8 @@ skills. Codex homes are saved exactly as Claude Code folders are, an entry for e
   it, as it does a Claude Code folder.
 - Answers saved for each home before this decision are read as they are: nothing is deleted or
   converted, and mixed answers follow the main home.
+
+Changed on 2026-10-16 and 2026-10-20.
 
 **Why:**
 

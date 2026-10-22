@@ -3,8 +3,8 @@
 **Built:** not yet.
 
 **Decision:** dev-home-toolkit ships built-in rules: rules an end user can add to their own. Each
-is a file in dev-home that setup owns, and none applies without a yes. Not built yet: it comes
-after version numbers
+is a file in dev-home that setup owns, and none applies without a yes. It comes after
+version numbers
 ([0060: The release data file](0060-the-release-data-file.md)).
 Decided by the developer on 2026-10-17 and 2026-10-18.
 
@@ -156,9 +156,6 @@ The folders, the `state` line, and the copies per agent are dev-home-toolkit's o
 - For a file that loses its note: leaving it in `built-in/on/` as the end user's (the folder would
   hold a file that isn't built-in); putting it back as a hand edit (it would reverse the end user's
   choice to make the rule their own).
-
-**This changes:** [0040: Answers to offers](0040-answers-to-offers.md): built-in rules
-get no reminders, and their `NEW` line names a batch once.
 
 **Look again if:** end users ask for reminders about unanswered rules, or a rule needs text that
 differs by PC.

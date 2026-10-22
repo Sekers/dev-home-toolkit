@@ -1,7 +1,7 @@
 # 0046: Settings files' layout and versions
 
 **Built:** yes, except: the change of 2026-10-18: `dev-home.json` records no dev-home-toolkit
-version or layout versions.
+version or layout versions, and the starter, not setup's code, still creates it.
 
 **Decision:** this PC's settings are grouped by what they're about, and each one's name is its
 path, as in git config and Codex's `-c`:
@@ -13,49 +13,56 @@ path, as in git config and Codex's `-c`:
   "updates": { "installAutomatically": false, "checkEveryHours": 24 },
   "claudeCode": { "folders": { "~/.claude-second": { "setUp": true } } },
   "codex": { "homes": { "~/.codex": { "setUp": true } } },
-  "skills": { "handoff": { "includeSecurityBugsInIssueOffers": true } }
+  "skills": { "handoff": { "preferences": { "includeSecurityBugsInIssueOffers": true } } }
 }
 ```
 
 - `--configure` takes the path, such as `--configure 'updates.checkEveryHours=6'`. A folder has
-  a dot in its name, so folders keep `claudeCode.folders+=<folder>` and `-=<folder>`. (Later
-  changed by
-  [0052: Codex homes](0052-codex-homes.md):
-  every Codex home has the same answer, the main home's, which setup keeps in every home's
-  entry.)
-- A setting is written only once it's answered, and then it stays, so a later change of default
-  never changes a PC that answered. `testHomeDir` stays at the top, as before.
-- `schemaVersion` says which layout the file has, and goes up only when a setting is renamed or
-  moved. A file without one, such as one from before this change, is set aside: a run by hand
+  a dot in its name, so folders keep `claudeCode.folders+=<folder>` and `-=<folder>`. Every Codex
+  home has the same answer, the main home's, which setup keeps in every home's entry
+  ([0052: Codex homes](0052-codex-homes.md)).
+- A setting may be written before it's answered, such as a skill saved as `unanswered`
+  ([0049: Answers in the settings](0049-answers-in-the-settings.md)). Once it's answered, it
+  stays, so a later change of default never changes a PC that answered. `testHomeDir` stays at
+  the top, as before.
+- `schemaVersion` says which layout the file has. A change to the structure raises it, with a
+  conversion step from 1.0.0 on (decision 0049, and
+  [0080: Compatibility before 1.0.0](0080-compatibility-before-1-0-0.md)). A file without one,
+  from before this layout, is set aside: a run by hand
   offers to rename it to a dated backup and ask its questions again, keeping only `testHomeDir`,
   and a quiet run says so and stops. A version higher than the code knows is a `PROBLEM`, and
   setup never saves over that file.
 - Every value is checked on every run, against one list of the settings plus the preferences
   each skill declares. A value of the wrong kind is a `PROBLEM` that names it and says what it
-  counts as instead. A key setup doesn't know was kept, with a `PROBLEM` naming it, until
-  [0049: Answers in the settings](0049-answers-in-the-settings.md) had it
-  removed, with one line naming it and a backup. Setup stops
-  only when the file can't be read at all.
-- `dev-home.json` gets `schemaVersion` too, and the same checks. Its setting keeps its name,
+  counts as instead. A key nothing declares is removed, with one line naming it and a backup, as
+  decision 0049 says. Setup stops only when the file can't be read at all.
+- `dev-home.json` gets `schemaVersion` too, and the same checks of its values, but setup keeps
+  any key there it doesn't know (`dev_home_text` in `internal/shared/settings.py`), which
+  [0068: Versions and layouts in dev-home](0068-versions-and-layouts-in-dev-home.md) relies on.
+  Its setting keeps its name,
   `multiMachine`. Without a version, a run by hand asks its question again, with the old answer as
   the default, and rewrites the file in place: git keeps its history, and a backup file would show
   up in every sync as an uncommitted file. Until then, and while its version is higher than the
-  code knows, the copies setting counts as unanswered, so each sync checks GitHub.
+  code knows, the copies setting counts as unanswered, so each sync checks GitHub. It also records
+  the newest dev-home-toolkit version that has set dev-home up, and `layoutVersions`, one number
+  for each part of dev-home
+  ([0068: Versions and layouts in dev-home](0068-versions-and-layouts-in-dev-home.md)), and
+  setup's code creates it
+  ([0070: Who owns each file in dev-home](0070-who-owns-each-file-in-dev-home.md)).
 - `setUp` may go on any folder, the default ones (`~/.claude`, `~/.codex`) included. Missing
-  means not answered yet: the default folders are set up, as the recommended pick, and extra
-  folders aren't, except the one the session runs in. A `false` is kept wherever it's written.
-  (Later changed by
-  [0034: Runs of setup by hand](0034-runs-of-setup-by-hand.md):
-  a Claude Code folder or Codex home with no answer isn't set up, `~/.claude`, `~/.codex`, and
-  the session's own included.)
-  A folder answered yes that no longer exists is skipped without a word and keeps its answer, and
-  the settings menu shows it as not found.
+  means not answered yet, and a folder with no answer isn't set up, `~/.claude`, `~/.codex`, and
+  the session's own included
+  ([0034: Runs of setup by hand](0034-runs-of-setup-by-hand.md)). A `false` is kept wherever
+  it's written. A folder answered yes that no longer exists is skipped without a word and keeps
+  its answer, and the settings menu shows it as not found.
 - A skill declares its preferences in a `dev-home-skill.json` in its folder:
   `{"preferences": {"<name>": {"default": true, "label": "...", "help": "..."}}}`. Setup reads
   these from dev-home-toolkit's skills and from the person's own, and a preference is saved, and
   set with `--configure`, as `skills.<skill>.preferences.<name>`
   ([0049: Answers in the settings](0049-answers-in-the-settings.md)).
   Only yes-or-no preferences for now.
+
+Changed on 2026-10-13, 2026-10-14, 2026-10-15, and 2026-10-18.
 
 **Why:**
 
@@ -87,18 +94,6 @@ path, as in git config and Codex's `-c`:
   (a quiet run would have to write the file, and a folder missing only for a while would lose its
   answer).
 - A dated backup of `dev-home.json` when it's rewritten: git already has every version.
-
-This changes decision 0025, "Setup's questions", whose two lists become `claudeCode.folders`;
-the names used in decision 0024, "Checking GitHub", decision 0026, "setup.py --configure", and
-decision 0037, "Extra Codex homes"; where decision 0032, "Recommended settings", and decision
-0035, "Skills per PC", save their answers; and the schema version that decision 0022, "Active
-copies", set aside until the format changed.
-
-**Changed on 2026-10-18,** not built yet: `dev-home.json` gains the newest dev-home-toolkit
-version that has set dev-home up, and `layoutVersions`, one number for each part of dev-home
-([0068: Versions and layouts in dev-home](0068-versions-and-layouts-in-dev-home.md)).
-Setup's code creates the file, where the starter used to seed it
-([0070: Who owns each file in dev-home](0070-who-owns-each-file-in-dev-home.md)).
 
 **Look again if:** a setting needs more than two levels of grouping, or a file without a version
 should be moved forward instead of set aside.

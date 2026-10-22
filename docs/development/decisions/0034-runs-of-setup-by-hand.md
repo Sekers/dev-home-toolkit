@@ -1,6 +1,6 @@
 # 0034: Runs of setup by hand
 
-**Built:** yes.
+**Built:** yes, except: the questions about skills and recommended settings, in steps 2 and 3.
 
 **Decision:** every run of `setup.py` at a console goes in this order:
 
@@ -14,18 +14,14 @@
 3. The settings list that `--configure` shows, with skills and recommended settings added, so any
    setting can be changed: a number for one, `a` for all, and Enter to go on. A dev-home folder
    changed here goes back through step 1, and the new dev-home's copies question.
-4. The changes to confirm: the change to `dev-home.json`, if any, and each settings file's diff,
-   each shown and asked about. (Later changed by
-   [0053: What a folder's yes approves](0053-what-a-folders-yes-approves.md):
-   the settings files' changes aren't asked about, since the folder's yes approved them.)
+4. The change to confirm: the change to `dev-home.json`, if any, shown and asked about. The
+   settings files' changes aren't asked about, since the folder's yes approved them
+   ([0053: What a folder's yes approves](0053-what-a-folders-yes-approves.md)).
 5. The work, without stopping, holding the sync's lock: save this PC's answers, commit
-   `dev-home.json` if it changed, then the Python link, the generated files, the skill links, and
-   the rules. Then, with the lock let go, the settings files. Each is read again first; if it
-   changed since its diff was shown, setup shows the new diff and asks again. `dev-home.json` is
-   read again too, and left as it is, with a `PROBLEM`, if it changed since its change was shown.
-   (Later changed by the same decision: the settings files are written while the lock is held,
-   since a sync writes them too, and one that changed since its change was planned is left alone
-   until the next run.)
+   `dev-home.json` if it changed, then the Python link, the generated files, the skill links, the
+   rules, and the settings files. A settings file that changed since its change was planned is
+   left alone until the next run. `dev-home.json` is read again too, and left as it is, with a
+   `PROBLEM`, if it changed since its change was shown.
 
 A run with no console, such as a quiet one, asks nothing and shows no menu, and does the rest in
 the same order, its work holding the lock too, unless a sync that runs it holds the lock already.
@@ -37,17 +33,18 @@ Every Claude Code folder setup finds is asked about, `~/.claude` included, in th
 for optional lists, each one recommended, so a first setup is still one Enter. Setup never sets up
 a folder without an answer, the session's own included: it adds no links there and removes none,
 so a folder linked before setup asked about it keeps working until a run by hand answers. A quiet
-run names each folder nobody has answered for, on every run, since a missed work account is easy
-to overlook. Every folder's `setUp` is written once it's answered. (Later changed by
-[0036: New items](0036-new-items.md):
-it names them in a `NEW` line, not a `PROBLEM`, and a folder can hold a reminder, which setup
-doesn't ask about until its date.)
+run names each folder nobody has answered for in a `NEW` line, on every run, since a missed work
+account is easy to overlook ([0036: New items](0036-new-items.md)). A folder can hold a reminder,
+which setup doesn't ask about until its date. Every folder's `setUp` is written once it's
+answered.
 
 Codex gets one question for every Codex home it finds, recommended: `~/.codex` once Codex has
 made it, each `~/.codex-*` folder that holds a `config.toml` or an `auth.json`, the folder in
 `CODEX_HOME`, and each other home with an entry in `codex.homes`
 ([0052: Codex homes](0052-codex-homes.md)).
 Until it's answered, setup adds no links and removes none, as for a folder.
+
+Changed on 2026-10-15, 2026-10-16, and 2026-10-20.
 
 **Why:** running setup by hand is a normal way to use dev-home-toolkit, so it should offer every
 setting, not only the unanswered ones. Questions first and the work after is what people expect
@@ -57,14 +54,13 @@ clone that can't work stops setup after one or two answers. Committing `dev-home
 questions, not between them, means nothing has been pushed until the work starts, so Ctrl+C
 during the questions leaves everything as it was.
 
-The diffs come after the menu, because the menu can change the folders and the dev-home they're
+The changes come after the menu, because the menu can change the folders and the dev-home they're
 for. The work holds the sync's lock, so a sync in another session can't set up at the same moment
 or save this PC's settings in between, and since every question comes first, no sync waits for a
-person. The settings files come after the lock is let go: no sync writes them, and asking again
-about one that changed would otherwise hold the lock while a question waits. A changed
-`dev-home.json` isn't asked about again: it's committed while the lock is held, where a question
-would hold up every sync, and only a sync bringing in another copy's change can change it, which
-is rare.
+person. The settings files are written while the lock is held, since a sync writes them too, and
+nothing asks about them, since the folder's yes approved them. A changed `dev-home.json` isn't
+asked about again: it's committed while the lock is held, where a question would hold up every
+sync, and only a sync bringing in another copy's change can change it, which is rare.
 
 Asking about every folder, the default one included, means dev-home-toolkit does nothing the person
 may not want: an extra account is often kept apart on purpose, such as a work one; the
@@ -72,14 +68,6 @@ may not want: an extra account is often kept apart on purpose, such as a work on
 doesn't want their default account set up sees the choice. It's one rule for every folder, and
 for both agents. A folder linked before setup asked about it gets no special case, `~/.codex`
 included: only PCs set up before this change are in that state, and one run by hand answers.
-
-This changes three other decisions: the menu from
-[0026: setup.py --configure](0026-setup-py-configure.md) becomes
-part of every run by hand; the copies question from
-[0022: Active copies](0022-active-copies.md) is
-asked on every PC's first setup; and the save in
-[0049: Answers in the settings](0049-answers-in-the-settings.md), which
-held the lock only while it saved, now runs inside the work's lock.
 
 **Options set aside:**
 
@@ -91,10 +79,9 @@ held the lock only while it saved, now runs inside the work's lock.
 - Skipping the copies question when `dev-home.json` answers it: moving to a new PC and retiring
   the old one would leave it at several copies for good.
 - The settings files' diffs before the menu: a change made in the menu could make them wrong.
-- Holding the lock for the settings files too: asking again about a changed file would hold up
-  every sync until the person answered. (Later changed by
-  [0053: What a folder's yes approves](0053-what-a-folders-yes-approves.md):
-  nothing asks about them any more, so the lock covers them.)
+- Writing the settings files after the lock is let go, asking again about one that changed, as
+  until 2026-10-15: a sync writes them too, and since the folder's yes approves them, there's no
+  question to hold the lock for.
 - A sync setting up a folder it finds right away, then asking to confirm: it would link dev-home
   into a backup copy or a work account before the person says anything.
 - An off switch on the default folders: hidden from the people who need it, and two rules.

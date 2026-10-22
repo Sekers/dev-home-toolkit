@@ -15,23 +15,19 @@ root, says which, as `{ "multiMachine": false }` or `true`, and the commands act
 | `/handoff`, `/handoff <question>` | The local copy. GitHub only to push commits still waiting, and to check once `devHome.checkEveryHours` has passed | Fetch first, every time |
 | `/handoff update`, `next`, `issue`, `audit` | Edit, commit, push | Fetch first, edit, commit, push |
 | `/knowledge <question>` | The local copy | The local copy |
-| Plain `/knowledge` | The local copy, unless `devHome.checkEveryHours` has passed: then sync first | The same |
+| Plain `/knowledge` | The local copy. GitHub only to push commits still waiting, and to check once `devHome.checkEveryHours` has passed | Fetch first, every time |
 | `/knowledge add` | Add, commit, push | Fetch first, add, commit, push |
 | `/dev-home sync` | Fetch, merge, push | The same |
 
-(Later changed by
-[0029: The dev-home skill](0029-the-dev-home-skill.md): plain
-`/knowledge` fetches first with several copies, as `/handoff` does.)
+Plain `/knowledge` syncs as adding a note does
+([0029: The dev-home skill](0029-the-dev-home-skill.md)).
 
-- A new dev-home starts with `multiMachine: false`. When setup clones one set to false, it asks
-  whether another copy will stay in use, with no default: the person types y or n, and Enter
-  asks again. One set to true stays true, without a question. An older dev-home with no
-  `dev-home.json` needs an answer at a console, and `--quiet` says so and changes nothing.
-  (Later changed by
-  [0034: Runs of setup by hand](0034-runs-of-setup-by-hand.md):
-  every PC's first setup asks, except for a dev-home setup has just created, and so does a clone
-  set to false, as "Is dev-home in active use anywhere besides this PC?", with the file's answer
-  as the default. Only a dev-home with no answer gets the question with no default.)
+- A new dev-home starts with `multiMachine: false`. Every PC's first setup asks "Is dev-home in
+  active use anywhere besides this PC?", with the file's answer as the default, except for a
+  dev-home setup has just created
+  ([0034: Runs of setup by hand](0034-runs-of-setup-by-hand.md)). Only a dev-home with no
+  answer, such as an older one with no `dev-home.json`, gets the question with no default: the
+  person types y or n, and Enter asks again. `--quiet` says so and changes nothing.
 - A missing or unreadable `dev-home.json` means fetching every time.
 - With one active copy, a sync that brings in commits this PC didn't make says so in one line,
   naming `/dev-home configure`. It never changes the setting itself: that's a commit every copy
@@ -45,6 +41,8 @@ root, says which, as `{ "multiMachine": false }` or `true`, and the commands act
   others are retired.
 - The sync's lines say what's true for the mode: with one copy, a read never says that dev-home
   may be behind.
+
+Changed on 2026-10-14 and 2026-10-20.
 
 **Why:**
 

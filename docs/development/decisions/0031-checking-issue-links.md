@@ -5,11 +5,12 @@
 **Decision:** `/handoff update` finds out whether linked GitHub issues have closed with one
 script in the handoff skill's folder, not a `gh issue view` for each link. The script finds the
 handoff from the folder it runs in, as `facts.py` does, reads every issue link in it, checks
-them all with one `gh` request, and prints a line for each: closed, with GitHub's reason; open;
-or not checked, and why, such as `gh` missing or signed out. The agent runs it in the same turn
-as its read of the handoff just before editing, so it costs no extra turn. It never runs for a
-read, `next`, or `issue`. It adds one Python start, about 0.04 s, and replaces a `gh` process
-for each link with one.
+them all with one `gh` request, and a second when an issue closed as not planned
+([0045: Closed issues](0045-closed-issues.md)), and prints a line for each: closed, with GitHub's
+reason; open; or not checked, and why, such as `gh` missing or signed out. The agent runs it in
+the same turn as its read of the handoff just before editing, so it costs no extra turn. It never
+runs for a read, `next`, or `issue`. It adds one Python start, about 0.04 s, and replaces a `gh`
+process for each link with one. Changed on 2026-10-09.
 
 **Why:** reading a link and checking its state takes no judgment, so it belongs in a script (see
 [skills.md](../skills.md)). One call covers any number of links. When issues on GitLab, Bitbucket,

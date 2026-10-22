@@ -7,7 +7,7 @@ This page lists them, below, and AGENTS.md has the rule to ask before adding any
 rest of what used to be there lives under `internal/`: the generated files in
 `internal/.generated/`, the Python link in `internal/.python/`, and everything for development in
 `internal/development/` (the development tools' settings, the tests, and what they write:
-`.venv`, caches, and the test sandboxes).
+`.venv`, caches, and the test sandboxes). Changed on 2026-10-21 and 2026-10-22.
 
 **Why each item stays:**
 
@@ -37,6 +37,9 @@ rest of what used to be there lives under `internal/`: the generated files in
   Beside it goes a dated backup each time `--configure` changes it or setup sets aside a file in
   an older layout, such as `local-settings.json.bak-YYYYMMDD-HHMMSS`. Git ignores both.
 
+**Why the list is here, not in AGENTS.md:** AGENTS.md keeps only the rule to ask before adding
+anything to the root, so its "The two repos" section holds only what tells the two repos apart.
+
 **Why `.generated/` moved, though every PC's links pointed into it:** that was only a reason
 about the cost of moving, and on its merits the folder is machinery nobody runs or edits. It
 moved in the same update as phase 1's other changes to it, so each PC goes through one
@@ -51,9 +54,9 @@ editor too. "development" matches `docs/development/`; `dev/` or `dev-tools/` wo
 **What it costs:** longer development commands (`uv run --directory internal/development ...`).
 Ruff has to be given its settings for the skill scripts, which aren't under them, and an editor's
 ruff extension and test panel won't find them for those files without settings of its own. The
-usual fix for the editor is a `.vscode/settings.json`, which a decision of its own added on
-2026-10-22, for VS Code's Python; it has no settings for the ruff extension or the test panel
-yet.
+usual fix for the editor is a `.vscode/settings.json`, which holds VS Code's Python setting
+([0078: VS Code settings](0078-vs-code-settings.md)) and no settings yet for the ruff extension or
+the test panel.
 
 **Options set aside:**
 
@@ -70,13 +73,6 @@ yet.
 - The whole of setup's code in the root: setup runs inside the sync's process too, so the same
   `__pycache__` reason applies.
 - The tests staying in `internal/tests/`: ruff wouldn't find its settings for them.
-
-**Changed on 2026-10-21:** the list moved here from AGENTS.md, which keeps the rule to ask before
-adding anything to the root, so that AGENTS.md's "The two repos" section holds only what tells the
-two repos apart.
-
-**Changed on 2026-10-22:** `.vscode/` joined the root, for VS Code's settings, which this page
-had left to a decision of its own: "[0078: VS Code settings](0078-vs-code-settings.md)".
 
 **Look again if:** dev-home-toolkit becomes a Python package, or a `--configure` switch means
 nobody edits `local-settings.json` by hand.

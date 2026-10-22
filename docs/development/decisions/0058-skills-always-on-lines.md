@@ -3,7 +3,7 @@
 **Built:** not yet.
 
 **Decision:** the operating rules, `templates/operating-rules/operating-rules.md`, stay one
-complete file, in two parts. Not built yet.
+complete file, in two parts.
 
 - A general part, always loaded: what dev-home is, git there only through `sync.py`, privacy in
   project repos, where an end user's own skills go, their global rules winning, and every rule
@@ -15,11 +15,13 @@ complete file, in two parts. Not built yet.
 
 Setup writes each agent's rules with the general part and the block of each skill added for that
 agent, and leaves the other blocks out. It turns each marker into the heading "When the
-`<skill>` skill is available", worded in setup alone. Claude Code's folders still share one
-generated file, and each Codex home still gets one `AGENTS.md`: skills are answered per PC, and an
-agent requirement covers a whole agent
-([0057: Requirements](0057-requirements.md)),
-so there's one version per agent.
+`<skill>` skill is available", worded in setup alone. Each agent's folder gets its rules as one
+file setup writes there, which joins the operating rules, with the blocks of the skills added for
+that agent, and the end user's rules for that agent on that PC
+([0064: Each agent's rules file](0064-each-agents-rules-file.md)). Skills are answered per PC, and
+an agent requirement covers a whole agent
+([0057: Requirements](0057-requirements.md)), so the blocks are the same for every folder of one
+agent. Changed on 2026-10-18.
 
 - A skill hidden with an agent's own switch, at any level, keeps its block, and the agent skips it
   because it can't see the skill. Setup never reads or writes the agents' switches.
@@ -67,12 +69,5 @@ Measured on 2026-10-16: the rules are 317 words, about 150 general, 50 for `hand
   they have many skills, so rules there aren't reliable.
 - A file of lines in each skill's folder, which setup assembles: the rules stop being one file to
   read whole, and the file is linked into the agents with the skill.
-
-**Changed on 2026-10-18,** not built yet, with the reasons in
-[0064: Each agent's rules file](0064-each-agents-rules-file.md):
-each Claude Code folder gets a file of its own, which setup writes in its `rules\` in place of the
-links, so the one generated file every Claude Code folder shared goes. Each agent's file joins the
-operating rules, with the blocks of the skills added for that agent, and the end user's rules for
-that agent on that PC. The blocks, their heading, and the tests work as above.
 
 **Look again if:** many skills need always-on lines, or an agent starts loading rules per skill.

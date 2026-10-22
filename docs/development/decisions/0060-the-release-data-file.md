@@ -4,7 +4,7 @@
 
 **Decision:** dev-home-toolkit's version lives in a small data file in `internal/shared/`, such as
 `release.json`, beside the code that reads it, with the facts about the release that end users
-and the update check need. Not built yet. Its exact name and fields are decided with the
+and the update check need. Its exact name and fields are decided with the
 changelog's format.
 
 - It holds the version, such as `1.2.0`, and facts such as whether the release fixes a security
@@ -26,7 +26,7 @@ changelog's format.
 - `CHANGELOG.md`, in the root ([0016: The root](0016-the-root.md)), holds the release
   notes for people. It gets its format and its first entries before the first public release.
 
-**Added on 2026-10-18,** not built yet, decided by the developer:
+**What the file holds,** decided by the developer on 2026-10-18:
 
 ```json
 {

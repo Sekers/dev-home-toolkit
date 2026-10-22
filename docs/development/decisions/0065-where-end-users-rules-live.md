@@ -16,7 +16,7 @@ Each level holds `mine/`, the end user's rule files. `_all-agents/` and each `<a
 ([0067: Built-in rules](0067-built-in-rules.md)),
 never the per-PC levels, and `pcs/<pc>/<agent>/` also holds `unanswered/`
 ([0064: Each agent's rules file](0064-each-agents-rules-file.md)).
-Not built yet. Decided by the developer on 2026-10-17 and 2026-10-18.
+Decided by the developer on 2026-10-17 and 2026-10-18.
 
 - **Names.** `<pc>` is the computer's name in lowercase, any other character a hyphen.
   `claude-code/` and `codex/` exist only for agents set up on some PC.

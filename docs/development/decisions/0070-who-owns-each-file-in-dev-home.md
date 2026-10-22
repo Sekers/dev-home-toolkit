@@ -4,7 +4,7 @@
 
 **Decision:** each file dev-home-toolkit puts in a dev-home has one owner. Either dev-home-toolkit
 owns it, and setup writes it and keeps it current, or the end user does, and setup creates it only
-when it's missing and never changes it. Not built yet. Decided by the developer on 2026-10-18.
+when it's missing and never changes it. Decided by the developer on 2026-10-18.
 
 | File | Owner | What setup does |
 | --- | --- | --- |

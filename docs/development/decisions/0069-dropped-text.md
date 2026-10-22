@@ -3,7 +3,7 @@
 **Built:** not yet.
 
 **Decision:** text an end user tells setup to drop goes to the Recycle Bin, as a file, before
-setup removes or overwrites anything. Not built yet. Decided by the developer on 2026-10-18.
+setup removes or overwrites anything. Decided by the developer on 2026-10-18.
 
 - **Where text gets dropped:** wherever setup asks where an agent's rules go, "drop them" is an
   answer

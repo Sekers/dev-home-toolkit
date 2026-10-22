@@ -3,11 +3,15 @@
 **Built:** yes, except: the change of 2026-10-18: the checks cover only `knowledge/README.md`, still
 the only index.
 
-**Decision:** when a sync commits `knowledge/README.md`, dev-home's knowledge index, it first
-checks two things, and commits nothing if either fails: every note the index lists is committed
-already, or among the files given and still there; and no note is listed twice. After it brings
-in commits from GitHub, by a fast-forward or a merge, it reports a note the index lists twice.
-Each failure is a `PROBLEM` line, and nothing is printed when all is well.
+**Decision:** when a sync commits one of dev-home's knowledge index files, `knowledge/README.md`,
+which lists the subjects, or a subject's own `README.md`, which lists its notes
+([0071: The knowledge index](0071-the-knowledge-index.md)), it first checks, and commits nothing
+if a check fails: every note a subject's list names is committed already, or among the files
+given and still there; every subject the subject list names has its folder; and no file lists an
+entry twice. After it brings in commits from GitHub, by a fast-forward or a merge, it reports an
+entry listed twice. Each failure is a `PROBLEM` line, and nothing is printed when all is well. It
+takes one `git ls-tree` of `knowledge/`, which lists every subject's files. Changed on
+2026-10-18.
 
 **Why:** git commits a whole file, so a sync that commits the index also takes in a row that
 another session on the same PC has added for a note it hasn't committed yet. Until that session
@@ -30,14 +34,6 @@ come in only reads the file. The developer approved the call, as AGENTS.md's "Sp
   skill writes a note before its row.
 - Generating the index from each note's **Covers:** line, so no agent edits it: it changes the
   index's format, the filing rules, and the knowledge skill, too much for problems this rare.
-
-**Changed on 2026-10-18,** not built yet, with the reasons in
-[0071: The knowledge index](0071-the-knowledge-index.md):
-the index becomes a subject list in `knowledge/README.md` and a list of notes in each subject's
-own `README.md`, each still one line per entry. So the checks cover every index file a sync
-commits: every note a subject's list names is committed already, or among the files given and
-still there; every subject the subject list names has its folder; and no file lists an entry
-twice. It's still one `git ls-tree` of `knowledge/`, which lists every subject's files.
 
 **Look again if:** the index stops being one row per line, or notes reach dev-home other than
 through the sync.

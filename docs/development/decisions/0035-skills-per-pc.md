@@ -5,7 +5,8 @@ setup by hand doesn't ask about skills.
 
 **Decision:** setup decides which skills are added to the agents on each PC, meaning linked into
 each Claude Code folder's `skills/` and into `~/.agents/skills` for Codex. Claude Code's and
-Codex's own menus decide whether an added skill is shown in an account or a project.
+Codex's own menus decide whether an added skill is shown in an account or a project. Changed on
+2026-10-12, 2026-10-16, and 2026-10-17, before it was built.
 
 - Each PC saves a yes or no for each skill in `local-settings.json`, as
   `skills.<name>.addedToAgents`. A no removes
@@ -27,22 +28,10 @@ Codex's own menus decide whether an added skill is shown in an account or a proj
 - `/dev-home skills` shows each skill's state, from the result setup records. Codex records a
   skill turned off by its real path, inside `internal/.generated/skills/`, so that path stays
   fixed, and a test checks it.
-
-Changed on 2026-10-12 and 2026-10-16, before it was built: the answer was
-`skills.<name>.installed` and the field `alwaysInstalled`. "Installed" already means installing
-dev-home-toolkit updates, and "added" alone could read as added to dev-home, so both say
-`addedToAgents`. `requires` became a list of typed entries, checked per skills folder, in place of
-`tools`, `programs`, and `os`. On 2026-10-17, before any release, it was split into two lists,
-`supportedOn` and `dependsOn`
-([0062: Keeping a skill off](0062-keeping-a-skill-off.md)).
-
-Built: each PC's answer, the links setup adds and removes by it and by `supportedOn`, a renamed
-skill's answers moved through `formerNames`, and the state setup records. Not built yet: a
-skill's always-on lines leaving the rules with a no, and asking at a run of setup by hand, which
-comes with setup's question about skills and its preferences. Until then, a skill with no answer
-follows its default, the `NEW` line names it once
-([0036: New items](0036-new-items.md)),
-and `/dev-home configure` changes it.
+- A renamed skill's answers move to its new name through `formerNames`.
+- Until a run of setup by hand asks about skills, which comes with setup's question about skills
+  and its preferences, a skill with no answer follows its default, the `NEW` line names it once
+  ([0036: New items](0036-new-items.md)), and `/dev-home configure` changes it.
 
 **Why:** checked on 2026-10-07 against Claude Code 2.1.293's docs and Codex's source at
 rust-v0.161.0:
@@ -65,9 +54,8 @@ rust-v0.161.0:
 - A file in the skill's folder rather than its frontmatter: dev-home-toolkit's skills and the
   person's own work the same way, setup reads JSON with Python's standard library, and a skill
   copied from elsewhere will need a file of its own anyway, to record where it came from.
-
-This changes decision 0030, "/dev-home skills", whose list now shows each
-skill's state.
+- `addedToAgents` and `alwaysAddedToAgents`: "installed" already means installing
+  dev-home-toolkit updates, and "added" alone could read as added to dev-home.
 
 **Options set aside:**
 
@@ -81,6 +69,9 @@ skill's state.
   skill copied from someone else would edit their `SKILL.md`.
 - The person's own skills always added: one made for one PC could only be hidden per agent and
   per account.
+- `skills.<name>.installed` and `alwaysInstalled` (see Why), and one `requires` list, or fields
+  named `tools`, `programs`, and `os`, in place of `supportedOn` and `dependsOn`
+  ([0062: Keeping a skill off](0062-keeping-a-skill-off.md) says why there are two lists).
 
 **Look again if:** people find themselves making the same choices on every PC, when a one-time
 copy of another PC's choices could help, or an agent starts syncing skill choices.

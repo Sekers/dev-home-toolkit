@@ -52,9 +52,6 @@ link to it, and keeps it until the item is removed.
   usual, while a match in ordinary wording, such as "see also" in a sentence, would leave a
   tracked link unchecked without a word.
 
-This changes decision 0031, "Checking issue links": one `gh` request becomes
-two when an issue closed as not planned.
-
 **Options set aside:**
 
 - Removing a not-planned item and reporting it: the end user may not know why it closed.

@@ -4,7 +4,7 @@
 
 **Decision:** `dev-home.json` records the newest dev-home-toolkit version that has set dev-home
 up, and a layout version for each part of dev-home, and tests catch a layout change made without
-one. Not built yet: it needs version numbers
+one. It needs version numbers
 ([0060: The release data file](0060-the-release-data-file.md)).
 Decided by the developer on 2026-10-18.
 
@@ -83,13 +83,6 @@ version numbers are needed before built-in rules ship.
   developers); a fingerprint of names kept in one module (it misses paths built elsewhere, and
   rearrangements); review and a checklist alone; raising the version automatically (a layout
   change also needs a conversion step, which only a developer can write).
-
-**This changes:**
-[0046: Settings files' layout and versions](0046-settings-files-layout-and-versions.md),
-for `dev-home.json`'s new fields; and
-[0024: Checking GitHub](0024-checking-github.md), whose interval the early
-check skips once per newer version, and whose last-fetch time no longer counts a fetch with only
-`not-for-merge` lines.
 
 **Look again if:** a part's layout needs more than one number, or PCs on different versions stay
 apart for long.

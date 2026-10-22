@@ -3,8 +3,7 @@
 **Built:** not yet.
 
 **Decision:** any agent dev-home-toolkit adds support for later, such as Gemini CLI, works the way
-Claude Code and Codex do. Not built yet: no agent is planned. Decided by the developer on
-2026-10-18.
+Claude Code and Codex do. No other agent is planned. Decided by the developer on 2026-10-18.
 
 - Setup asks before setting up its folders, and saves the answers per PC.
 - Skills are linked into the folders it reads skills from.

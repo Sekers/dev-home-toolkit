@@ -6,11 +6,16 @@
 **Decision:** once a Claude Code folder, or Codex, is answered no, every run of setup, quiet ones
 included, removes what setup set up there, and lists each removal as it goes:
 
-- In a Claude Code folder: the links setup made in its `skills\` and `rules\`, and dev-home and
-  dev-home-toolkit in `permissions.additionalDirectories` in its `settings.json`.
-- For Codex, in every Codex home: the `AGENTS.md` setup wrote, which starts with setup's note,
-  and dev-home in `writable_roots` in its `config.toml`. And the links setup made in
-  `~/.agents/skills`, the one skills folder every home reads.
+- In a Claude Code folder: the links setup made in its `skills\`; setup's rules file in its
+  `rules\`, with setup's last-written copy of it
+  ([0064: Each agent's rules file](0064-each-agents-rules-file.md)); dev-home and
+  dev-home-toolkit in `permissions.additionalDirectories` in its `settings.json`; and, in a
+  folder other than `~/.claude`, setup's two patterns in `claudeMdExcludes`, and the list once
+  it's empty. Every other pattern stays, though one written exactly like setup's goes too
+  ([0074: Instructions in other Claude Code folders](0074-instructions-in-other-claude-code-folders.md)).
+- For Codex, in every Codex home: the `AGENTS.md` setup wrote, which it tells by its last-written
+  copy, with that copy, and dev-home in `writable_roots` in its `config.toml`. And the links
+  setup made in `~/.agents/skills`, the one skills folder every home reads.
 
 ```text
 REMOVED   Link in a folder you said no to: C:\Users\you\.claude-second\skills\handoff
@@ -21,10 +26,14 @@ SET       Codex config in .codex: removed dev-home from writable_roots in C:\Use
 ```
 
 - A link counts as setup's when it points where setup's links point: in `skills\` and
-  `~/.agents/skills`, to a skill in `internal/.generated/skills/` or in dev-home's `skills/`; in
-  `rules\`, to the generated operating rules or dev-home's `global-rules/`. Anything else there
-  stays: a link of the person's own, a file, a folder, and an `AGENTS.md` setup didn't write.
+  `~/.agents/skills`, to a skill in `internal/.generated/skills/` or in dev-home's `skills/`.
+  Anything else there stays: a link of the person's own, a file, a folder, and an `AGENTS.md`
+  setup didn't write.
 - Each link is removed by itself, never with a recursive delete, and never anything it points to.
+- Before it removes an agent's rules file, setup saves any lines added to it, as every run does,
+  and it says so in one line, noting that the end user's rules are still in dev-home. Nothing in
+  dev-home changes, and setup stops creating `my-rules.md` for that agent on that PC. How another
+  agent is added is in [0073: Agents added later](0073-agents-added-later.md).
 - The question about a folder, or Codex, says what a no does, after what a yes does: "A 'no'
   removes all of that, if it's there.", and for Codex "A 'no' removes all of that but
   project_doc_max_bytes, if it's there." (the developer's wording, 2026-10-16). So the no
@@ -47,6 +56,8 @@ SET       Codex config in .codex: removed dev-home from writable_roots in C:\Use
 - A file setup can't safely edit gets a `PROBLEM` line on every run, and a run by hand shows what
   to take out by hand: one with comments, a form of `writable_roots` setup doesn't edit, such as
   a dotted key, and a `settings.json` that isn't JSON at all but names either folder.
+
+Changed on 2026-10-18 and 2026-10-19.
 
 **Why:**
 
@@ -118,28 +129,6 @@ starting at `AGENTS` in `internal/shared/settings.py`.
   decision took away for these same entries.
 - Code for several agents sharing a folder, written now: of the agents setup sets up, only Codex
   reads `~/.agents/skills`, so the rule is the same today, and the comments mark where it changes.
-
-This changes [0052: Codex homes](0052-codex-homes.md),
-where a no set up nothing and removed nothing;
-[0025: Setup's questions](0025-setups-questions.md),
-where a folder with a no was left alone; and
-[0053: What a folder's yes approves](0053-what-a-folders-yes-approves.md),
-whose change a no now takes back out.
-
-**Changed on 2026-10-18,** not built yet, with the reasons in
-[0064: Each agent's rules file](0064-each-agents-rules-file.md):
-setup's rules file in each agent's folder replaces the links in `rules\`, and setup tells its
-`AGENTS.md` in a Codex home by its last-written copy, not by a note. A no first saves any lines
-added to that file, as every run does, then removes the file and setup's copy of it, and says so
-in one line, noting that the end user's rules are still in dev-home. Nothing in dev-home changes,
-and setup stops creating `my-rules.md` for that agent on that PC. How another agent is added is in
-[0073: Agents added later](0073-agents-added-later.md).
-
-**Changed on 2026-10-19,** with the reasons in
-[0074: Instructions in other Claude Code folders](0074-instructions-in-other-claude-code-folders.md):
-in a Claude Code folder other than `~/.claude`, a no also takes setup's two patterns out of
-`claudeMdExcludes`, and the list once it's empty. Every other pattern stays, though one written
-exactly like setup's goes too.
 
 **Look again if:** setup sets up another agent that reads `~/.agents/skills`, Claude Code starts
 reading it, or Codex gets a skills folder for each home that isn't deprecated.

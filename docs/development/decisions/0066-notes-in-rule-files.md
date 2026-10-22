@@ -3,8 +3,8 @@
 **Built:** not yet.
 
 **Decision:** any rule file in dev-home's `rules/` may start with a note: an HTML comment whose
-first line is only `note`, then fields, then a blank line and free text. Not built yet. Decided by
-the developer on 2026-10-17 and 2026-10-18.
+first line is only `note`, then fields, then a blank line and free text. Decided by the
+developer on 2026-10-17 and 2026-10-18.
 
 ```markdown
 <!-- note

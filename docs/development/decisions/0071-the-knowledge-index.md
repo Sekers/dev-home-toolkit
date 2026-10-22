@@ -4,7 +4,7 @@
 
 **Decision:** dev-home's knowledge index becomes two levels. `knowledge/README.md` lists only the
 subjects, one line each, and each subject folder has its own `README.md` listing its notes, one
-line each. Not built yet. Decided by the developer on 2026-10-18.
+line each. Decided by the developer on 2026-10-18.
 
 ```text
 knowledge/
@@ -86,10 +86,6 @@ agent may read two subject lists.
 - A hook that names no agent, such as "AI agents' instruction files": an agent would open a note
   about other agents and find nothing.
 - `index.md` in place of `README.md`: GitHub doesn't show it.
-
-**This changes:**
-[0056: Checking the knowledge index](0056-checking-the-knowledge-index.md),
-whose checks now cover every index file.
 
 **Look again if:** a subject grows past what one list reads cheaply, or the agents gain a search
 that makes an index unnecessary.

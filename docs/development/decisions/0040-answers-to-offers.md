@@ -1,12 +1,14 @@
 # 0040: Answers to offers
 
 **Built:** yes, except: knowledge candidates and update notices don't offer these answers yet, nor
-do the offers that aren't built: recommended settings, built-in rules, and copied skills.
+do the offers that aren't built, recommended settings and copied skills; and built-in rules, with
+answers of their own, aren't built.
 
 **Decision:** every question that offers something a person can take or turn down uses the same
 answers, built and planned offers alike: issue and knowledge candidates, setup's optional lists
-(skills, recommended settings, example rules), the `NEW` line, dev-home-toolkit updates, starter
-updates, and copied skills. Two terms:
+(skills and recommended settings), the `NEW` line, dev-home-toolkit updates, and copied skills.
+Built-in rules have answers of their own, a departure below. Changed on 2026-10-16 and
+2026-10-18. Two terms:
 
 - **Session:** one conversation with an agent. A new conversation, or `/clear`, starts a new
   one; resuming a conversation continues it. At a terminal, one run of setup is one session.
@@ -33,42 +35,28 @@ updates, and copied skills. Two terms:
 - A question lists only the answers that do something different for it, each with its note in
   parentheses, so it explains itself. A `NEW` line comes back every session anyway, so it offers
   no "remind me next session". That's part of the standard, not a departure.
+- A knowledge candidate's reminder or no needs a record in dev-home of the finding and its
+  evidence, with the answer; where it's kept is decided when it's built.
 
 **Departure:** approving exact text, such as a draft's "Save, commit, and push this?" or a
 settings diff's typed yes, stays yes or no. It's one change shown once, not an offer that comes
 back.
 
-**Departure,** decided 2026-10-16: the `NEW` line for a new skill is a notice, not an offer. The
-skill already works at its default, so the line says once what happened and how to change it,
-with no answers, as a new preference gets no line at all
-([0036: New items](0036-new-items.md)).
-A folder setup hasn't asked about is still an offer, with the answers above, so a folder can now
-hold a reminder ([0049: Answers in the settings](0049-answers-in-the-settings.md)).
+**Departure:** the `NEW` line for a new skill is a notice, not an offer. The skill already works
+at its default, so the line says once what happened and how to change it, with no answers, as a
+new preference gets no line at all ([0036: New items](0036-new-items.md)). A folder setup hasn't
+asked about is still an offer, with the answers above, so a folder can hold a reminder
+([0049: Answers in the settings](0049-answers-in-the-settings.md)).
 
-**Departure,** decided 2026-10-18, not built yet: the example rules above became built-in rules,
-and a new one is announced in one `NEW` line for its batch, once. Its answers are `added`,
-`not added`, `default`, and `unanswered`, as for skills, with no reminders: a rule loads in every
-session, so it never applies without a yes, and a line in every session would cost attention for
-something optional
-([0067: Built-in rules](0067-built-in-rules.md)).
-Starter updates were dropped the same day
-([0070: Who owns each file in dev-home](0070-who-owns-each-file-in-dev-home.md)).
+**Departure:** a new built-in rule is announced in one `NEW` line for its batch, once. Its answers
+are `added`, `not added`, `default`, and `unanswered`, as for skills, with no reminders: a rule
+loads in every session, so it never applies without a yes, and a line in every session would cost
+attention for something optional ([0067: Built-in rules](0067-built-in-rules.md)).
 
 **Why:** the offers grew one at a time, with different words for the same idea ("decide later",
 "remind me later", "skip this version"), and "later" never said when. Defining each answer by
 what's remembered and when it comes back makes every question mean the same thing. One type per
 list keeps a quick "All" from accepting something the person didn't look at.
-
-**This changes:**
-
-- Decision 0033, "Prompts for optional lists": it gains skip and the reminders, and different types
-  are asked separately.
-- Decision 0036, "New items": one answer covers a batch of one
-  type.
-- Issue candidates: "File it, decide later, or no?" becomes these answers.
-- Knowledge candidates: they gain the reminders and a remembered no, where a no now lasts only
-  for the session and nothing records it. Both need a record in dev-home of the finding and its
-  evidence; where is decided when it's built.
 
 **Options set aside:** a "later" with no time (nobody can tell when it comes back); "not now"
 beside "remind me later" (both sound like a reminder will come); one answer for a list of mixed

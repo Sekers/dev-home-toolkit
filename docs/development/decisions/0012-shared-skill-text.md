@@ -3,8 +3,7 @@
 **Built:** not yet.
 
 **Decision:** text that several of dev-home-toolkit's skills need word for word has one source, a
-file in `templates/shared-skill-text/` named for what it says, such as `other-sessions.md`. It
-isn't built yet.
+file in `templates/shared-skill-text/` named for what it says, such as `other-sessions.md`.
 
 - Each skill's template marks where a passage goes with an HTML comment, such as
   `<!-- shared: other-sessions -->`, indented to the text around it. The markers are the only

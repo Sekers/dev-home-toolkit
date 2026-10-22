@@ -1,13 +1,14 @@
 # 0057: Requirements
 
-**Built:** yes, except: the release side, with the `devHomeToolkit` type.
+**Built:** yes, except: the release side, with the `devHomeToolkit` type, and built-in rules'
+files.
 
 **Decision:** a skill's `dev-home-skill.json`, and a release's data file
 ([0060: The release data file](0060-the-release-data-file.md)),
 list what it needs to run, as facts, and one checker in `internal/shared/` decides what that
-means. Built for skills, with the types `os`, `agent`, `program`, and `python`: the reader in
-`settings.py`, the checker in `requirements.py`, and what setup does with the result, in
-`setup.py`. The release side, with the `devHomeToolkit` type, isn't built. Which requirements keep
+means. For skills, the types are `os`, `agent`, `program`, and `python`, with the reader in
+`settings.py`, the checker in `requirements.py`, and what setup does with the result in
+`setup.py`; a release adds the type `devHomeToolkit`. Which requirements keep
 a skill off, and which only warn, is a decision of its own:
 [0062: Keeping a skill off](0062-keeping-a-skill-off.md).
 
@@ -81,6 +82,13 @@ a skill off, and which only warn, is a decision of its own:
   standard's `compatibility` text, `/dev-home skills` shows it.
 - A test checks each of dev-home-toolkit's own skill files, setup reports a mistake in an end
   user's own as a `PROBLEM`, and a page in `docs/reference/` describes the file.
+- A built-in rule's `dev-home-rule.json` takes the same `supportedOn`, with `os` and `agent`, and
+  no `dependsOn`, since a rule loads whether or not a program is there
+  ([0072: Fields in skill and rule files](0072-fields-in-skill-and-rule-files.md)). Neither file
+  has a format version: a rule for developers, in [skills.md](../skills.md), says a field never
+  changes meaning.
+
+Changed on 2026-10-17 and 2026-10-18, before any release.
 
 **How it grows:**
 
@@ -118,38 +126,28 @@ a skill off, and which only warn, is a decision of its own:
   ([0062: Keeping a skill off](0062-keeping-a-skill-off.md)).
 - An end user can't change the operating system, so a notice would only add noise. They can
   install a program, so knowing what's missing helps.
+- Two lists, so the file says which kind each entry is. With one list, the reader knew an entry's
+  kind only from its type's name, so a type it didn't know, whether misspelled, newer, or made
+  up, couldn't be handled by the rule for its kind: a misspelled `agent` was ignored, and the
+  skill went into agents its writer excluded. With two lists, each kind keeps its own rule even
+  for what the reader doesn't know, and either kind can gain types later. Both names state facts
+  about the skill, not what setup should do, so they hold for releases too.
+- Types and names match in any case: the case carries no meaning, and the people writing these
+  files write names the way they know them.
 
 Established practice: typed entries, and shipping a new type before requiring it. The rule per
 type, the check per skills folder, and the recorded result are dev-home-toolkit's own design.
 
-**Changed on 2026-10-17,** before any release, with the reasons in
-[0062: Keeping a skill off](0062-keeping-a-skill-off.md):
-a missing program or an older Python only warns, where it kept the skill off; a type or a field
-the reader doesn't know is a `PROBLEM` line, where an unknown type counted as not met and an
-unknown field went unsaid; and no skill declares a `devHomeToolkit` minimum, which was to be the
-format's gate. The type `tool` became `agent`, since "tool" means several things in this repo.
-Types and names in `anyOf` match in any case, where `Windows` was reported as unknown: the case
-carries no meaning, and the people writing these files write names the way they know them.
-
-**Changed again on 2026-10-17,** before any release: the one list, `requires`, became two,
-`supportedOn` and `dependsOn`, so the file says which kind each entry is. With one list, the
-reader knew an entry's kind only from its type's name, so a type it didn't know, whether
-misspelled, newer, or made up, couldn't be handled by the rule for its kind: a misspelled `agent`
-was ignored, and the skill went into agents its writer excluded. With two lists, each kind keeps
-its own rule even for what the reader doesn't know, and either kind can gain types later. Both
-names state facts about the skill, not what setup should do, so they hold for releases too.
-
-**Changed on 2026-10-18,** before any release, with the reasons in
-[0072: Fields in skill and rule files](0072-fields-in-skill-and-rule-files.md): a
-program's `description` becomes `usedFor` (built on 2026-10-21); a built-in rule's
-`dev-home-rule.json` takes the same `supportedOn`, with `os` and `agent`, and no `dependsOn`, since
-a rule loads whether or not a program is there (not built yet); and neither file gets a format
-version, with a rule for developers that a field never changes meaning (in
-[skills.md](../skills.md) since 2026-10-21).
-
 **Options set aside:**
 
-- One list, `requires`, with each entry's kind known from its type's name: see the change above.
+- One list, `requires`, with each entry's kind known from its type's name: see Why.
+- A missing program or an older Python keeping a skill off, an unknown type counting as not met
+  with no `PROBLEM` line, an unknown field going unsaid, and a `devHomeToolkit` minimum in a skill's file as the format's
+  gate, as until 2026-10-17 ([0062: Keeping a skill off](0062-keeping-a-skill-off.md) says why
+  not).
+- The type name `tool`: "tool" means several things in this repo.
+- A program's `description`: in a skill's folder, "description" means `SKILL.md`'s text for
+  agents ([0072: Fields in skill and rule files](0072-fields-in-skill-and-rule-files.md)).
 - Telling a misspelled limit from other unknown types by its spelling: the closest-word check
   matches made-up types such as `ios` and `dos` to `os`, which would keep such a skill off for
   good. By its shape, an `anyOf`: it would also catch made-up types written that way, and block a

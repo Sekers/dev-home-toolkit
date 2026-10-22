@@ -6,10 +6,10 @@
 as `internal/.python/python.exe` in dev-home-toolkit's folder. `internal/.python/` is a directory
 junction setup makes to the Python install manager's shortcut folder,
 `%LocalAppData%\Python\bin`, or else to the folder of the newest Python 3.12 or later in the
-registry (PEP 514), which covers the traditional installer. Each run checks only that the
-junction's `python.exe` is there, which starts no process. Setup starts Python to check its
-version only when it makes the junction, or re-points it because that `python.exe` is gone. A
-symbolic link will do the same job on macOS and Linux.
+registry (PEP 514), which covers the traditional installer. On every run, setup checks that the
+junction leads to the Python a first run would pick, and re-points it when it doesn't
+([0077: Which Python setup uses](0077-which-python-setup-uses.md)). A symbolic link will do the
+same job on macOS and Linux. Changed on 2026-10-20.
 
 **Why a junction:** dev-home-toolkit's path has no spaces, so the command is the same unquoted text
 in Claude Code's Bash and PowerShell tools and in Codex, and each is pre-approved as both
@@ -49,11 +49,6 @@ alone. Without it, compiling a 600-line module took about 8 ms on every run.
   the link.
 - One root folder for everything that belongs to the PC (the settings, the generated files, and
   the link): a bigger change, for files that had no need to move.
-
-**Changed on 2026-10-20:** every run, not only one that makes the junction or finds its
-`python.exe` gone, checks that the junction leads to the first suitable Python, and re-points it
-when another comes first, with the reasons in
-[0077: Which Python setup uses](0077-which-python-setup-uses.md).
 
 **Not tested yet:** the install manager's shortcut after its runtime is uninstalled
 (`py install --refresh` repairs it); a junction on a Dev Drive, which is ReFS and documented as
