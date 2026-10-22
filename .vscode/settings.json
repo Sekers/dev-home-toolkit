@@ -1,0 +1,5 @@
+{
+  // The development tools' environment. VS Code looks for one only in the root and one folder
+  // down, so it wouldn't find this one by itself.
+  "python.defaultInterpreterPath": "${workspaceFolder}/internal/development/.venv/Scripts/python.exe"
+}

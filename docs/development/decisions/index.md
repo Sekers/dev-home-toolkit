@@ -82,3 +82,4 @@ Research a decision rests on has its own page in `../research/`.
 - [One word for each idea, in a glossary](one-word-for-each-idea-in-a-glossary.md)
 - [A PC catches up at its next sync](a-pc-catches-up-at-its-next-sync.md)
 - [Setup follows the newest suitable Python on every run](setup-follows-the-newest-suitable-python-on-every-run.md)
+- [VS Code uses the development tools' environment, through a committed settings file](vs-code-uses-the-development-tools-environment-through-a-committed-settings-file.md)

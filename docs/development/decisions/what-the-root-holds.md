@@ -10,6 +10,9 @@ rest of what used to be there lives under `internal/`: the generated files in
 **Why each item stays:**
 
 - `.gitattributes` and `.gitignore`: git applies them to the whole repo only from the root.
+- `.vscode/`: VS Code reads a folder's workspace settings only from there. Its `settings.json`
+  points VS Code at the development tools' environment
+  ([why](vs-code-uses-the-development-tools-environment-through-a-committed-settings-file.md)).
 - `AGENTS.md` and `CLAUDE.md`: Codex and Claude Code read them from the root.
 - `CHANGELOG.md`: Keep a Changelog names it so and puts it in the root, where people and programs
   look for one.
@@ -46,8 +49,9 @@ editor too. "development" matches `docs/development/`; `dev/` or `dev-tools/` wo
 **What it costs:** longer development commands (`uv run --directory internal/development ...`).
 Ruff has to be given its settings for the skill scripts, which aren't under them, and an editor's
 ruff extension and test panel won't find them for those files without settings of its own. The
-usual fix for the editor, a `.vscode/settings.json`, would be a root folder, so it needs its own
-decision.
+usual fix for the editor is a `.vscode/settings.json`, which a decision of its own added on
+2026-10-22, for VS Code's Python; it has no settings for the ruff extension or the test panel
+yet.
 
 **Options set aside:**
 
@@ -69,5 +73,10 @@ decision.
 adding anything to the root, so that AGENTS.md's "The two repos" section holds only what tells the
 two repos apart.
 
-**Look again if:** dev-home-toolkit becomes a Python package, an editor's settings become worth a
-root folder, or a `--configure` switch means nobody edits `local-settings.json` by hand.
+**Changed on 2026-10-22:** `.vscode/` joined the root, for VS Code's settings, which this page
+had left to a decision of its own: "[VS Code uses the development tools' environment, through a
+committed settings
+file](vs-code-uses-the-development-tools-environment-through-a-committed-settings-file.md)".
+
+**Look again if:** dev-home-toolkit becomes a Python package, or a `--configure` switch means
+nobody edits `local-settings.json` by hand.
