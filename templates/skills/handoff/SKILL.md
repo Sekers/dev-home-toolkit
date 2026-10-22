@@ -295,8 +295,9 @@ Follow "Changing the handoff". While updating:
   An issue link after "See also:", written exactly so, at the end of an item, is there for what
   that issue holds: its state changes nothing, so the script leaves it out. Every other issue
   link is one the item tracks: the issue it was filed as (the item starts
-  `GitHub issue [#<number>]`), or one it's waiting on, such as another project's. Keep the items whose tracked issues are open or weren't
-  checked, and say which weren't checked and why. When a tracked issue is closed:
+  `GitHub issue [#<number>]`), or one it's waiting on, such as another project's. Keep the
+  items whose tracked issues are open or weren't checked, and say which weren't checked and why.
+  When a tracked issue is closed:
   - As completed, or with no reason: remove an item filed as that issue, like any finished item,
     and say which ones you removed. Keep any other item, and tell the user that the issue closed
     and what the item says to do next.

@@ -142,9 +142,9 @@ type, the check per skills folder, and the recorded result are dev-home-toolkit'
 
 - One list, `requires`, with each entry's kind known from its type's name: see Why.
 - A missing program or an older Python keeping a skill off, an unknown type counting as not met
-  with no `PROBLEM` line, an unknown field going unsaid, and a `devHomeToolkit` minimum in a skill's file as the format's
-  gate, as until 2026-10-17 ([0062: Keeping a skill off](0062-keeping-a-skill-off.md) says why
-  not).
+  with no `PROBLEM` line, an unknown field going unsaid, and a `devHomeToolkit` minimum in a
+  skill's file as the format's gate, as until 2026-10-17
+  ([0062: Keeping a skill off](0062-keeping-a-skill-off.md) says why not).
 - The type name `tool`: "tool" means several things in this repo.
 - A program's `description`: in a skill's folder, "description" means `SKILL.md`'s text for
   agents ([0072: Fields in skill and rule files](0072-fields-in-skill-and-rule-files.md)).

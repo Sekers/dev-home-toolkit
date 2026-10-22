@@ -21,11 +21,11 @@ Decided by the developer on 2026-10-18.
 - **An early update check.** When `dev-home.json` records a newer version than this PC's own, the
   sync checks GitHub right away, ignoring `updates.checkEveryHours`, and installs the update if
   automatic updates are on. With them off, the update's line, whenever the waiting releases'
-  `urgency` gives one, also names the version another PC runs. Once per newer version: after a check that reaches GitHub, the sync writes that version as
-  `alreadyCheckedFor` in `internal/.generated/update-check.json`, and a missing or unreadable file
-  counts as no record. Both interval checks, for updates and for dev-home, keep using
-  `.git/FETCH_HEAD`'s time, but a last fetch with no line for the upstream branch, only
-  `not-for-merge` lines, doesn't count.
+  `urgency` gives one, also names the version another PC runs. Once per newer version: after a
+  check that reaches GitHub, the sync writes that version as `alreadyCheckedFor` in
+  `internal/.generated/update-check.json`, and a missing or unreadable file counts as no record.
+  Both interval checks, for updates and for dev-home, keep using `.git/FETCH_HEAD`'s time, but a
+  last fetch with no line for the upstream branch, only `not-for-merge` lines, doesn't count.
 - **Layout versions:** a `layoutVersions` field, such as `{ "rules": 1 }`, with a part added when
   its layout first needs one: `knowledge` with its subject lists
   ([0071: The knowledge index](0071-the-knowledge-index.md)),

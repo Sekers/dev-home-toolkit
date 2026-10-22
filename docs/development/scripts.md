@@ -79,13 +79,13 @@ points here; its rules apply too.
   itself first (`links.py` does, and so does the tests' `remove_sandbox`), or use
   `cmd /c rmdir`.
 - Agents run setup.py only with `--quiet`, which never prompts: no settings changes beyond the
-  ones a folder's yes approved, and no creating repos. sync.py runs it that way after every sync that doesn't commit, and after one
-  that commits when it brought in commits from GitHub. The one other way an agent runs it is
-  `--configure '<name>=<value>'`, which changes that one setting with no prompt, after the end
-  user approves the exact change in chat (`--what-if` shows it first): that chat approval stands
-  in for a typed yes. Only a person runs it otherwise, and even then it asks only when its input
-  comes from a real console and its output goes to one (`console.py`), so it never waits for an
-  answer nobody can see or give.
+  ones a folder's yes approved, and no creating repos. sync.py runs it that way after every sync
+  that doesn't commit, and after one that commits when it brought in commits from GitHub. The one
+  other way an agent runs it is `--configure '<name>=<value>'`, which changes that one setting
+  with no prompt, after the end user approves the exact change in chat (`--what-if` shows it
+  first): that chat approval stands in for a typed yes. Only a person runs it otherwise, and even
+  then it asks only when its input comes from a real console and its output goes to one
+  (`console.py`), so it never waits for an answer nobody can see or give.
 - A question of setup's that offers something a person can take or turn down uses the standard
   answers, as [skills.md](skills.md) says for every such question. A list of such items, of one
   type, is asked through setup's `choose_from_list`, the one prompt

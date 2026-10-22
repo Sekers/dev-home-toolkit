@@ -7,8 +7,9 @@ Code folder it sets up other than `~/.claude`: `**/<profile folder name>/.claude
 `**/<profile folder name>/.claude/rules/**`, with `?` in place of each character a pattern reads
 as more than itself. A folder whose `settings.json` is really `~/.claude`'s, through a link, gets
 none: setup compares the real paths of the folder and its `settings.json` with `~/.claude`'s on
-every run, about 0.3 ms per Claude Code folder (measured on Windows, 2026-10-19). The yes to setting up the folder approves them, as it approves the folder's other settings
-change ([0053: What a folder's yes approves](0053-what-a-folders-yes-approves.md)),
+every run, about 0.3 ms per Claude Code folder (measured on Windows, 2026-10-19). The yes to
+setting up the folder approves them, as it approves the folder's other settings change
+([0053: What a folder's yes approves](0053-what-a-folders-yes-approves.md)),
 and the question says what they do and why. A no to the folder takes them back out, and leaves
 any other pattern. Every run, quiet ones included, adds them when they're missing.
 

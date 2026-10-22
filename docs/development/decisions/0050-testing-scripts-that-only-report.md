@@ -80,11 +80,12 @@ read. The tests check both scripts in two layers.
 **Options set aside:**
 
 - Forbidding only risky kinds of event, and letting everything else through: the watcher's
-  first design, until 2026-10-14. It fails open. Probes found three ways to write a file that its list missed,
-  `_winapi.CreateFile`, `sqlite3.connect`, and `_winapi.CopyFile2` (which `Path.copy` uses on
-  Windows).
-- A list of methods that write files: what the code check used until 2026-10-14. It fails open, and Python 3.14's `Path.copy`, `copy_into`, `move`, and `move_into` weren't on
-  it, so `Path.copy` got past both layers.
+  first design, until 2026-10-14. It fails open. Probes found three ways to write a file that its
+  list missed, `_winapi.CreateFile`, `sqlite3.connect`, and `_winapi.CopyFile2` (which
+  `Path.copy` uses on Windows).
+- A list of methods that write files: what the code check used until 2026-10-14. It fails open,
+  and Python 3.14's `Path.copy`, `copy_into`, `move`, and `move_into` weren't on it, so
+  `Path.copy` got past both layers.
 - Allowing only listed kinds, with no forbidden group: an unlisted kind would fail with no hint
   of whether it's risky. The forbidden group gives each known risk its own reason.
 - Name lists only for modules that can touch files or the network: sorting modules that way is

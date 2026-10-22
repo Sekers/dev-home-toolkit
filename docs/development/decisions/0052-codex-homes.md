@@ -30,8 +30,12 @@ skills. Codex homes are saved exactly as Claude Code folders are, an entry for e
 - Every run, quiet ones included, gives each home that's there the main home's answer when its
   own differs or it has none: a new home, or one whose answer was changed by hand, the main
   home's included. It keeps no backup, since nobody changed a setting, and prints one line in
-  place of the save's own, such as
-  `SET       dev-home is now turned off for Codex in ~/.codex-work and D:/codex-test, to match ~/.codex. Codex only supports one set of skills for all your Codex homes, so they share one setting.`
+  place of the save's own, such as:
+
+  ```text
+  SET       dev-home is now turned off for Codex in ~/.codex-work and D:/codex-test, to match ~/.codex. Codex only supports one set of skills for all your Codex homes, so they share one setting.
+  ```
+
 - `--configure` and the menu: a change to the main home's answer changes every home, those that
   are gone included. A change that would leave the homes with different answers is refused, with
   a message that all of them share one answer, naming the main home. Adding a home with the

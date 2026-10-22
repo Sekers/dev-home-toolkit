@@ -43,8 +43,9 @@ folder link as a directory junction, which needs no admin rights and no Develope
     The scripts read it to find your dev-home.
     Setup removes a setting nothing declares any more, such as one misspelled in a hand edit,
     and says so, after a backup of the file. It never overwrites a file it can't read as JSON,
-    or one with a `schemaVersion` it doesn't know. One in an older layout, from before its settings were grouped, it offers to set
-    aside, as a dated backup beside it, and then asks its questions again.
+    or one with a `schemaVersion` it doesn't know. One in an older layout, from before its
+    settings were grouped, it offers to set aside, as a dated backup beside it, and then asks its
+    questions again.
 - **In each Claude Code folder you said yes to** (`~\.claude`, and any extra ones):
   - Links in `skills\` to each skill added to your agents on this PC (this repo's, and your own
     from dev-home; see [A skill's dev-home-skill.json](dev-home-skill-json.md)). In `rules\`,

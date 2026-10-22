@@ -1,5 +1,7 @@
 {
   // The development tools' environment. VS Code looks for one only in the root and one folder
   // down, so it wouldn't find this one by itself.
-  "python.defaultInterpreterPath": "${workspaceFolder}/internal/development/.venv/Scripts/python.exe"
+  "python.defaultInterpreterPath": "${workspaceFolder}/internal/development/.venv/Scripts/python.exe",
+  // markdownlint's rules for this repo, kept with the development tools' settings.
+  "markdownlint.configFile": "${workspaceFolder}/internal/development/.markdownlint.jsonc"
 }

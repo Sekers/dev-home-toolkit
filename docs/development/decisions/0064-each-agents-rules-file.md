@@ -31,11 +31,11 @@ Decided by the developer on 2026-10-17 and 2026-10-18.
 - **Taking over a file in the way.** At the end user's yes for a Codex home, setup gathers the
   home's existing `AGENTS.md`; in a Claude Code folder, only a file already at setup's own path.
   It shows the content and asks where it goes: every agent on every PC, that agent on every PC,
-  every agent on this PC, that agent on this PC, or drop it. It puts each file it moves, as a file of its own, in that
-  level's `mine/`, commits and pushes, only then removes the originals, and owns the file from
-  then on ([0066: Notes in rule files](0066-notes-in-rule-files.md) has how moved files are
-  named and marked). An `AGENTS.override.md` is left alone and reported on every sync: Codex
-  documents it as a temporary switch that replaces `AGENTS.md`.
+  every agent on this PC, that agent on this PC, or drop it. It puts each file it moves, as a file
+  of its own, in that level's `mine/`, commits and pushes, only then removes the originals, and
+  owns the file from then on ([0066: Notes in rule files](0066-notes-in-rule-files.md) has how
+  moved files are named and marked). An `AGENTS.override.md` is left alone and reported on every
+  sync: Codex documents it as a temporary switch that replaces `AGENTS.md`.
 - **Lines added to setup's file later,** in either agent, get the same question, at the next run
   at a console or through `/dev-home configure`.
 - **A run that can't ask,** a quiet sync at the start of a skill command, puts those lines in

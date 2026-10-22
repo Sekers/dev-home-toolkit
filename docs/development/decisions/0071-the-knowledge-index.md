@@ -43,7 +43,8 @@ knowledge/
 - **Lines:** a subject's line stays as broad as the subject. A note's line names the agents and
   programs the note covers, and changes with the note.
 - **Owner:** the indexes are the end user's, kept by the knowledge skill. Setup never changes
-  them; it only creates `knowledge/README.md`, with its title, when it's missing ([0070: Who owns each file in dev-home](0070-who-owns-each-file-in-dev-home.md)).
+  them; it only creates `knowledge/README.md`, with its title, when it's missing
+  ([0070: Who owns each file in dev-home](0070-who-owns-each-file-in-dev-home.md)).
   The explanation of what belongs in the knowledge base lives in the knowledge skill, where its
   filing rules already say it, and in dev-home's root README. The old index's intro paragraph,
   which repeated it, goes.

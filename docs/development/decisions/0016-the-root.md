@@ -13,7 +13,7 @@ rest of what used to be there lives under `internal/`: the generated files in
 
 - `.gitattributes` and `.gitignore`: git applies them to the whole repo only from the root.
 - `.vscode/`: VS Code reads a folder's workspace settings only from there. Its `settings.json`
-  points VS Code at the development tools' environment
+  points VS Code at the development tools' environment and at markdownlint's rules for this repo
   ([why](0078-vs-code-settings.md)).
 - `AGENTS.md` and `CLAUDE.md`: Codex and Claude Code read them from the root.
 - `CHANGELOG.md`: Keep a Changelog names it so and puts it in the root, where people and programs
@@ -54,9 +54,9 @@ editor too. "development" matches `docs/development/`; `dev/` or `dev-tools/` wo
 **What it costs:** longer development commands (`uv run --directory internal/development ...`).
 Ruff has to be given its settings for the skill scripts, which aren't under them, and an editor's
 ruff extension and test panel won't find them for those files without settings of its own. The
-usual fix for the editor is a `.vscode/settings.json`, which holds VS Code's Python setting
-([0078: VS Code settings](0078-vs-code-settings.md)) and no settings yet for the ruff extension or
-the test panel.
+usual fix for the editor is a `.vscode/settings.json`, which holds VS Code's Python setting and
+markdownlint's ([0078: VS Code settings](0078-vs-code-settings.md)), and no settings yet for the
+ruff extension or the test panel.
 
 **Options set aside:**
 
