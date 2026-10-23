@@ -358,7 +358,7 @@ def test_a_file_with_only_top_level_headings_adds_no_my_rules(
 
 
 def test_a_heading_with_nothing_under_it_is_left_out(code: ModuleType, rules: Path) -> None:
-    # As the starter's my-rules.md is, once its comment is left out.
+    # As a my-rules.md with only a heading and a comment is, once the comment is left out.
     write(rules / "_all-agents" / "mine" / "my-rules.md", "# My rules\n\n<!-- Your rules. -->\n")
     write(rules / "codex" / "mine" / "a.md", "# Python\n\n## Empty\n\n### Also empty\n")
     result = joined(code, rules)

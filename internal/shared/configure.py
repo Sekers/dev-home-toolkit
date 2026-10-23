@@ -812,7 +812,7 @@ def checked_dev_home(value: str) -> str:
     """A folder for devHome.folder, which must already be a dev-home: cloning or creating one
     takes a person's answers at a console."""
     # Loaded here, since setup loads this module.
-    from .setup import is_in_use, missing_dev_home_files
+    from .setup import is_dev_home, is_in_use
 
     folder = forward(value)
     reason = unsafe_reason(folder)
@@ -821,10 +821,10 @@ def checked_dev_home(value: str) -> str:
     if is_inside(folder, TOOLKIT_ROOT):
         raise SettingError(f"The folder {folder} is dev-home-toolkit's own folder, or inside it.")
     full = Path(comparable(folder))
-    if not is_in_use(full) or missing_dev_home_files(full):
+    if not is_in_use(full) or not is_dev_home(full):
         raise SettingError(
             f"{folder} isn't a dev-home: devHome.folder can only be a folder that already is one, "
-            "with knowledge/README.md. To clone or create one, the user runs setup.py in a "
+            f"with {DEV_HOME_SETTINGS}. To clone or create one, the user runs setup.py in a "
             "terminal."
         )
     return folder

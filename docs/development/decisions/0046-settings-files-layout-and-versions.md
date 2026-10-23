@@ -1,7 +1,7 @@
 # 0046: Settings files' layout and versions
 
 **Built:** yes, except: the change of 2026-10-18: `dev-home.json` records no dev-home-toolkit
-version or layout versions, and the starter, not setup's code, still creates it.
+version or layout versions yet. Setup's code creates it, as that change says.
 
 **Decision:** this PC's settings are grouped by what they're about, and each one's name is its
 path, as in git config and Codex's `-c`:

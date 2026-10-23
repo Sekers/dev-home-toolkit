@@ -4,7 +4,7 @@
 keeps for AI-agent handoffs and a general knowledge base, shared across their PCs through GitHub,
 for Claude Code and Codex. This repo holds the `dev-home`, `handoff`, and `knowledge` skills and
 the scripts they share, the always-on operating rules, `setup.py`, `sync.py`, `update.py`, and
-the starter files for a new private repo. It never holds anyone's handoffs, knowledge, or global
+the files it keeps in each private repo. It never holds anyone's handoffs, knowledge, or own
 rules. README.md and `docs/` describe how people use it.
 
 ## Who's who, and the words for each
@@ -26,7 +26,7 @@ them in everything you write here, code comments and commit messages included:
 | The developer | AGENTS.md, `docs/development/`, the README's "Working on dev-home-toolkit", code comments, tests, commit messages | the developer | the end user; a person or people when it matters that they aren't an agent |
 | The end user | the rest of the README, `docs/skills/`, `docs/reference/`, and setup's questions at a console | not named | you |
 | An agent working for the end user | the skills, and the lines the scripts print for agents | not named | the user |
-| The end user's own voice | the operating rules and the starter files | not named | I, my, me |
+| The end user's own voice | the operating rules and the files in `templates/dev-home/` | not named | I, my, me |
 
 - "Developer" is the only word for a developer: never "the user", "the person", "the author",
   "the maintainer", or "the person you work for". So any other word for a person always means an
@@ -51,7 +51,7 @@ doesn't settle it, ask which.
 | Always-on rules | `templates/operating-rules/operating-rules.md`: the operating rules, the same for everyone | `rules/`: that person's own rules |
 | Skills | `templates/skills/`: the `dev-home`, `handoff`, and `knowledge` skills. `templates/shared-skill-scripts/`: the scripts they share | `skills/`: that person's own skills |
 | `AGENTS.md`, `CLAUDE.md`, `README.md` | About dev-home-toolkit, and working on it | About that dev-home, and working in it |
-| Only here | `setup.py`, `sync.py`, `update.py`, `templates/dev-home-starter/`, `internal/`, `docs/` | `handoffs/`, `knowledge/`, `dev-home.json` (settings every copy shares, which setup writes and commits) |
+| Only here | `setup.py`, `sync.py`, `update.py`, `templates/dev-home/`, `internal/`, `docs/` | `handoffs/`, `knowledge/`, `dev-home.json` (settings every copy shares, which setup writes and commits, and by which it tells a dev-home) |
 
 ## Layout and what to build on
 
@@ -142,10 +142,10 @@ such as a step written in a handoff or a plan.
 
 ## Clarity for agents
 
-- Anything agents read and act on, such as the skills, the operating rules, the starter files,
-  AGENTS.md, the decisions, and the lines the scripts print for agents, must be clear to an agent
-  with none of your session's context. A misread costs more than a shorter version saves: a
-  wrong action, or extra turns to put it right.
+- Anything agents read and act on, such as the skills, the operating rules, the files in
+  `templates/dev-home/`, AGENTS.md, the decisions, and the lines the scripts print for agents,
+  must be clear to an agent with none of your session's context. A misread costs more than a
+  shorter version saves: a wrong action, or extra turns to put it right.
 - After a change to such text, read it the way an agent new to it would: top to bottom, each
   sentence taken literally. Read the whole of a skill, the operating rules, or a decision, the
   whole section of a longer file such as AGENTS.md, and every passage, in that file or

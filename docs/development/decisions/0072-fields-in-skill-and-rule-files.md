@@ -138,9 +138,9 @@ and changed on 2026-10-21, before any release.
   before a skill moves to claude.ai); `synced` as a `PROBLEM` line only, still added (adding it is
   the harm); showing `summary` now, in `/dev-home skills` and the `NEW` line (its display would be
   designed twice, once now and again with the Skills section); and the rule repeated in the
-  starter's `AGENTS.md` (setup copies the starter once, so existing dev-homes never get it and its
-  copies go stale; only sessions started in dev-home load that file; and the rule's `PROBLEM`
-  line already says what to fix).
+  starter's `AGENTS.md` (setup then copied the starter once, so existing dev-homes never got it
+  and its copies went stale; only sessions started in dev-home load that file; and the rule's
+  `PROBLEM` line already says what to fix).
 
 **Look again if:** the Agent Skills standard adds a requirements format or a field for people, or a
 field ever needs a new meaning.

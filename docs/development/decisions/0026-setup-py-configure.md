@@ -41,8 +41,9 @@ skill's answer and preferences, and the shared `multiMachine`. Changed on 2026-1
 - The `dev-home` skill pre-approves `setup.py --configure *`, as the skills pre-approve
   `sync.py *` for commits: the person's yes in chat to the exact preview is the approval.
 - Before it sets dev-home's git config, setup checks that the folder looks like a dev-home: it
-  has the file the starter makes, `knowledge/README.md`.
-  With `--quiet`, it stops when they're missing, before saving or setting anything, and at a
+  has `dev-home.json`
+  ([0070: Who owns each file in dev-home](0070-who-owns-each-file-in-dev-home.md)).
+  With `--quiet`, it stops when that's missing, before saving or setting anything, and at a
   console it asks for the folder again, where Enter stops. A clone gets the same check before
   setup sets its git config.
 

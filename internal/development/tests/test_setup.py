@@ -282,6 +282,86 @@ def test_puts_back_a_my_rules_md_that_was_deleted_and_commits_it(box: Sandbox) -
     assert committed == ["rules: add my-rules.md", "", "rules/codex/mine/my-rules.md"], committed
 
 
+def test_puts_back_a_knowledge_index_that_was_deleted_with_only_its_title(box: Sandbox) -> None:
+    # The end user's own file, so setup only creates it, and dev-home stays a dev-home without it.
+    path = box.content / "knowledge" / "README.md"
+    before = path.read_bytes()
+    git("-C", str(box.content), "rm", "--quiet", str(path))
+    git("-C", str(box.content), "commit", "--quiet", "-m", "test: remove the knowledge index")
+    try:
+        result = setup(box)
+        text = path.read_text(encoding="utf-8")
+        committed = git("-C", str(box.content), "log", "-1", "--name-only", "--format=%s")
+    finally:
+        path.write_bytes(before)
+        if git("-C", str(box.content), "status", "--porcelain"):
+            git("-C", str(box.content), "add", "--", str(path))
+            git("-C", str(box.content), "commit", "--quiet", "-m", "test: the index as it was")
+        git("-C", str(box.content), "push", "--quiet")
+    assert result.code == 0, str(result)
+    assert result.has_line(r"^WROTE\s+The knowledge index, with only its title: "), str(result)
+    assert text == "# Knowledge base\n"
+    assert committed == ["knowledge: add README.md", "", "knowledge/README.md"], committed
+
+
+def test_waits_on_a_my_rules_md_renamed_away_until_the_rename_is_committed(box: Sandbox) -> None:
+    # A commit while the renamed file isn't committed would leave every other copy without those
+    # rules, so only the run after the rename's commit puts an empty one back.
+    content = str(box.content)
+    mine = box.content / "rules" / "codex" / "mine"
+    head = git("-C", content, "rev-parse", "HEAD")
+    (mine / "my-rules.md").rename(mine / "moved.md")
+    try:
+        waiting = setup(box)
+        waited = (mine / "my-rules.md").exists()
+        after_waiting = git("-C", content, "rev-parse", "HEAD")
+        git("-C", content, "add", "--all", "--", str(mine))
+        git("-C", content, "commit", "--quiet", "-m", "test: rename my-rules.md")
+        after = setup(box)
+        committed = git("-C", content, "log", "-1", "--name-only", "--format=%s")
+    finally:
+        (mine / "moved.md").unlink()
+        git("-C", content, "add", "--all", "--", str(mine))
+        if git("-C", content, "status", "--porcelain", "--", str(mine)):
+            git("-C", content, "commit", "--quiet", "-m", "test: the folder as it was")
+        git("-C", content, "push", "--quiet")
+    assert waiting.code == 0 and not waited, str(waiting)
+    assert after_waiting == head
+    assert after.code == 0, str(after)
+    assert committed == ["rules: add my-rules.md", "", "rules/codex/mine/my-rules.md"], committed
+
+
+def test_puts_back_a_knowledge_index_deleted_but_not_committed_as_git_has_it(
+    box: Sandbox,
+) -> None:
+    # Nothing renames the index, so a missing one is a mistake: its rows come back.
+    content = str(box.content)
+    path = box.content / "knowledge" / "README.md"
+    before = path.read_bytes()
+    rows = "# Knowledge base\n\n| File | Question it answers |\n| --- | --- |\n"
+    write_text(path, rows)
+    git("-C", content, "commit", "--quiet", "-am", "test: an index with rows")
+    head = git("-C", content, "rev-parse", "HEAD")
+    path.unlink()
+    try:
+        result = setup(box)
+        # Setup's git converts line endings as this PC's git config says; a dev-home's own
+        # .gitattributes keeps them LF.
+        text = path.read_bytes().replace(b"\r\n", b"\n").decode("utf-8")
+        after = git("-C", content, "rev-parse", "HEAD")
+    finally:
+        path.write_bytes(before)
+        git("-C", content, "commit", "--quiet", "-am", "test: the index as it was")
+        git("-C", content, "push", "--quiet")
+    assert result.code == 0, str(result)
+    assert result.has_line(r"^WROTE\s+The knowledge index, put back from the last commit: "), str(
+        result
+    )
+    assert text == rows
+    # Put back, not committed: the commit before stays the last.
+    assert after == head
+
+
 def test_says_in_a_large_line_when_the_end_users_rules_for_an_agent_pass_the_size(
     box: Sandbox, settings_kept: Path
 ) -> None:
@@ -1578,17 +1658,18 @@ def test_a_dev_home_folder_with_no_dev_home_yet_is_reported_and_not_saved(box: S
     assert after == before
 
 
-def write_starter_files(folder: Path) -> None:
-    """The file every dev-home starts with, which setup checks for, and the end user's rules."""
-    write_text(folder / "rules" / "_all-agents" / "mine" / "my-rules.md", "# My rules\n")
-    write_text(folder / "knowledge" / "README.md", "# Knowledge base\n")
+def write_dev_home_json(folder: Path) -> None:
+    """dev-home.json, by which setup tells a dev-home from another folder."""
+    write_text(folder / "dev-home.json", '{\n  "schemaVersion": 1,\n  "multiMachine": false\n}\n')
 
 
 def test_stops_at_a_folder_that_doesnt_look_like_a_dev_home(box: Sandbox) -> None:
-    # Such as a project's repo, named by mistake: setup must not turn its signing off.
+    # Such as a project's repo, named by mistake: setup must not turn its signing off. A knowledge
+    # index of its own doesn't make it one.
     project = box.root / "a-project"
     git("init", "--quiet", "-b", "main", str(project))
     write_text(project / "README.md", "# a project\n")
+    write_text(project / "knowledge" / "README.md", "# Knowledge base\n")
     git("-C", str(project), "add", "--all")
     git("-C", str(project), "commit", "--quiet", "-m", "test: project")
     settings = box.toolkit / "local-settings.json"
@@ -1598,8 +1679,8 @@ def test_stops_at_a_folder_that_doesnt_look_like_a_dev_home(box: Sandbox) -> Non
     finally:
         write_text(settings, before)
     pattern = (
-        r"^PROBLEM\s+.*a-project doesn't look like a dev-home: it has no knowledge/README\.md, "
-        r"which every dev-home starts with"
+        r"^PROBLEM\s+.*a-project doesn't look like a dev-home: it has no dev-home\.json, which "
+        r"every dev-home has"
     )
     assert result.code == 1 and result.has_line(pattern), str(result)
     assert read(settings) == before
@@ -1947,11 +2028,12 @@ def test_says_so_when_it_cant_save_its_settings(box: Sandbox) -> None:
 @pytest.mark.parametrize(
     ("text", "says"),
     [
-        (None, r"dev-home has no answer yet to whether it's in active use anywhere besides this "),
+        # dev-home.json is how setup tells a dev-home from another folder.
+        (None, r"doesn't look like a dev-home: it has no dev-home\.json, which every dev-home has"),
         ('{"schemaVersion": 1, "other": 1}\n', r"dev-home has no answer yet"),
         ("[true]\n", r"dev-home\.json could not be read as a JSON object of settings, so setup "),
     ],
-    ids=["no file", "no answer", "not an object"],
+    ids=["no file, so not a dev-home", "no answer", "not an object"],
 )
 def test_a_quiet_run_reports_dev_home_json_with_no_answer_and_changes_nothing(
     box: Sandbox, text: str | None, says: str
@@ -2275,9 +2357,9 @@ def operating_system_section(gitignore: Path) -> list[str]:
 def test_both_gitignores_ignore_what_each_operating_system_leaves(box: Sandbox) -> None:
     # dev-home's sync offers to commit any file git doesn't ignore, and developers work on more
     # than one operating system, so both files ignore the same list.
-    starter = box.toolkit / "templates" / "dev-home-starter" / ".gitignore"
+    dev_home = box.toolkit / "templates" / "dev-home" / ".gitignore"
     toolkit = box.toolkit / ".gitignore"
-    assert operating_system_section(starter) == operating_system_section(toolkit)
+    assert operating_system_section(dev_home) == operating_system_section(toolkit)
     names = [
         "Thumbs.db",
         "desktop.ini",
@@ -2290,7 +2372,7 @@ def test_both_gitignores_ignore_what_each_operating_system_leaves(box: Sandbox) 
     ]
     repo = box.root / "operating-system-ignore-check"
     git("init", "--quiet", str(repo))
-    shutil.copyfile(starter, repo / ".gitignore")
+    shutil.copyfile(dev_home, repo / ".gitignore")
     assert git("-C", str(repo), "check-ignore", "--no-index", *names) == names
 
 
@@ -2480,8 +2562,8 @@ def test_each_dev_home_toolkit_skill_file_reads_with_no_problem(box: Sandbox) ->
         declared, problems = settings.read_skill_file(folder, own=False)
         assert declared is not None and problems == [], (folder.name, problems)
         skills[folder.name] = declared
-    # Every PC has dev-home, which changes its answers in chat; the starter makes the folders
-    # that handoff and knowledge keep their files in.
+    # Every PC has dev-home, which changes its answers in chat; handoff and knowledge are
+    # recommended, and the end user chooses.
     assert skills["dev-home"].always_added, skills["dev-home"]
     for name in ("handoff", "knowledge"):
         assert skills[name].recommended and not skills[name].always_added, skills[name]
@@ -3194,7 +3276,7 @@ def test_a_renamed_skill_keeps_its_answers(box: Sandbox, settings_kept: Path) ->
 
 def test_configure_sets_content_dir_only_to_a_dev_home(box: Sandbox, settings_kept: Path) -> None:
     other = box.root / "configured-dev-home"
-    write_starter_files(other)
+    write_dev_home_json(other)
     git("init", "--quiet", "-b", "main", str(other))
     plain = box.root / "configured-plain-folder"
     write_text(plain / "notes.md", "not a dev-home\n")
@@ -3442,11 +3524,11 @@ def test_configure_doesnt_go_with_quiet(box: Sandbox) -> None:
 
 
 def test_reports_a_dev_home_repo_with_no_commits(box: Sandbox) -> None:
-    # What a first run leaves when git init worked but the commit didn't: the starter's files,
+    # What a first run leaves when git init worked but the commit didn't: a new dev-home's files,
     # with no commit.
     unfinished = box.root / "unfinished-dev-home"
     git("init", "--quiet", "-b", "main", str(unfinished))
-    write_starter_files(unfinished)
+    write_dev_home_json(unfinished)
     settings = box.toolkit / "local-settings.json"
     before = read(settings)
     try:
@@ -3460,7 +3542,7 @@ def test_reports_a_dev_home_git_cant_read_without_advice_to_delete_it(box: Sandb
     # A repo git refuses to read says nothing about what's in it.
     unreadable = box.root / "unreadable-dev-home"
     git("init", "--quiet", "-b", "main", str(unreadable))
-    write_starter_files(unreadable)
+    write_dev_home_json(unreadable)
     git("-C", str(unreadable), "add", "--all")
     git("-C", str(unreadable), "commit", "--quiet", "-m", "test: content")
     append(unreadable / ".git" / "config", "[broken")

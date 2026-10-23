@@ -11,11 +11,11 @@ A run goes in this order, so the questions come first and the work after:
 
 1. dev-home first. On the first run it asks where your dev-home is (the private repo that holds
    your handoffs and knowledge base). If that folder doesn't exist yet, it offers to clone your
-   dev-home from GitHub, or to create a new private one from the files in
-   templates/dev-home-starter/. A folder that exists must look like a dev-home: it has the file
-   the starter makes, knowledge/README.md. Setup sets that repo's own git config, so it never
-   works on a folder without it, such as a project's repo named by mistake. When dev-home can't
-   be put in place, setup stops, and saves nothing.
+   dev-home from GitHub, or to create a new private one from the files in templates/dev-home/.
+   A folder that exists must look like a dev-home: it has dev-home.json, which only
+   dev-home-toolkit writes. Setup sets that repo's own git config, so it never works on a folder
+   without it, such as a project's repo named by mistake. When dev-home can't be put in place,
+   setup stops, and saves nothing.
 2. The questions not answered yet: whether to pull updates automatically, whether to set up each
    Claude Code folder it finds, whether to set up Codex, in every Codex home, and how many copies
    of dev-home are in active use. Each is asked whenever its answer isn't saved yet, not only on
@@ -55,10 +55,16 @@ AGENTS.md in each Codex home. It holds the operating rules, from their template 
 paths filled in, then the end user's rules from dev-home's rules/, joined for that agent on this PC
 (rules.py). Setup keeps a copy of what it last wrote there, in internal/.generated/last-written/,
 and rewrites the file only while it still matches that copy, or while there's none and the file is
-already what setup would write; it reports any other file there, and leaves it as it is. It also
-makes sure each level of rules/ for every agent set up here has a my-rules.md, creating an empty
-one where it's missing, and commits it. The design is in docs/development/decisions/, in decisions
-0064, "Each agent's rules file", and 0065, "Where end users' rules live".
+already what setup would write; it reports any other file there, and leaves it as it is. The
+design is in docs/development/decisions/, in decisions 0064, "Each agent's rules file", and 0065,
+"Where end users' rules live".
+
+In dev-home, setup creates the end user's files it keeps there wherever they're missing, and
+commits them: the knowledge index, with only its title, and a my-rules.md, empty, at each level of
+rules/ for every agent set up here. One that git still has, the end user's change not committed
+yet, isn't committed over: the index is put back as git has it, and a my-rules.md waits. A new
+dev-home starts with the files in templates/dev-home/, which dev-home-toolkit owns, and
+dev-home.json (decision 0070, "Who owns each file in dev-home").
 
 Each Claude Code folder and Codex home setup sets up needs a change in its settings file, so the
 agent can reach dev-home from any project, and in a Claude Code folder other than ~/.claude, so its
@@ -200,6 +206,7 @@ from .settings import (
     CODEX,
     CODEX_INSTRUCTIONS_MAX,
     DEV_HOME_SETTINGS,
+    KNOWLEDGE_INDEX,
     MISSING,
     RULES_WARN_ABOVE,
     SCHEMA_VERSION,
@@ -284,9 +291,11 @@ CLAUDE_RULES_FILE = "dev-home-rules.md"
 CODEX_RULES_FILE = "AGENTS.md"
 # Each agent setup sets up, by the name a skill's supportedOn gives it, such as claude-code.
 REQUIRES_NAMES = {shown: name for name, shown in requirements.AGENT_NAMES.items()}
-# Files every dev-home starts with, from templates/dev-home-starter/, which tell it from another
-# folder, such as a project's repo. dev-home.json isn't one: a dev-home may not have it yet.
-DEV_HOME_FILES = ("knowledge/README.md",)
+# The files dev-home-toolkit owns in a dev-home that a new one starts with, filled in with this
+# PC's paths (decision 0070, "Who owns each file in dev-home").
+DEV_HOME_TEMPLATES = TOOLKIT_ROOT / "templates" / "dev-home"
+# What setup creates the knowledge index with when it's missing: only its title.
+KNOWLEDGE_INDEX_TEXT = "# Knowledge base\n"
 # The skills folder every Codex home reads, in the profile folder. Of the agents setup sets up, only
 # Codex reads it, so setup links the skills here for a yes to Codex, and removes its links here
 # for a no.
@@ -600,13 +609,13 @@ class Setup:
             self.line(f"{len(self.problems)} problem(s) to fix. Run setup.py again afterward.", RED)
         return 1
 
-    def not_a_dev_home_problem(self, folder: Path, missing_files: str) -> None:
+    def not_a_dev_home_problem(self, folder: Path) -> None:
         self.status(
             "PROBLEM",
-            f"{folder} doesn't look like a dev-home: it has no {missing_files}, which every "
-            "dev-home starts with, so setup stopped before setting anything in it. If it is your "
-            "dev-home, put the missing files back; if not, point setup at your dev-home with "
-            "--content-dir.",
+            f"{folder} doesn't look like a dev-home: it has no {DEV_HOME_SETTINGS}, which every "
+            "dev-home has, so setup stopped before setting anything in it. If it is your dev-home, "
+            f"put {DEV_HOME_SETTINGS} back from its git history; if not, point setup at your "
+            "dev-home with --content-dir.",
         )
 
     def set_aside_settings(self, settings: LocalSettings) -> LocalSettings:
@@ -1100,8 +1109,9 @@ class Setup:
     # dev-home itself
 
     def initialize_content_repo(self, path: Path, values: dict[str, str]) -> None:
-        """Offers to clone the person's dev-home from GitHub, or to create a new private one
-        from templates/dev-home-starter/. The caller checks the folder afterward."""
+        """Offers to clone the person's dev-home from GitHub, or to create a new private one: the
+        files in templates/dev-home/, filled in, with dev-home.json, set to one active copy, and
+        the knowledge index. The caller checks the folder afterward."""
         if not self.can_ask:
             self.status(
                 "PROBLEM",
@@ -1159,26 +1169,28 @@ class Setup:
         if name is None:
             self.status("PROBLEM", stopped)
             return
-        action = f"Create a private repo named {name} on GitHub, from templates/dev-home-starter/"
+        action = f"Create a private repo named {name} on GitHub, from templates/dev-home/"
         if not self.should(path, action):
             return
         path.mkdir(parents=True, exist_ok=True)
-        starter = TOOLKIT_ROOT / "templates" / "dev-home-starter"
-        files: list[str] = []
-        for file in sorted(f for f in starter.rglob("*") if f.is_file()):
-            relative = file.relative_to(starter)
-            target = path / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
+        contents: dict[str, bytes] = {}
+        for file in sorted(f for f in DEV_HOME_TEMPLATES.rglob("*") if f.is_file()):
             rendered = generated.render(file, values)
             self.unknown_placeholders.extend(rendered.unknown)
-            target.write_bytes(rendered.data)
-            files.append(relative.as_posix())
+            contents[file.relative_to(DEV_HOME_TEMPLATES).as_posix()] = rendered.data
+        # A new dev-home has one active copy: nothing else can be using it yet.
+        contents[DEV_HOME_SETTINGS] = dev_home_text({}, False).encode("utf-8")
+        contents[KNOWLEDGE_INDEX] = KNOWLEDGE_INDEX_TEXT.encode("utf-8")
+        for relative, data in contents.items():
+            target = path / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
         steps = [
             ["init", "--quiet", "-b", "main"],
             ["config", "--local", "commit.gpgsign", "false"],
             ["config", "--local", "pull.rebase", "false"],
-            ["add", "--", *files],
-            ["commit", "--quiet", "-m", "starter: new dev-home"],
+            ["add", "--", *contents],
+            ["commit", "--quiet", "-m", "dev-home: new dev-home"],
         ]
         for step in steps:
             done = run_git(path, *step)
@@ -1401,22 +1413,43 @@ class Setup:
             "longer need it, remove it with cmd /c rmdir, then run setup.py again.",
         )
 
-    # Each agent's rules file
-
-    def sync_my_rules(self, content_root: Path, pc: str, agents: Sequence[str]) -> None:
-        """Makes sure each level of dev-home's rules/, for every agent and for each agent set up
-        here, at both the every-PC level and this PC's, has a my-rules.md, the file an agent opens
-        to add one of the end user's rules at that level: an empty one where it's missing, in any
-        letter case, committed and pushed. Setup never touches another file there."""
-        if not agents:
+    def sync_own_files(self, content_root: Path, pc: str, agents: Sequence[str]) -> None:
+        """Makes sure dev-home has the end user's files that setup keeps there (decision 0070,
+        "Who owns each file in dev-home"): the knowledge index, and a my-rules.md at each level of
+        rules/, for every agent and for each agent set up here, at both the every-PC level and
+        this PC's, the file an agent opens to add one of the end user's rules at that level. Each
+        one missing that git doesn't have either is created, the index with only its title and
+        my-rules.md empty, then committed and pushed together. One git still has is the end
+        user's delete or rename, not committed yet, which a commit would carry to every copy: a
+        my-rules.md then waits for that commit, since moving rules to another file is a normal
+        rename, while the index, which nothing renames, is put back as git has it. Setup never
+        changes them, or any other file there, otherwise."""
+        index = content_root / KNOWLEDGE_INDEX
+        missing = [] if index.is_file() else [index]
+        if agents:
+            missing += rules.missing_my_rules(content_root / rules.RULES, pc, agents)
+        if not missing:
             return
+        in_git = self.files_in_git(content_root)
+        if in_git is None:
+            return
+        wanted: list[tuple[Path, str, str]] = []
+        for path in missing:
+            if path.relative_to(content_root).as_posix().lower() not in in_git:
+                wanted.append(
+                    (path, KNOWLEDGE_INDEX_TEXT, "the knowledge index")
+                    if path == index
+                    else (path, "", "an empty my-rules.md, for your rules at this level")
+                )
+            elif path == index:
+                self.restore_knowledge_index(content_root)
         created: list[Path] = []
-        for path in rules.missing_my_rules(content_root / rules.RULES, pc, agents):
-            if not self.should(path, "Create an empty my-rules.md, for your rules at this level"):
+        for path, text, what in wanted:
+            if not self.should(path, f"Create {what}"):
                 continue
             try:
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(b"")
+                path.write_bytes(text.encode("utf-8"))
             except OSError as error:
                 self.status("PROBLEM", f"Could not create {path}. {error}")
                 continue
@@ -1424,21 +1457,64 @@ class Setup:
         if not created:
             return
         names = [path.relative_to(content_root).as_posix() for path in created]
-        self.status(
-            "WROTE", f"An empty my-rules.md, for your rules, in dev-home: {', '.join(names)}"
+        rules_files = [name for name in names if name != KNOWLEDGE_INDEX]
+        if KNOWLEDGE_INDEX in names:
+            self.status("WROTE", f"The knowledge index, with only its title: {KNOWLEDGE_INDEX}")
+        if rules_files:
+            self.status(
+                "WROTE",
+                f"An empty my-rules.md, for your rules, in dev-home: {', '.join(rules_files)}",
+            )
+        message = (
+            "rules: add my-rules.md"
+            if KNOWLEDGE_INDEX not in names
+            else "knowledge: add README.md"
+            if not rules_files
+            else "dev-home: add knowledge/README.md and my-rules.md"
         )
         # Loaded only now, so a sync that can't load stops only this commit, not setup.
         try:
             sync = importlib.import_module(f"{__package__}.sync")
-            code = sync.commit_for_setup(
-                content_root, names, "rules: add my-rules.md", holds_lock=True
-            )
+            code = sync.commit_for_setup(content_root, names, message, holds_lock=True)
         except Exception as error:
             self.status("PROBLEM", f"Could not commit {', '.join(names)}: {describe(error)}")
             return
         if code != 0:
             # The sync has said what went wrong.
             self.problems.append(f"Committing {', '.join(names)}")
+
+    def files_in_git(self, content_root: Path) -> set[str] | None:
+        """The paths, in lowercase, of the knowledge index and the files in rules/ as dev-home's
+        last commit has them, or None, said in a PROBLEM line, when git can't tell. One git call,
+        made only when one of those files is missing."""
+        listed = run_git(
+            content_root, "ls-tree", "-r", "--name-only", "HEAD", "--", rules.RULES, KNOWLEDGE_INDEX
+        )
+        if listed.code != 0:
+            self.status(
+                "PROBLEM",
+                "Could not tell from git whether a missing my-rules.md or knowledge index is a "
+                "change not committed yet, so setup left them missing. "
+                f"git: {first_line(listed.err + listed.out)}",
+            )
+            return None
+        return {line.lower() for line in listed.out}
+
+    def restore_knowledge_index(self, content_root: Path) -> None:
+        """Puts back the knowledge index as dev-home's last commit has it, when it's missing but
+        git still has it."""
+        path = content_root / KNOWLEDGE_INDEX
+        if not self.should(path, "Put back the knowledge index as git has it"):
+            return
+        where = ("--source=HEAD", "--staged", "--worktree")
+        restored = run_git(content_root, "restore", *where, "--", KNOWLEDGE_INDEX)
+        if restored.code != 0:
+            error = first_line(restored.err + restored.out)
+            self.status("PROBLEM", f"Could not put back {path} from git. git: {error}")
+            return
+        self.status("WROTE", f"The knowledge index, put back from the last commit: {path}")
+
+    # Each agent's rules file
 
     def sync_rules_file(self, folder: Path, path: Path, text: str, rules_root: Path) -> None:
         """Writes an agent's rules file, path, in its folder, as long as it's setup's own: when
@@ -1875,15 +1951,14 @@ class Setup:
             # An empty or missing folder gets a dev-home below. One with files must already be
             # one, before anything is saved or set in it.
             folder = Path(comparable(settings.content_dir))
-            missing_files = missing_dev_home_files(folder)
-            if not missing_files or not is_in_use(folder):
+            if is_dev_home(folder) or not is_in_use(folder):
                 break
             if not self.can_ask:
-                self.not_a_dev_home_problem(folder, missing_files)
+                self.not_a_dev_home_problem(folder)
                 raise CannotGoOnError
             self.line(
-                f"{folder} doesn't look like a dev-home: it has no {missing_files}, which every "
-                "dev-home starts with."
+                f"{folder} doesn't look like a dev-home: it has no {DEV_HOME_SETTINGS}, which "
+                "every dev-home has."
             )
             answer = self.ask("Your dev-home folder, or Enter to stop")
             if not answer:
@@ -1931,9 +2006,8 @@ class Setup:
             raise CannotGoOnError
 
         # A clone of the wrong repo gets no further than a wrong folder would.
-        missing_files = missing_dev_home_files(content_root)
-        if missing_files:
-            self.not_a_dev_home_problem(content_root, missing_files)
+        if not is_dev_home(content_root):
+            self.not_a_dev_home_problem(content_root)
             raise CannotGoOnError
         return content_root
 
@@ -2221,7 +2295,8 @@ class Setup:
         plans: dict[str, SkillPlan],
     ) -> None:
         """Everything setup sets up besides this PC's settings and the agents' settings files, in
-        order: dev-home's git config and its dev-home.json, Python for the skills' scripts, the
+        order: dev-home's git config, its dev-home.json, and the end user's files setup keeps
+        there, Python for the skills' scripts, the
         generated files and each skill's state, the skills' links in each skills folder in
         folders, as plans says, and the always-on rules."""
         values = template_values(content_root)
@@ -2252,6 +2327,14 @@ class Setup:
         # With signing off, so a commit needs no prompt. A skill a merge here brings in is linked
         # by the next run, which names it in its NEW line first.
         self.write_copies(content_root)
+        # The end user's files setup keeps in dev-home, for the agents set up on this PC.
+        pc = rules.pc_folder(rules.computer_name())
+        claude_code, codex = REQUIRES_NAMES[CLAUDE_CODE.name], REQUIRES_NAMES[CODEX.name]
+        agents = [
+            *([claude_code] if agent_folders.claude_dirs else []),
+            *([codex] if agent_folders.codex_homes else []),
+        ]
+        self.sync_own_files(content_root, pc, agents)
 
         # 2. Python, for the skills' scripts. A test profile has its own AppData folder.
         if settings.test_home_dir:
@@ -2373,13 +2456,6 @@ class Setup:
         # description above). Each line about a problem in the end user's files is said once,
         # though a file in _all-agents/ joins for every agent.
         rules_root = content_root / rules.RULES
-        pc = rules.pc_folder(rules.computer_name())
-        claude_code, codex = REQUIRES_NAMES[CLAUDE_CODE.name], REQUIRES_NAMES[CODEX.name]
-        agents = [
-            *([claude_code] if agent_folders.claude_dirs else []),
-            *([codex] if agent_folders.codex_homes else []),
-        ]
-        self.sync_my_rules(content_root, pc, agents)
         operating = operating_rendered.data.decode("utf-8")
         system = requirements.operating_system()
         rules_files = [
@@ -3134,10 +3210,11 @@ def is_in_use(folder: Path) -> bool:
         return True
 
 
-def missing_dev_home_files(folder: Path) -> str:
-    """The files every dev-home starts with that a folder lacks, joined with "or", or "" when it
-    has them all."""
-    return " or ".join(name for name in DEV_HOME_FILES if not (folder / name).is_file())
+def is_dev_home(folder: Path) -> bool:
+    """Whether a folder is a dev-home: whether it has dev-home.json, which only dev-home-toolkit
+    writes, and every dev-home has from its start. The end user's own files, such as the
+    knowledge index, don't count, since setup recreates them when they're missing."""
+    return (folder / DEV_HOME_SETTINGS).is_file()
 
 
 def make_writable(path: Path) -> None:

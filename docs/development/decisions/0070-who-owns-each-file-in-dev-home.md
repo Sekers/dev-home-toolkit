@@ -1,22 +1,33 @@
 # 0070: Who owns each file in dev-home
 
-**Built:** yes, except: everything but `my-rules.md`, which setup creates, empty, wherever one is
-missing ([0065: Where end users' rules live](0065-where-end-users-rules-live.md)).
+**Built:** yes, except: dev-home's per-PC `AGENTS.md` and `CLAUDE.md`; keeping `README.md`,
+`.gitignore`, and `.gitattributes` current, with hand edits to them, which waits for the version
+check below, since without it two PCs on different versions would undo each other's copies;
+built-in rules' files and the `unanswered/` folders, which come with those parts; withdrawn files;
+and a release that changes line endings. Until then, a new dev-home starts with the files in
+`templates/dev-home/`, filled in, and nothing updates them.
 
 **Decision:** each file dev-home-toolkit puts in a dev-home has one owner. Either dev-home-toolkit
 owns it, and setup writes it and keeps it current, or the end user does, and setup creates it only
-when it's missing and never changes it. Decided by the developer on 2026-10-18.
+when it's missing and never changes it. Decided by the developer on 2026-10-18, and changed on
+2026-10-23 (how setup tells a dev-home, where the files live in this repo, and a missing file git
+still has).
 
 | File | Owner | What setup does |
 | --- | --- | --- |
 | `AGENTS.md`, `CLAUDE.md` | dev-home-toolkit | writes them on each PC with that PC's commands, always overwriting them; `.gitignore` lists both |
 | `README.md` | dev-home-toolkit | keeps it current |
 | `.gitignore`, `.gitattributes` | dev-home-toolkit | writes them whole and commits them with the sync, only from a PC on the newest version |
-| `dev-home.json` | dev-home-toolkit | its code creates the file, and the starter drops its copy |
+| `dev-home.json` | dev-home-toolkit | its code creates the file, and tells a dev-home by it |
 | Built-in rules' files in `built-in/`, and the `unanswered/` folders | dev-home-toolkit | writes, moves, and removes them ([0067: Built-in rules](0067-built-in-rules.md), [0064: Each agent's rules file](0064-each-agents-rules-file.md)) |
-| `my-rules.md` in each `mine/` setup keeps | the end user | creates it, empty, whenever it's missing |
-| `knowledge/README.md` | the end user, through the knowledge skill | creates it, with only its title, whenever it's missing |
+| `my-rules.md` in each `mine/` setup keeps | the end user | creates it, empty, whenever it's missing and the last commit doesn't have it either |
+| `knowledge/README.md` | the end user, through the knowledge skill | when it's missing, puts it back as the last commit has it, or creates it with only its title when the last commit has none |
 
+- **How setup tells a dev-home** from another folder, such as a project's repo named by mistake,
+  before it sets that repo's git config: by its `dev-home.json` alone (the developer,
+  2026-10-23).
+- **Where the files live in this repo:** `templates/dev-home/`, which holds only the files
+  dev-home-toolkit owns; setup's code makes `dev-home.json` and the end user's files.
 - **The end user's own patterns:** ignore patterns go in a `.gitignore` inside a subfolder, such as
   `knowledge/.gitignore`, which every copy shares, or in `.git/info/exclude` for one copy;
   attributes go in a subfolder's `.gitattributes`, or in `.git/info/attributes`. Git reads all of
@@ -65,6 +76,18 @@ starter's macOS and Linux section in `.gitignore` reaches existing dev-homes by 
 - One clear owner per file, now and as files are added, with no record of starter commits and no
   three-way merges to build. It reuses what's already decided: the Recycle Bin, the `withdrawn`
   list, and layout versions.
+- `dev-home.json`: only dev-home-toolkit writes it, every dev-home has it from its start, and a
+  project's repo won't. An end user's file, such as the knowledge index, would stop every sync
+  when it's missing, before the run that puts it back. Setup can't rebuild a missing
+  `dev-home.json` itself, since it holds an answer, so its `PROBLEM` line says to restore it from
+  git.
+- `templates/dev-home/`: nothing there is copied once any more, so "starter" would mislead.
+- A missing file git still has is the end user's delete or rename, not committed yet. A commit of
+  the recreated file then would carry the loss to every copy: an empty `my-rules.md` while the
+  renamed file isn't committed, or a title-only index in place of all its rows. Renaming
+  `my-rules.md` to move its rules is normal, so setup waits for that commit; nothing renames the
+  index, so a missing one is a mistake, and setup puts back its rows. Checking costs one git
+  call, only on a run that finds a file missing (the developer, 2026-10-23).
 
 **Costs:** an end user can't keep their own wording in a file dev-home-toolkit owns, such as a
 personal note in dev-home's `README.md`; dev-home is private, so that README is mostly for the end
@@ -79,6 +102,14 @@ user and their agents anyway. A copied skill still needs its own record of where
 - The starter seeding `dev-home.json`: two places define its first contents.
 - Keeping the planned starter updates: it still needs each file's owner decided, doesn't cover a
   mixed file, an example, or a withdrawn file any better, and is the most to build.
+- Telling a dev-home by any one of several files, such as `dev-home.json`, the knowledge index,
+  or `rules/` (a docs project with a knowledge index would pass); checking only when a folder is
+  chosen (a hand-edited setting that points elsewhere would go unnoticed, and it needs a record of
+  which folder was checked).
+- Keeping the folder's name, `templates/dev-home-starter/`; `templates/dev-home-files/` (longer,
+  and says no more).
+- For a missing file git still has: waiting on the index too (lookups find no index until it's
+  restored by hand); committing the recreated file at once (it spreads the loss).
 
 **Look again if:** a file needs content from both dev-home-toolkit and the end user, or end users
 ask to keep their own wording in a file dev-home-toolkit owns.

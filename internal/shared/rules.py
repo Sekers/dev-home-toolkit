@@ -47,7 +47,7 @@ PCS = "pcs"
 MINE = "mine"
 UNANSWERED = "unanswered"
 MY_RULES = "my-rules.md"
-# The heading the end user's rules go under, as the starter's my-rules.md has it.
+# The heading the end user's rules go under, as many an end user's own rules file starts.
 MY_RULES_HEADING = "# My rules"
 # The longest a name in rules/ may be (decision 0065): a PC's folder, an agent's folder, a
 # built-in rule's name, and the name of a file setup moves there, .md included.

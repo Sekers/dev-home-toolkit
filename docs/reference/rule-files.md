@@ -18,7 +18,8 @@ rules](../guide/your-rules.md) explains them from the start.
   out, and so is a file directly in a level folder, which setup reports on every sync.
 - Setup creates an empty `my-rules.md`, and commits it, wherever one is missing, in any letter
   case: in `_all-agents/mine/` and in `<agent>/mine/` for each agent set up on the PC, at both the
-  every-PC level and the PC's own. It never changes any other file there.
+  every-PC level and the PC's own. While a rename or delete of one isn't committed, it waits. It
+  never changes any other file there.
 
 ## The order they join in
 

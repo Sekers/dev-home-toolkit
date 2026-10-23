@@ -96,6 +96,7 @@ from .output import commit_count, describe, first_line, status_line
 from .programs import by_hand, find_program, run_setup
 from .settings import (
     DEFAULT_HOURS,
+    KNOWLEDGE_INDEX,
     SCHEMA_VERSION,
     SETTINGS_PATH,
     get,
@@ -132,9 +133,7 @@ IN_PROGRESS = {
 QUIET_STATES = {"OK", "LEFT", "STALE", "UPDATE"}
 # The values --fetch takes, the first being what a sync does without it.
 FETCH_WHEN = ("always", "auto")
-# The knowledge base's index in dev-home: a table with one row per note, whose first cell links
-# to the note, relative to the index's folder.
-KNOWLEDGE_INDEX = "knowledge/README.md"
+# A row of the knowledge index (see KNOWLEDGE_INDEX) that links to a note.
 INDEX_ROW = re.compile(r"\|\s*\[[^\]]*\]\(([^)\s]+)\)")
 
 

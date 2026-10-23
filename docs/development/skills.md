@@ -1,8 +1,8 @@
 # Skills and everything else under templates/
 
 The rules for changing anything under `templates/`: the skills, the scripts they share, the
-operating rules, and the starter, and for adding a script anywhere. AGENTS.md points here; its
-rules apply too.
+operating rules, and the files in `templates/dev-home/`, and for adding a script anywhere.
+AGENTS.md points here; its rules apply too.
 
 ## Where things go
 
@@ -12,9 +12,12 @@ rules apply too.
   `templates/shared-skill-scripts/` when skills share it. The same goes for anything else a
   skill has: one skill's in its own folder, and what several skills share in a
   `templates/shared-skill-*` folder for its kind.
-- `templates/dev-home-starter/` holds a new dev-home's first files. Setup copies them in once,
-  and after that they're the person's own: a change to the starter never reaches an existing
-  dev-home.
+- `templates/dev-home/` holds only files dev-home-toolkit owns in a dev-home, which a new one
+  starts with
+  ([0070: Who owns each file in dev-home](decisions/0070-who-owns-each-file-in-dev-home.md)).
+  An end user's own file, such as the knowledge index or a `my-rules.md`, never goes there:
+  setup's code creates it when it's missing. Until the version check of decision 0070 is built, a
+  change to a committed file there reaches only new dev-homes.
 
 ## Templates, generated files, and names
 
@@ -34,8 +37,8 @@ rules apply too.
   written to `internal/.generated/`, at the same paths. The skills there are what gets linked into
   the agents, and the skills run the shared scripts from there. `templates/operating-rules/` is
   filled in on every setup run too, but goes straight into each agent's rules file (see
-  "Operating rules", below). The starter has no copy there, because setup fills it in only once
-  (see AGENTS.md's "The two repos"). Python adds `__pycache__` folders there when the scripts
+  "Operating rules", below). `templates/dev-home/` has no copy there either: setup fills it in
+  only for a new dev-home. Python adds `__pycache__` folders there when the scripts
   run, and setup leaves those, and any link, alone.
 - A file and its folder keep the same name at every stage: template, generated copy, and link,
   such as `skills/handoff/SKILL.md`.

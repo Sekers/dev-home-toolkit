@@ -387,11 +387,11 @@ def layout_snapshot(box: Sandbox) -> dict[Path, bytes]:
     """The bytes of each file a layout list covers (see layouts.py), in each folder directly in
     the sandbox: the copy's local-settings.json, and each dev-home's dev-home.json and every file
     in its rules/, those of the dev-homes a test clones or creates included. A dev-home is a
-    folder with knowledge/README.md, as setup tells one, so a Claude Code folder's rules/ isn't
-    taken for one."""
+    folder with dev-home.json, as setup tells one, so a Claude Code folder's rules/ isn't taken
+    for one."""
     paths = [path for part in layouts.PARTS for path in box.root.glob(f"*/{part.file}")]
     for rules in box.root.glob(f"*/{layouts.RULES_FOLDER}"):
-        if (rules.parent / "knowledge" / "README.md").is_file():
+        if (rules.parent / "dev-home.json").is_file():
             paths += [path for path in rules.rglob("*") if path.is_file()]
     found: dict[Path, bytes] = {}
     for path in sorted(paths):

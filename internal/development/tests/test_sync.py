@@ -849,13 +849,16 @@ def test_a_file_nobody_has_touched_for_15_minutes_is_stale(box: Sandbox) -> None
 
 
 def test_lists_a_staged_rename_with_its_old_name(box: Sandbox) -> None:
+    # A handoff, since setup puts back a knowledge index that's gone.
     content = str(box.content)
-    git("-C", content, "mv", "knowledge/README.md", "knowledge/INDEX.md")
+    git("-C", content, "mv", "handoffs/demo/HANDOFF.md", "handoffs/demo/OLD.md")
     try:
         result = sync(box)
     finally:
-        git("-C", content, "mv", "knowledge/INDEX.md", "knowledge/README.md")
-    pattern = r"^(LEFT|STALE)\s+knowledge/INDEX\.md \(renamed from knowledge/README\.md, staged, "
+        git("-C", content, "mv", "handoffs/demo/OLD.md", "handoffs/demo/HANDOFF.md")
+    pattern = (
+        r"^(LEFT|STALE)\s+handoffs/demo/OLD\.md \(renamed from handoffs/demo/HANDOFF\.md, staged, "
+    )
     assert result.has_line(pattern), str(result)
 
 

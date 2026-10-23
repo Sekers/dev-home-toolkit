@@ -28,6 +28,9 @@ SETTINGS_PATH = TOOLKIT_ROOT / "local-settings.json"
 # dev-home's own settings, in its root: for now, only multiMachine, whether more than one copy is
 # in active use.
 DEV_HOME_SETTINGS = "dev-home.json"
+# The knowledge base's index in dev-home, the end user's own: a table with one row per note, whose
+# first cell links to the note, relative to the index's folder.
+KNOWLEDGE_INDEX = "knowledge/README.md"
 # Each file's layout version. "Changing a setting later" in docs/development/settings.md says when
 # it goes up.
 SCHEMA_VERSION = 1

@@ -2186,12 +2186,12 @@ def test_a_new_dev_home_github_refuses_is_kept_with_the_command_to_finish(
         r"purpose\. Once that is fixed, run: gh repo create taken --private --source "
     )
     assert re.search(pattern, out, re.M), out
-    # Then the my-rules.md files the starter doesn't have, for each agent set up.
+    # Then the my-rules.md files, for each agent set up.
     subjects = git("-C", str(new_home), "log", "--format=%s")
-    assert subjects == ["rules: add my-rules.md", "starter: new dev-home"], subjects
+    assert subjects == ["rules: add my-rules.md", "dev-home: new dev-home"], subjects
 
 
-def test_creates_a_new_dev_home_from_the_starter(
+def test_creates_a_new_dev_home_from_templates_and_dev_home_json(
     box: Sandbox,
     settings: Path,
     person: Person,
@@ -2204,17 +2204,27 @@ def test_creates_a_new_dev_home_from_the_starter(
     out = capsys.readouterr().out
     agents = (new_home / "AGENTS.md").read_text(encoding="utf-8")
     subjects = git("-C", str(new_home), "log", "--format=%s")
+    first = git("-C", str(new_home), "show", "--name-only", "--format=", "HEAD~1")
     signing = git("-C", str(new_home), "config", "--local", "--get", "commit.gpgsign")
     toolkit = str(box.toolkit).replace("\\", "/")
     assert re.search(r"^CREATED\s+New private repo my-dev-home on GitHub", out, re.M), out
     assert f"{toolkit}/sync.py" in agents
-    # Then the my-rules.md files the starter doesn't have, for each agent set up.
-    assert subjects == ["rules: add my-rules.md", "starter: new dev-home"], subjects
-    assert (
-        (new_home / "rules" / "_all-agents" / "mine" / "my-rules.md")
-        .read_text(encoding="utf-8")
-        .startswith("# My rules\n")
+    # The files in templates/dev-home/, with dev-home.json and the knowledge index, then the
+    # my-rules.md files, each empty, for each agent set up.
+    assert subjects == ["rules: add my-rules.md", "dev-home: new dev-home"], subjects
+    assert sorted(first) == [
+        ".gitattributes",
+        ".gitignore",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "README.md",
+        "dev-home.json",
+        "knowledge/README.md",
+    ], first
+    assert (new_home / "knowledge" / "README.md").read_text(encoding="utf-8") == (
+        "# Knowledge base\n"
     )
+    assert (new_home / "rules" / "_all-agents" / "mine" / "my-rules.md").read_bytes() == b""
     assert signing == ["false"]
     # A new dev-home starts with one active copy, without a question.
     assert json.loads((new_home / "dev-home.json").read_text(encoding="utf-8")) == {

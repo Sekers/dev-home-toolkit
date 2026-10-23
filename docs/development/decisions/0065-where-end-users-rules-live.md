@@ -19,17 +19,21 @@ Each level holds `mine/`, the end user's rule files. `_all-agents/` and each `<a
 never the per-PC levels, and `pcs/<pc>/<agent>/` also holds `unanswered/`
 ([0064: Each agent's rules file](0064-each-agents-rules-file.md)).
 Decided by the developer on 2026-10-17 and 2026-10-18, and changed on 2026-10-22 (a code block
-left open, the order inside a merged section, `# My rules`, and the size settings' details).
+left open, the order inside a merged section, `# My rules`, and the size settings' details) and
+2026-10-23 (a missing `my-rules.md` git still has).
 
 - **Names.** `<pc>` is the computer's name in lowercase, any other character a hyphen.
   `claude-code/` and `codex/` exist only for agents set up on some PC.
   `claude-code` matches the agent's name in `dev-home-skill.json`.
 - **`mine/`.** Setup makes sure every `mine/` exists and holds a `my-rules.md`, recreating an empty
   one whenever it's missing (deleted or renamed away, letter case ignored), for `_all-agents` and
-  each agent set up on that PC, at both levels, and commits it. It never touches any other file in
-  `mine/`. The end user's files there take any `.md` name, subfolders included, joined
-  alphabetically by path. A file directly in a level folder is reported on each sync and not
-  joined. The end user's current `global-rules.md` moves to `rules/_all-agents/mine/my-rules.md`.
+  each agent set up on that PC, at both levels, and commits it. While git still has the missing
+  file, a delete or rename the end user hasn't committed yet, setup waits for that commit, so its
+  own commit never takes those rules from the other copies (the developer, 2026-10-23). It never
+  touches any other file in `mine/`. The end user's files there take any `.md` name, subfolders
+  included, joined alphabetically by path. A file directly in a level folder is reported on each
+  sync and not joined. The end user's current `global-rules.md` moves to
+  `rules/_all-agents/mine/my-rules.md`.
 - **Operating systems.** A rule file's note may say `os: windows`, or several names separated by
   commas, the names `supportedOn` takes, in any case
   ([0066: Notes in rule files](0066-notes-in-rule-files.md)). Setup joins the file only on
@@ -98,11 +102,12 @@ left open, the order inside a merged section, `# My rules`, and the size setting
 - No sentence says which rule wins: programs and agents that combine rule files, such as Ruler
   and Cursor, add none; a conflict is better fixed than ranked; and a later, more specific rule
   is usually followed.
-- `# My rules`: the starter's `my-rules.md` starts with it, but setup creates the others empty,
-  so a rule written in one with no heading would follow the operating rules' last line as if it
-  were one of them, and a `## Writing style` there wouldn't combine with the one under
-  `# My rules`. Putting such rules under that heading in the join works for every file, with no
-  habit for the end user to keep. A fresh agent's read found the gap (2026-10-22).
+- `# My rules`: setup creates every `my-rules.md` empty, and an end user's own file may start
+  with `# My rules` or with no heading at all, so a rule written with no heading would follow the
+  operating rules' last line as if it were one of them, and a `## Writing style` there wouldn't
+  combine with the one under `# My rules`. Putting such rules under that heading in the join
+  works for every file, with no habit for the end user to keep. A fresh agent's read found the
+  gap (2026-10-22).
 - Comments: Claude Code's memory docs (read 2026-10-18) strip "Block-level HTML comments" and keep
   "Comments inside code blocks", so both agents see the same rules, and comments cost no tokens in
   Codex. An unclosed comment kept would likely hide every later file from Claude Code (inferred

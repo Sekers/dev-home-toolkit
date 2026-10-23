@@ -30,7 +30,9 @@ Each level keeps your files in its `mine/` folder. On each PC, setup makes sure 
 holds a `my-rules.md` at every level that applies there: `_all-agents` and each agent set up on
 that PC, both for every PC and for that PC alone. It creates an empty one wherever it's missing,
 and commits it, so you, or an agent you ask, always know which file to open: to add a rule for
-Codex on this PC, open `rules/pcs/<pc>/codex/mine/my-rules.md`.
+Codex on this PC, open `rules/pcs/<pc>/codex/mine/my-rules.md`. When you rename or delete one,
+setup waits until that change is committed, so your other PCs never get an empty file in the
+meantime.
 
 You can add other `.md` files to `mine/` too, in subfolders if you like. They join in alphabetical
 order by their path. A file put directly in a level folder, outside `mine/`, never loads, and

@@ -13,8 +13,9 @@ Codex's own menus decide whether an added skill is shown in an account or a proj
   setup's links for it, and its lines leave the generated always-on rules
   ([0058: Skills' always-on lines](0058-skills-always-on-lines.md)).
   Nothing is deleted.
-- `dev-home` is always added. `handoff` and `knowledge` are recommended because the starter
-  dev-home makes their folders, so a change to the starter means looking at this set again.
+- `dev-home` is always added. `handoff` and `knowledge` are recommended because every dev-home
+  holds their files, and setup keeps the knowledge index there, so a change to what setup keeps
+  in dev-home means looking at this set again.
 - The person's own skills, from `skills/` in dev-home, work like recommended skills: added by
   default, in the same list and prompt, and asked about once on each PC.
 - A skill can carry a `dev-home-skill.json` in its folder, with `recommended`,
