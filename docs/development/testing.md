@@ -51,6 +51,6 @@ proposing a commit, and points here; its rules apply too.
 - What needs a person is tested with a fake for them: setup's questions, a yes or no to a
   settings change, and creating dev-home with a faked gh (`test_setup_questions.py`, which runs
   setup's code in the test process from the sandbox's copy). What the tests can't reach, so it
-  gets checked by hand: a real console's prompts, a real clone or repo creation on GitHub, and
-  finding a Python through the registry, which a test profile skips. Say which of those a change
-  affects.
+  gets checked by hand: a real console's prompts, a real clone or repo creation on GitHub,
+  finding a Python through the registry, which a test profile skips, and sending a file to the
+  real Recycle Bin, which the tests leave alone. Say which of those a change affects.

@@ -1,6 +1,8 @@
 # 0069: Dropped text
 
-**Built:** not yet.
+**Built:** yes, except: everything that drops text, which comes with the rules work. The module
+that sends it to the Recycle Bin, `internal/shared/recycle_bin.py`, is built, and nothing uses it
+yet.
 
 **Decision:** text an end user tells setup to drop goes to the Recycle Bin, as a file, before
 setup removes or overwrites anything. Decided by the developer on 2026-10-18.
@@ -14,9 +16,15 @@ setup removes or overwrites anything. Decided by the developer on 2026-10-18.
   called with `ctypes`, which setup already uses, so nothing new gets installed. macOS's Trash and
   Linux's trash folder come with those systems. A file in `unanswered/` that's dropped goes to the
   bin itself.
-- **Setup overwrites the agent's file only once the text is safe.** How it confirms that the bin
-  took it is settled and tested when building, since Windows can delete a file for good on a drive
-  with no Recycle Bin, such as some network drives.
+- **Setup overwrites the agent's file only once the text is safe.** It writes the text to a file
+  of its own, named for what it holds, in a new folder of the system's temporary folder, and sends
+  that file to the bin with a progress sink listening to `IFileOperation`. The sink's
+  `PostDeleteItem` is given the item the file became in the bin, or none when Windows deleted it
+  for good, which it does without a word on a drive with no Recycle Bin, such as some network
+  drives, or with a bin set to remove files at once, or too small for the file. That file was
+  setup's own copy, so a delete for good loses nothing. Tested on Windows 11 on 2026-10-22: a
+  file reached the real bin, and a delete without the bin's flags, which deletes for good, was
+  reported as not in the bin.
 - **When the bin can't take it,** setup says so and asks: keep it as one of the end user's rules,
   in the `mine/` they pick, or delete it for good. Through `/dev-home configure`, the agent asks
   the same in chat. No backup file is left anywhere.
@@ -59,6 +67,8 @@ question in the rare case the bin fails.
 - No way back: dropped means gone.
 - On a quiet sync whose bin fails, putting a hand-edited file back anyway: the edit would be lost.
 - `SHFileOperation`, documented as replaced.
+- To confirm the bin took the file, comparing its count of items before and after
+  (`SHQueryRecycleBin`): another program's delete at the same moment would look like this one.
 
 **Look again if:** end users report text lost on a drive with no Recycle Bin, or Python gains a
 standard way to reach the system's trash.
