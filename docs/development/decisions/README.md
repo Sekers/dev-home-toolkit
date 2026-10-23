@@ -104,3 +104,4 @@ file and link to the new one.
 - [0079: Old test sandboxes](0079-old-test-sandboxes.md)
 - [0080: Compatibility before 1.0.0](0080-compatibility-before-1-0-0.md)
 - [0081: Writing decisions](0081-writing-decisions.md)
+- [0082: markdownlint's rules](0082-markdownlints-rules.md)

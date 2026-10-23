@@ -1,5 +1,5 @@
-// markdownlint's rules for this repo's Markdown. VS Code's markdownlint extension reads this file
-// through markdownlint.configFile in .vscode/settings.json (decision 0078 says why it's here).
+// markdownlint's rules for this repo's Markdown, which every program that runs markdownlint finds
+// here (decision 0082 says why).
 {
   // Prose and headings wrap at 100 characters. Code blocks and tables can't wrap, so they have no
   // limit. A command in a skill stays on one line, because agents copy it and the tests match it
