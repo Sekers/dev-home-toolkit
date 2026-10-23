@@ -110,7 +110,7 @@ first, and setup saves none of your answers until it's in place:
 
 | Question | What to answer |
 | --- | --- |
-| Your dev-home folder | Where your dev-home is, or should go. Press Enter for the suggestion: a `dev-home` folder next to this one, such as `C:\Programming\dev-home`. The same rules for the path apply. A folder that already has files in it must be a dev-home: setup checks for the files every dev-home starts with (`global-rules\global-rules.md` and `knowledge\README.md`), and asks again if they're missing, so it never changes a project's repo by mistake. |
+| Your dev-home folder | Where your dev-home is, or should go. Press Enter for the suggestion: a `dev-home` folder next to this one, such as `C:\Programming\dev-home`. The same rules for the path apply. A folder that already has files in it must be a dev-home: setup checks for the file every dev-home starts with, `knowledge\README.md`, and asks again if it's missing, so it never changes a project's repo by mistake. |
 | Clone your existing dev-home (c), create a new private one (n), or stop (s)? | Only when the dev-home folder doesn't exist yet. On your first PC, `n` creates a private repo on GitHub from the files in `templates/dev-home-starter/`. On every later PC, `c` clones it. Either way, it then asks for the repo's name; Enter accepts `dev-home`. |
 | Pull updates automatically? | Enter, or `d`, follows the default, yes: new versions of this repo install as soon as a sync finds them. `n` tells you about them instead, to install yourself, and `y` keeps yes even if a later version changes the default. See [Updates](docs/reference/scripts.md#updates). |
 | Set up Claude Code in this folder? | Asked once for each Claude Code folder it finds: `~\.claude`, once Claude Code has made it, and each `~\.claude-<name>`, one per extra Claude account you run with `CLAUDE_CONFIG_DIR`, including one made after your first run. Several are asked about together: Enter sets them all up, `n` none, and `e` asks about each, where Enter means yes. Each of these questions also takes `s`, to skip for now, or a number of days, such as `7`, to have setup ask again then. A yes also approves the change the folder's `settings.json` needs, which the question says first: your dev-home and dev-home-toolkit folders in `permissions.additionalDirectories`, so Claude Code can use them from any project, and in a folder other than `~\.claude`, two patterns in `claudeMdExcludes` that keep `~\.claude`'s `CLAUDE.md` and rules out of that account's sessions ([why](docs/reference/setup-changes.md)). A no is kept, so it isn't asked again. Setup sets up no folder before you answer: until you do, it leaves the folder as it is, and every sync names it in a `NEW` line, which the agent passes on, so you can answer in chat with `/dev-home configure`: set it up, no, or remind me in N days. Until a reminder's date, setup doesn't ask, and syncs don't name the folder. |
@@ -214,29 +214,26 @@ A typical day with the included skills:
 ## Your own rules and skills
 
 - **Rules.** Every session, in both agents and on every PC, loads two sets of always-on rules:
-  - **Your global rules**, in `global-rules/global-rules.md` in your dev-home: your own
-    preferences for every project. The file starts as the empty template from
-    `templates/dev-home-starter/`, and after that it's yours to edit.
+  - **Your rules**, in `rules/` in your dev-home: your own preferences, for every agent or one,
+    on every PC or one. [Your rules](docs/guide/your-rules.md) says where each goes.
   - **The operating rules**, which come with dev-home-toolkit, in
     [`templates/operating-rules/operating-rules.md`](templates/operating-rules/operating-rules.md):
     how every session works with your dev-home, which the skills and scripts depend on. They're
     the same for everyone, and updates to dev-home-toolkit change them.
 
-  Your global rules win where the two conflict, because the operating rules say so. Keep yours
-  short: every line costs tokens in every session.
-  - **How they load.** Setup hooks both into each agent's standard place for always-on
-    instructions: Claude Code's
-    [user-level rules](https://code.claude.com/docs/en/memory#user-level-rules) folder, as the
-    links `dev-home-global-rules` and `dev-home-operating-rules`, and Codex's
-    [global `AGENTS.md`](https://learn.chatgpt.com/docs/agent-configuration/agents-md), joined
-    into one file.
+  Keep yours short: every line costs tokens in every session.
+  - **How they load.** Setup joins the two into one file in each agent's standard place for
+    always-on instructions: Claude Code's
+    [user-level rules](https://code.claude.com/docs/en/memory#user-level-rules) folder, as
+    `dev-home-rules.md`, and Codex's
+    [global `AGENTS.md`](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
   - **Already using `~\.claude\CLAUDE.md`?** It keeps loading in Claude Code, alongside these
     rules, and setup never touches it. But only Claude Code reads it, and only for that account
-    on that PC. Move anything you want everywhere into your global rules, and take it out of
+    on that PC. Move anything you want everywhere into your rules, and take it out of
     `CLAUDE.md` so Claude doesn't read it twice.
   - **Already have your own `~\.codex\AGENTS.md`, or one in another Codex home?** Setup needs
     that file for the joined rules, so it leaves yours alone and reports it. Move what you want to
-    keep into your global rules, delete the file, and run setup again.
+    keep into your rules, delete the file, and run setup again.
 - **Skills.** Create `skills/<name>/SKILL.md` in your dev-home, with standard frontmatter only:
   `name` (the same as the folder, following
   [the rule for names](docs/reference/dev-home-skill-json.md#the-skills-name)), `description`, and
@@ -254,7 +251,7 @@ A typical day with the included skills:
 | --- | --- |
 | `handoffs/` | One handoff per project, filed by where the project is hosted (see [Handoffs](docs/skills/handoff.md#where-handoffs-are-kept)). |
 | `knowledge/` | Your knowledge base. `knowledge/README.md` is its index. |
-| `global-rules/global-rules.md` | Your global rules: your own preferences for every project, loaded in every session. |
+| `rules/` | Your rules: your own preferences, loaded in every session, for every agent or one, on every PC or one (see [Your rules](docs/guide/your-rules.md)). |
 | `skills/` | Skills of your own, if you add any. |
 | `AGENTS.md`, `README.md` | Notes on working in dev-home itself, for agents and for you. |
 | `.drafts/` | Scratch space for text that leaves dev-home, such as GitHub issue bodies. Git ignores it. |
@@ -271,9 +268,11 @@ Everything beyond getting started is in the `docs/` folder:
 | Skills | [Handoffs](docs/skills/handoff.md) | Every `/handoff` command, with examples: when a change is committed and pushed, how issues are filed, and where handoffs are kept. |
 | Skills | [Knowledge base](docs/skills/knowledge.md) | Every `/knowledge` command, and when agents check the knowledge base or offer to add to it. |
 | Skills | [dev-home](docs/skills/dev-home.md) | `/dev-home sync`, `configure`, and `skills`: syncing when you ask, changing a setting, and listing your skills. |
+| Guide | [Your rules](docs/guide/your-rules.md) | Where each of your rules goes, for every agent or one, on every PC or one, and how your agents get them. |
 | Reference | [The scripts](docs/reference/scripts.md) | `setup.py`, `sync.py`, and `update.py`: when each one runs, what their status words mean, how updates are installed, and where they come from. |
 | Reference | [What setup changes on your PC](docs/reference/setup-changes.md) | Every link, file, and setting that setup adds, why, and how to remove it all. |
 | Reference | [A skill's dev-home-skill.json](docs/reference/dev-home-skill-json.md) | The file that says whether a skill is added to your agents unless you say no, what it needs to run, its preferences, and its old names. |
+| Reference | [Rule files](docs/reference/rule-files.md) | The files in your dev-home's `rules/`: which join for each agent, in what order, how each is read, and their notes. |
 | Development | [Design decisions](docs/development/decisions/README.md) | For people changing dev-home-toolkit: decisions made and options set aside, with the reasons. |
 | Development | [Skills and everything else under templates/](docs/development/skills.md) | The rules for changing the skills, the scripts they share, the operating rules, and the starter. |
 | Development | [setup.py, sync.py, and update.py](docs/development/scripts.md) | The rules for changing the scripts and their code in `internal/shared/`. |
@@ -295,10 +294,11 @@ Everything beyond getting started is in the `docs/` folder:
   other changed file may be someone's work in progress. It never stages, commits, stashes,
   resets, or discards those. It runs one sync at a time, undoes a merge that conflicts, and never
   deletes a git lock file.
-- **`setup.py` replaces only its own work:** its generated files, links whose target is gone,
-  and links it made to skills that no longer exist. Anything else in its way is reported, not
-  changed. It changes an agent's settings file only in a folder you said yes to, after saying what
-  that yes changes, and keeps a backup.
+- **`setup.py` replaces only its own work:** its generated files, its rules file in each agent's
+  folder while that still matches what it last wrote there, links whose target is gone, and links
+  it made to skills that no longer exist. Anything else in its way is reported, not changed. It
+  changes an agent's settings file only in a folder you said yes to, after saying what that yes
+  changes, and keeps a backup.
 - **Tooling updates install themselves,** as most apps' do, unless you turn off
   `updates.installAutomatically`. Whoever controls this repo on GitHub controls code that runs on
   your PC, so turn it off if you'd rather look at each update first and install it with
@@ -306,16 +306,16 @@ Everything beyond getting started is in the `docs/` folder:
 - **Never run `Remove-Item -Recurse`** on `~\.claude`, `~\.claude-*`, or `~\.agents`. It follows
   the links into your dev-home and deletes what's there. Remove a single link with
   `cmd /c rmdir <link>`.
-- **Edit your global rules in dev-home,** in `global-rules/global-rules.md`, never in a Codex
-  home's `AGENTS.md`, such as `~\.codex\AGENTS.md`, which setup rewrites.
+- **Edit your rules in dev-home,** in `rules/`, never in the file setup writes for each agent,
+  `dev-home-rules.md` in a Claude Code folder's `rules\` or a Codex home's `AGENTS.md`, which
+  setup rewrites.
 
 ## Troubleshooting
 
 - **Setup ends with "problem(s) to fix".** Each `PROBLEM` line says what to do. Fix those, then
   run setup again.
 - **`/handoff` says the operating rules aren't loaded.** Restart the agent. If it still says so,
-  run setup and read its output. In the Claude desktop app's Cowork sessions, Claude Code skips
-  rule folders linked from outside the session's folder, so the rules may not load there.
+  run setup and read its output.
 - **A skill seems to be missing.** Run setup with `--quiet`, then restart the agent.
 - **A skill says dev-home-toolkit needs Python.** Install Python 3.12 or later (see
   [Requirements](#requirements)), then run setup again.
@@ -335,7 +335,7 @@ Everything beyond getting started is in the `docs/` folder:
 | --- | --- |
 | `setup.py`, `sync.py`, `update.py` | The scripts (see [The scripts](docs/reference/scripts.md)): short entry points that load their code from `internal/shared/`. |
 | `templates/` | Everything setup fills in with each PC's paths. |
-| `templates/operating-rules/` | The operating rules every session loads, along with your global rules. Filled in on every setup run, into `internal/.generated/`. |
+| `templates/operating-rules/` | The operating rules every session loads, before the end user's rules. Filled in on every setup run, into each agent's rules file. |
 | `templates/skills/` | The skills, one folder each. Filled in on every setup run, into `internal/.generated/`. |
 | `templates/shared-skill-scripts/` | Python scripts that the skills share and only agents run. Filled in on every setup run, into `internal/.generated/`. |
 | `templates/dev-home-starter/` | The files a brand-new dev-home starts with. Filled in once, when setup creates it. |

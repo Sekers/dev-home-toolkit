@@ -30,16 +30,15 @@ rules apply too.
     path is short, has no spaces, and is the same on every PC.
   - `{{SKILL_STAMP}}`: the skill's stamp, a fingerprint of its `SKILL.md` (skills only). See
     "Skills" below.
-- `templates/operating-rules/`, `templates/skills/`, and `templates/shared-skill-scripts/` are
-  filled in on every setup run and written to `internal/.generated/`, at the same paths. The
-  skills and rules there are what gets linked into the agents, and the skills run the shared
-  scripts from there. The starter has no copy there, because setup fills it in only once (see
-  AGENTS.md's "The two repos"). Python adds `__pycache__` folders there when the scripts run,
-  and setup leaves those, and any link, alone.
+- `templates/skills/` and `templates/shared-skill-scripts/` are filled in on every setup run and
+  written to `internal/.generated/`, at the same paths. The skills there are what gets linked into
+  the agents, and the skills run the shared scripts from there. `templates/operating-rules/` is
+  filled in on every setup run too, but goes straight into each agent's rules file (see
+  "Operating rules", below). The starter has no copy there, because setup fills it in only once
+  (see AGENTS.md's "The two repos"). Python adds `__pycache__` folders there when the scripts
+  run, and setup leaves those, and any link, alone.
 - A file and its folder keep the same name at every stage: template, generated copy, and link,
-  such as `operating-rules/operating-rules.md`. The links in each Claude Code folder's `rules/`
-  are the exception: nothing there says which repo a name belongs to, so each is named
-  `dev-home-` plus the folder it points to.
+  such as `skills/handoff/SKILL.md`.
 - Pre-approvals in `allowed-tools` match the literal command text, so write every command with a
   placeholder where the path goes, never a variable or `~`. After setup fills it in, the command
   in the steps and the pre-approval match exactly.
@@ -92,7 +91,7 @@ rules apply too.
 - Each skill stands on its own. Mention another skill only where that's part of how this one
   works.
 - A skill's rules for when it may change, commit, and push live in that skill, not in the
-  operating rules or anyone's global rules.
+  operating rules or an end user's own rules.
 - Some skills have similar rules. When you change a rule in one skill, check whether another skill
   has a similar rule that might need the same change. That it does is never a given: decide from
   how each skill works.
@@ -153,12 +152,10 @@ rules apply too.
   together: the same for everyone, and not theirs to edit.
 - Keep the first heading, "Private repo: dev-home (rules loaded)". The handoff skill checks for
   it.
-- Only rules the skills and scripts depend on belong here. Personal preferences go in each
-  person's global rules, `global-rules/global-rules.md` in their dev-home, which load along with
-  these and win where the two conflict.
-- Claude Code loads both through links in each Claude folder's `rules/`, such as
-  `~/.claude/rules/dev-home-operating-rules` and `~/.claude/rules/dev-home-global-rules`. Codex
-  reads only one file, so setup writes `~/.codex/AGENTS.md` as the two joined, reading each by
-  name. So a person's `global-rules/` holds that one file. Keep the operating rules short: they
-  load in every session.
+- Only rules the skills and scripts depend on belong here. Personal preferences go in each end
+  user's own rules, in `rules/` in their dev-home, which load after these.
+- Setup joins the two into one file for each agent: `dev-home-rules.md` in each Claude Code
+  folder's `rules/`, and `AGENTS.md` in each Codex home
+  ([0064: Each agent's rules file](decisions/0064-each-agents-rules-file.md)). Keep the operating
+  rules short: they load in every session.
 - Codex's own `~/.codex/rules/` holds command policies, not these, and setup never touches it.

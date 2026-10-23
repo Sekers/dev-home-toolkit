@@ -66,7 +66,7 @@ so they're approved together. Other changes follow their own rules:
 
 - The project's own files, such as an item an update moves into them (see "Update"): edit them
   only after a yes to the exact text. This skill never commits them; committing them follows the
-  project's own rules and the user's global rules.
+  project's own rules and the user's own rules.
 - A GitHub issue: filed only after a yes to its exact text (see "GitHub issues"). Its draft body
   is ignored by git and never committed.
 

@@ -1,20 +1,21 @@
-"""Sets up dev-home-toolkit on this PC: finds or creates your dev-home, fills in the skills and
-operating rules with this PC's paths, links them into Claude Code and Codex, and checks the
-settings they need.
+"""Sets up dev-home-toolkit on this PC: finds or creates your dev-home, fills in the skills with
+this PC's paths and links them into Claude Code and Codex, writes each agent's always-on rules,
+and checks the settings they need.
 
-Safe to run any number of times. It rewrites only its own generated files, creates missing links,
-replaces links whose target is gone, removes links it made to skills that no longer exist,
-removes what it set up in a folder answered no, and reports anything else without changing it.
+Safe to run any number of times. It rewrites only its own generated files and rules files,
+creates missing links, replaces links whose target is gone, removes links it made to skills that
+no longer exist, removes what it set up in a folder answered no, and reports anything else without
+changing it.
 
 A run goes in this order, so the questions come first and the work after:
 
 1. dev-home first. On the first run it asks where your dev-home is (the private repo that holds
    your handoffs and knowledge base). If that folder doesn't exist yet, it offers to clone your
    dev-home from GitHub, or to create a new private one from the files in
-   templates/dev-home-starter/. A folder that exists must look like a dev-home: it has the files
-   the starter makes, global-rules/global-rules.md and knowledge/README.md. Setup sets that
-   repo's own git config, so it never works on a folder without them, such as a project's repo
-   named by mistake. When dev-home can't be put in place, setup stops, and saves nothing.
+   templates/dev-home-starter/. A folder that exists must look like a dev-home: it has the file
+   the starter makes, knowledge/README.md. Setup sets that repo's own git config, so it never
+   works on a folder without it, such as a project's repo named by mistake. When dev-home can't
+   be put in place, setup stops, and saves nothing.
 2. The questions not answered yet: whether to pull updates automatically, whether to set up each
    Claude Code folder it finds, whether to set up Codex, in every Codex home, and how many copies
    of dev-home are in active use. Each is asked whenever its answer isn't saved yet, not only on
@@ -43,11 +44,21 @@ file's answer as the default, when the file has no answer, and after cloning one
 shows the change, and after a yes writes that file alone, then commits and pushes it, so every
 copy agrees.
 
-The templates in this repo hold placeholders where paths go. Setup writes copies of the skills,
-the scripts they share, and the operating rules, with this PC's paths filled in, to
-internal/.generated/, at the same paths they have under templates/, and links the skills and
-rules into the agents. Pre-approved commands must match the command text exactly, so the paths
-can't be variables.
+The templates in this repo hold placeholders where paths go. Setup writes copies of the skills
+and the scripts they share, with this PC's paths filled in, to internal/.generated/, at the same
+paths they have under templates/, and links the skills into the agents. Pre-approved commands must
+match the command text exactly, so the paths can't be variables.
+
+Each agent gets its always-on rules as one file setup writes in its folder: dev-home-rules.md in
+each Claude Code folder's rules/, which Claude Code loads with every other .md file there, and
+AGENTS.md in each Codex home. It holds the operating rules, from their template with this PC's
+paths filled in, then the end user's rules from dev-home's rules/, joined for that agent on this PC
+(rules.py). Setup keeps a copy of what it last wrote there, in internal/.generated/last-written/,
+and rewrites the file only while it still matches that copy, or while there's none and the file is
+already what setup would write; it reports any other file there, and leaves it as it is. It also
+makes sure each level of rules/ for every agent set up here has a my-rules.md, creating an empty
+one where it's missing, and commits it. The design is in docs/development/decisions/, in decisions
+0064, "Each agent's rules file", and 0065, "Where end users' rules live".
 
 Each Claude Code folder and Codex home setup sets up needs a change in its settings file, so the
 agent can reach dev-home from any project, and in a Claude Code folder other than ~/.claude, so its
@@ -61,16 +72,18 @@ prints what to change by hand.
 Run it by hand once per PC. After that, each sync runs it with --quiet, so changes to the
 skills, and skills added on another PC, reach this one.
 
-Claude Code gets the links and rules in each folder answered yes under claudeCode.folders in
+Claude Code gets the skills' links and its rules file in each folder answered yes under
+claudeCode.folders in
 local-settings.json. Setup offers each Claude Code folder it finds, in a list, each recommended:
 ~/.claude, once Claude Code has made it; each extra one, one per account, such as
 ~/.claude-<name>; and the folder in CLAUDE_CONFIG_DIR. It saves a no there too, and a reminder,
 the answer to ask again in a number of days. A folder with no yes or no isn't set up: setup adds
 no links there and removes none. A sync names each one with no answer yet, or a reminder that's
 due, in a NEW line, which says how to answer; until a reminder is due, setup doesn't ask about
-its folder, and syncs don't name it. In a folder answered no, setup removes the links it made,
-and takes dev-home and dev-home-toolkit, and its claudeMdExcludes patterns, back out of its
-settings.json, and leaves the rest alone. One answered yes that no longer exists is skipped.
+its folder, and syncs don't name it. In a folder answered no, setup removes the links it made and
+its rules file, while that still matches the copy of what it last wrote, and takes dev-home and
+dev-home-toolkit, and its claudeMdExcludes patterns, back out of its settings.json, and leaves the
+rest alone. One answered yes that no longer exists is skipped.
 
 Codex homes are saved the same way, under codex.homes, but every home reads the same skills, from
 ~/.agents/skills, so every home has the same answer: setup sets up all of them, or none, and asks
@@ -80,10 +93,10 @@ entry. The main home is ~/.codex when it's there, otherwise the first ~/.codex-<
 name, otherwise the first other home there by full path; codex.homes keeps its entries in that
 order too. A home whose answer differs from the main home's, or that has none, such as a new one,
 gets the main home's answer, with a line saying so; when the main home has none, the next home
-there in that order that has one gives it. A yes gets each home its
-rules and settings, and the skills linked into ~/.agents/skills. A no removes the rules file setup
-wrote in each home and the links it made in ~/.agents/skills, and takes dev-home back out of each
-home's writable_roots. Until Codex is answered yes or no, setup adds no links and removes none,
+there in that order that has one gives it. A yes gets each home its rules and settings, and the
+skills linked into ~/.agents/skills. A no removes the rules file setup wrote in each home, as for
+a Claude Code folder, and the links it made in ~/.agents/skills, and takes dev-home back out of
+each home's writable_roots. Until Codex is answered yes or no, setup adds no links and removes none,
 and a sync names its homes in a NEW line, as for a folder. One reminder covers every home.
 
 Each skill is added to the agents on this PC, or not, by its answer in
@@ -164,6 +177,7 @@ from . import (
     generated,
     python_link,
     requirements,
+    rules,
 )
 from .git import run_git
 from .links import LinkInfo, is_link, link_info, make_folder_link, remove_folder_link
@@ -245,24 +259,37 @@ ALLOWED_NAMES = ("dev-home", "dev-home-toolkit")
 GLOB_SPECIAL = "*?[]{}()!@+\\"
 GENERATED_ROOT = TOOLKIT_ROOT / "internal" / ".generated"
 PYTHON_LINK = TOOLKIT_ROOT / "internal" / ".python"
-GENERATED_FOLDERS = ("skills", "shared-skill-scripts", "operating-rules")
+GENERATED_FOLDERS = ("skills", "shared-skill-scripts", "last-written")
+# A copy of the rules file setup last wrote in each agent's folder, by which it tells that file
+# from one an end user changed (decision 0064, "Each agent's rules file"), on this PC only.
+LAST_WRITTEN = GENERATED_ROOT / "last-written"
 # What setup decided for each skill on this PC, which facts.py's skills topic shows.
 SKILL_STATES = GENERATED_ROOT / "skill-states.json"
 # The Pythons that didn't run when setup checked them, which syncs skip (see sync_python_link).
 # There only while one is noted.
 FAILED_PYTHONS = GENERATED_ROOT / "failed-pythons.json"
 FOLDER_NOTE = (
-    "Setup writes everything in this folder: the files from templates/skills/,\n"
-    "templates/shared-skill-scripts/, and templates/operating-rules/, with this PC's paths filled\n"
-    "in; skill-states.json, what it decided for each skill on this PC; and, while there are any,\n"
-    "failed-pythons.json, the Pythons that didn't run when setup checked them. Don't edit it:\n"
-    "the next setup run rewrites it. Python writes the __pycache__ folders when the scripts run,\n"
-    "to start them faster, and setup leaves those alone.\n"
+    "Setup writes everything in this folder: the files from templates/skills/ and\n"
+    "templates/shared-skill-scripts/, with this PC's paths filled in; last-written/, a copy of\n"
+    "the rules file it last wrote in each agent's folder; skill-states.json, what it decided for\n"
+    "each skill on this PC; and, while there are any, failed-pythons.json, the Pythons that\n"
+    "didn't run when setup checked them. Don't edit it: the next setup run rewrites it. Python\n"
+    "writes the __pycache__ folders when the scripts run, to start them faster, and setup leaves\n"
+    "those alone.\n"
 )
+OPERATING_TEMPLATE = TOOLKIT_ROOT / "templates" / "operating-rules" / "operating-rules.md"
+# The first line of the operating rules, which every rules file setup writes starts with, kept
+# first (docs/development/skills.md).
+OPERATING_HEADING = "# Private repo: dev-home (rules loaded)"
+# The rules file setup writes in each Claude Code folder's rules/, which Claude Code loads with
+# every other .md file there, and in each Codex home, the one file Codex reads there.
+CLAUDE_RULES_FILE = "dev-home-rules.md"
+CODEX_RULES_FILE = "AGENTS.md"
 # Each agent setup sets up, by the name a skill's supportedOn gives it, such as claude-code.
 REQUIRES_NAMES = {shown: name for name, shown in requirements.AGENT_NAMES.items()}
-# Files every dev-home starts with, from templates/dev-home-starter/.
-DEV_HOME_FILES = ("global-rules/global-rules.md", "knowledge/README.md")
+# Files every dev-home starts with, from templates/dev-home-starter/, which tell it from another
+# folder, such as a project's repo. dev-home.json isn't one: a dev-home may not have it yet.
+DEV_HOME_FILES = ("knowledge/README.md",)
 # The skills folder every Codex home reads, in the profile folder. Of the agents setup sets up, only
 # Codex reads it, so setup links the skills here for a yes to Codex, and removes its links here
 # for a no.
@@ -1306,7 +1333,9 @@ class Setup:
         try:
             sync = importlib.import_module(f"{__package__}.sync")
             message = f"dev-home: {'several active copies' if several else 'one active copy'}"
-            code = sync.commit_for_setup(content_root, DEV_HOME_SETTINGS, message, holds_lock=True)
+            code = sync.commit_for_setup(
+                content_root, [DEV_HOME_SETTINGS], message, holds_lock=True
+            )
         except Exception as error:
             self.status("PROBLEM", f"Could not commit {path}: {describe(error)}")
             return
@@ -1367,61 +1396,109 @@ class Setup:
             "longer need it, remove it with cmd /c rmdir, then run setup.py again.",
         )
 
-    def sync_codex_rules(
-        self,
-        home: Path,
-        operating_template: Path,
-        global_path: Path,
-        values: dict[str, str],
-        note_text: str,
-    ) -> None:
-        """Codex reads a single always-on file in each home, so setup writes the operating rules
-        and the person's global rules into it, joined, under one note naming both. The operating
-        rules come from their template rather than Claude Code's generated copy, which has a note
-        of its own. It replaces only a file it wrote, or a link whose target is gone."""
-        path = home / "AGENTS.md"
-        label = f"Codex always-on rules in {home.name}"
-        parts = [
-            note_text,
-            generated.render(operating_template, values).data.decode("utf-8").rstrip("\n"),
-        ]
-        if global_path.is_file():
-            parts.append(generated.read_text(global_path).rstrip("\n"))
-        text = "\n\n".join(parts) + "\n"
+    # Each agent's rules file
 
-        existing = link_info(path)
-        if existing is not None:
-            if existing.is_link:
-                if existing.target is not None and Path(existing.target).exists():
-                    self.status(
-                        "PROBLEM",
-                        f"{label}: {path} links to {existing.target}. Left alone. Move anything "
-                        f"you want to keep into {global_path}, delete the link, then run setup.py "
-                        "again.",
-                    )
-                    return
-                if not self.should(path, "Replace this link with the joined rules file"):
-                    return
-                path.unlink()
-            else:
-                current = path.read_bytes().decode("utf-8-sig", errors="replace")
-                if not current.startswith(generated.MARKER):
-                    self.status(
-                        "PROBLEM",
-                        f"{label}: {path} already exists, and setup did not write it. Move "
-                        f"anything you want to keep into {global_path}, delete the file, then run "
-                        "setup.py again.",
-                    )
-                    return
-                if current == text:
-                    self.status("OK", label)
-                    return
-        if not self.should(path, "Write the operating and global rules, joined"):
+    def sync_my_rules(self, content_root: Path, pc: str, agents: Sequence[str]) -> None:
+        """Makes sure each level of dev-home's rules/, for every agent and for each agent set up
+        here, at both the every-PC level and this PC's, has a my-rules.md, the file an agent opens
+        to add one of the end user's rules at that level: an empty one where it's missing, in any
+        letter case, committed and pushed. Setup never touches another file there."""
+        if not agents:
             return
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("w", encoding="utf-8", newline="") as file:
-            file.write(text)
-        self.status("WROTE", f"{label}: {path}")
+        created: list[Path] = []
+        for path in rules.missing_my_rules(content_root / rules.RULES, pc, agents):
+            if not self.should(path, "Create an empty my-rules.md, for your rules at this level"):
+                continue
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"")
+            except OSError as error:
+                self.status("PROBLEM", f"Could not create {path}. {error}")
+                continue
+            created.append(path)
+        if not created:
+            return
+        names = [path.relative_to(content_root).as_posix() for path in created]
+        self.status(
+            "WROTE", f"An empty my-rules.md, for your rules, in dev-home: {', '.join(names)}"
+        )
+        # Loaded only now, so a sync that can't load stops only this commit, not setup.
+        try:
+            sync = importlib.import_module(f"{__package__}.sync")
+            code = sync.commit_for_setup(
+                content_root, names, "rules: add my-rules.md", holds_lock=True
+            )
+        except Exception as error:
+            self.status("PROBLEM", f"Could not commit {', '.join(names)}: {describe(error)}")
+            return
+        if code != 0:
+            # The sync has said what went wrong.
+            self.problems.append(f"Committing {', '.join(names)}")
+
+    def sync_rules_file(self, folder: Path, path: Path, text: str, rules_root: Path) -> None:
+        """Writes an agent's rules file, path, in its folder, as long as it's setup's own: when
+        there's none; when it still matches the copy setup keeps of what it last wrote there; or,
+        with no copy, when it already holds what setup would write. Any other file there holds the
+        end user's lines, so setup leaves it as it is and says what to do. A link whose target is
+        gone is replaced; any other link stays, as setup never writes through one."""
+        label = f"Rules file in {folder.name}"
+        copy = LAST_WRITTEN / rules.copy_name(folder)
+        data = text.encode("utf-8")
+        move = (
+            f"Move anything you want to keep into {rules_root}, delete the file, then run setup.py"
+        )
+        existing = link_info(path)
+        if existing is not None and existing.is_link:
+            if existing.target is not None and Path(existing.target).exists():
+                self.status(
+                    "PROBLEM",
+                    f"{label}: {path} links to {existing.target}, so setup left it alone. "
+                    f"{move.replace('the file', 'the link')} again.",
+                )
+                return
+            if not self.should(
+                path, "Replace this link, whose target is gone, with the rules file"
+            ):
+                return
+            try:
+                path.unlink()
+            except OSError as error:
+                self.status("PROBLEM", f"{label}: could not remove the link {path}. {error}")
+                return
+            existing = None
+        try:
+            current = path.read_bytes() if existing is not None else None
+            kept = copy.read_bytes() if copy.is_file() else None
+        except OSError as error:
+            self.status("PROBLEM", f"{label}: {path} couldn't be read, so setup left it. {error}")
+            return
+        if current is not None and current not in (data, kept):
+            if kept is None and not current.startswith(OPERATING_HEADING.encode("utf-8")):
+                said = "already exists, and setup didn't write it"
+            else:
+                said = "has changes setup didn't make, so the rules in it may be out of date"
+            self.status("PROBLEM", f"{label}: {path} {said}. Setup left it as it is. {move} again.")
+            return
+        if current == data:
+            self.status("OK", label)
+        elif self.should(path, "Write the operating rules and your rules, joined"):
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                if path.is_file():
+                    make_writable(path)
+                path.write_bytes(data)
+            except OSError as error:
+                self.status("PROBLEM", f"{label}: could not write {path}. {error}")
+                return
+            self.status("WROTE", f"{label}: {path}")
+        else:
+            return
+        if kept != data and self.should(copy, "Keep a copy of the rules file setup wrote"):
+            try:
+                copy.parent.mkdir(parents=True, exist_ok=True)
+                copy.write_bytes(data)
+            except OSError as error:
+                self.status("PROBLEM", f"Could not write {copy}. {error}")
 
     # Python, for the skills' scripts
 
@@ -2136,22 +2213,30 @@ class Setup:
         generated files and each skill's state, the skills' links in each skills folder in
         folders, as plans says, and the always-on rules."""
         values = template_values(content_root)
-        # The operating rules template and the person's global rules, each named once: setup
-        # reads them from here, and the notes in generated files point to them.
-        operating_template = TOOLKIT_ROOT / "templates" / "operating-rules" / "operating-rules.md"
-        global_rules_file = content_root / "global-rules" / "global-rules.md"
 
-        # 1. dev-home: no signing prompts for agent commits, and pulls that merge rather than
-        # rebase, as sync.py does, because a rebase refuses to run while any file is uncommitted.
-        for key, value in (("commit.gpgsign", "false"), ("pull.rebase", "false")):
-            current = run_git(content_root, "config", "--local", "--get", key)
-            if first_line(current.out) == value:
+        # 1. dev-home: no signing prompts for agent commits; pulls that merge rather than rebase,
+        # as sync.py does, because a rebase refuses to run while any file is uncommitted; and
+        # paths longer than Windows' default limit, which rules/ can need (decision 0065). One
+        # git call reads all three, and a path that's too long anyway is a PROBLEM.
+        wanted = {"commit.gpgsign": "false", "pull.rebase": "false", "core.longpaths": "true"}
+        listed = run_git(content_root, "config", "--local", "--list")
+        current: dict[str, str] = {}
+        for line in listed.out:
+            key, _, value = line.partition("=")
+            current[key.lower()] = value
+        for key, value in wanted.items():
+            if current.get(key) == value:
                 self.status("OK", f"dev-home git config {key} = {value}")
             elif self.should(f"git config --local {key} in {content_root}", f"Set to {value}"):
                 if run_git(content_root, "config", "--local", key, value).code == 0:
                     self.status("SET", f"dev-home git config {key} = {value}")
                 else:
                     self.status("PROBLEM", f"Could not set git config {key} in {content_root}.")
+        # A test profile's dev-home sits deep inside this repo's folder, past that length, so the
+        # tests check path_problem by itself.
+        too_long = "" if settings.test_home_dir else rules.path_problem(content_root)
+        if too_long:
+            self.status("PROBLEM", too_long)
         # With signing off, so a commit needs no prompt. A skill a merge here brings in is linked
         # by the next run, which names it in its NEW line first.
         self.write_copies(content_root)
@@ -2165,9 +2250,10 @@ class Setup:
             )
         self.sync_python_link(local_app_data, skip_registry=bool(settings.test_home_dir))
 
-        # 3. Generated files: the skills, the scripts they share, and the operating rules, with
-        # this PC's paths filled in, at the same paths they have under templates/. None carries a
-        # note saying not to edit it: each would cost tokens on every load (decision 0064).
+        # 3. Generated files: the skills and the scripts they share, with this PC's paths filled
+        # in, at the same paths they have under templates/. None carries a note saying not to edit
+        # it: each would cost tokens on every load (decision 0064). The operating rules go into
+        # each agent's rules file instead (step 5).
         skill_sources = skill_templates()
         generated_skills = GENERATED_ROOT / "skills"
         for skill in skill_sources:
@@ -2182,9 +2268,6 @@ class Setup:
                 stale = os.path.normcase(folder.name) not in skill_names
                 if folder.is_dir() and not is_link(folder) and stale:
                     self.sync_generated_folder(folder, values)
-        self.sync_generated_folder(
-            GENERATED_ROOT / "operating-rules", values, operating_template.parent
-        )
         # The scripts the skills share. The skills run them from here, at the path
         # SHARED_SKILL_SCRIPTS_DIR gives.
         self.sync_generated_folder(
@@ -2192,6 +2275,10 @@ class Setup:
             values,
             TOOLKIT_ROOT / "templates" / "shared-skill-scripts",
         )
+        # The operating rules, filled in here so a placeholder they don't know is reported with
+        # the others, below; step 5 writes them into each agent's rules file.
+        operating_rendered = generated.render(OPERATING_TEMPLATE, values)
+        self.unknown_placeholders.extend(operating_rendered.unknown)
         # A folder here with no templates, such as one left from an older layout, is removed.
         # A link here isn't setup's, so it stays.
         if GENERATED_ROOT.exists():
@@ -2215,7 +2302,7 @@ class Setup:
 
         for unknown in dict.fromkeys(self.unknown_placeholders):
             self.status("PROBLEM", f"A placeholder setup does not know, left as it is: {unknown}")
-        label = "Skills, their shared scripts, and operating rules with this PC's paths"
+        label = "Skills and their shared scripts with this PC's paths"
         if self.generated_changes > 0:
             self.status(
                 "WROTE", f"{label}: {self.generated_changes} file(s) changed in {GENERATED_ROOT}"
@@ -2269,61 +2356,66 @@ class Setup:
                         entry, "Remove a link to a deleted skill", "Link to a deleted skill"
                     )
 
-        # 5. Always-on rules: the operating rules from here, and the person's global rules from
-        # dev-home. Claude Code loads every file in the rules folder of each Claude folder, where
-        # each link is named dev-home- plus the folder it points to, since nothing there says
-        # which repo a name belongs to. Codex reads one file in each home, so setup writes the
-        # two joined there.
-        operating_rules = GENERATED_ROOT / "operating-rules"
-        global_rules = global_rules_file.parent
-        for claude_dir in agent_folders.claude_dirs:
-            claude_name = Path(claude_dir).name
-            rules = Path(claude_dir) / "rules"
-            self.sync_link(
-                rules / "dev-home-operating-rules",
-                operating_rules,
-                f"Claude Code operating rules in {claude_name}",
-            )
-            if global_rules.exists():
-                self.sync_link(
-                    rules / "dev-home-global-rules",
-                    global_rules,
-                    f"Claude Code global rules in {claude_name}",
-                )
-        codex_note = generated.note(
-            f"{forward(operating_template)} and {forward(global_rules_file)}",
-            "Put rules of your own in the second file; changing the first changes "
-            "dev-home-toolkit itself.",
-        )
-        for home in agent_folders.codex_homes:
-            self.sync_codex_rules(
-                Path(home), operating_template, global_rules_file, values, codex_note
-            )
+        # 5. Always-on rules: one file in each agent's folder, the operating rules and then the end
+        # user's rules from dev-home's rules/, joined for that agent on this PC (see the
+        # description above). Each line about a problem in the end user's files is said once,
+        # though a file in _all-agents/ joins for every agent.
+        rules_root = content_root / rules.RULES
+        pc = rules.pc_folder(rules.computer_name())
+        claude_code, codex = REQUIRES_NAMES[CLAUDE_CODE.name], REQUIRES_NAMES[CODEX.name]
+        agents = [
+            *([claude_code] if agent_folders.claude_dirs else []),
+            *([codex] if agent_folders.codex_homes else []),
+        ]
+        self.sync_my_rules(content_root, pc, agents)
+        operating = operating_rendered.data.decode("utf-8")
+        system = requirements.operating_system()
+        rules_files = [
+            *(
+                (Path(d), Path(d) / "rules" / CLAUDE_RULES_FILE, claude_code)
+                for d in agent_folders.claude_dirs
+            ),
+            *((Path(h), Path(h) / CODEX_RULES_FILE, codex) for h in agent_folders.codex_homes),
+        ]
+        joined: dict[str, rules.Joined] = {}
+        problems: list[str] = []
+        for folder, path, agent in rules_files:
+            if agent not in joined:
+                joined[agent] = rules.joined_rules(operating, rules_root, pc, agent, system)
+                problems += joined[agent].problems
+            self.sync_rules_file(folder, path, joined[agent].text, rules_root)
+        problems += [
+            rules.stray_file_problem(rules_root, path)
+            for path in rules.stray_files(rules_root, pc, agents)
+        ]
+        for problem in dict.fromkeys(problems):
+            self.status("PROBLEM", problem)
 
         # 6. What setup set up in each folder answered no, each removal listed as it goes: the
-        # links it made in a Claude Code folder, and for Codex, the rules file it wrote in each
-        # home and the links it made in ~/.agents/skills. A link counts as setup's when it points
-        # where setup's links point, so one of the person's own stays, as does anything that
-        # isn't a link. A folder that is really one setup sets up, through a junction, such as
-        # ~/.claude/skills made a junction to ~/.agents/skills to share skills, keeps its links.
-        # What a yes added to the agents' settings files is taken out last, with the other settings
+        # links it made in a Claude Code folder, and for Codex, the links it made in
+        # ~/.agents/skills; and the rules file it wrote in each, while that still matches the copy
+        # of what it last wrote. A link counts as setup's when it points where setup's links
+        # point, so one of the person's own stays, as does anything that isn't a link. A folder
+        # that is really one setup sets up, through a junction, such as ~/.claude/skills made a
+        # junction to ~/.agents/skills to share skills, keeps its links and its rules file. What a
+        # yes added to the agents' settings files is taken out last, with the other settings
         # changes (see settings_checks).
         set_up: set[str] = set()
         if agent_folders.declined_claude_dirs or agent_folders.declined_codex_homes:
             set_up = {real_path(folder) for folder in tool_skill_folders}
-            set_up |= {real_path(Path(d) / "rules") for d in agent_folders.claude_dirs}
-        rules_targets = (operating_rules, global_rules)
+            set_up |= {real_path(path.parent) for _, path, _ in rules_files}
         for claude_dir in agent_folders.declined_claude_dirs:
-            for subfolder, targets in (("skills", skill_targets), ("rules", rules_targets)):
-                self.remove_links_in(
-                    Path(claude_dir) / subfolder,
-                    targets,
-                    set_up,
-                    "Remove a link in a folder you said no to",
-                    "Link in a folder you said no to",
-                )
+            self.remove_links_in(
+                Path(claude_dir) / "skills",
+                skill_targets,
+                set_up,
+                "Remove a link in a folder you said no to",
+                "Link in a folder you said no to",
+            )
+            path = Path(claude_dir) / "rules" / CLAUDE_RULES_FILE
+            self.remove_rules_file(Path(claude_dir), path, set_up, rules_root)
         for home in agent_folders.declined_codex_homes:
-            self.remove_codex_rules(Path(home))
+            self.remove_rules_file(Path(home), Path(home) / CODEX_RULES_FILE, set_up, rules_root)
         # Adding an agent: see AGENTS_SKILLS. Only Codex reads that folder today, of the
         # agents setup sets up, so a no to Codex is enough to remove the links there.
         if agent_folders.declined_codex_homes:
@@ -2364,28 +2456,49 @@ class Setup:
         except OSError as error:
             self.status("PROBLEM", f"Could not remove the link {link}. {error}")
 
-    def remove_codex_rules(self, home: Path) -> None:
-        """Removes the rules file setup wrote in a Codex home answered no, and leaves an AGENTS.md
-        it didn't write, or a link, as it is."""
-        path = home / "AGENTS.md"
-        if is_link(path) or not path.is_file():
+    def remove_rules_file(
+        self, folder: Path, path: Path, set_up: set[str], rules_root: Path
+    ) -> None:
+        """Removes the rules file setup wrote in a folder answered no, path, and its copy of it,
+        while the file still matches that copy. A file with changes setup didn't make stays, and
+        is reported; one setup has no copy of isn't setup's, and stays, as does a link. In a
+        folder that's really one setup sets up, through a junction, the file is that folder's, so
+        only this folder's copy goes."""
+        copy = LAST_WRITTEN / rules.copy_name(folder)
+        if not copy.is_file():
             return
         try:
-            current = path.read_bytes().decode("utf-8-sig", errors="replace")
+            shared = real_path(path.parent) in set_up
+            current = None if shared or is_link(path) else path.read_bytes()
+            kept = copy.read_bytes()
+        except FileNotFoundError:
+            current = None
+            kept = b""
         except OSError as error:
-            self.status("PROBLEM", f"{path} could not be read, so setup left it as it is. {error}")
+            self.status("PROBLEM", f"{path} couldn't be read, so setup left it as it is. {error}")
             return
-        if not current.startswith(generated.MARKER):
+        if current is not None and current != kept:
+            self.status(
+                "PROBLEM",
+                f"{path} has changes setup didn't make, so setup left it, though you said no to "
+                f"setting up {folder}. Move anything you want to keep into {rules_root}, then "
+                "delete it.",
+            )
             return
-        if not self.should(
-            path, "Remove the rules file setup wrote in a Codex home you said no to"
-        ):
-            return
-        try:
-            remove_generated_file(path)
-            self.status("REMOVED", f"Rules file in a Codex home you said no to: {path}")
-        except OSError as error:
-            self.status("PROBLEM", f"Could not remove {path}. {error}")
+        if current is not None:
+            if not self.should(
+                path, "Remove the rules file setup wrote in a folder you said no to"
+            ):
+                return
+            try:
+                remove_generated_file(path)
+            except OSError as error:
+                self.status("PROBLEM", f"Could not remove {path}. {error}")
+                return
+            self.status("REMOVED", f"Rules file in a folder you said no to: {path}")
+        if self.should(copy, "Remove setup's copy of that rules file"):
+            with contextlib.suppress(OSError):
+                copy.unlink()
 
     def settings_checks(
         self, content_root: Path, agent_folders: AgentFolders

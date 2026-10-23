@@ -23,5 +23,4 @@
   don't re-offer a no.
 - Findings that only help work on one project's own code go where that project's AGENTS.md says
   research goes. Anything about a project that shouldn't be public goes in its handoff.
-- My global rules in `{{CONTENT_DIR}}/global-rules/global-rules.md` add to these, and win where
-  the two conflict.
+- My rules are in `{{CONTENT_DIR}}/rules/`; `{{CONTENT_DIR}}/README.md` explains its folders.

@@ -7,7 +7,7 @@ allowed-tools: "Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --ski
 # dev-home
 
 dev-home is the user's private repo, at `{{CONTENT_DIR}}`, which keeps their handoffs, knowledge
-base, global rules, and own skills on GitHub. dev-home-toolkit, at `{{TOOLKIT_DIR}}`, is the tooling
+base, own rules, and own skills on GitHub. dev-home-toolkit, at `{{TOOLKIT_DIR}}`, is the tooling
 that syncs it and sets it up on each PC. This skill syncs dev-home when the user asks, lists each
 skill and whether it's added to the user's agents, and shows and changes dev-home-toolkit's
 settings. Run the commands below exactly as written; in Claude Code they are pre-approved.

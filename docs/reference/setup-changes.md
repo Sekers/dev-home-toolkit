@@ -1,23 +1,26 @@
 # What setup changes on your PC
 
-Setup doesn't copy the skills and rules into Claude Code's and Codex's folders. It adds links
-there instead: a link is a folder entry that points to a folder somewhere else, and the agents
-read through it as if the files were right there. So when a sync or an update changes a skill
-or a rule, the agents see the change at once, with nothing to copy. On Windows, setup makes each
-folder link as a directory junction, which needs no admin rights and no Developer Mode.
+Setup doesn't copy the skills into Claude Code's and Codex's folders. It adds links there
+instead: a link is a folder entry that points to a folder somewhere else, and the agents read
+through it as if the files were right there. So when a sync or an update changes a skill, the
+agents see the change at once, with nothing to copy. On Windows, setup makes each folder link as
+a directory junction, which needs no admin rights and no Developer Mode. Your always-on rules are
+the exception: each agent gets them as one file setup writes in its folder, the operating rules
+and your rules joined, which setup writes again at each sync.
 
 - **In your dev-home-toolkit folder,** three things that belong to this PC only. Git ignores them,
   so they never go to GitHub, and an update never overwrites them.
-  - `internal\.generated\`: this PC's copy of the skills, the scripts they share, and the
-    operating rules, at the same paths they have under `templates/`. In this repo, they hold a
-    placeholder wherever a folder path goes, because everyone keeps their folders in different
-    places. Setup writes a copy with this PC's real paths filled in, and that copy is what the
-    agents use. The paths have to be written out in full, because the commands a skill may run
-    without asking you are matched by their exact text. Setup rewrites this folder whenever it
-    runs, so don't edit it; put skills of your own in your dev-home. Python adds
-    `__pycache__` folders beside the scripts when they run, so they start faster next time;
-    setup leaves those alone. Setup also writes `skill-states.json` there: whether it added each
-    skill to your agents on this PC, and if not, why, which `/dev-home skills` shows. And when a
+  - `internal\.generated\`: this PC's copy of the skills and the scripts they share, at the same
+    paths they have under `templates/`. In this repo, they hold a placeholder wherever a folder
+    path goes, because everyone keeps their folders in different places. Setup writes a copy with
+    this PC's real paths filled in, and that copy is what the agents use. The paths have to be
+    written out in full, because the commands a skill may run without asking you are matched by
+    their exact text. Setup rewrites this folder whenever it runs, so don't edit it; put skills of
+    your own in your dev-home. Python adds `__pycache__` folders beside the scripts when they
+    run, so they start faster next time; setup leaves those alone. Setup also writes
+    `skill-states.json` there: whether it added each skill to your agents on this PC, and if not,
+    why, which `/dev-home skills` shows. In `last-written\`, it keeps a copy of the rules file it
+    last wrote in each agent's folder, by which it knows that file is still its own. And when a
     Python doesn't run as setup checks it, setup notes it in `failed-pythons.json` there, so
     syncs don't wait for it again until that Python changes.
   - `internal\.python\`: a directory junction to the folder of the Python the skills' scripts
@@ -46,10 +49,11 @@ folder link as a directory junction, which needs no admin rights and no Develope
     questions again.
 - **In each Claude Code folder you said yes to** (`~\.claude`, and any extra ones):
   - Links in `skills\` to each skill added to your agents on this PC (this repo's, and your own
-    from dev-home; see [A skill's dev-home-skill.json](dev-home-skill-json.md)). In `rules\`,
-    `dev-home-operating-rules` links to the operating rules, and `dev-home-global-rules` to your
-    dev-home's `global-rules\`. Nothing in that folder says which repo a name belongs to, so
-    each link starts with `dev-home-`.
+    from dev-home; see [A skill's dev-home-skill.json](dev-home-skill-json.md)).
+  - `rules\dev-home-rules.md`: the operating rules and your rules joined, which Claude Code loads
+    with every other `.md` file in `rules\` (see [Rule files](rule-files.md)). Setup rewrites it
+    whenever it runs, while it still matches what setup last wrote there, and never replaces one
+    with changes it didn't make.
   - `settings.json` gets your dev-home and dev-home-toolkit folders in
     `permissions.additionalDirectories`, so Claude Code can use them from any project. Your yes to
     the folder approves this, and every sync puts it back if it goes missing, with a backup.
@@ -65,9 +69,10 @@ folder link as a directory junction, which needs no admin rights and no Develope
   ones). Every home reads the same skills, so it's all of them or none:
   - Links in `~\.agents\skills\`, which every Codex home reads, to each skill added to your
     agents on this PC.
-  - `AGENTS.md` in each home, such as `~\.codex\AGENTS.md`: the operating rules and your global
-    rules joined into one file, because Codex reads only one always-on file. Setup rewrites it
-    whenever it runs, but never replaces an `AGENTS.md` it didn't write.
+  - `AGENTS.md` in each home, such as `~\.codex\AGENTS.md`: the operating rules and your rules
+    joined, as for Claude Code, since Codex reads one always-on file there. Setup rewrites it
+    whenever it runs, while it still matches what setup last wrote there, and never replaces an
+    `AGENTS.md` it didn't write, or one with changes it didn't make.
   - `config.toml` gets dev-home in `[sandbox_workspace_write]` `writable_roots`, so Codex can
     edit handoffs and knowledge from any project. Your yes to Codex approves this, and every sync
     puts it back if it goes missing, with a backup. It also gets
@@ -77,15 +82,18 @@ folder link as a directory junction, which needs no admin rights and no Develope
     leaves room.
 - **If you say no later,** to a Claude Code folder or to Codex, setup removes what it set up
   there, naming each as it goes:
-  - In a Claude Code folder: its links in `skills\` and `rules\`, your dev-home and
-    dev-home-toolkit folders in `settings.json`'s `permissions.additionalDirectories`, and its two
-    patterns in `claudeMdExcludes`, with a backup.
+  - In a Claude Code folder: its links in `skills\`, its `rules\dev-home-rules.md`, your
+    dev-home and dev-home-toolkit folders in `settings.json`'s
+    `permissions.additionalDirectories`, and its two patterns in `claudeMdExcludes`, with a
+    backup.
   - For Codex: the `AGENTS.md` it wrote in each home, its links in `~\.agents\skills\`, and your
     dev-home in each `config.toml`'s `writable_roots`, with a backup.
     `project_doc_max_bytes` stays, since it gives Codex no access.
 
-  Your own files, links, and settings there stay, though an entry you added yourself for the same
-  folder, or the same pattern, goes too; the backup keeps it. Other agents that read those
+  A rules file with changes setup didn't make stays, and setup says so: move anything you want to
+  keep into your dev-home's `rules\`, then delete it. Your own files, links, and settings there
+  stay, though an entry you added yourself for the same folder, or the same pattern, goes too;
+  the backup keeps it. Other agents that read those
   skills folders lose dev-home's skills too: GitHub Copilot, Gemini CLI, and Cursor read
   `~\.agents\skills\`, and Cursor also reads `~\.claude\skills\`.
 - **If a skill isn't added to your agents on this PC,** because you said no to it, it's marked as
@@ -94,14 +102,18 @@ folder link as a directory junction, which needs no admin rights and no Develope
   downloads from claude.ai, setup removes its links from those skills folders, naming each as it
   goes, and puts them back once that changes. A program or a Python version the skill needs
   never takes its links out. The skill's copy in `internal\.generated\` stays where it is.
-- **In your dev-home's own git config:** commit signing off, and pulls that merge rather than
-  rebase. With signing off, a commit never stops in the middle of a sync to ask for your signing
-  passphrase. Your project repos keep signing as usual. Setup does this only in a folder that
-  looks like a dev-home, with `global-rules\global-rules.md` and `knowledge\README.md`.
-- **In your dev-home itself,** after your yes: `dev-home.json`, which says whether dev-home is in
+- **In your dev-home's own git config:** commit signing off, pulls that merge rather than rebase,
+  and `core.longpaths` on, since `rules\` can need paths longer than Windows' default limit. With
+  signing off, a commit never stops in the middle of a sync to ask for your signing passphrase.
+  Your project repos keep signing as usual. Setup does this only in a folder that looks like a
+  dev-home, with `knowledge\README.md`.
+- **In your dev-home itself:** an empty `my-rules.md` wherever one is missing in `rules\`, for
+  every agent and for each agent set up on this PC (see [Your rules](../guide/your-rules.md)),
+  committed and pushed. And after your yes, `dev-home.json`, which says whether dev-home is in
   active use on one PC or on several, so each sync knows how often to check GitHub. Every copy
   shares it, so setup commits and pushes the change; git's history is its backup.
 
 **To remove it all:** delete each link with `cmd /c rmdir <link>`, `internal\.python` included,
-delete the `AGENTS.md` setup wrote in each Codex home, take the added lines out of the settings
+delete the rules file setup wrote in each agent's folder, `rules\dev-home-rules.md` in each
+Claude Code folder and `AGENTS.md` in each Codex home, take the added lines out of the settings
 files, then delete your dev-home-toolkit folder. Your dev-home stays as it is.

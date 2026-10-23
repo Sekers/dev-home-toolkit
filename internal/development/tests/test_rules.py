@@ -10,6 +10,8 @@ import pytest
 from helpers import Sandbox, make_junction, remove_link, sandbox_for, shared_module, write_text
 
 OPERATING = "# Private repo: dev-home (rules loaded)\n\n- An operating rule.\n"
+# A file's - Rule, as it joins, with no heading of its own.
+RULE = "# My rules\n\n- Rule"
 
 
 @pytest.fixture(scope="module")
@@ -52,6 +54,7 @@ def own(code: ModuleType, rules: Path, system: str = "windows") -> str:
         ("Lab PC_2.local", "lab-pc-2-local"),
         ("Caf\u00e9", "caf-"),
         ("A" * 40, "a" * 32),
+        ("", "pc"),
     ],
 )
 def test_a_pcs_folder_is_its_name_in_lowercase_with_other_characters_as_hyphens(
@@ -75,7 +78,9 @@ def test_levels_join_in_order_with_this_pcs_unanswered_lines_last(
     # Another agent's, and another PC's, never join.
     write(rules / "claude-code" / "mine" / "my-rules.md", "- Claude Code's\n")
     write(rules / "pcs" / "lab" / "codex" / "mine" / "my-rules.md", "- The lab's\n")
-    assert own(code, rules) == "- One\n\n- Two\n\n- Three\n\n- Four\n\n- Five\n\n- Six"
+    assert own(code, rules) == (
+        "# My rules\n\n- One\n\n- Two\n\n- Three\n\n- Four\n\n- Five\n\n- Six"
+    )
 
 
 def test_files_join_alphabetically_by_path_subfolders_included_in_any_case(
@@ -86,6 +91,7 @@ def test_files_join_alphabetically_by_path_subfolders_included_in_any_case(
         write(mine / relative, f"- {relative}\n")
     # Compared by path, so c.md comes before c/a.md: "." sorts before "/".
     assert own(code, rules).split("\n\n") == [
+        "# My rules",
         "- A.md",
         "- b.md",
         "- B/z.md",
@@ -101,7 +107,7 @@ def test_a_linked_folder_isnt_followed(code: ModuleType, rules: Path) -> None:
     loop = mine / "loop"
     make_junction(loop, mine)
     try:
-        assert own(code, rules) == "- Mine"
+        assert own(code, rules) == "# My rules\n\n- Mine"
     finally:
         remove_link(loop)
 
@@ -118,7 +124,8 @@ def test_no_rules_of_the_end_users_leaves_the_operating_rules_alone(
 
 def test_own_bytes_count_only_the_end_users_rules_as_utf8(code: ModuleType, rules: Path) -> None:
     write(rules / "_all-agents" / "mine" / "my-rules.md", "- Caf\u00e9\n")
-    assert joined(code, rules).own_bytes == len("- Caf\u00e9".encode())  # type: ignore[attr-defined]
+    own_bytes = joined(code, rules).own_bytes  # type: ignore[attr-defined]
+    assert own_bytes == len("# My rules\n\n- Caf\u00e9".encode())
 
 
 def test_a_file_directly_in_a_level_folder_is_reported_and_never_joins(
@@ -168,8 +175,8 @@ def test_a_notes_os_field_limits_the_file_to_those_systems(
     code: ModuleType, rules: Path, field: str, on_windows: bool, on_linux: bool
 ) -> None:
     write(rules / "_all-agents" / "mine" / "my-rules.md", f"<!-- note\n{field}\n-->\n- Rule\n")
-    assert (own(code, rules, "windows") == "- Rule") is on_windows
-    assert (own(code, rules, "linux") == "- Rule") is on_linux
+    assert (own(code, rules, "windows") == RULE) is on_windows
+    assert (own(code, rules, "linux") == RULE) is on_linux
     assert joined(code, rules).problems == []  # type: ignore[attr-defined]
 
 
@@ -178,7 +185,7 @@ def test_a_misspelled_system_loads_the_rule_everywhere_and_says_so(
 ) -> None:
     path = rules / "_all-agents" / "mine" / "my-rules.md"
     write(path, "<!-- note\nos: windows, linnux\n-->\n- Rule\n")
-    assert own(code, rules, "macos") == "- Rule"
+    assert own(code, rules, "macos") == RULE
     assert joined(code, rules).problems == [  # type: ignore[attr-defined]
         f"{path} names \"linnux\" in its note's os: field, which this dev-home-toolkit doesn't "
         'know, so the rule loads on every system. Did you mean "linux"? If not, name one or more '
@@ -188,7 +195,7 @@ def test_a_misspelled_system_loads_the_rule_everywhere_and_says_so(
 
 def test_only_a_note_at_the_files_start_counts(code: ModuleType, rules: Path) -> None:
     write(rules / "_all-agents" / "mine" / "my-rules.md", "- Rule\n\n<!-- note\nos: linux\n-->\n")
-    assert own(code, rules, "windows") == "- Rule"
+    assert own(code, rules, "windows") == RULE
 
 
 # Reading each file
@@ -205,7 +212,7 @@ def test_comments_that_start_a_line_go_whole_lines_and_all(code: ModuleType, rul
         "```text\n<!-- kept, in code -->\n```\n",
     )
     assert own(code, rules) == (
-        "- One <!-- kept, mid-line -->\n- Two\n```text\n<!-- kept, in code -->\n```"
+        "# My rules\n\n- One <!-- kept, mid-line -->\n- Two\n```text\n<!-- kept, in code -->\n```"
     )
 
 
@@ -216,7 +223,7 @@ def test_a_comment_that_never_ends_goes_to_its_files_end_and_is_reported(
     write(path, "- One\n<!-- never ends\n- Hidden\n")
     write(rules / "_all-agents" / "mine" / "b.md", "- Two\n")
     result = joined(code, rules)
-    assert own(code, rules) == "- One\n\n- Two"
+    assert own(code, rules) == "# My rules\n\n- One\n\n- Two"
     assert result.problems == [  # type: ignore[attr-defined]
         f"{path} has a comment, <!--, that never ends with -->, so setup leaves out everything "
         "from there to the file's end: end the comment."
@@ -229,7 +236,7 @@ def test_a_code_block_that_never_closes_is_closed_at_its_files_end_and_reported(
     path = rules / "_all-agents" / "mine" / "a.md"
     write(path, "## Notes\n\n~~~~\n## Not a heading\n")
     write(rules / "_all-agents" / "mine" / "b.md", "## Notes\n\n- After\n")
-    assert own(code, rules) == "## Notes\n\n~~~~\n## Not a heading\n~~~~\n\n- After"
+    assert own(code, rules) == "# My rules\n\n## Notes\n\n~~~~\n## Not a heading\n~~~~\n\n- After"
     assert joined(code, rules).problems == [  # type: ignore[attr-defined]
         f"{path} opens a code block with ~~~~ that never closes, so setup closes it at the "
         "file's end: close it where it should end."
@@ -240,7 +247,7 @@ def test_blank_lines_at_a_files_ends_go_and_inside_it_stay(code: ModuleType, rul
     write(rules / "_all-agents" / "mine" / "a.md", "\n\n- One\n\n\n- Two\n\n\n")
     write(rules / "codex" / "mine" / "b.md", "\r\n- Three\r\n")
     text = joined(code, rules).text  # type: ignore[attr-defined]
-    assert text.endswith("\n\n- One\n\n\n- Two\n\n- Three\n"), text
+    assert text.endswith("\n\n# My rules\n\n- One\n\n\n- Two\n\n- Three\n"), text
 
 
 def test_a_byte_order_mark_decides_and_utf16_is_read_but_reported(
@@ -250,7 +257,7 @@ def test_a_byte_order_mark_decides_and_utf16_is_read_but_reported(
     mine.mkdir(parents=True)
     (mine / "a.md").write_bytes(b"\xef\xbb\xbf- UTF-8 with a mark\n")
     (mine / "b.md").write_bytes("- UTF-16\n".encode("utf-16"))
-    assert own(code, rules) == "- UTF-8 with a mark\n\n- UTF-16"
+    assert own(code, rules) == "# My rules\n\n- UTF-8 with a mark\n\n- UTF-16"
     assert joined(code, rules).problems == [  # type: ignore[attr-defined]
         f"{mine / 'b.md'} is saved as UTF-16, which git counts as binary, so a sync can't merge "
         "it: save it as UTF-8."
@@ -262,7 +269,7 @@ def test_bytes_that_arent_utf8_and_nul_bytes_are_reported(code: ModuleType, rule
     mine.mkdir(parents=True)
     (mine / "a.md").write_bytes(b"- Caf\xe9\n")
     (mine / "b.md").write_bytes(b"- N\x00UL\n")
-    assert own(code, rules) == "- Caf\ufffd\n\n- NUL"
+    assert own(code, rules) == "# My rules\n\n- Caf\ufffd\n\n- NUL"
     problems = joined(code, rules).problems  # type: ignore[attr-defined]
     assert problems == [
         f"{mine / 'a.md'} isn't saved as UTF-8, so setup reads each byte that isn't as the "
@@ -292,7 +299,9 @@ def test_a_sections_own_text_comes_before_its_subsections(code: ModuleType, rule
     # So text keeps the heading it had: the second file's - Three stays under ## A.
     write(rules / "_all-agents" / "mine" / "a.md", "## A\n\n- One\n\n### B\n\n- Two\n")
     write(rules / "_all-agents" / "mine" / "b.md", "## A\n\n- Three\n\n### C\n\n- Four\n")
-    assert own(code, rules) == ("## A\n\n- One\n\n- Three\n\n### B\n\n- Two\n\n### C\n\n- Four")
+    assert own(code, rules) == (
+        "# My rules\n\n## A\n\n- One\n\n- Three\n\n### B\n\n- Two\n\n### C\n\n- Four"
+    )
 
 
 @pytest.mark.parametrize(
@@ -304,9 +313,9 @@ def test_a_sections_own_text_comes_before_its_subsections(code: ModuleType, rule
             "# R\n\n### Python\n\n- Two\n\n## Commits\n\n- One",
         ),
         (
-            "# My rules\n\n- One\n",
+            "## Commits\n\n- One\n",
             "### Python\n\n- Two\n",
-            "### Python\n\n- Two\n\n# My rules\n\n- One",
+            "# My rules\n\n### Python\n\n- Two\n\n## Commits\n\n- One",
         ),
     ],
 )
@@ -323,14 +332,40 @@ def test_a_comment_ends_on_its_own_line_even_when_its_ends_overlap(
     code: ModuleType, rules: Path
 ) -> None:
     write(rules / "_all-agents" / "mine" / "a.md", "- One\n<!-->\n- Two\n<!--->\n- Three\n")
-    assert own(code, rules) == "- One\n- Two\n- Three"
+    assert own(code, rules) == "# My rules\n\n- One\n- Two\n- Three"
     assert joined(code, rules).problems == []  # type: ignore[attr-defined]
 
 
-def test_text_before_a_files_first_heading_goes_first(code: ModuleType, rules: Path) -> None:
-    write(rules / "_all-agents" / "mine" / "a.md", "# My rules\n\n- One\n")
-    write(rules / "codex" / "mine" / "b.md", "- Two, under no heading\n")
-    assert own(code, rules) == "- Two, under no heading\n\n# My rules\n\n- One"
+def test_rules_outside_a_top_level_heading_go_under_my_rules(code: ModuleType, rules: Path) -> None:
+    # Rather than after the operating rules' last line, as if they were part of them.
+    write(rules / "_all-agents" / "mine" / "a.md", "# My rules\n\n## Writing style\n\n- One\n")
+    write(
+        rules / "codex" / "mine" / "b.md",
+        "- Two, under no heading\n\n## Writing style\n\n- Three\n\n# Python\n\n- Four\n",
+    )
+    write(rules / "codex" / "mine" / "c.md", "### Git\n\n- Five\n\n# my rules\n\n- Six\n")
+    assert own(code, rules) == (
+        "# My rules\n\n- Two, under no heading\n\n- Six\n\n### Git\n\n- Five\n\n"
+        "## Writing style\n\n- One\n\n- Three\n\n# Python\n\n- Four"
+    )
+
+
+def test_a_file_with_only_top_level_headings_adds_no_my_rules(
+    code: ModuleType, rules: Path
+) -> None:
+    write(rules / "_all-agents" / "mine" / "a.md", "# Python\n\n- One\n")
+    assert own(code, rules) == "# Python\n\n- One"
+
+
+def test_a_heading_with_nothing_under_it_is_left_out(code: ModuleType, rules: Path) -> None:
+    # As the starter's my-rules.md is, once its comment is left out.
+    write(rules / "_all-agents" / "mine" / "my-rules.md", "# My rules\n\n<!-- Your rules. -->\n")
+    write(rules / "codex" / "mine" / "a.md", "# Python\n\n## Empty\n\n### Also empty\n")
+    result = joined(code, rules)
+    assert result.text == OPERATING  # type: ignore[attr-defined]
+    assert result.own_bytes == 0  # type: ignore[attr-defined]
+    write(rules / "codex" / "mine" / "b.md", "## Empty\n\n## Kept\n\n- One\n")
+    assert own(code, rules) == "# My rules\n\n## Kept\n\n- One"
 
 
 def test_headings_under_different_parents_or_levels_stay_apart(
@@ -341,7 +376,7 @@ def test_headings_under_different_parents_or_levels_stay_apart(
         rules / "_all-agents" / "mine" / "b.md", "## B\n\n### Notes\n\n- Two\n\n## Notes\n\n- 3\n"
     )
     assert own(code, rules) == (
-        "## A\n\n### Notes\n\n- One\n\n## B\n\n### Notes\n\n- Two\n\n## Notes\n\n- 3"
+        "# My rules\n\n## A\n\n### Notes\n\n- One\n\n## B\n\n### Notes\n\n- Two\n\n## Notes\n\n- 3"
     )
 
 
@@ -352,7 +387,8 @@ def test_only_markdown_headings_outside_code_count(code: ModuleType, rules: Path
         "#Notes is no heading\n    ## Nor is code\n```\n## Notes\n```\n",
     )
     assert own(code, rules) == (
-        "#Notes is no heading\n    ## Nor is code\n```\n## Notes\n```\n\n## Notes\n\n- One"
+        "# My rules\n\n#Notes is no heading\n    ## Nor is code\n```\n## Notes\n```\n\n"
+        "## Notes\n\n- One"
     )
 
 

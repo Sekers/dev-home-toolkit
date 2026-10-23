@@ -798,7 +798,7 @@ def checked_dev_home(value: str) -> str:
     if not is_in_use(full) or missing_dev_home_files(full):
         raise SettingError(
             f"{folder} isn't a dev-home: devHome.folder can only be a folder that already is one, "
-            "with global-rules/global-rules.md and knowledge/README.md. To clone or create one, "
-            "the user runs setup.py in a terminal."
+            "with knowledge/README.md. To clone or create one, the user runs setup.py in a "
+            "terminal."
         )
     return folder

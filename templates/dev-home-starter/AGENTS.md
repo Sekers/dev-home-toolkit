@@ -21,9 +21,13 @@ setup.py, and sync.py) lives in my clone of dev-home-toolkit, at `{{TOOLKIT_DIR}
   handoff skill finds, reads, and updates them.
 - `knowledge/`: my general knowledge base. `knowledge/README.md` is its index; the rules for
   files come with the knowledge skill.
-- `global-rules/global-rules.md`: my global rules, my own always-on preferences for every
-  project. Every session loads them along with the operating rules from dev-home-toolkit. Keep
-  the file short: every line costs tokens in every session.
+- `rules/`: my rules, my own always-on preferences, which every session loads after the
+  operating rules from dev-home-toolkit. `_all-agents/mine/` holds those for every agent on every
+  PC, `<agent>/mine/` those for one agent (`claude-code`, `codex`), and
+  `pcs/<pc>/_all-agents/mine/` and `pcs/<pc>/<agent>/mine/` the same for one PC alone, where
+  `<pc>` is the PC's name in lowercase, with any character other than a letter or a digit as a
+  hyphen. Add a rule to `my-rules.md` in the right folder, never to the rules file setup joins
+  them into for each agent. Keep them short: every line costs tokens in every session.
 - `skills/`: my personal skills, if any. Setup links them into Claude Code and Codex.
 - `.drafts/`: git-ignored scratch space for text that leaves this repo, such as GitHub issue
   bodies. Nothing in it is ever committed.

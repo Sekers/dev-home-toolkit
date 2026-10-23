@@ -85,8 +85,10 @@ def person(box: Sandbox, monkeypatch: pytest.MonkeyPatch) -> Iterator[Person]:
 
 class FakeGh:
     """gh, signed in, recording each call. A clone copies the sandbox's own dev-home remote, as
-    if from GitHub, or clone_from when a test sets it. failing names a command, such as
-    ("repo", "create"), that fails instead."""
+    if from GitHub, or clone_from when a test sets it. A create with --source, --remote origin,
+    and --push makes a bare repo in the sandbox, as if on GitHub, and pushes to it, setting the
+    upstream branch, as gh does. failing names a command, such as ("repo", "create"), that fails
+    instead."""
 
     def __init__(self, box: Sandbox) -> None:
         self.box = box
@@ -100,6 +102,12 @@ class FakeGh:
             return 1, [f"gh: {' '.join(self.failing)} failed on purpose"]
         if args[:2] == ("repo", "clone"):
             git("clone", "--quiet", str(self.clone_from), args[3])
+        if args[:2] == ("repo", "create") and "--push" in args:
+            source = args[args.index("--source") + 1]
+            remote = self.box.root / f"{args[2]}-on-github.git"
+            git("init", "--quiet", "--bare", "-b", "main", str(remote))
+            git("-C", source, "remote", "add", "origin", str(remote))
+            git("-C", source, "push", "--quiet", "-u", "origin", "HEAD")
         return 0, []
 
 
@@ -1025,7 +1033,7 @@ def own_dev_home(box: Sandbox, name: str, copies: str | None) -> tuple[Path, Pat
     git("init", "--quiet", "--bare", "-b", "main", str(remote))
     git("clone", "--quiet", str(remote), str(home))
     git("-C", str(home), "config", "commit.gpgsign", "false")
-    write_text(home / "global-rules" / "global-rules.md", "# My rules\n")
+    write_text(home / "rules" / "_all-agents" / "mine" / "my-rules.md", "# My rules\n")
     write_text(home / "knowledge" / "README.md", "# Knowledge base\n")
     if copies is not None:
         write_text(home / "dev-home.json", copies)
@@ -2169,7 +2177,9 @@ def test_a_new_dev_home_github_refuses_is_kept_with_the_command_to_finish(
         r"purpose\. Once that is fixed, run: gh repo create taken --private --source "
     )
     assert re.search(pattern, out, re.M), out
-    assert git("-C", str(new_home), "log", "-1", "--format=%s") == ["starter: new dev-home"]
+    # Then the my-rules.md files the starter doesn't have, for each agent set up.
+    subjects = git("-C", str(new_home), "log", "--format=%s")
+    assert subjects == ["rules: add my-rules.md", "starter: new dev-home"], subjects
 
 
 def test_creates_a_new_dev_home_from_the_starter(
@@ -2184,12 +2194,18 @@ def test_creates_a_new_dev_home_from_the_starter(
     returned = setup_here(box, "--content-dir", str(new_home))
     out = capsys.readouterr().out
     agents = (new_home / "AGENTS.md").read_text(encoding="utf-8")
-    subject = git("-C", str(new_home), "log", "-1", "--format=%s")
+    subjects = git("-C", str(new_home), "log", "--format=%s")
     signing = git("-C", str(new_home), "config", "--local", "--get", "commit.gpgsign")
     toolkit = str(box.toolkit).replace("\\", "/")
     assert re.search(r"^CREATED\s+New private repo my-dev-home on GitHub", out, re.M), out
     assert f"{toolkit}/sync.py" in agents
-    assert subject == ["starter: new dev-home"]
+    # Then the my-rules.md files the starter doesn't have, for each agent set up.
+    assert subjects == ["rules: add my-rules.md", "starter: new dev-home"], subjects
+    assert (
+        (new_home / "rules" / "_all-agents" / "mine" / "my-rules.md")
+        .read_text(encoding="utf-8")
+        .startswith("# My rules\n")
+    )
     assert signing == ["false"]
     # A new dev-home starts with one active copy, without a question.
     assert json.loads((new_home / "dev-home.json").read_text(encoding="utf-8")) == {
@@ -2200,8 +2216,8 @@ def test_creates_a_new_dev_home_from_the_starter(
     assert not any(re.search(p, asked) for p in copies for asked in person.asked), person.asked
     create = ("repo", "create", "my-dev-home", "--private", "--source", str(new_home))
     assert any(call[: len(create)] == create for call in fake_gh.calls), fake_gh.calls
-    # The only problems left come from the sandbox's other dev-home: links to it, which setup
-    # leaves alone, and settings changes for the new one, which nobody answers here.
+    # Any problem left comes from the sandbox's other dev-home: a link to it, which setup leaves
+    # alone, or a settings change for the new one, which nobody answers here.
     problems = [line for line in out.splitlines() if line.startswith("PROBLEM")]
-    assert returned == 1 and problems, out
-    assert all(re.search(r"Left alone|left unchanged", line) for line in problems), out
+    assert returned == (1 if problems else 0), out
+    assert all(re.search(r"left it alone|left unchanged", line) for line in problems), out

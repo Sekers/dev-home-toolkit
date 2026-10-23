@@ -1,0 +1,6 @@
+# dev-home's rules/ in layout 1: every file the code creates there. layouts.py says what the
+# placeholders stand for, and docs/development/testing.md when this list changes.
+rules/_all-agents/mine/my-rules.md
+rules/<agent>/mine/my-rules.md
+rules/pcs/<pc>/_all-agents/mine/my-rules.md
+rules/pcs/<pc>/<agent>/mine/my-rules.md

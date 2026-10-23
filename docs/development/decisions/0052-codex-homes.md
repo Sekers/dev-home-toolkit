@@ -69,7 +69,7 @@ Changed on 2026-10-16 and 2026-10-20.
 **Costs, accepted:**
 
 - With two Codex accounts, such as a work one, dev-home can't be kept out of just one: a yes puts
-  the always-on rules, the person's global rules included, write access to dev-home, and the
+  the always-on rules, the person's own rules included, write access to dev-home, and the
   skills in every home.
 - A folder that only looks like a home, such as a backup copy with a `config.toml`, is set up
   too.

@@ -1,8 +1,8 @@
 # 0065: Where end users' rules live
 
-**Built:** yes, except: setup using it. `internal/shared/rules.py` reads `rules/` and joins it,
-with the operating rules, for an agent on a PC, and finds what's missing or misplaced there; setup
-doesn't call it yet, nor write anything in `rules/`.
+**Built:** yes, except: the two size settings, the handoff skill's own check of a path's length,
+and `built-in/`, which comes with built-in rules. Setup skips its check of dev-home's path in a
+test profile, whose dev-home sits deep in the repo's folder, so the tests check it directly.
 
 **Decision:** dev-home's `global-rules/` becomes `rules/`, with four levels:
 
@@ -19,7 +19,7 @@ Each level holds `mine/`, the end user's rule files. `_all-agents/` and each `<a
 never the per-PC levels, and `pcs/<pc>/<agent>/` also holds `unanswered/`
 ([0064: Each agent's rules file](0064-each-agents-rules-file.md)).
 Decided by the developer on 2026-10-17 and 2026-10-18, and changed on 2026-10-22 (a code block
-left open, and the order inside a merged section).
+left open, the order inside a merged section, and `# My rules`).
 
 - **Names.** `<pc>` is the computer's name in lowercase, any other character a hyphen.
   `claude-code/` and `codex/` exist only for agents set up on some PC.
@@ -42,7 +42,10 @@ left open, and the order inside a merged section).
   (letter case and surrounding spaces ignored) under the same parent. A merged section sits where
   its heading first appears, and holds its own text first, from each file in join order, then its
   subsections, each where it first appears, but a deeper heading before a shallower one, so text
-  keeps the heading it had; text before a file's first heading goes first, for the same reason.
+  keeps the heading it had. What a file has outside a top-level heading of its own, its text
+  before any heading and any deeper heading before its first top-level one, goes under
+  `# My rules`, merged with that heading in any file, and a heading with nothing under it is left
+  out (the developer, 2026-10-22).
   Only Markdown headings count: a line starting with one to six `#` and then a space or nothing,
   outside fenced code. The operating rules never merge, and content is never deduplicated. So a
   built-in rule carrying `## Writing style` lands under the end user's own section of that name.
@@ -93,6 +96,11 @@ left open, and the order inside a merged section).
 - No sentence says which rule wins: programs and agents that combine rule files, such as Ruler
   and Cursor, add none; a conflict is better fixed than ranked; and a later, more specific rule
   is usually followed.
+- `# My rules`: the starter's `my-rules.md` starts with it, but setup creates the others empty,
+  so a rule written in one with no heading would follow the operating rules' last line as if it
+  were one of them, and a `## Writing style` there wouldn't combine with the one under
+  `# My rules`. Putting such rules under that heading in the join works for every file, with no
+  habit for the end user to keep. A fresh agent's read found the gap (2026-10-22).
 - Comments: Claude Code's memory docs (read 2026-10-18) strip "Block-level HTML comments" and keep
   "Comments inside code blocks", so both agents see the same rules, and comments cost no tokens in
   Codex. An unclosed comment kept would likely hide every later file from Claude Code (inferred
@@ -130,6 +138,9 @@ left open, and the order inside a merged section).
   `my-rules.md` alone.
 - A "later rule wins" sentence; headings per level (they'd stop headings combining, and cost
   tokens); keeping the last line with a new path; removing it.
+- Setup writing `# My rules` into each `my-rules.md` it creates, with end users starting their
+  other files with it (a file without it still lands among the operating rules); leaving the join
+  as it was and only rewording the guide.
 - Leaving a file that isn't clean UTF-8 out (one bad line drops every rule in it); reading the
   whole file as Windows-1252 (garbles a mixed file's UTF-8 part, tested); repairing it line by line
   (about 30 more lines of guessing for unlikely cases); converting the file.

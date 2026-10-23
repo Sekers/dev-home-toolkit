@@ -1,8 +1,8 @@
 # 0068: Versions and layouts in dev-home
 
 **Built:** yes, except: the newest version, the early update check, `layoutVersions`, the layout
-tests for `rules/`, `handoffs/`, and `knowledge/`, and the release step's lock on released lists.
-The layout tests for `dev-home.json` and `local-settings.json` are built.
+tests for `handoffs/` and `knowledge/`, and the release step's lock on released lists. The layout
+tests for `dev-home.json`, `local-settings.json`, and `rules/` are built.
 
 **Decision:** `dev-home.json` records the newest dev-home-toolkit version that has set dev-home
 up, and a layout version for each part of dev-home, and tests catch a layout change made without

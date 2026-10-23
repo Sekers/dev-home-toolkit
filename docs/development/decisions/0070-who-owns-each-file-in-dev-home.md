@@ -1,6 +1,7 @@
 # 0070: Who owns each file in dev-home
 
-**Built:** not yet.
+**Built:** yes, except: everything but `my-rules.md`, which setup creates, empty, wherever one is
+missing ([0065: Where end users' rules live](0065-where-end-users-rules-live.md)).
 
 **Decision:** each file dev-home-toolkit puts in a dev-home has one owner. Either dev-home-toolkit
 owns it, and setup writes it and keeps it current, or the end user does, and setup creates it only

@@ -40,7 +40,7 @@ is your go-ahead. Some examples:
   remark, never changes the handoff.
 - **Commits cover only the handoff.** If an update moves an item into your project's own files,
   such as a decision into its AGENTS.md, the agent shows you the text first and never commits
-  those files: your project's own rules, and your global rules, decide that.
+  those files: your project's own rules, and your own rules, decide that.
 - **Next up changes only when you say so.** When an update finishes it, the agent asks before
   clearing it.
 - **Every handoff has the same sections,** from `templates/skills/handoff/template.md`; the

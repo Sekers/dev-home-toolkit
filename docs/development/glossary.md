@@ -72,9 +72,8 @@ as "both tools" for Claude Code and Codex.
   `templates/operating-rules/operating-rules.md`, written in the end user's own voice.\
   _Avoid_: global rules, base rules, system rules.
 - **The end user's rules**: always-on rules an end user writes for themselves, kept in their
-  dev-home: their **global rules**, `global-rules/global-rules.md`, until the rules work is built;
-  then the files under `rules/`, by level, called "your rules" for the end user and "my rules" in
-  their own voice.\
+  dev-home: the files under `rules/`, by level, called "your rules" for the end user and "my
+  rules" in their own voice.\
   _Avoid_: personal rules, custom rules, user rules.
 - **Built-in rule**: a rule dev-home-toolkit ships for end users to add to their own rules, which
   applies only after a yes, from `templates/built-in-rules/<name>/` (not built yet).\

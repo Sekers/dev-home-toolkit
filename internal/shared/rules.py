@@ -1,8 +1,8 @@
 """The end user's rules in dev-home's rules/, and joining them, after the operating rules, into the
 one file setup writes for each agent. The design and its reasons are in docs/development/
 decisions/, in decision 0065, "Where end users' rules live", and decision 0066, "Notes in rule
-files". This module only reads: setup writes each agent's file (decision 0064, "Each agent's rules
-file").
+files". This module only reads: setup writes each agent's file, and the my-rules.md files it
+finds missing (decision 0064, "Each agent's rules file").
 
 rules/ has four levels, and an agent's file joins them in this order, each one's mine/ folder,
 the end user's own files:
@@ -25,12 +25,15 @@ Matching headings combine: Markdown headings (one to six #, then a space or the 
 in fenced code) of the same level and text, letter case and surrounding spaces aside, under the
 same parent. A merged section sits where its heading first appears, and holds its own text first,
 from each file in join order, then its subsections, each where it first appears, but a deeper
-heading before a shallower one, so text keeps the heading it had. Text before a file's first
-heading goes first, for the same reason. The
-operating rules come first and never merge, and nothing is ever deduplicated."""
+heading before a shallower one, so text keeps the heading it had. What a file has outside a
+top-level heading of its own goes under # My rules, so none of it reads as part of the operating
+rules, and a heading with nothing under it is left out. The operating rules come first and never
+merge, and nothing is ever deduplicated."""
 
+import hashlib
 import os
 import re
+import sys
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -44,6 +47,8 @@ PCS = "pcs"
 MINE = "mine"
 UNANSWERED = "unanswered"
 MY_RULES = "my-rules.md"
+# The heading the end user's rules go under, as the starter's my-rules.md has it.
+MY_RULES_HEADING = "# My rules"
 # The longest a name in rules/ may be (decision 0065): a PC's folder, an agent's folder, a
 # built-in rule's name, and the name of a file setup moves there, .md included.
 PC_NAME_LIMIT = 32
@@ -95,10 +100,35 @@ class Section:
     children: list["Section"] = field(default_factory=list)
 
 
+def computer_name() -> str:
+    """The operating system's own name for the computer, as facts.py's environment topic gives
+    it. On Windows, the name Windows reports, the same as COMPUTERNAME."""
+    if sys.platform == "win32":
+        import ctypes
+
+        buffer = ctypes.create_unicode_buffer(256)
+        size = ctypes.c_ulong(len(buffer))
+        if ctypes.WinDLL("kernel32").GetComputerNameW(buffer, ctypes.byref(size)):
+            return buffer.value
+        return os.environ.get("COMPUTERNAME", "pc")
+    return os.uname().nodename.split(".")[0]
+
+
 def pc_folder(computer_name: str) -> str:
     """The folder for a PC under rules/pcs/: its computer name in lowercase, with any other
-    character than a letter or a digit as a hyphen, cut to PC_NAME_LIMIT."""
-    return re.sub(r"[^a-z0-9]", "-", computer_name.lower())[:PC_NAME_LIMIT]
+    character than a letter or a digit as a hyphen, cut to PC_NAME_LIMIT. An empty name, which
+    would make this PC's levels look like another PC's folders, is pc."""
+    return re.sub(r"[^a-z0-9]", "-", computer_name.lower())[:PC_NAME_LIMIT] or "pc"
+
+
+def copy_name(folder: Path) -> str:
+    """The name of the copy setup keeps of the rules file it last wrote in an agent's folder, one
+    for each folder: the folder's full path in lowercase, with each run of other characters than
+    letters and digits as one hyphen, and a short hash of the path, so two folders whose names
+    differ only in such characters never share a copy."""
+    full = str(folder).lower()
+    readable = re.sub(r"[^a-z0-9]+", "-", full).strip("-")[-60:]
+    return f"{readable}-{hashlib.sha256(full.encode('utf-8')).hexdigest()[:8]}.md"
 
 
 def levels(pc: str, agent: str) -> list[Path]:
@@ -322,6 +352,23 @@ def parsed(text: str) -> Section:
     return root
 
 
+def under_my_rules(file: Section) -> Section:
+    """A file's tree with what it has outside a top-level heading of its own, its text before any
+    heading and any deeper heading before its first top-level one, moved under # My rules. Without
+    a heading, those rules would follow the operating rules' last line as if they were part of
+    them, and wouldn't combine with what other files have under # My rules."""
+    text = [chunk for chunk in map(trimmed, file.chunks) if chunk]
+    # A deeper heading is only ever outside a top-level one before the file's first top-level one,
+    # so # My rules goes first, where those rules were.
+    deeper = [child for child in file.children if child.level > 1]
+    top = [child for child in file.children if child.level == 1]
+    if not text and not deeper:
+        return Section(file.heading, 0, file.key, [], top)
+    mine = parsed(MY_RULES_HEADING).children[0]
+    mine.chunks, mine.children = text, deeper
+    return Section(file.heading, 0, file.key, [], [mine, *top])
+
+
 def merge(into: Section, part: Section) -> None:
     """Adds part, a section of one file, to into, its match in the joined rules."""
     into.chunks += [chunk for chunk in map(trimmed, part.chunks) if chunk]
@@ -337,9 +384,12 @@ def rendered(section: Section) -> list[str]:
     """A joined section's lines: its heading, then each chunk of its own text and each
     subsection, with a blank line between them. A subsection with a deeper heading goes before
     one with a shallower heading, which would otherwise take it in: only merging puts them the
-    other way round, from different files."""
+    other way round, from different files. A heading with nothing under it holds no rule, so it's
+    left out."""
     children = sorted(section.children, key=lambda child: -child.level)
-    blocks = [*section.chunks, *(rendered(child) for child in children)]
+    blocks = [*section.chunks, *(block for child in children if (block := rendered(child)))]
+    if section.level and not blocks:
+        return []
     lines = [section.heading] if section.level else []
     for block in blocks:
         if lines:
@@ -353,7 +403,7 @@ def join(texts: Iterable[str]) -> str:
     root = Section("", 0, (0, ""))
     for text in texts:
         if text:
-            merge(root, parsed(text))
+            merge(root, under_my_rules(parsed(text)))
     return "\n".join(rendered(root))
 
 

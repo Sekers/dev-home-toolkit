@@ -794,16 +794,18 @@ def sync(argv: Sequence[str]) -> int:
     return sync_root(root, paths, message, fetch_when, check_hours)
 
 
-def commit_for_setup(root: Path, path: str, message: str, *, holds_lock: bool = False) -> int:
-    """Commits one file in the dev-home at root, named relative to it, and syncs, as
+def commit_for_setup(
+    root: Path, paths: list[str], message: str, *, holds_lock: bool = False
+) -> int:
+    """Commits files in the dev-home at root, each named relative to it, and syncs, as
     sync.py --message does. Setup runs this, so it skips the update check and setup, which a sync
     that brings in commits otherwise runs: setup would start again inside itself. Setup says
     when it holds the lock already, which this sync would otherwise wait for. Returns 0, or 1
     when the user needs to act, and never raises."""
     try:
-        return sync_root(root, [path], message, FETCH_WHEN[0], 0, then=False, holds_lock=holds_lock)
+        return sync_root(root, paths, message, FETCH_WHEN[0], 0, then=False, holds_lock=holds_lock)
     except Exception as error:
-        return problem(f"The commit of {path} stopped: {describe(error)}")
+        return problem(f"The commit of {', '.join(paths)} stopped: {describe(error)}")
 
 
 def sync_root(

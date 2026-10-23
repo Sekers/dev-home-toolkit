@@ -11,11 +11,17 @@ declared setting is left out by name because its declaration, and formerNames, a
 being added, renamed, or removed. A saved state, such as {"$state": "remind", "on": "2030-01-15"},
 adds each of its keys after its setting's path. Lines starting with # are comments.
 
+dev-home's rules/ has a list too, rules-1.txt: the path of each file the code creates there, from
+dev-home's folder, with <pc> for a PC's folder and <agent> for an agent's. rules/ has no layout
+version of its own yet, so its layout is 1.
+
 helpers.py checks every run of the scripts in a test: each key path the run adds to one of these
-files must be on that file's list for the layout its schemaVersion names. test_layouts.py checks
-that the code still writes everything on each list."""
+files must be on that file's list for the layout its schemaVersion names, and each file it creates
+in rules/ on rules' list. test_layouts.py checks that the code still writes everything on each
+list."""
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -24,6 +30,8 @@ LISTS = Path(__file__).resolve().with_name("layout-lists")
 # The key of a saved state, as internal/shared/settings.py writes it.
 STATE = "$state"
 SETTING = "<setting>"
+RULES_FOLDER = "rules"
+RULES_LIST = LISTS / "rules-1.txt"
 
 
 @dataclass(frozen=True)
@@ -65,15 +73,45 @@ def is_version(version: object) -> bool:
     return isinstance(version, int) and not isinstance(version, bool)
 
 
+def read_list(path: Path) -> set[str]:
+    """A list's lines, without its comments."""
+    lines = (line.strip() for line in path.read_text(encoding="utf-8").splitlines())
+    return {line for line in lines if line and not line.startswith("#")}
+
+
 def listed(part: Part, version: object) -> set[str] | None:
     """The key paths on a part's list for that layout version, or None when it has no list."""
     if not is_version(version):
         return None
     path = list_path(part, version)
-    if not path.is_file():
-        return None
-    lines = (line.strip() for line in path.read_text(encoding="utf-8").splitlines())
-    return {line for line in lines if line and not line.startswith("#")}
+    return read_list(path) if path.is_file() else None
+
+
+def rules_key(relative: Sequence[str]) -> str:
+    """A file's path in rules/, given its parts after rules/, as rules' list writes it: rules/,
+    then the parts, with <pc> for a PC's folder and <agent> for an agent's."""
+    parts = list(relative)
+    agent = 0
+    if len(parts) > 1 and parts[0] == "pcs":
+        parts[1] = "<pc>"
+        agent = 2
+    if len(parts) > agent + 1 and parts[agent] != "_all-agents":
+        parts[agent] = "<agent>"
+    return "/".join([RULES_FOLDER, *parts])
+
+
+def rules_problems(path: Path, relative: Sequence[str], before: list[bytes]) -> list[str]:
+    """What's wrong with a file a run created in rules/: one rules' list doesn't have. A file that
+    was there before the run isn't the run's to answer for."""
+    key = rules_key(relative)
+    if before or key in read_list(RULES_LIST):
+        return []
+    return [
+        f"{path} is a file the run created in rules/ that rules' list doesn't have: {key}. A "
+        f"change to what the code writes there is a layout change: before 1.0.0, add it to "
+        f"{RULES_LIST}; from 1.0.0, raise rules/'s layout version, save a list for the new layout, "
+        "and add a conversion step (see docs/development/testing.md)."
+    ]
 
 
 def declared_settings(toolkit: Path) -> set[str]:
@@ -117,11 +155,15 @@ def read_data(data: bytes | None) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
-def problems(path: Path, before: list[bytes], after: bytes, toolkit: Path) -> list[str]:
-    """What's wrong with what a run wrote to one of the files a list covers, given its bytes
-    after the run, and before it and after each write the test made during it: a layout version
-    the run wrote that has no list, and each key path it added that its layout's list doesn't
-    have. A file that isn't a JSON object isn't checked: the code never writes one."""
+def problems(path: Path, before: list[bytes], after: bytes, toolkit: Path, root: Path) -> list[str]:
+    """What's wrong with what a run wrote to one of the files a list covers, in the sandbox at
+    root, given its bytes after the run, and before it and after each write the test made during
+    it: for a file in a dev-home's rules/, see rules_problems; for another, a layout version the
+    run wrote that has no list, and each key path it added that its layout's list doesn't have.
+    A file that isn't a JSON object isn't checked: the code never writes one."""
+    relative = path.relative_to(root).parts
+    if len(relative) > 2 and relative[1] == RULES_FOLDER:
+        return rules_problems(path, relative[2:], before)
     part = part_named(path.name)
     data = read_data(after)
     if data is None:

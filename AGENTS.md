@@ -48,7 +48,7 @@ doesn't settle it, ask which.
 
 | What | dev-home-toolkit (this repo, public) | dev-home (each person's, private) |
 | --- | --- | --- |
-| Always-on rules | `templates/operating-rules/operating-rules.md`: the operating rules, the same for everyone | `global-rules/global-rules.md`: that person's global rules |
+| Always-on rules | `templates/operating-rules/operating-rules.md`: the operating rules, the same for everyone | `rules/`: that person's own rules |
 | Skills | `templates/skills/`: the `dev-home`, `handoff`, and `knowledge` skills. `templates/shared-skill-scripts/`: the scripts they share | `skills/`: that person's own skills |
 | `AGENTS.md`, `CLAUDE.md`, `README.md` | About dev-home-toolkit, and working on it | About that dev-home, and working in it |
 | Only here | `setup.py`, `sync.py`, `update.py`, `templates/dev-home-starter/`, `internal/`, `docs/` | `handoffs/`, `knowledge/`, `dev-home.json` (settings every copy shares, which setup writes and commits) |

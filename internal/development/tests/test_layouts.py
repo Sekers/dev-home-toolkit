@@ -20,9 +20,14 @@ def box(request: pytest.FixtureRequest) -> Iterator[Sandbox]:
 
 def seen(box: Sandbox, found: dict[tuple[str, object], set[str]]) -> None:
     """Adds the key paths now in the sandbox's files to found, by each file's name and the layout
-    version it names."""
+    version it names, and the files in its dev-home's rules/, as rules' list writes them, under
+    ("rules", 1)."""
     declared = layouts.declared_settings(box.toolkit)
     for path, data in layout_snapshot(box).items():
+        relative = path.relative_to(box.root).parts
+        if relative[1] == layouts.RULES_FOLDER:
+            found.setdefault((layouts.RULES_FOLDER, 1), set()).add(layouts.rules_key(relative[2:]))
+            continue
         part = layouts.part_named(path.name)
         value = layouts.read_data(data)
         assert value is not None, path
@@ -65,16 +70,22 @@ def test_each_list_holds_exactly_what_the_code_writes(box: Sandbox) -> None:
     # be left.
     versions = {file: [v for f, v in found if f == file] for file, _ in found}
     assert all(len(seen_versions) == 1 for seen_versions in versions.values()), versions
-    assert {file for file, _ in found} == {part.file for part in layouts.PARTS}, found
+    parts = {part.file for part in layouts.PARTS} | {layouts.RULES_FOLDER}
+    assert {file for file, _ in found} == parts, found
     for (file, version), written in found.items():
-        part = layouts.part_named(file)
-        listed = layouts.listed(part, version)
-        assert listed is not None, layouts.list_path(part, version)
+        if file == layouts.RULES_FOLDER:
+            list_path, listed = layouts.RULES_LIST, layouts.read_list(layouts.RULES_LIST)
+        else:
+            part = layouts.part_named(file)
+            list_path = layouts.list_path(part, version)
+            found_list = layouts.listed(part, version)
+            assert found_list is not None, list_path
+            listed = found_list
         unwritten = sorted(listed - written)
         assert not unwritten, (
-            f"{layouts.list_path(part, version)} has key paths no run in this test wrote: "
-            f"{', '.join(unwritten)}. If the code no longer writes them, take them off the list; "
-            "otherwise make this test write them."
+            f"{list_path} has key paths no run in this test wrote: {', '.join(unwritten)}. If the "
+            "code no longer writes them, take them off the list; otherwise make this test write "
+            "them."
         )
 
 

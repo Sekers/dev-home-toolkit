@@ -272,7 +272,7 @@ def new_sandbox(name: str, *, toolkit_repo: bool = False) -> Sandbox:
     # Several active copies, so a sync fetches every time unless a test says otherwise.
     files = {
         "dev-home.json": '{\n  "schemaVersion": 1,\n  "multiMachine": true\n}\n',
-        "global-rules/global-rules.md": "# My rules\n\n- Personal rule one.\n",
+        "rules/_all-agents/mine/my-rules.md": "# My rules\n\n- Personal rule one.\n",
         "knowledge/README.md": "# Knowledge base\n",
         "handoffs/demo/HANDOFF.md": "# demo handoff\n",
         "skills/mine/SKILL.md": "---\nname: mine\ndescription: A personal test skill.\n---\n",
@@ -385,13 +385,18 @@ def check_in_sandbox(argv: list[str]) -> None:
 
 def layout_snapshot(box: Sandbox) -> dict[Path, bytes]:
     """The bytes of each file a layout list covers (see layouts.py), in each folder directly in
-    the sandbox: the copy's local-settings.json, and each dev-home's dev-home.json, those a test
-    clones or creates included."""
+    the sandbox: the copy's local-settings.json, and each dev-home's dev-home.json and every file
+    in its rules/, those of the dev-homes a test clones or creates included. A dev-home is a
+    folder with knowledge/README.md, as setup tells one, so a Claude Code folder's rules/ isn't
+    taken for one."""
+    paths = [path for part in layouts.PARTS for path in box.root.glob(f"*/{part.file}")]
+    for rules in box.root.glob(f"*/{layouts.RULES_FOLDER}"):
+        if (rules.parent / "knowledge" / "README.md").is_file():
+            paths += [path for path in rules.rglob("*") if path.is_file()]
     found: dict[Path, bytes] = {}
-    for part in layouts.PARTS:
-        for path in sorted(box.root.glob(f"*/{part.file}")):
-            with contextlib.suppress(OSError):
-                found[path] = path.read_bytes()
+    for path in sorted(paths):
+        with contextlib.suppress(OSError):
+            found[path] = path.read_bytes()
     return found
 
 
@@ -412,7 +417,7 @@ class LayoutCheck:
         for path, data in layout_snapshot(self.box).items():
             earlier = [state[path] for state in self.states if path in state]
             if data not in earlier:
-                problems += layouts.problems(path, earlier, data, self.box.toolkit)
+                problems += layouts.problems(path, earlier, data, self.box.toolkit, self.box.root)
         return problems
 
     @contextlib.contextmanager

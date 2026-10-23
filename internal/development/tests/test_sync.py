@@ -1166,7 +1166,7 @@ def test_setups_commit_brings_in_commits_without_running_setup_or_the_update_che
     monkeypatch.setattr(code.Sync, "update_toolkit", update_check_ran)
     push_from_another_copy(box, "Before setup's commit.")
     write_text(box.content / "notes" / "from-setup.md", "committed by setup's sync\n")
-    returned = code.commit_for_setup(box.content, "notes/from-setup.md", "notes: from setup")
+    returned = code.commit_for_setup(box.content, ["notes/from-setup.md"], "notes: from setup")
     out = capsys.readouterr().out
     assert returned == 0, out
     assert re.search(r"^MERGED\s+1 commit from GitHub", out, re.M), out
@@ -1184,10 +1184,10 @@ def test_setups_commit_runs_inside_the_lock_its_setup_holds(
     with code.one_run_at_a_time(box.content / ".git") as owned:
         assert owned
         waited = code.commit_for_setup(
-            box.content, "notes/inside-the-lock.md", "notes: inside the lock"
+            box.content, ["notes/inside-the-lock.md"], "notes: inside the lock"
         )
         held = code.commit_for_setup(
-            box.content, "notes/inside-the-lock.md", "notes: inside the lock", holds_lock=True
+            box.content, ["notes/inside-the-lock.md"], "notes: inside the lock", holds_lock=True
         )
     out = capsys.readouterr().out
     assert waited == 1, out

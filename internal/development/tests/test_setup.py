@@ -169,8 +169,8 @@ def test_no_generated_file_carries_a_note(box: Sandbox) -> None:
     assert len(skills) >= 2
     for skill in skills:
         assert read(skill).startswith(f"---\nname: {skill.parent.name}\n"), skill
-    rules = read(box.generated / "operating-rules" / "operating-rules.md")
-    assert rules.startswith("# Private repo: dev-home (rules loaded)\n")
+    # The operating rules go only into each agent's rules file.
+    assert not (box.generated / "operating-rules").exists()
 
 
 @pytest.mark.parametrize("folder", [".claude/skills", ".agents/skills"])
@@ -181,24 +181,105 @@ def test_links_each_skill(box: Sandbox, folder: str) -> None:
     assert link_target(skills / "mine") == box.content / "skills" / "mine"
 
 
-def test_links_the_rules_for_claude_code(box: Sandbox) -> None:
-    rules = box.profile / ".claude" / "rules"
-    assert link_target(rules / "dev-home-operating-rules") == box.generated / "operating-rules"
-    assert link_target(rules / "dev-home-global-rules") == box.content / "global-rules"
+def rules_files(box: Sandbox) -> dict[str, Path]:
+    """The rules file setup writes in the sandbox's Claude Code folder and Codex home."""
+    return {
+        "claude-code": box.profile / ".claude" / "rules" / "dev-home-rules.md",
+        "codex": box.profile / ".codex" / "AGENTS.md",
+    }
 
 
-def test_writes_codexs_rules_with_one_note_then_the_operating_then_the_global(box: Sandbox) -> None:
-    toolkit, content = forward(box.toolkit), forward(box.content)
-    codex = read(box.profile / ".codex" / "AGENTS.md")
-    source = (
-        f"{MARKER}{toolkit}/templates/operating-rules/operating-rules.md and "
-        f"{content}/global-rules/global-rules.md. "
-    )
-    operating = codex.find("# Private repo: dev-home (rules loaded)")
-    assert codex.startswith(source), codex
-    assert "Put rules of your own in the second file;" in codex
-    assert codex.count(MARKER) == 1
-    assert 0 < operating < codex.find("- Personal rule one.")
+def copy_of(box: Sandbox, folder: Path) -> Path:
+    """Setup's copy of the rules file it last wrote in an agent's folder."""
+    name: str = shared_module(box, "rules").copy_name(folder)
+    return box.generated / "last-written" / name
+
+
+def pc_folder(box: Sandbox) -> str:
+    rules = shared_module(box, "rules")
+    name: str = rules.pc_folder(rules.computer_name())
+    return name
+
+
+@pytest.mark.parametrize("agent", ["claude-code", "codex"])
+def test_writes_each_agents_rules_file_with_the_operating_rules_then_the_end_users(
+    box: Sandbox, agent: str
+) -> None:
+    path = rules_files(box)[agent]
+    text = read(path)
+    assert text.startswith("# Private repo: dev-home (rules loaded)\n"), text
+    assert f"- My rules are in `{forward(box.content)}/rules/`;" in text
+    assert text.endswith("\n\n# My rules\n\n- Personal rule one.\n"), text
+    assert MARKER not in text
+    # A copy of what it wrote, by which it knows the file is its own.
+    folder = path.parent if agent == "codex" else path.parent.parent
+    assert copy_of(box, folder).read_text(encoding="utf-8") == text
+
+
+def test_gives_each_level_for_an_agent_set_up_here_a_my_rules_md_and_commits_it(
+    box: Sandbox,
+) -> None:
+    rules, pc = box.content / "rules", pc_folder(box)
+    created = [
+        f"rules/{level}/mine/my-rules.md"
+        for level in [
+            "claude-code",
+            f"pcs/{pc}/_all-agents",
+            f"pcs/{pc}/claude-code",
+            "codex",
+            f"pcs/{pc}/codex",
+        ]
+    ]
+    for relative in created:
+        assert (box.content / relative).read_bytes() == b"", relative
+    # The one the sandbox's dev-home started with stays as it was.
+    assert (rules / "_all-agents" / "mine" / "my-rules.md").read_bytes() != b""
+    committed = git("-C", str(box.content), "log", "-1", "--name-only", "--format=%s")
+    assert committed[0] == "rules: add my-rules.md", committed
+    assert sorted(committed[2:]) == sorted(created), committed
+    assert git("-C", str(box.content), "status", "--porcelain") == []
+
+
+def test_turns_on_long_paths_in_dev_homes_git_config(box: Sandbox) -> None:
+    # rules/ can need paths past Windows' default limit (decision 0065).
+    config = git("-C", str(box.content), "config", "--local", "--get", "core.longpaths")
+    assert config == ["true"]
+
+
+def test_reports_each_problem_in_the_end_users_rules_once_and_a_stray_rule_file(
+    box: Sandbox,
+) -> None:
+    # A file in _all-agents/ joins for both agents, but its problem is said once. A file directly
+    # in a level folder never joins.
+    misspelled = box.content / "rules" / "_all-agents" / "mine" / "os.md"
+    stray = box.content / "rules" / "codex" / "stray.md"
+    write_text(misspelled, "<!-- note\nos: windos\n-->\n- A Windows rule.\n")
+    write_text(stray, "- Misplaced.\n")
+    try:
+        result = setup(box)
+        texts = [read(path) for path in rules_files(box).values()]
+    finally:
+        misspelled.unlink()
+        stray.unlink()
+        setup(box)
+    said = [line for line in result.lines if "windos" in line]
+    assert len(said) == 1 and said[0].startswith("PROBLEM"), str(result)
+    assert 'Did you mean "windows"?' in said[0]
+    pattern = r"^PROBLEM\s+.*[\\/]rules[\\/]codex[\\/]stray\.md is directly in rules/codex/, "
+    assert result.code == 1 and result.has_line(pattern), str(result)
+    for text in texts:
+        assert "- A Windows rule." in text and "Misplaced" not in text, text
+
+
+def test_puts_back_a_my_rules_md_that_was_deleted_and_commits_it(box: Sandbox) -> None:
+    path = box.content / "rules" / "codex" / "mine" / "my-rules.md"
+    git("-C", str(box.content), "rm", "--quiet", str(path))
+    git("-C", str(box.content), "commit", "--quiet", "-m", "test: remove my-rules.md")
+    result = setup(box)
+    assert result.code == 0, str(result)
+    assert path.read_bytes() == b""
+    committed = git("-C", str(box.content), "log", "-1", "--name-only", "--format=%s")
+    assert committed == ["rules: add my-rules.md", "", "rules/codex/mine/my-rules.md"], committed
 
 
 def test_a_second_run_changes_nothing_and_prints_nothing_else(box: Sandbox) -> None:
@@ -412,22 +493,22 @@ def test_rewrites_and_removes_read_only_generated_files(box: Sandbox) -> None:
 
 
 def test_never_writes_through_a_link_to_a_generated_file(box: Sandbox) -> None:
-    generated_rules = box.generated / "operating-rules" / "operating-rules.md"
+    generated_file = box.generated / "skills" / "handoff" / "template.md"
     someone_elses = box.root / "someone-elses-file.md"
     write_text(someone_elses, "keep\n")
-    before = generated_rules.read_bytes()
-    generated_rules.unlink()
+    before = generated_file.read_bytes()
+    generated_file.unlink()
     try:
         try:
-            generated_rules.symlink_to(someone_elses)
+            generated_file.symlink_to(someone_elses)
         except OSError:
             pytest.skip("Creating a file symlink needs admin rights or Developer Mode on this PC.")
         result = setup(box)
         kept = read(someone_elses)
     finally:
-        if generated_rules.is_symlink():
-            generated_rules.unlink()
-        generated_rules.write_bytes(before)
+        if generated_file.is_symlink():
+            generated_file.unlink()
+        generated_file.write_bytes(before)
     assert result.code == 1 and result.has_line("is a link, so setup left it alone"), str(result)
     assert kept == "keep\n"
 
@@ -995,8 +1076,11 @@ def test_a_claude_folder_answered_no_loses_what_setup_set_up_there(box: Sandbox)
     skills, rules = folder / "skills", folder / "rules"
     make_junction(skills / "handoff", box.generated / "skills" / "handoff")
     make_junction(skills / "mine", box.content / "skills" / "mine")
-    make_junction(rules / "dev-home-operating-rules", box.generated / "operating-rules")
-    make_junction(rules / "dev-home-global-rules", box.content / "global-rules")
+    # The rules file setup wrote there, which still matches its copy, and a rule file of the
+    # person's own.
+    write_text(rules / "dev-home-rules.md", "# Private repo: dev-home (rules loaded)\n")
+    write_text(copy_of(box, folder), "# Private repo: dev-home (rules loaded)\n")
+    write_text(rules / "mine.md", "- My own rule.\n")
     own = box.root / "own-skill"
     write_text(own / "SKILL.md", "---\nname: own\ndescription: A test.\n---\n")
     make_junction(skills / "own", own)
@@ -1014,6 +1098,7 @@ def test_a_claude_folder_answered_no_loses_what_setup_set_up_there(box: Sandbox)
         result = setup(box)
         skills_left = sorted(entry.name for entry in skills.iterdir())
         rules_left = sorted(entry.name for entry in rules.iterdir())
+        copy_left = copy_of(box, folder).exists()
         settings_after = json.loads(read(settings))
         backups = [read(backup) for backup in folder.glob("settings.json.bak-*")]
         again = setup(box)
@@ -1023,6 +1108,8 @@ def test_a_claude_folder_answered_no_loses_what_setup_set_up_there(box: Sandbox)
         shutil.rmtree(own)
     off = r".*[\\/]\.claude-off[\\/]"
     pattern = rf"^What if: Remove a link in a folder you said no to: {off}skills[\\/]handoff$"
+    assert previewed.has_line(pattern), str(previewed)
+    pattern = rf"^What if: Remove the rules file setup wrote in a folder you said no to: {off}rules"
     assert previewed.has_line(pattern), str(previewed)
     assert previewed.has_line(r"^CHANGE\s+Claude Code settings in \.claude-off: "), str(previewed)
     assert previewed_left == ["handoff", "local", "mine", "own"], str(previewed)
@@ -1043,16 +1130,45 @@ def test_a_claude_folder_answered_no_loses_what_setup_set_up_there(box: Sandbox)
         "claudeMdExcludes": ["**/other/CLAUDE.md"],
     }, settings_after
     assert backups == [settings_before], backups
-    for link in (r"skills[\\/]handoff", r"skills[\\/]mine", r"rules[\\/]dev-home-operating-rules"):
+    for link in (r"skills[\\/]handoff", r"skills[\\/]mine"):
         pattern = rf"^REMOVED\s+Link in a folder you said no to: {off}{link}$"
         assert result.has_line(pattern), str(result)
-    assert result.has_line(rf"{off}rules[\\/]dev-home-global-rules$"), str(result)
+    removed = rf"{off}rules[\\/]dev-home-rules\.md$"
+    pattern = rf"^REMOVED\s+Rules file in a folder you said no to: {removed}"
+    assert result.has_line(pattern), str(result)
     assert skills_left == ["local", "own"], str(result)
-    assert rules_left == [], str(result)
+    assert rules_left == ["mine.md"], str(result)
+    assert not copy_left, str(result)
     # Only the links went, never what they pointed to.
     assert (box.generated / "skills" / "handoff" / "SKILL.md").is_file()
-    assert (box.content / "global-rules" / "global-rules.md").is_file()
     assert again.code == 0 and not again.has_line(r"^(REMOVED|SET)\s"), str(again)
+
+
+def test_a_rules_file_with_changes_setup_didnt_make_stays_after_a_no(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    folder = box.profile / ".claude-edited"
+    path = folder / "rules" / "dev-home-rules.md"
+    write_text(path, "# Private repo: dev-home (rules loaded)\n\n- A line added by hand.\n")
+    write_text(copy_of(box, folder), "# Private repo: dev-home (rules loaded)\n")
+    saved = json.loads(read(settings_kept))
+    saved["claudeCode"]["folders"]["~/.claude-edited"] = {"setUp": False}
+    write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
+    try:
+        result = setup(box)
+        kept = read(path)
+        copy_kept = copy_of(box, folder).exists()
+    finally:
+        remove_claude_folder(folder)
+        copy_of(box, folder).unlink(missing_ok=True)
+    pattern = (
+        r"^PROBLEM\s+.*[\\/]\.claude-edited[\\/]rules[\\/]dev-home-rules\.md has changes setup "
+        r"didn't make, so setup left it, though you said no to setting up .*\.claude-edited\. Move "
+        r"anything you want to keep into .*[\\/]rules, then delete it\.$"
+    )
+    assert result.code == 1 and result.has_line(pattern), str(result)
+    assert kept.endswith("- A line added by hand.\n")
+    assert copy_kept
 
 
 def test_a_folder_answered_no_that_is_really_one_set_up_keeps_what_it_uses(
@@ -1077,7 +1193,7 @@ def test_a_folder_answered_no_that_is_really_one_set_up_keeps_what_it_uses(
         result = setup(box)
         again = setup(box)
         skill = link_target(claude / "skills" / "handoff")
-        rules = link_target(claude / "rules" / "dev-home-global-rules")
+        rules = (claude / "rules" / "dev-home-rules.md").is_file()
         allowed = json.loads(read(claude / "settings.json"))["permissions"]
         shared = json.loads(read(shares / "settings.json"))
     finally:
@@ -1093,7 +1209,7 @@ def test_a_folder_answered_no_that_is_really_one_set_up_keeps_what_it_uses(
     assert not result.has_line(r"\.claude-alias|Claude Code settings in \.claude:"), str(result)
     assert again.code == 0 and not again.has_line(r"^(REMOVED|LINKED|SET)\s"), str(again)
     assert skill == box.generated / "skills" / "handoff"
-    assert rules == box.content / "global-rules"
+    assert rules
     assert len(allowed["additionalDirectories"]) == 2, allowed
     assert "permissions" not in shared, shared
 
@@ -1151,7 +1267,8 @@ def test_a_no_to_codex_removes_what_setup_set_up_for_it(
     settings_text = read(settings_path)
     profile = box.root / "codex-declined-profile"
     main, second = profile / ".codex", profile / ".codex-second"
-    write_text(main / "AGENTS.md", f"{MARKER}\nRules setup wrote.\n")
+    write_text(main / "AGENTS.md", "Rules setup wrote.\n")
+    write_text(copy_of(box, main), "Rules setup wrote.\n")
     config = (
         'model = "x"\nproject_doc_max_bytes = 65536\n\n[sandbox_workspace_write]\n'
         f"writable_roots = ['{box.content}', 'D:\\scratch']\n"
@@ -1191,7 +1308,7 @@ def test_a_no_to_codex_removes_what_setup_set_up_for_it(
         shutil.rmtree(profile)
         shutil.rmtree(own)
     for pattern in (
-        r"^What if: Remove the rules file setup wrote in a Codex home you said no to: ",
+        r"^What if: Remove the rules file setup wrote in a folder you said no to: ",
         r"^What if: Remove a link for Codex, which you said no to: .*[\\/]handoff$",
         r"^CHANGE\s+Codex config in \.codex: ",
     ):
@@ -1199,7 +1316,7 @@ def test_a_no_to_codex_removes_what_setup_set_up_for_it(
     assert previewed_left == ["handoff", "mine", "own"], str(previewed)
     assert previewed_config == config, str(previewed)
     assert result.code == 0, str(result)
-    pattern = r"^REMOVED\s+Rules file in a Codex home you said no to: .*[\\/]\.codex[\\/]AGENTS\.md"
+    pattern = r"^REMOVED\s+Rules file in a folder you said no to: .*[\\/]\.codex[\\/]AGENTS\.md"
     assert result.has_line(pattern + "$"), str(result)
     assert not main_rules, str(result)
     assert second_rules == "My own rules.\n", str(result)
@@ -1240,33 +1357,31 @@ def test_a_folder_answered_yes_that_is_gone_is_skipped_without_a_word(box: Sandb
     assert shown.has_line(r"~/\.claude-gone: yes \(not found\)"), str(shown)
 
 
-def test_a_changed_template_reaches_the_generated_copy_and_codexs_rules(box: Sandbox) -> None:
+def test_a_changed_operating_rules_template_reaches_each_agents_rules_file(box: Sandbox) -> None:
+    # Each file still matches setup's copy of it, so setup rewrites it, and its copy.
     template = box.toolkit / "templates" / "operating-rules" / "operating-rules.md"
     before = template.read_bytes()
     append(template, "- A line added to the operating rules.")
     try:
         result = setup(box)
-        codex = read(box.profile / ".codex" / "AGENTS.md")
-        generated = read(box.generated / "operating-rules" / "operating-rules.md")
+        texts = {agent: read(path) for agent, path in rules_files(box).items()}
+        copy = read(copy_of(box, box.profile / ".codex"))
     finally:
         template.write_bytes(before)
         setup(box)
-    assert "A line added to the operating rules." in codex, str(result)
-    assert "A line added to the operating rules." in generated
+    pattern = r"^WROTE\s+Rules file in \.(claude|codex): "
+    assert len([line for line in result.lines if re.match(pattern, line)]) == 2, str(result)
+    for text in texts.values():
+        assert "- A line added to the operating rules.\n\n# My rules\n" in text, text
+    assert copy == texts["codex"]
 
 
-def test_removes_a_generated_folder_with_no_templates_and_moves_a_link_off_it(
-    box: Sandbox,
-) -> None:
-    # The generated folder from an older layout, with the operating rules link still in it.
-    old_rules = box.generated / "rules"
-    write_text(old_rules / "core.md", "old core rules\n")
-    link = box.profile / ".claude" / "rules" / "dev-home-operating-rules"
-    remove_link(link)
-    make_junction(link, old_rules)
+def test_removes_a_generated_folder_with_no_templates(box: Sandbox) -> None:
+    # Such as the operating rules' own folder, from before each agent got one rules file.
+    old_rules = box.generated / "operating-rules"
+    write_text(old_rules / "operating-rules.md", "old operating rules\n")
     result = setup(box)
     assert result.code == 0 and not old_rules.exists(), str(result)
-    assert link_target(link) == box.generated / "operating-rules"
 
 
 def test_a_template_file_becomes_a_folder_and_back(box: Sandbox) -> None:
@@ -1317,17 +1432,52 @@ def test_replaces_a_link_whose_target_is_gone(box: Sandbox) -> None:
     assert link_target(link) == box.generated / "skills" / "handoff"
 
 
-def test_leaves_alone_a_codex_rules_file_it_did_not_write(box: Sandbox) -> None:
-    rules = box.profile / ".codex" / "AGENTS.md"
-    before = rules.read_bytes()
+@pytest.mark.parametrize(
+    ("kept_copy", "said"),
+    [
+        (True, "has changes setup didn't make, so the rules in it may be out of date"),
+        (False, "already exists, and setup didn't write it"),
+    ],
+)
+def test_leaves_alone_a_rules_file_that_isnt_setups_and_says_what_to_do(
+    box: Sandbox, kept_copy: bool, said: str
+) -> None:
+    # With setup's copy, an edited file; with none, a file of the person's own, such as an
+    # AGENTS.md they wrote before setting Codex up.
+    rules, copy = box.profile / ".codex" / "AGENTS.md", copy_of(box, box.profile / ".codex")
+    before, copy_before = rules.read_bytes(), copy.read_bytes()
     write_text(rules, "my own codex rules\n")
+    if not kept_copy:
+        copy.unlink()
     try:
         result = setup(box)
-        kept = read(rules) == "my own codex rules\n"
+        kept = read(rules)
     finally:
         rules.write_bytes(before)
-    assert result.code == 1 and result.has_line("setup did not write it"), str(result)
-    assert kept
+        copy.write_bytes(copy_before)
+    pattern = (
+        rf"^PROBLEM\s+Rules file in \.codex: .*[\\/]\.codex[\\/]AGENTS\.md {re.escape(said)}\. "
+        r"Setup left it as it is\. Move anything you want to keep into .*[\\/]rules, delete the "
+        r"file, then run setup\.py again\.$"
+    )
+    assert result.code == 1 and result.has_line(pattern), str(result)
+    assert kept == "my own codex rules\n"
+
+
+def test_takes_a_rules_file_it_has_no_copy_of_when_it_holds_what_setup_would_write(
+    box: Sandbox,
+) -> None:
+    # Such as one setup wrote on a PC whose copy was lost.
+    rules, copy = box.profile / ".codex" / "AGENTS.md", copy_of(box, box.profile / ".codex")
+    copy_before = copy.read_bytes()
+    copy.unlink()
+    try:
+        result = setup(box)
+        copied = copy.read_bytes()
+    finally:
+        copy.write_bytes(copy_before)
+    assert result.code == 0 and not result.has_line(r"^WROTE\s"), str(result)
+    assert copied == rules.read_bytes()
 
 
 def test_leaves_alone_a_codex_rules_link_whose_target_exists(box: Sandbox) -> None:
@@ -1336,11 +1486,11 @@ def test_leaves_alone_a_codex_rules_link_whose_target_exists(box: Sandbox) -> No
     rules.unlink()
     try:
         try:
-            rules.symlink_to(box.content / "global-rules" / "global-rules.md")
+            rules.symlink_to(box.content / "rules" / "_all-agents" / "mine" / "my-rules.md")
         except OSError:
             pytest.skip("Creating a file symlink needs admin rights or Developer Mode on this PC.")
         result = setup(box)
-        assert result.code == 1 and result.has_line("Left alone"), str(result)
+        assert result.code == 1 and result.has_line("so setup left it alone"), str(result)
         assert link_target(rules) is not None
     finally:
         if rules.is_symlink():
@@ -1348,16 +1498,21 @@ def test_leaves_alone_a_codex_rules_link_whose_target_exists(box: Sandbox) -> No
         rules.write_bytes(before)
 
 
-def test_reports_a_placeholder_it_does_not_know(box: Sandbox) -> None:
-    template = box.toolkit / "templates" / "skills" / "handoff" / "template.md"
-    before = template.read_bytes()
-    append(template, "{{NOT_A_PLACEHOLDER}}")
+@pytest.mark.parametrize(
+    "template",
+    ["templates/skills/handoff/template.md", "templates/operating-rules/operating-rules.md"],
+)
+def test_reports_a_placeholder_it_does_not_know(box: Sandbox, template: str) -> None:
+    path = box.toolkit / template
+    before = path.read_bytes()
+    append(path, "{{NOT_A_PLACEHOLDER}}")
     try:
         result = setup(box)
     finally:
-        template.write_bytes(before)
+        path.write_bytes(before)
         setup(box)
-    assert result.code == 1 and result.has_line("NOT_A_PLACEHOLDER"), str(result)
+    pattern = rf"^PROBLEM\s+A placeholder setup does not know.*{re.escape(path.name)}"
+    assert result.code == 1 and result.has_line(pattern), str(result)
 
 
 def test_a_personal_skill_with_a_tooling_skills_name(box: Sandbox) -> None:
@@ -1395,8 +1550,8 @@ def test_a_dev_home_folder_with_no_dev_home_yet_is_reported_and_not_saved(box: S
 
 
 def write_starter_files(folder: Path) -> None:
-    """The files every dev-home starts with, which setup checks for."""
-    write_text(folder / "global-rules" / "global-rules.md", "# My rules\n")
+    """The file every dev-home starts with, which setup checks for, and the end user's rules."""
+    write_text(folder / "rules" / "_all-agents" / "mine" / "my-rules.md", "# My rules\n")
     write_text(folder / "knowledge" / "README.md", "# Knowledge base\n")
 
 
@@ -1414,8 +1569,8 @@ def test_stops_at_a_folder_that_doesnt_look_like_a_dev_home(box: Sandbox) -> Non
     finally:
         write_text(settings, before)
     pattern = (
-        r"^PROBLEM\s+.*a-project doesn't look like a dev-home: it has no "
-        r"global-rules/global-rules\.md or knowledge/README\.md, which every dev-home starts with"
+        r"^PROBLEM\s+.*a-project doesn't look like a dev-home: it has no knowledge/README\.md, "
+        r"which every dev-home starts with"
     )
     assert result.code == 1 and result.has_line(pattern), str(result)
     assert read(settings) == before
@@ -1754,7 +1909,7 @@ def test_says_so_when_it_cant_save_its_settings(box: Sandbox) -> None:
         settings.chmod(stat.S_IREAD | stat.S_IWRITE)
         write_text(settings, before)
     assert result.has_line(r"^PROBLEM\s+Could not save this PC's settings in "), str(result)
-    assert result.has_line(r"^WROTE\s+Skills, their shared scripts, and operating rules"), str(
+    assert result.has_line(r"^WROTE\s+Skills and their shared scripts with this PC's paths"), str(
         result
     )
     assert (box.generated / "skills" / "handoff" / "SKILL.md").is_file()
@@ -3246,33 +3401,41 @@ def test_takes_only_its_own_options(box: Sandbox) -> None:
 
 
 def test_what_if_changes_nothing(box: Sandbox) -> None:
-    # Something for each kind of change: a link to make, a generated file to write, and a
-    # dev-home folder to save, given here when the settings have none.
+    # Something for each kind of change: a link to make, a generated file and a rules file to
+    # write, and a dev-home folder to save, given here when the settings have none.
     link = box.profile / ".claude" / "skills" / "knowledge"
-    template = box.toolkit / "templates" / "operating-rules" / "operating-rules.md"
-    generated_rules = box.generated / "operating-rules" / "operating-rules.md"
+    template = box.toolkit / "templates" / "skills" / "handoff" / "template.md"
+    generated_file = box.generated / "skills" / "handoff" / "template.md"
+    operating = box.toolkit / "templates" / "operating-rules" / "operating-rules.md"
+    rules = rules_files(box)["codex"]
     settings = box.toolkit / "local-settings.json"
-    template_bytes, rules_bytes = template.read_bytes(), generated_rules.read_bytes()
+    template_bytes, generated_bytes = template.read_bytes(), generated_file.read_bytes()
+    operating_bytes, rules_bytes = operating.read_bytes(), rules.read_bytes()
     settings_bytes = settings.read_bytes()
     unset = json.loads(settings_bytes)
     unset["devHome"]["folder"] = ""
     write_text(settings, json.dumps(unset, indent=2) + "\n")
     unset_bytes = settings.read_bytes()
     remove_link(link)
-    append(template, "- A line added to the operating rules.")
+    append(template, "A line added to a skill's template.")
+    append(operating, "- A line added to the operating rules.")
     try:
         result = run_python(box, "setup.py", "--what-if", "--content-dir", str(box.content))
         assert result.code == 0, str(result)
         assert result.has_line(r"^What if: Save this PC's settings: "), str(result)
         assert result.has_line(r"^What if: Create a link to "), str(result)
         assert result.has_line(r"^What if: Write a generated file: "), str(result)
+        pattern = r"^What if: Write the operating rules and your rules, joined: "
+        assert result.has_line(pattern), str(result)
         assert result.has_line("This was a preview"), str(result)
         assert link_target(link) is None
-        assert generated_rules.read_bytes() == rules_bytes
+        assert generated_file.read_bytes() == generated_bytes
+        assert rules.read_bytes() == rules_bytes
         assert settings.read_bytes() == unset_bytes
     finally:
         settings.write_bytes(settings_bytes)
         template.write_bytes(template_bytes)
+        operating.write_bytes(operating_bytes)
         setup(box)
     assert link_target(link) == box.generated / "skills" / "knowledge"
 
