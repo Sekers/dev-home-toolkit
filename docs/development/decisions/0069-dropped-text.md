@@ -5,7 +5,8 @@ that sends it to the Recycle Bin, `internal/shared/recycle_bin.py`, is built, an
 yet.
 
 **Decision:** text an end user tells setup to drop goes to the Recycle Bin, as a file, before
-setup removes or overwrites anything. Decided by the developer on 2026-10-18.
+setup removes or overwrites anything. Decided by the developer on 2026-10-18, and changed on
+2026-10-23 (what a run that can ask does with a hand edit the bin can't take).
 
 - **Where text gets dropped:** wherever setup asks where an agent's rules go, "drop them" is an
   answer
@@ -34,7 +35,12 @@ setup removes or overwrites anything. Decided by the developer on 2026-10-18.
   ([0070: Who owns each file in dev-home](0070-who-owns-each-file-in-dev-home.md)).
   A quiet sync puts files back too, and can't ask. So when the bin can't take a hand edit on a
   quiet sync, setup leaves the file as edited, and prints a `PROBLEM` line naming it on each sync,
-  until a run that can ask.
+  until a run that can ask. When the bin can't take a hand edit on a run that can ask, at a
+  console or through `/dev-home configure`, setup shows the edited lines, then asks whether to
+  delete them for good or leave the file as edited. Leaving it takes the quiet sync's path: the
+  `PROBLEM` line stays, and a later run whose bin takes the edit puts the file back. This question
+  covers dev-home's `AGENTS.md` and `CLAUDE.md`, the only hand edits setup puts back so far; each
+  other file dev-home-toolkit owns gets its choice when setup starts keeping it current.
 
 **Why:**
 
@@ -47,6 +53,10 @@ setup removes or overwrites anything. Decided by the developer on 2026-10-18.
   can ask instead of leaving a copy somewhere. The one case a quiet sync meets, a hand edit to put
   back, waits for a run that can ask, so nothing is lost there either (the developer, 2026-10-18).
   A plain sync never commits a changed file, so the edit can't spread meanwhile.
+- A hand edit to dev-home's `AGENTS.md` or `CLAUDE.md` is guidance for sessions in dev-home, and
+  every level of `rules/` loads in every session, so keeping it as one of the end user's rules
+  would load it everywhere. Leaving the file loses nothing without an answer, and the lines shown
+  can be copied anywhere first (the developer, 2026-10-23).
 - `IFileOperation`: Microsoft's page for `SHFileOperation` says it "has been replaced in Windows
   Vista by IFileOperation" (read 2026-10-18). The page doesn't say "deprecated", but AGENTS.md's
   rule against building on deprecated features points to the replacement.
@@ -66,6 +76,10 @@ question in the rare case the bin fails.
 - Always a dated copy, with no Recycle Bin: the least code, but copies pile up out of sight.
 - No way back: dropped means gone.
 - On a quiet sync whose bin fails, putting a hand-edited file back anyway: the edit would be lost.
+- For a hand edit to dev-home's `AGENTS.md` or `CLAUDE.md` that the bin can't take: keeping it as
+  one of the end user's rules, in the `mine/` they pick (it would load in every session, in every
+  project); or offering that beside leaving the file and deleting the edit (one more choice, which
+  puts the text where it doesn't belong, for a rare case).
 - `SHFileOperation`, documented as replaced.
 - To confirm the bin took the file, comparing its count of items before and after
   (`SHQueryRecycleBin`): another program's delete at the same moment would look like this one.

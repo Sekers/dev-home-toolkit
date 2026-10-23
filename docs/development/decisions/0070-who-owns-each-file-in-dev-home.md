@@ -10,8 +10,8 @@ and a release that changes line endings. Until then, a new dev-home starts with 
 **Decision:** each file dev-home-toolkit puts in a dev-home has one owner. Either dev-home-toolkit
 owns it, and setup writes it and keeps it current, or the end user does, and setup creates it only
 when it's missing and never changes it. Decided by the developer on 2026-10-18, and changed on
-2026-10-23 (how setup tells a dev-home, where the files live in this repo, and a missing file git
-still has).
+2026-10-23 (how setup tells a dev-home, where the files live in this repo, a missing file git
+still has, and no place for an end user's guidance for dev-home sessions alone).
 
 | File | Owner | What setup does |
 | --- | --- | --- |
@@ -39,9 +39,12 @@ still has).
 - **A hand edit to a file dev-home-toolkit owns,** any of those above, `AGENTS.md`, `CLAUDE.md`,
   and built-in rules' files included, goes to the Recycle Bin
   ([0069: Dropped text](0069-dropped-text.md)), then setup puts
-  the file back, with one line saying so and where the end user's own content goes. When the bin
-  can't take it on a quiet sync, which can't ask, setup leaves the file as edited and names it in a
-  `PROBLEM` line on each sync until a run that can ask.
+  the file back, with one line saying so and where the end user's own content goes. For dev-home's
+  `AGENTS.md` and `CLAUDE.md`, that line says setup rewrites the file on every run, and that the
+  end user's guidance for every session goes in their rules, in `rules/`; nothing holds guidance
+  for dev-home sessions alone (the developer, 2026-10-23). When the bin can't take it on a quiet
+  sync, which can't ask, setup leaves the file as edited and names it in a `PROBLEM` line on each
+  sync until a run that can ask, which asks as 0069 says.
 - **A file dev-home-toolkit stops writing,** such as `CLAUDE.md` if Claude Code someday needs no
   pointer, is listed in that release's `withdrawn` list, with `kind: "file"` and its reason
   ([0060: The release data file](0060-the-release-data-file.md)),
@@ -88,10 +91,17 @@ starter's macOS and Linux section in `.gitignore` reaches existing dev-homes by 
   `my-rules.md` to move its rules is normal, so setup waits for that commit; nothing renames the
   index, so a missing one is a mistake, and setup puts back its rows. Checking costs one git
   call, only on a run that finds a file missing (the developer, 2026-10-23).
+- No place for an end user's guidance for dev-home sessions alone: dev-home's `AGENTS.md` and
+  `CLAUDE.md` hold what agents need to work with dev-home-toolkit's machinery there, and an end
+  user's own preferences have their place in `rules/`. A file of their own for dev-home sessions
+  would add to dev-home's layout and to setup, for a need nobody has shown (the developer,
+  2026-10-23).
 
 **Costs:** an end user can't keep their own wording in a file dev-home-toolkit owns, such as a
 personal note in dev-home's `README.md`; dev-home is private, so that README is mostly for the end
-user and their agents anyway. A copied skill still needs its own record of where it came from.
+user and their agents anyway. Guidance an end user wants only in dev-home sessions has no place of
+its own: in `rules/`, it loads in every session. A copied skill still needs its own record of
+where it came from.
 
 **Options set aside:**
 
@@ -110,6 +120,9 @@ user and their agents anyway. A copied skill still needs its own record of where
   and says no more).
 - For a missing file git still has: waiting on the index too (lookups find no index until it's
   restored by hand); committing the recreated file at once (it spreads the loss).
+- For an end user's guidance for dev-home sessions alone: a file of theirs that setup joins onto
+  the end of dev-home's `AGENTS.md` (a new file in dev-home's layout, and more code, for a need
+  nobody has shown); a `.claude/rules/` folder committed in dev-home, which Claude Code loads only
+  there (Codex ignores it).
 
-**Look again if:** a file needs content from both dev-home-toolkit and the end user, or end users
-ask to keep their own wording in a file dev-home-toolkit owns.
+**Look again if:** a file needs content from both dev-home-toolkit and the end user.
