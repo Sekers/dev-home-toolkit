@@ -1,0 +1,16 @@
+# local-settings.json with schemaVersion 1: every key path the code writes there. layouts.py
+# says what the placeholders stand for, and docs/development/testing.md when this list changes.
+<setting>
+<setting>.$state
+claudeCode.folders.<folder>.setUp
+claudeCode.folders.<folder>.setUp.$state
+claudeCode.folders.<folder>.setUp.on
+codex.homes.<folder>.setUp
+codex.homes.<folder>.setUp.$state
+codex.homes.<folder>.setUp.on
+schemaVersion
+skills.<skill>.addedToAgents
+skills.<skill>.addedToAgents.$state
+skills.<skill>.preferences.<preference>
+skills.<skill>.preferences.<preference>.$state
+testHomeDir

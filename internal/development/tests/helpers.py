@@ -6,7 +6,9 @@ internal/development/.test-sandbox/, which git ignores: a copy of this repo's wo
 dev-home with some content, and local bare repos standing in for GitHub. The copy's
 local-settings.json sets testHomeDir before anything in the copy runs, so every setup run from
 it, including the ones sync.py and update.py start, uses the scratch profile instead of the
-real one. run refuses a script outside a sandbox. Nothing here uses the network or GitHub.
+real one. run refuses a script outside a sandbox. Nothing here uses the network or GitHub. After
+each script it runs, it checks what the script wrote to the files the layout lists cover (see
+layouts.py).
 
 The skills' commands are taken word for word from the sandbox's generated skills. They start
 with internal/.python/python.exe, a junction setup makes. A virtual environment's python.exe
@@ -35,6 +37,7 @@ from types import ModuleType
 
 import pytest
 
+import layouts
 from read_only_launcher import DLL_CALLS, FAILED, GIT_READS, PROGRAMS
 
 # This file is in internal/development/tests/, three folders below the repo's root.
@@ -380,6 +383,81 @@ def check_in_sandbox(argv: list[str]) -> None:
                 raise AssertionError(f"Refusing to run {path}, which is not in a sandbox.")
 
 
+def layout_snapshot(box: Sandbox) -> dict[Path, bytes]:
+    """The bytes of each file a layout list covers (see layouts.py), in each folder directly in
+    the sandbox: the copy's local-settings.json, and each dev-home's dev-home.json, those a test
+    clones or creates included."""
+    found: dict[Path, bytes] = {}
+    for part in layouts.PARTS:
+        for path in sorted(box.root.glob(f"*/{part.file}")):
+            with contextlib.suppress(OSError):
+                found[path] = path.read_bytes()
+    return found
+
+
+class LayoutCheck:
+    """One run's check of the files the layout lists cover (see layouts.py): each key path the
+    run adds to one of them has to be on that file's list for its layout. What the test itself
+    writes there during the run, standing in for another run, is the test's (see test_writes)."""
+
+    def __init__(self, box: Sandbox) -> None:
+        self.box = box
+        # What the files held before the run, and after each write the test made during it.
+        self.states = [layout_snapshot(box)]
+        self.problems: list[str] = []
+
+    def found(self) -> list[str]:
+        """What's wrong with the files as they are now, by every state so far."""
+        problems: list[str] = []
+        for path, data in layout_snapshot(self.box).items():
+            earlier = [state[path] for state in self.states if path in state]
+            if data not in earlier:
+                problems += layouts.problems(path, earlier, data, self.box.toolkit)
+        return problems
+
+    @contextlib.contextmanager
+    def test_writes(self) -> Iterator[None]:
+        """Around a write the test makes during the run: first notes what's wrong with what the
+        run has written so far, then counts what the test wrote as the test's."""
+        self.problems += self.found()
+        yield
+        self.states.append(layout_snapshot(self.box))
+
+    def finish(self, what: str) -> None:
+        """Fails the test at anything wrong with what the run wrote. what says which run it was."""
+        problems = list(dict.fromkeys([*self.problems, *self.found()]))
+        if problems:
+            raise AssertionError("\n".join([f"After {what}:", *problems]))
+
+
+# Each layouts_checked in progress, by its sandbox's root.
+CHECKING: dict[Path, list[LayoutCheck]] = {}
+
+
+@contextlib.contextmanager
+def layouts_checked(box: Sandbox) -> Iterator[None]:
+    """For a test that runs setup's, sync's, or update's code in this process: checks the run's
+    changes to the files the layout lists cover, as run does for every script it runs."""
+    check = LayoutCheck(box)
+    CHECKING.setdefault(box.root, []).append(check)
+    try:
+        yield
+    finally:
+        CHECKING[box.root].remove(check)
+    check.finish("a run in the test's own process")
+
+
+@contextlib.contextmanager
+def writing_meanwhile(box: Sandbox) -> Iterator[None]:
+    """For a test that writes one of the files the layout lists cover while the code it runs in
+    its own process is still going, standing in for another run: what it writes is the test's, so
+    the check after that code leaves it out (see LayoutCheck.test_writes)."""
+    with contextlib.ExitStack() as stack:
+        for check in CHECKING.get(box.root, []):
+            stack.enter_context(check.test_writes())
+        yield
+
+
 def run(
     box: Sandbox,
     argv: list[str],
@@ -390,8 +468,10 @@ def run(
 ) -> Run:
     """Runs a command as an agent's shell tool does: input from nowhere, so a script can never
     wait for an answer, and its output and errors together, read as UTF-8. With answer, that's
-    its input instead, as a person typing it."""
+    its input instead, as a person typing it. Then checks what it changed in the files the
+    layout lists cover (see LayoutCheck)."""
     check_in_sandbox(argv)
+    check = LayoutCheck(box)
     done = subprocess.run(
         argv,
         cwd=cwd,
@@ -402,7 +482,9 @@ def run(
         stderr=subprocess.STDOUT,
         check=False,
     )
-    return Run(done.returncode, done.stdout.decode("utf-8", errors="replace").splitlines())
+    result = Run(done.returncode, done.stdout.decode("utf-8", errors="replace").splitlines())
+    check.finish(f"{' '.join(argv)}, {result}")
+    return result
 
 
 def run_python(
@@ -444,12 +526,18 @@ def profile_kept(box: Sandbox) -> Iterator[None]:
         run_python(box, "setup.py", "--quiet")
 
 
+# Each process start_python started, by its process ID, until finish checks what it changed in
+# the files the layout lists cover: its command, and its check.
+STARTED: dict[int, tuple[list[str], LayoutCheck]] = {}
+
+
 def start_python(box: Sandbox, script: str, *args: str) -> subprocess.Popen[bytes]:
     """Starts one of the sandbox copy's Python scripts in its root without waiting for it, as
     run_python runs it, with its output and errors together."""
     argv = [sys.executable, "-I", str(box.toolkit / script), *args]
     check_in_sandbox(argv)
-    return subprocess.Popen(
+    check = LayoutCheck(box)
+    process = subprocess.Popen(
         argv,
         cwd=box.root,
         env=script_env(box),
@@ -457,21 +545,30 @@ def start_python(box: Sandbox, script: str, *args: str) -> subprocess.Popen[byte
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
+    STARTED[process.pid] = (argv, check)
+    return process
 
 
 def finish(process: subprocess.Popen[bytes]) -> Run:
-    """Waits for a process start_python started, and returns how it ended."""
+    """Waits for a process start_python started, and returns how it ended, after checking what it
+    changed in the files the layout lists cover (see LayoutCheck)."""
     out, _ = process.communicate(timeout=120)
-    return Run(process.returncode, out.decode("utf-8", errors="replace").splitlines())
+    result = Run(process.returncode, out.decode("utf-8", errors="replace").splitlines())
+    argv, check = STARTED.pop(process.pid)
+    check.finish(f"{' '.join(argv)}, {result}")
+    return result
 
 
 def run_while_asking(
     box: Sandbox, script: str, *, prompt: str, answer: str, meanwhile: Callable[[], None]
 ) -> Run:
     """Runs one of the sandbox copy's Python scripts, waits for the output line that matches
-    prompt, which comes just before its question, calls meanwhile, then answers."""
+    prompt, which comes just before its question, calls meanwhile, then answers. Then checks what
+    it changed in the files the layout lists cover (see LayoutCheck), leaving out what meanwhile
+    wrote there."""
     argv = [sys.executable, "-I", str(box.toolkit / script)]
     check_in_sandbox(argv)
+    check = LayoutCheck(box)
     process = subprocess.Popen(
         argv,
         cwd=box.root,
@@ -492,13 +589,16 @@ def run_while_asking(
             lines.append(raw.decode("utf-8", errors="replace").rstrip("\r\n"))
             if re.search(prompt, lines[-1]):
                 break
-        meanwhile()
+        with check.test_writes():
+            meanwhile()
         rest, _ = process.communicate((answer + "\n").encode("utf-8"), timeout=120)
     finally:
         if process.poll() is None:
             process.kill()
     lines.extend(rest.decode("utf-8", errors="replace").splitlines())
-    return Run(process.returncode, lines)
+    result = Run(process.returncode, lines)
+    check.finish(f"{' '.join(argv)}, {result}")
+    return result
 
 
 def skill_command(box: Sandbox, skill: str, script: str) -> str:

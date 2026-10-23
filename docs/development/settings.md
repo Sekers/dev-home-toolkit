@@ -78,4 +78,4 @@ AGENTS.md's rules apply too.
   preferences get none either.
 - To change what a setting holds, such as hours to minutes, or the structure of a file, raise the
   file's `schemaVersion`, and add a conversion step for that version, with a test (not built
-  yet).
+  yet). The layout tests catch a change to a file's structure ([testing.md](testing.md)).

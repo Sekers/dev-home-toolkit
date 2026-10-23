@@ -24,6 +24,7 @@ from helpers import (
     Sandbox,
     check_in_sandbox,
     git,
+    layouts_checked,
     link_target,
     profile_kept,
     remove_link,
@@ -32,6 +33,7 @@ from helpers import (
     script_env,
     shared_module,
     write_text,
+    writing_meanwhile,
 )
 
 pytestmark = pytest.mark.xdist_group("setup-questions")
@@ -120,7 +122,8 @@ def settings(box: Sandbox) -> Iterator[Path]:
 
 
 def setup_here(box: Sandbox, *args: str) -> int:
-    returned: int = shared_module(box, "setup").main(list(args))
+    with layouts_checked(box):
+        returned: int = shared_module(box, "setup").main(list(args))
     return returned
 
 
@@ -141,23 +144,24 @@ def test_with_input_from_a_silent_pipe_it_never_waits(box: Sandbox, settings: Pa
     write_text(settings, json.dumps(saved, indent=2) + "\n")
     argv = [sys.executable, "-I", str(box.toolkit / "setup.py")]
     check_in_sandbox(argv)
-    process = subprocess.Popen(
-        argv,
-        cwd=box.root,
-        env=script_env(box),
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-    # The pipe stays open, with nothing written to it, until setup ends.
-    try:
-        process.wait(timeout=60)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        raise AssertionError("setup waited for input nobody gave") from None
-    finally:
-        assert process.stdin is not None and process.stdout is not None
-        process.stdin.close()
+    with layouts_checked(box):
+        process = subprocess.Popen(
+            argv,
+            cwd=box.root,
+            env=script_env(box),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        # The pipe stays open, with nothing written to it, until setup ends.
+        try:
+            process.wait(timeout=60)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            raise AssertionError("setup waited for input nobody gave") from None
+        finally:
+            assert process.stdin is not None and process.stdout is not None
+            process.stdin.close()
     out = process.stdout.read().decode("utf-8", errors="replace")
     process.stdout.close()
     assert process.returncode == 1, out
@@ -787,7 +791,8 @@ def test_setup_by_hand_does_its_work_only_once_a_sync_lets_go_of_its_lock(
         waited = setup_here(box)
         unsaved = json.loads(settings.read_text(encoding="utf-8"))
         # A sync runs setup while it holds the lock, so that setup works without taking it.
-        held = shared_module(box, "setup").main([], sync_holds_lock=True)
+        with layouts_checked(box):
+            held = shared_module(box, "setup").main([], sync_holds_lock=True)
     out = capsys.readouterr().out
     saved = json.loads(settings.read_text(encoding="utf-8"))
     assert waited == 1, out
@@ -1697,7 +1702,8 @@ def before_the_work(
 
     @contextlib.contextmanager
     def another_run_first(run: Any, content_root: Path) -> Iterator[bool]:
-        meanwhile()
+        with writing_meanwhile(box):
+            meanwhile()
         with taking(run, content_root) as owned:
             yield owned
 
@@ -1964,7 +1970,8 @@ def test_a_syncs_setup_reads_this_pcs_settings_only_once(
 
     edit(settings, lambda data: data["skills"].pop("mine"))
     monkeypatch.setattr(code, "load_local_settings", counted)
-    returned = code.main(["--quiet"], sync_holds_lock=True)
+    with layouts_checked(box):
+        returned = code.main(["--quiet"], sync_holds_lock=True)
     out = capsys.readouterr().out
     saved = json.loads(settings.read_text(encoding="utf-8"))
     assert returned == 0, out

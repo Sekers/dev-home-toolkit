@@ -1,12 +1,14 @@
 # 0068: Versions and layouts in dev-home
 
-**Built:** not yet.
+**Built:** yes, except: the newest version, the early update check, `layoutVersions`, the layout
+tests for `rules/`, `handoffs/`, and `knowledge/`, and the release step's lock on released lists.
+The layout tests for `dev-home.json` and `local-settings.json` are built.
 
 **Decision:** `dev-home.json` records the newest dev-home-toolkit version that has set dev-home
 up, and a layout version for each part of dev-home, and tests catch a layout change made without
 one. It needs version numbers
 ([0060: The release data file](0060-the-release-data-file.md)).
-Decided by the developer on 2026-10-18.
+Decided by the developer on 2026-10-18, and changed on 2026-10-22 (setting names in the lists).
 
 - **The newest version** is a new field in `dev-home.json`, its name settled when building.
   `schemaVersion` doesn't change, since setup keeps keys it doesn't know there (`dev_home_text` in
@@ -37,9 +39,12 @@ Decided by the developer on 2026-10-18.
 - **Layout tests,** for every part another version may read: `dev-home.json` and
   `local-settings.json`, by their `schemaVersion`, and `rules/`, `handoffs/`, and `knowledge/`, by
   `layoutVersions`. For each part, a test lists what its code produces: the files, with made-up
-  names replaced by placeholders, each note's field names, JSON keys, and template sections. The
-  list is saved in dev-home-toolkit's repo for each version. A difference fails the test until the
-  version is raised, the new list saved, and a conversion step exists.
+  names replaced by placeholders, each note's field names, JSON keys, and template sections. A
+  setting's name counts as a made-up name, since its declaration and `formerNames` already handle
+  one being added, renamed, or removed (`docs/development/settings.md`), so a new key in a
+  folder's entry is a layout change and a new setting isn't. The list is saved in
+  dev-home-toolkit's repo for each version. A difference fails the test until the version is
+  raised, the new list saved, and a conversion step exists.
   Every test counts: a file that matches nothing on its part's list fails the test that wrote it.
   Released lists are locked: the release step refuses if a released version's list changed, or if
   any check fails. Not caught: a change in what a file means, or in which files the code reads; a

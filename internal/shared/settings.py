@@ -28,7 +28,8 @@ SETTINGS_PATH = TOOLKIT_ROOT / "local-settings.json"
 # dev-home's own settings, in its root: for now, only multiMachine, whether more than one copy is
 # in active use.
 DEV_HOME_SETTINGS = "dev-home.json"
-# Each file's layout. It goes up only when a setting is renamed or moved.
+# Each file's layout version. "Changing a setting later" in docs/development/settings.md says when
+# it goes up.
 SCHEMA_VERSION = 1
 DEV_HOME_SCHEMA_VERSION = 1
 # The file in a skill's folder that declares its preferences, and what it needs to run, with the

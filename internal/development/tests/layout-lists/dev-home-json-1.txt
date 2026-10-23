@@ -1,0 +1,4 @@
+# dev-home.json with schemaVersion 1: every key path the code writes there. layouts.py says how
+# the list is written, and docs/development/testing.md when it changes.
+multiMachine
+schemaVersion

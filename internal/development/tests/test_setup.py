@@ -25,6 +25,7 @@ from helpers import (
     Run,
     Sandbox,
     git,
+    layouts_checked,
     link_target,
     make_junction,
     new_sandbox,
@@ -328,17 +329,18 @@ def test_a_python_that_doesnt_run_is_noted_and_syncs_skip_it(
     make_junction(link, Path(sys.base_prefix))
     failed = r"^PROBLEM\s+Python for the skills: the Python in .* didn't run as Python 3\.12"
     try:
-        first = code.main(["--quiet"])
-        first_out = capsys.readouterr().out
-        noted = json.loads(read(note))
-        second = code.main(["--quiet"])
-        second_out = capsys.readouterr().out
-        write_text(note, json.dumps({key: [0, 0] for key in noted}) + "\n")
-        changed = code.main(["--quiet"])
-        changed_out = capsys.readouterr().out
-        broken = False
-        code.main([])
-        by_hand_out = capsys.readouterr().out
+        with layouts_checked(box):
+            first = code.main(["--quiet"])
+            first_out = capsys.readouterr().out
+            noted = json.loads(read(note))
+            second = code.main(["--quiet"])
+            second_out = capsys.readouterr().out
+            write_text(note, json.dumps({key: [0, 0] for key in noted}) + "\n")
+            changed = code.main(["--quiet"])
+            changed_out = capsys.readouterr().out
+            broken = False
+            code.main([])
+            by_hand_out = capsys.readouterr().out
         note_left = note.exists()
     finally:
         if link_target(link) != box.python_bin:
@@ -1538,7 +1540,8 @@ def test_a_syncs_setup_removes_a_gone_skills_answers_and_setup_by_hand_leaves_th
     write_text(settings_kept, json.dumps(edited, indent=2) + "\n")
     by_hand = setup(box)
     kept = json.loads(read(settings_kept))
-    returned = shared_module(box, "setup").main(["--quiet"], sync_holds_lock=True)
+    with layouts_checked(box):
+        returned = shared_module(box, "setup").main(["--quiet"], sync_holds_lock=True)
     out = capsys.readouterr().out
     saved = json.loads(read(settings_kept))
     assert by_hand.code == 0, str(by_hand)
@@ -1559,7 +1562,8 @@ def test_a_skill_whose_preferences_cant_be_read_keeps_its_answers(
     edited["skills"] = {"mine": {"preferences": {"tidy": False}}}
     write_text(settings_kept, json.dumps(edited, indent=2) + "\n")
     try:
-        shared_module(box, "setup").main(["--quiet"], sync_holds_lock=True)
+        with layouts_checked(box):
+            shared_module(box, "setup").main(["--quiet"], sync_holds_lock=True)
     finally:
         skill.unlink()
     out = capsys.readouterr().out

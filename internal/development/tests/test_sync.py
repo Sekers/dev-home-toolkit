@@ -25,6 +25,7 @@ from helpers import (
     Sandbox,
     finish,
     git,
+    layouts_checked,
     link_target,
     run,
     run_python,
@@ -916,7 +917,8 @@ def test_after_waiting_its_limit_for_another_sync_says_so(
     with (box.content / ".git" / "dev-home-sync.lock").open("a+b") as handle:
         hold(handle)
         try:
-            returned = code.main([])
+            with layouts_checked(box):
+                returned = code.main([])
         finally:
             let_go(handle)
     out = capsys.readouterr().out
@@ -942,7 +944,8 @@ def test_an_error_in_one_step_still_lets_the_update_check_and_setup_run(
     probe = box.content / "skills" / "probe-two"
     write_text(probe / "SKILL.md", "---\nname: probe-two\ndescription: For this check.\n---\n")
     try:
-        returned = code.main([])
+        with layouts_checked(box):
+            returned = code.main([])
         linked = link_target(box.profile / ".claude" / "skills" / "probe-two")
     finally:
         (probe / "SKILL.md").unlink()
@@ -1238,7 +1241,8 @@ def test_update_by_hand_pulls_nothing_while_a_sync_holds_the_lock(
     with (box.content / ".git" / "dev-home-sync.lock").open("a+b") as handle:
         hold(handle)
         try:
-            returned = code.main([])
+            with layouts_checked(box):
+                returned = code.main([])
         finally:
             let_go(handle)
     out = capsys.readouterr().out
@@ -1270,7 +1274,8 @@ def test_update_by_hand_holds_the_lock_for_the_pull_then_runs_setup_at_the_conso
 
     monkeypatch.setattr(code, "run_git", watched_git)
     monkeypatch.setattr(code, "run_setup", setup_after_the_pull)
-    returned = code.main([])
+    with layouts_checked(box):
+        returned = code.main([])
     out = capsys.readouterr().out
     assert returned == 0, out
     assert merges == [True], merges

@@ -34,6 +34,20 @@ proposing a commit, and points here; its rules apply too.
   Developer Mode, or another platform; git and the file system stay real. Use `monkeypatch` and
   small typed fakes first, and `unittest.mock` only with `autospec`, where recording calls saves
   real work.
+- The layout tests keep a list of what the code writes into each file another version of
+  dev-home-toolkit may read: so far `local-settings.json` and `dev-home.json`, by their
+  `schemaVersion`. The lists are in `tests/layout-lists/`, and `tests/layouts.py` says how
+  they're written. Every script a test runs is checked afterwards: each key path it added to one
+  of those files has to be on that file's list, and `layouts_checked` in `helpers.py` does the
+  same for code a test runs in its own process. A test that writes one of those files during such
+  a run, standing in for another run, does it inside `writing_meanwhile`, so what it writes isn't
+  counted as the run's. `test_layouts.py` checks that the code still writes everything on each
+  list, and that the check works. A change in what a key means, or in which files the code reads,
+  is a layout change too, though the lists can't see it. Before 1.0.0, a layout change updates
+  the current layout's list in place, in the same commit; from 1.0.0 it raises the file's
+  `schemaVersion`, saves a list for the new layout, and adds a conversion step
+  ([0068](decisions/0068-versions-and-layouts-in-dev-home.md),
+  [0080](decisions/0080-compatibility-before-1-0-0.md)).
 - What needs a person is tested with a fake for them: setup's questions, a yes or no to a
   settings change, and creating dev-home with a faked gh (`test_setup_questions.py`, which runs
   setup's code in the test process from the sandbox's copy). What the tests can't reach, so it
