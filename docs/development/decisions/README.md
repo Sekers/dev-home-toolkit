@@ -105,3 +105,4 @@ file and link to the new one.
 - [0080: Compatibility before 1.0.0](0080-compatibility-before-1-0-0.md)
 - [0081: Writing decisions](0081-writing-decisions.md)
 - [0082: markdownlint's rules](0082-markdownlints-rules.md)
+- [0083: The PC's name](0083-the-pcs-name.md)

@@ -30,9 +30,9 @@ from pathlib import PurePath
 GIT_READS = {"rev-parse", "rev-list", "cat-file", "remote get-url"}
 # The programs each script may start, by its file name. Only these scripts can be watched.
 PROGRAMS: dict[str, set[str]] = {"facts.py": {"git"}, "issue_status.py": {"git", "gh"}}
-# The Windows DLLs a script may load, and the functions it may call from them.
-DLLS = {"kernel32"}
-DLL_CALLS = {"GetComputerNameW"}
+# The Windows DLLs a script may load, and the functions it may call from them: none today.
+DLLS: set[str] = set()
+DLL_CALLS: set[str] = set()
 # What ctypes looks up in a DLL for itself.
 CTYPES_OWN_LOOKUPS = {"GetLastError"}
 FAILED = "FAILED: read-only check:"
@@ -64,10 +64,8 @@ HARMLESS = {
     "_thread.start_joinable_thread",
     "_winapi.CreatePipe",
     "msvcrt.open_osfhandle",
-    # A buffer for a DLL function's answer. Calling a function is harmless here because
-    # ctypes.dlsym, checked below, has already checked its name.
-    "ctypes.call_function",
-    "ctypes.create_unicode_buffer",
+    # Reading the computer's host name, which sends nothing over the network.
+    "socket.gethostname",
 }
 
 WRITE_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_TRUNC

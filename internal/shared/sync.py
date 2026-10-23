@@ -26,7 +26,9 @@ here, and lists the uncommitted files: it skips only the network call. With one 
 commits a fetch brings in came from another copy, so it says to check the setting.
 
 With --message and paths, it commits exactly those paths, then pushes without fetching first.
-Only when GitHub rejects the push, because it has commits this copy lacks, does it fetch, merge,
+It adds this PC's name at the end of the message's first line, in parentheses, as it does for
+the commit a merge makes, so dev-home's history shows which PC made each commit. Only when
+GitHub rejects the push, because it has commits this copy lacks, does it fetch, merge,
 and push again. A push that fails for any other reason, such as offline, waits for the next sync.
 
 When the paths include knowledge/README.md, the knowledge base's index, it commits nothing while
@@ -91,7 +93,7 @@ from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from typing import IO
 
-from .git import GIT_MISSING, GitResult, last_fetch_age, run_git
+from .git import GIT_MISSING, GitResult, last_fetch_age, run_git, with_pc_name
 from .output import commit_count, describe, first_line, status_line
 from .programs import by_hand, find_program, run_setup
 from .settings import (
@@ -362,6 +364,7 @@ class Sync:
         ):
             self.stopped = True
             return
+        message = with_pc_name(message)
         listed = ", ".join(paths)
         add = self.git("--literal-pathspecs", "add", "--", *paths)
         if add.code != 0:
@@ -415,7 +418,7 @@ class Sync:
                 "--no-edit",
                 "--quiet",
                 "-m",
-                "sync: merge another PC's commits",
+                with_pc_name("sync: merge GitHub's commits"),
                 "@{upstream}",
             )
             if merge.code == 0:

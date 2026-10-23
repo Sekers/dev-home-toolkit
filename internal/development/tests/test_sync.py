@@ -27,6 +27,7 @@ from helpers import (
     git,
     layouts_checked,
     link_target,
+    on_this_pc,
     run,
     run_python,
     run_while_asking,
@@ -165,9 +166,9 @@ def test_the_skills_commit_command_runs_as_written(box: Sandbox) -> None:
     argv = [str(box.python), "-I", str(box.toolkit / "sync.py"), "--message", "handoff: demo", DEMO]
     result = run(box, argv, cwd=box.root)
     assert result.code == 0, str(result)
-    assert result.has_line(r'^COMMITTED\s+"handoff: demo" \(handoffs/demo/HANDOFF\.md\)'), str(
-        result
-    )
+    subject = re.escape(on_this_pc(box, "handoff: demo"))
+    pattern = rf'^COMMITTED\s+"{subject}" \(handoffs/demo/HANDOFF\.md\)'
+    assert result.has_line(pattern), str(result)
 
 
 def test_a_sync_that_commits_with_nothing_new_leaves_setup_to_the_next_plain_sync(
@@ -199,9 +200,19 @@ def test_commits_and_pushes_only_the_named_file_and_lists_the_other_as_left(
     finally:
         (box.content / "notes.md").unlink()
     assert result.code == 0, str(result)
-    assert pushed == ["handoff: demo"], pushed
+    assert pushed == [on_this_pc(box, "handoff: demo")], pushed
     assert "?? notes.md" in untracked, untracked
     assert result.has_line(r"^LEFT\s+notes\.md \(new file, under a minute ago\)"), str(result)
+
+
+def test_a_commit_subject_ends_with_this_pcs_name_once(box: Sandbox) -> None:
+    with_pc_name = shared_module(box, "git").with_pc_name
+    named = on_this_pc(box, "handoff: demo")
+    assert with_pc_name("handoff: demo") == named
+    # A subject that already ends with it, as an agent might write one, stays as it is.
+    assert with_pc_name(named) == named
+    # Only the first line, the subject, gets it.
+    assert with_pc_name("handoff: demo\n\nMore.") == f"{named}\n\nMore."
 
 
 def test_passes_on_an_accented_letter_in_a_file_name_as_it_is(box: Sandbox) -> None:
@@ -240,9 +251,11 @@ def test_a_sync_that_commits_and_brings_in_commits_runs_setup(box: Sandbox) -> N
     push_from(other, "skills/from-other-pc/SKILL.md", "skills: from another PC")
     append(box.content / DEMO, "While another PC pushed.")
     result = sync(box, "--message", "handoff: demo", DEMO)
+    merge = git("-C", str(box.remote), "log", "-1", "--format=%s", "main")
     assert result.code == 0, str(result)
     # Both PCs had new commits.
     assert result.has_line(r"^MERGED\s+1 commit from GitHub, with a merge commit"), str(result)
+    assert merge == [on_this_pc(box, "sync: merge GitHub's commits")], merge
     assert result.has_line(r"^PUSHED\s+2 commits to GitHub\."), str(result)
     assert link_target(box.profile / ".claude" / "skills" / "from-other-pc") is not None
 
@@ -751,7 +764,8 @@ def test_a_commit_of_the_knowledge_index_waits_for_a_note_not_committed_yet(box:
     # Named together, the note and its row go in one commit.
     result = sync(box, "--message", "knowledge: demo/pending", note, INDEX)
     assert result.code == 0, str(result)
-    pattern = r'^COMMITTED\s+"knowledge: demo/pending" \(knowledge/demo/pending\.md, knowledge/'
+    subject = re.escape(on_this_pc(box, "knowledge: demo/pending"))
+    pattern = rf'^COMMITTED\s+"{subject}" \(knowledge/demo/pending\.md, knowledge/'
     assert result.has_line(pattern), str(result)
 
 
@@ -896,9 +910,8 @@ def test_two_spellings_of_one_file_are_committed_once(box: Sandbox) -> None:
     other_spelling = str(box.content / "HANDOFFS" / "demo" / "handoff.md")
     result = sync(box, "--message", "handoff: demo", DEMO, other_spelling)
     assert result.code == 0, str(result)
-    assert result.has_line(r'^COMMITTED\s+"handoff: demo" \(handoffs/demo/HANDOFF\.md\)$'), str(
-        result
-    )
+    subject = re.escape(on_this_pc(box, "handoff: demo"))
+    assert result.has_line(rf'^COMMITTED\s+"{subject}" \(handoffs/demo/HANDOFF\.md\)$'), str(result)
 
 
 def test_quotes_gits_reason_not_a_warning_before_it(box: Sandbox) -> None:
@@ -1196,7 +1209,8 @@ def test_setups_commit_runs_inside_the_lock_its_setup_holds(
     assert waited == 1, out
     assert re.search(r"^PROBLEM\s+Another sync, or an update, has been using dev-home", out, re.M)
     assert held == 0, out
-    assert git("-C", str(box.remote), "log", "-1", "--format=%s") == ["notes: inside the lock"]
+    subjects = git("-C", str(box.remote), "log", "-1", "--format=%s")
+    assert subjects == [on_this_pc(box, "notes: inside the lock")], subjects
 
 
 def test_the_update_check_waits_its_interval_and_uses_what_it_knows(box: Sandbox) -> None:

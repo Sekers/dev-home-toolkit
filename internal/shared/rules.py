@@ -33,7 +33,6 @@ merge, and nothing is ever deduplicated."""
 import hashlib
 import os
 import re
-import sys
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -100,24 +99,10 @@ class Section:
     children: list["Section"] = field(default_factory=list)
 
 
-def computer_name() -> str:
-    """The operating system's own name for the computer, as facts.py's environment topic gives
-    it. On Windows, the name Windows reports, the same as COMPUTERNAME."""
-    if sys.platform == "win32":
-        import ctypes
-
-        buffer = ctypes.create_unicode_buffer(256)
-        size = ctypes.c_ulong(len(buffer))
-        if ctypes.WinDLL("kernel32").GetComputerNameW(buffer, ctypes.byref(size)):
-            return buffer.value
-        return os.environ.get("COMPUTERNAME", "pc")
-    return os.uname().nodename.split(".")[0]
-
-
 def pc_folder(computer_name: str) -> str:
-    """The folder for a PC under rules/pcs/: its computer name in lowercase, with any other
-    character than a letter or a digit as a hyphen, cut to PC_NAME_LIMIT. An empty name, which
-    would make this PC's levels look like another PC's folders, is pc."""
+    """The folder for a PC under rules/pcs/: its name (computer.computer_name) in lowercase, with
+    any other character than a letter or a digit as a hyphen, cut to PC_NAME_LIMIT. An empty
+    name, which would make this PC's levels look like another PC's folders, is pc."""
     return re.sub(r"[^a-z0-9]", "-", computer_name.lower())[:PC_NAME_LIMIT] or "pc"
 
 

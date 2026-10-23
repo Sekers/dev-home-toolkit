@@ -26,6 +26,7 @@ from helpers import (
     git,
     layouts_checked,
     link_target,
+    on_this_pc,
     profile_kept,
     remove_link,
     run_python,
@@ -1083,7 +1084,8 @@ def test_asks_how_many_copies_with_no_default_then_commits_and_pushes_the_answer
         "multiMachine": True,
     }
     assert re.search(r'^\s+\+\s+"multiMachine": true', out, re.M), out
-    assert git("-C", str(remote), "log", "-1", "--format=%s") == ["dev-home: several active copies"]
+    subjects = git("-C", str(remote), "log", "-1", "--format=%s")
+    assert subjects == [on_this_pc(box, "dev-home: several active copies")], subjects
     assert re.search(r"On each other copy, run /dev-home sync", out), out
 
 
@@ -1117,7 +1119,7 @@ def test_after_a_clone_set_to_one_copy_asks_with_one_as_the_default(
     # A key setup doesn't know is kept.
     assert saved == {"schemaVersion": 1, "multiMachine": several, "x": 1}, saved
     subjects = git("-C", str(remote), "log", "--format=%s")
-    assert (subjects[0] == "dev-home: several active copies") == several, subjects
+    assert (subjects[0] == on_this_pc(box, "dev-home: several active copies")) == several, subjects
     # Without a change, nothing is shown or asked about saving.
     assert any(re.search(SAVE_COPIES, asked) for asked in person.asked) == several
 
@@ -1157,7 +1159,8 @@ def test_a_first_setup_that_says_one_copy_asks_whether_the_others_are_retired(
     saved = json.loads((home / "dev-home.json").read_text(encoding="utf-8"))
     assert saved["multiMachine"] is several, saved
     subjects = git("-C", str(remote), "log", "-1", "--format=%s")
-    assert subjects == ["test: dev-home" if several else "dev-home: one active copy"], subjects
+    one = on_this_pc(box, "dev-home: one active copy")
+    assert subjects == ["test: dev-home" if several else one], subjects
 
 
 def test_a_dev_home_this_run_created_is_asked_nothing_even_on_a_first_setup(
@@ -1204,7 +1207,8 @@ def test_an_older_dev_home_json_is_asked_again_and_rewritten_in_place(
     saved = json.loads((home / "dev-home.json").read_text(encoding="utf-8"))
     assert saved == {"schemaVersion": 1, "multiMachine": False, "x": 1}, saved
     assert sorted(entry.name for entry in home.glob("dev-home.json*")) == ["dev-home.json"]
-    assert git("-C", str(remote), "log", "-1", "--format=%s") == ["dev-home: one active copy"]
+    subjects = git("-C", str(remote), "log", "-1", "--format=%s")
+    assert subjects == [on_this_pc(box, "dev-home: one active copy")], subjects
 
 
 @pytest.mark.parametrize(
@@ -2188,7 +2192,8 @@ def test_a_new_dev_home_github_refuses_is_kept_with_the_command_to_finish(
     assert re.search(pattern, out, re.M), out
     # Then the my-rules.md files, for each agent set up.
     subjects = git("-C", str(new_home), "log", "--format=%s")
-    assert subjects == ["rules: add my-rules.md", "dev-home: new dev-home"], subjects
+    created, added = "dev-home: new dev-home", "rules: add my-rules.md"
+    assert subjects == [on_this_pc(box, added), on_this_pc(box, created)], subjects
 
 
 def test_creates_a_new_dev_home_from_templates_and_dev_home_json(
@@ -2211,7 +2216,8 @@ def test_creates_a_new_dev_home_from_templates_and_dev_home_json(
     assert f"{toolkit}/sync.py" in agents
     # The files in templates/dev-home/, with dev-home.json and the knowledge index, then the
     # my-rules.md files, each empty, for each agent set up.
-    assert subjects == ["rules: add my-rules.md", "dev-home: new dev-home"], subjects
+    created, added = "dev-home: new dev-home", "rules: add my-rules.md"
+    assert subjects == [on_this_pc(box, added), on_this_pc(box, created)], subjects
     assert sorted(first) == [
         ".gitattributes",
         ".gitignore",

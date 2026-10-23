@@ -29,6 +29,7 @@ from helpers import (
     link_target,
     make_junction,
     new_sandbox,
+    on_this_pc,
     profile_kept,
     remove_link,
     remove_sandbox,
@@ -196,8 +197,8 @@ def copy_of(box: Sandbox, folder: Path) -> Path:
 
 
 def pc_folder(box: Sandbox) -> str:
-    rules = shared_module(box, "rules")
-    name: str = rules.pc_folder(rules.computer_name())
+    computer_name = shared_module(box, "computer").computer_name
+    name: str = shared_module(box, "rules").pc_folder(computer_name())
     return name
 
 
@@ -235,7 +236,7 @@ def test_gives_each_level_for_an_agent_set_up_here_a_my_rules_md_and_commits_it(
     # The one the sandbox's dev-home started with stays as it was.
     assert (rules / "_all-agents" / "mine" / "my-rules.md").read_bytes() != b""
     committed = git("-C", str(box.content), "log", "-1", "--name-only", "--format=%s")
-    assert committed[0] == "rules: add my-rules.md", committed
+    assert committed[0] == on_this_pc(box, "rules: add my-rules.md"), committed
     assert sorted(committed[2:]) == sorted(created), committed
     assert git("-C", str(box.content), "status", "--porcelain") == []
 
@@ -279,7 +280,8 @@ def test_puts_back_a_my_rules_md_that_was_deleted_and_commits_it(box: Sandbox) -
     assert result.code == 0, str(result)
     assert path.read_bytes() == b""
     committed = git("-C", str(box.content), "log", "-1", "--name-only", "--format=%s")
-    assert committed == ["rules: add my-rules.md", "", "rules/codex/mine/my-rules.md"], committed
+    subject = on_this_pc(box, "rules: add my-rules.md")
+    assert committed == [subject, "", "rules/codex/mine/my-rules.md"], committed
 
 
 def test_puts_back_a_knowledge_index_that_was_deleted_with_only_its_title(box: Sandbox) -> None:
@@ -301,7 +303,8 @@ def test_puts_back_a_knowledge_index_that_was_deleted_with_only_its_title(box: S
     assert result.code == 0, str(result)
     assert result.has_line(r"^WROTE\s+The knowledge index, with only its title: "), str(result)
     assert text == "# Knowledge base\n"
-    assert committed == ["knowledge: add README.md", "", "knowledge/README.md"], committed
+    subject = on_this_pc(box, "knowledge: add README.md")
+    assert committed == [subject, "", "knowledge/README.md"], committed
 
 
 def test_waits_on_a_my_rules_md_renamed_away_until_the_rename_is_committed(box: Sandbox) -> None:
@@ -328,7 +331,8 @@ def test_waits_on_a_my_rules_md_renamed_away_until_the_rename_is_committed(box: 
     assert waiting.code == 0 and not waited, str(waiting)
     assert after_waiting == head
     assert after.code == 0, str(after)
-    assert committed == ["rules: add my-rules.md", "", "rules/codex/mine/my-rules.md"], committed
+    subject = on_this_pc(box, "rules: add my-rules.md")
+    assert committed == [subject, "", "rules/codex/mine/my-rules.md"], committed
 
 
 def test_puts_back_a_knowledge_index_deleted_but_not_committed_as_git_has_it(
@@ -3511,10 +3515,11 @@ def test_configure_switches_copies_then_commits_and_pushes_it(box: Sandbox) -> N
     assert result.code == 0, str(result)
     assert result.has_line(r"^CHANGE\s+dev-home's copies: "), str(result)
     assert result.has_line(r'^\s+\+\s+"multiMachine": false$'), str(result)
-    assert result.has_line(r'^COMMITTED\s+"dev-home: one active copy"'), str(result)
+    one = on_this_pc(box, "dev-home: one active copy")
+    assert result.has_line(rf'^COMMITTED\s+"{re.escape(one)}"'), str(result)
     assert result.has_line(r"^PUSHED\s+1 commit to GitHub\."), str(result)
     assert back.code == 0, str(back)
-    assert subjects == ["dev-home: several active copies", "dev-home: one active copy"]
+    assert subjects == [on_this_pc(box, "dev-home: several active copies"), one]
 
 
 def test_configure_doesnt_go_with_quiet(box: Sandbox) -> None:

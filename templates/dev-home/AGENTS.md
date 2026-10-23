@@ -48,6 +48,7 @@ setup.py, and sync.py) lives in my clone of dev-home-toolkit, at `{{TOOLKIT_DIR}
   `PROBLEM` lines to me.
 - Never delete a lock file such as `.git/index.lock`. If sync.py says git stayed busy, ask me.
 - Commit messages read `<area>: <what>`, for example `handoff: you/tool` or
-  `knowledge: powershell/pipeline-binding`.
+  `knowledge: powershell/pipeline-binding`. `sync.py` adds this PC's name at the end, in
+  parentheses.
 - Commit signing is turned off in this repo's own config on purpose. That is not bypassing
   signing; my project repos keep signing.

@@ -22,7 +22,8 @@ Decided by the developer on 2026-10-17 and 2026-10-18, and changed on 2026-10-22
 left open, the order inside a merged section, `# My rules`, and the size settings' details) and
 2026-10-23 (a missing `my-rules.md` git still has).
 
-- **Names.** `<pc>` is the computer's name in lowercase, any other character a hyphen.
+- **Names.** `<pc>` is the PC's name ([0083: The PC's name](0083-the-pcs-name.md)) in
+  lowercase, any other character a hyphen.
   `claude-code/` and `codex/` exist only for agents set up on some PC.
   `claude-code` matches the agent's name in `dev-home-skill.json`.
 - **`mine/`.** Setup makes sure every `mine/` exists and holds a `my-rules.md`, recreating an empty
@@ -76,9 +77,9 @@ left open, the order inside a merged section, `# My rules`, and the size setting
   one agent on one PC are past it, every sync says so in a `LARGE` line, until they shrink or the
   end user raises the size; 0 never warns (the developer, 2026-10-22).
 - **Path length.** Caps of 40 characters on built-in skill and rule names, 24 on agent folder
-  names, and 32 on PC folder names, with moved-file names cut to 60. A longer computer name is cut
-  to 32 characters; two PCs whose names agree that far would share a folder, which is accepted as
-  rare, since a Windows computer name is at most 15 characters. Each run, setup checks that
+  names, and 32 on PC folder names, with moved-file names cut to 60. A longer PC name is cut to
+  32 characters; two PCs whose names agree that far would share a folder, which is accepted as
+  rare, since Windows' own generated names have at most 15 characters. Each run, setup checks that
   dev-home's folder path, plus the longest rules path it creates, plus 30 characters, fits under
   260 characters, and otherwise prints a `PROBLEM` line suggesting a shorter place for dev-home.
   The handoff skill checks the same way when it creates a handoff. Setup turns on `core.longpaths`

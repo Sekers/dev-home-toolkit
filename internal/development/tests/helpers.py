@@ -172,6 +172,13 @@ def shared_module(box: "Sandbox", name: str) -> ModuleType:
     return importlib.import_module(f"{package}.{name}")
 
 
+def on_this_pc(box: "Sandbox", subject: str) -> str:
+    """A commit subject as setup and sync.py write it in dev-home on this PC: the subject, then
+    the PC's name in parentheses."""
+    name: str = shared_module(box, "computer").computer_name()
+    return f"{subject} ({name})"
+
+
 def remove_link(link: Path) -> None:
     """Removes a link without touching what it points to."""
     if os.path.isjunction(link):
@@ -693,16 +700,16 @@ def main_block_nodes(tree: ast.Module) -> set[ast.AST]:
 REPORTING_NAMES = {
     "__future__": {"annotations"},
     "collections.abc": {"Callable", "Sequence"},
-    "ctypes": {"create_unicode_buffer", "c_ulong", "byref", "WinDLL"},
     "dataclasses": {"dataclass"},
     "functools": {"cache"},
     "importlib.util": {"spec_from_file_location", "module_from_spec"},
     "io": {"TextIOWrapper"},
     "json": {"loads", "dumps"},
-    "os": {"environ", "path", "pathsep", "sep", "getcwd", "uname", "fspath"},
+    "os": {"environ", "path", "pathsep", "sep", "getcwd", "fspath"},
     "pathlib": {"Path"},
     "re": {"IGNORECASE", "Match", "compile", "escape", "fullmatch", "match", "search", "sub"},
     "shutil": {"which"},
+    "socket": {"gethostname"},
     "subprocess": {"run", "DEVNULL", "TimeoutExpired"},
     "sys": {"argv", "exit", "modules", "platform", "stderr", "stdout", "version_info"},
     "types": {"ModuleType"},
@@ -726,6 +733,7 @@ REPORTING_METHODS = {
     "splitlines",
     "startswith",
     "strip",
+    "upper",
     # The script's own lists, dicts, and sets, in memory.
     "add",
     "append",
@@ -772,9 +780,6 @@ REPORTING_ATTRIBUTES = {
     "parent",
     # A class's name, such as an error's.
     "__name__",
-    # The computer's name from os.uname(), and the text a DLL function wrote to a buffer.
-    "nodename",
-    "value",
     # What loads a module from its file, and the module's name, for issue_status.py loading
     # facts.py.
     "loader",

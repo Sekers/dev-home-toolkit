@@ -51,6 +51,20 @@ def last_fetch_age(git_dir: Path) -> float | None:
     return max(0.0, time.time() - info.st_mtime)
 
 
+def with_pc_name(message: str) -> str:
+    """A commit message for dev-home, with this PC's name in parentheses at the end of its first
+    line, so dev-home's history shows which PC made each commit (decision 0083). A first line
+    that already ends with it stays as it is."""
+    # Loaded here, so only a run that commits pays for reading the name.
+    from .computer import computer_name
+
+    subject, newline, body = message.partition("\n")
+    ending = f" ({computer_name()})"
+    if subject.endswith(ending):
+        return message
+    return f"{subject}{ending}{newline}{body}"
+
+
 def run_git(repo: Path, *args: str) -> GitResult:
     """Runs git in a repo, reading its output as UTF-8. Git's messages are in English, so a
     rejected push or a lock can be told apart from other failures. Only git's own environment

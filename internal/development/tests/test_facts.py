@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import sys
 import uuid
 from collections.abc import Iterator
@@ -117,13 +118,21 @@ def test_prints_the_handoff_topics_six_lines_in_order(box: Sandbox, sample: Path
 
 
 def test_the_environment_topic_prints_this_computers_name(box: Sandbox, sample: Path) -> None:
+    # The name everything else names this PC by: facts.py's copy has to give the same one.
+    name = shared_module(box, "computer").computer_name()
     result = facts(box, sample, "environment")
-    if sys.platform == "win32":
-        name = os.environ["COMPUTERNAME"]
-    else:
-        name = os.uname().nodename.split(".")[0]
     assert result.code == 0, str(result)
     assert result.lines == [f"environment: {name}"], str(result)
+
+
+def test_both_copies_take_the_host_name_up_to_its_first_dot_in_capitals(
+    box: Sandbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Such as a Mac's name, which comes with .local when nothing else sets it.
+    monkeypatch.setattr(socket, "gethostname", lambda: "Marks-MacBook-Pro.local")
+    shared = shared_module(box, "computer").computer_name()
+    copy = facts_module(box, "facts_name").computer_name()
+    assert shared == copy == "MARKS-MACBOOK-PRO"
 
 
 def dev_home_skills(box: Sandbox) -> Run:

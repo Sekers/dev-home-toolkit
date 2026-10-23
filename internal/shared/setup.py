@@ -185,7 +185,8 @@ from . import (
     requirements,
     rules,
 )
-from .git import run_git
+from .computer import computer_name
+from .git import run_git, with_pc_name
 from .links import LinkInfo, is_link, link_info, make_folder_link, remove_folder_link
 from .output import GREEN, RED, YELLOW, color, describe, first_line, status_line
 from .paths import (
@@ -1190,7 +1191,7 @@ class Setup:
             ["config", "--local", "commit.gpgsign", "false"],
             ["config", "--local", "pull.rebase", "false"],
             ["add", "--", *contents],
-            ["commit", "--quiet", "-m", "dev-home: new dev-home"],
+            ["commit", "--quiet", "-m", with_pc_name("dev-home: new dev-home")],
         ]
         for step in steps:
             done = run_git(path, *step)
@@ -2328,7 +2329,7 @@ class Setup:
         # by the next run, which names it in its NEW line first.
         self.write_copies(content_root)
         # The end user's files setup keeps in dev-home, for the agents set up on this PC.
-        pc = rules.pc_folder(rules.computer_name())
+        pc = rules.pc_folder(computer_name())
         claude_code, codex = REQUIRES_NAMES[CLAUDE_CODE.name], REQUIRES_NAMES[CODEX.name]
         agents = [
             *([claude_code] if agent_folders.claude_dirs else []),

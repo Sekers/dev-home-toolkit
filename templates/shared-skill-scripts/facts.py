@@ -83,13 +83,13 @@ handoff.
 
 THE ENVIRONMENT TOPIC
 
-Prints one line, the computer's name as the operating system reports it:
+Prints one line, the computer's name:
 
     environment: PC-NAME
 
 A handoff keeps the facts that are true on only one computer under that name, so it has to come
-out the same in every session there. On Windows, that's the name Windows itself reports, the
-same as COMPUTERNAME, in capitals.
+out the same in every session there. It's the computer's host name, the name its owner gave it,
+up to the first dot, in capitals, as dev-home-toolkit names a PC everywhere.
 
 THE NEWER-COMMITS TOPIC
 
@@ -563,17 +563,16 @@ def handoff_lines(place: HandoffPlace) -> list[str]:
 
 
 def computer_name() -> str:
-    """The operating system's own name for the computer. On Windows, the name Windows reports,
-    the same as COMPUTERNAME, rather than the network name, which can differ in case."""
-    if sys.platform == "win32":
-        import ctypes
+    """The computer's host name up to the first dot, in capitals: a copy of computer_name in
+    dev-home-toolkit's internal/shared/computer.py, which a test checks gives the same name."""
+    # Loaded here, so only the environment topic pays for it.
+    import socket
 
-        buffer = ctypes.create_unicode_buffer(256)
-        size = ctypes.c_ulong(len(buffer))
-        if not ctypes.WinDLL("kernel32").GetComputerNameW(buffer, ctypes.byref(size)):
-            raise FactsError("Windows could not report this computer's name.")
-        return buffer.value
-    return os.uname().nodename.split(".")[0]
+    try:
+        name = socket.gethostname()
+    except OSError as error:
+        raise FactsError(f"The system could not report this computer's name. {error}") from None
+    return name.split(".")[0].upper()
 
 
 def environment_lines() -> list[str]:

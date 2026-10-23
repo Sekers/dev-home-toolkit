@@ -21,7 +21,8 @@ points here; its rules apply too.
 - Python 3.12 or later, the standard library only, and ASCII only (tests check). Windows only
   for now.
 - `internal/shared/` holds their code, one file per job, named for it: `setup.py`, `sync.py`,
-  and `update.py`, the code of the entry points of the same name; `git.py` (`run_git`, which
+  and `update.py`, the code of the entry points of the same name; `computer.py` (this PC's
+  name, which `facts.py` copies); `git.py` (`run_git`, which
   retries while another git process holds a lock); `output.py` (`status_line`, which prints
   every status line in one format, and small text helpers); `programs.py` (finding a program,
   and running setup); `settings.py` (this PC's `local-settings.json`, dev-home's

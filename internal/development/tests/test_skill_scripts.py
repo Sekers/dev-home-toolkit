@@ -100,7 +100,8 @@ def test_each_shared_script_command_is_stamped_and_pre_approved_word_for_word(
 # Samples for the searches below: each line in a "found" list must be found, and nothing in a
 # "not found" list.
 CHANGES = [
-    "import socket",
+    "import socket\nsocket.create_connection(('example.com', 80))",
+    "from socket import socket",
     "from urllib.request import urlopen",
     "import tempfile",
     "os.remove('x')",
@@ -116,6 +117,7 @@ CHANGES = [
     "os.environ.update(X='1')",
     "ctypes.windll.kernel32.DeleteFileW('x')",
     "ctypes.WinDLL('kernel32').DeleteFileW('x')",
+    "ctypes.WinDLL('kernel32').GetComputerNameW(b, s)",
     "exec('x')",
     "importlib.import_module('socket')",
     "import importlib\nimportlib.import_module('socket')",
@@ -164,7 +166,7 @@ READS = [
     "run_git('rev-parse', 'HEAD')",
     "run_git('remote', 'get-url', 'origin')",
     "run_git('cat-file', '--batch-check')",
-    "ctypes.WinDLL('kernel32').GetComputerNameW(b, s)",
+    "import socket\nsocket.gethostname().split('.')[0].upper()",
     "def run_git(*args):\n    return subprocess.run(['git', *args])",
     "def run_gh(gh, q):\n    return subprocess.run([gh, 'api', 'graphql', '-f', f'query={q}'])",
     "sys.modules[spec.name] = module",

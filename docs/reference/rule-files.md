@@ -12,8 +12,8 @@ rules](../guide/your-rules.md) explains them from the start.
 | `rules/pcs/<pc>/_all-agents/mine/` | every agent, on the PC named `<pc>` |
 | `rules/pcs/<pc>/<agent>/mine/` | one agent, on the PC named `<pc>` |
 
-- `<pc>` is the computer's name in lowercase, with any character other than a letter or a digit
-  as a hyphen, cut to 32 characters.
+- `<pc>` is the computer's host name, the name you gave it, up to its first dot, in lowercase,
+  with any character other than a letter or a digit as a hyphen, cut to 32 characters.
 - Every `.md` file in one of those folders joins, subfolders included. Any other file is left
   out, and so is a file directly in a level folder, which setup reports on every sync.
 - Setup creates an empty `my-rules.md`, and commits it, wherever one is missing, in any letter
