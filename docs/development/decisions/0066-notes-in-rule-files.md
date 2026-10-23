@@ -1,6 +1,8 @@
 # 0066: Notes in rule files
 
-**Built:** not yet.
+**Built:** yes, except: moved files' notes, names, and duplicates, which come with taking over an
+agent's file, and built-in rules' fields. Reading a note's fields, and acting on `os`, is built in
+`internal/shared/rules.py`.
 
 **Decision:** any rule file in dev-home's `rules/` may start with a note: an HTML comment whose
 first line is only `note`, then fields, then a blank line and free text. Decided by the

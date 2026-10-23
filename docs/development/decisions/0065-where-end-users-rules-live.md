@@ -1,6 +1,8 @@
 # 0065: Where end users' rules live
 
-**Built:** not yet.
+**Built:** yes, except: setup using it. `internal/shared/rules.py` reads `rules/` and joins it,
+with the operating rules, for an agent on a PC, and finds what's missing or misplaced there; setup
+doesn't call it yet, nor write anything in `rules/`.
 
 **Decision:** dev-home's `global-rules/` becomes `rules/`, with four levels:
 
@@ -16,7 +18,8 @@ Each level holds `mine/`, the end user's rule files. `_all-agents/` and each `<a
 ([0067: Built-in rules](0067-built-in-rules.md)),
 never the per-PC levels, and `pcs/<pc>/<agent>/` also holds `unanswered/`
 ([0064: Each agent's rules file](0064-each-agents-rules-file.md)).
-Decided by the developer on 2026-10-17 and 2026-10-18.
+Decided by the developer on 2026-10-17 and 2026-10-18, and changed on 2026-10-22 (a code block
+left open, and the order inside a merged section).
 
 - **Names.** `<pc>` is the computer's name in lowercase, any other character a hyphen.
   `claude-code/` and `codex/` exist only for agents set up on some PC.
@@ -37,14 +40,19 @@ Decided by the developer on 2026-10-17 and 2026-10-18.
   `built-in/on/` before `mine/`, and `pcs/<pc>/<agent>/unanswered/` after them, files alphabetically
   by path. No sentence says which rule wins. Matching headings combine: the same level and text
   (letter case and surrounding spaces ignored) under the same parent. A merged section sits where
-  its heading first appears, its content in join order; only lines starting with `#` outside
-  fenced code count; the operating rules never merge; and content is never deduplicated. So a
+  its heading first appears, and holds its own text first, from each file in join order, then its
+  subsections, each where it first appears, but a deeper heading before a shallower one, so text
+  keeps the heading it had; text before a file's first heading goes first, for the same reason.
+  Only Markdown headings count: a line starting with one to six `#` and then a space or nothing,
+  outside fenced code. The operating rules never merge, and content is never deduplicated. So a
   built-in rule carrying `## Writing style` lands under the end user's own section of that name.
 - **The operating rules' last line** becomes "My rules are in `<dev-home>/rules/`;
   `<dev-home>/README.md` explains its folders.", dropping "and win where the two conflict".
 - **Comments and blank lines.** Setup removes every HTML comment that starts a line, with all its
   lines, outside fenced code, notes included; a comment in the middle of a line stays. A comment
-  with no `-->` in its file is removed to that file's end, and reported on every sync. Each file's
+  with no `-->` in its file is removed to that file's end, and reported on every sync. A code
+  block a file leaves open is closed at that file's end, and reported on every sync, so it can't
+  turn the files after it into code (the developer, 2026-10-22). Each file's
   leading and trailing blank lines are dropped, one blank line separates files, and the joined
   file ends with one line break; blank lines inside a file stay. An empty file, or one with only a
   note, adds nothing.
