@@ -2,10 +2,12 @@
 
 **Built:** nothing to build.
 
-**Decision:** dev-home keeps every commit dev-home-toolkit makes there, one for each run of
-`sync.py --message` and each of setup's commits, and nothing trims or tidies its history: no
-squashing or rewriting it, no batching changes into fewer commits, and no scheduled maintenance
-beyond what git does by itself. Decided by the developer on 2026-10-23.
+**Decision:** dev-home keeps every commit dev-home-toolkit makes there: at most one for each run
+of `sync.py --message` (none when the files it names already match the last commit), one for each
+of setup's commits, and a merge commit whenever a sync brings together new commits from two
+copies. Nothing trims or tidies its history: no squashing or rewriting it, no batching changes into
+fewer commits, and no scheduled maintenance beyond what git does by itself. Decided by the
+developer on 2026-10-23.
 
 **Why:**
 
@@ -20,11 +22,13 @@ beyond what git does by itself. Decided by the developer on 2026-10-23.
   only text.
 - Git tidies up by itself. Commands that write to a repository, such as a commit or a fetch,
   start git's automatic maintenance (`git maintenance run --auto`, on by default through
-  `maintenance.auto`). It repacks once objects pile up, such as more than 6,700 loose objects or
-  50 packs for its `gc` task (`gc.auto` and `gc.autoPackLimit`), and keeps up to date the
-  commit-graph file that speeds up walking the history (git 2.55's `git-maintenance`, `git-gc`,
-  and `git-config` pages). The dev-home measured above had 158 loose objects in 3 packs, and a
-  commit-graph file already.
+  `maintenance.auto`). By default it runs only the `gc` task: git's docs name a default strategy
+  for manual and for scheduled maintenance, but none for automatic maintenance, and of the tasks
+  only `maintenance.gc.enabled` is on by default. That task repacks once objects pile up, past
+  6,700 loose objects or 50 packs (`gc.auto` and `gc.autoPackLimit`), and then also rewrites the
+  commit-graph files that speed up walking the history (`gc.writeCommitGraph`). All of this is
+  from git 2.55's `git-maintenance`, `git-gc`, and `git-config` pages. The dev-home measured above
+  had 158 loose objects in 3 packs, and commit-graph files already.
 - A sync's time doesn't grow with the history: a fetch or a push sends only the commits the other
   side lacks.
 - History viewers, such as GitHub's list of commits and VS Code's Source Control graph, load
@@ -55,4 +59,6 @@ beyond what git does by itself. Decided by the developer on 2026-10-23.
   measurable gain at this size, since git's own housekeeping already covers it.
 
 **Look again if:** a dev-home's `.git` folder passes about 100 MB, a sync or a history viewer
-gets noticeably slower, or dev-home starts holding large files that change often.
+gets noticeably slower, or dev-home starts holding large files that change often. If what grows is
+the time a new copy takes to clone, weigh a partial clone first (`git clone --filter=blob:none`,
+which fetches old versions of files only when they're needed): it leaves the history as it is.
