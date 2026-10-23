@@ -365,6 +365,15 @@ class Sync:
             self.stopped = True
             return
         message = with_pc_name(message)
+        try:
+            self.add_and_commit(paths, message)
+        except KeyboardInterrupt:
+            # Ctrl+C after git add, or during the commit, would leave the paths staged, and git
+            # refuses to merge while anything is. This puts their index entries back, then stops.
+            self.git("--literal-pathspecs", "restore", "--staged", "--", *paths)
+            raise
+
+    def add_and_commit(self, paths: list[str], message: str) -> None:
         listed = ", ".join(paths)
         add = self.git("--literal-pathspecs", "add", "--", *paths)
         if add.code != 0:

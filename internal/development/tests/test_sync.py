@@ -768,6 +768,31 @@ def test_a_commit_git_refuses_is_reported_and_the_file_left_unstaged(box: Sandbo
     assert status == [" M handoffs/demo/HANDOFF.md"], status
 
 
+def test_ctrl_c_during_a_commit_leaves_the_file_unstaged(
+    box: Sandbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Ctrl+C at a console raises KeyboardInterrupt in whatever code is running: here, after git
+    # add has staged the file.
+    code = shared_module(box, "sync")
+    real_git = code.Sync.git
+
+    def stopped_at_commit(self: object, *args: str) -> object:
+        if "commit" in args:
+            raise KeyboardInterrupt
+        return real_git(self, *args)
+
+    monkeypatch.setattr(code.Sync, "git", stopped_at_commit)
+    append(box.content / DEMO, "A commit stopped by Ctrl+C.")
+    try:
+        with pytest.raises(KeyboardInterrupt), layouts_checked(box):
+            code.main(["--message", "handoff: demo", DEMO])
+        status = git("-C", str(box.content), "status", "--porcelain")
+    finally:
+        # From HEAD, so a file left staged doesn't stay staged for the tests after this one.
+        git("-C", str(box.content), "checkout", "--quiet", "HEAD", "--", DEMO)
+    assert status == [" M handoffs/demo/HANDOFF.md"], status
+
+
 def index_row(note: str, question: str) -> str:
     """A row of the knowledge index, for a note named relative to knowledge/."""
     return f"| [{note}]({note}) | {question} |"
