@@ -1,6 +1,6 @@
 # 0002: Hand edits to generated files
 
-**Built:** yes, except: the change of 2026-10-18: the generated files still carry their notes, and
+**Built:** yes, except: the rules file setup writes in each Codex home still carries its note, and
 neither safety net exists yet.
 
 **Decision:** no safety net for hand edits to `internal/.generated/`, and no note in any generated

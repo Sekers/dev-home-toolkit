@@ -1,6 +1,8 @@
 # 0064: Each agent's rules file
 
-**Built:** not yet.
+**Built:** yes, except: all but the generated `SKILL.md` files and operating rules having no note.
+Each Codex home's `AGENTS.md` keeps its note until setup knows its own file by the copy of what it
+last wrote.
 
 **Decision:** every agent gets its always-on rules as one file that setup writes in the agent's
 own folder: each Codex home's `AGENTS.md`, as before, and one file in each Claude Code folder's

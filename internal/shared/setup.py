@@ -393,7 +393,6 @@ class Setup:
         self.just_showing = False
         self.problems: list[str] = []
         self.unknown_placeholders: list[str] = []
-        self.unplaced_notes: list[str] = []
         self.generated_changes = 0
         # The line saying which of a shared agent's folders got the main folder's answer, by the
         # agent's setting, printed once the settings are saved, unless a person answers for the
@@ -986,16 +985,10 @@ class Setup:
     # Generated files
 
     def sync_generated_folder(
-        self,
-        destination: Path,
-        values: dict[str, str],
-        source: Path | None = None,
-        note_file: str = "",
-        note_text: str = "",
+        self, destination: Path, values: dict[str, str], source: Path | None = None
     ) -> None:
-        """Makes destination hold exactly the files in source, with the placeholders filled in,
-        and note_text added to note_file (a path relative to source). With no source, empties
-        destination and removes it."""
+        """Makes destination hold exactly the files in source, with the placeholders filled in.
+        With no source, empties destination and removes it."""
         # Something else made a link here, or in a folder above here, and it may point anywhere,
         # so setup neither writes through it nor empties it.
         linked = linked_folder(destination)
@@ -1047,15 +1040,9 @@ class Setup:
 
         for file in source_files:
             assert source is not None
-            relative = os.path.relpath(file, source)
-            target = destination / relative
-            same_note_file = os.path.normcase(relative) == os.path.normcase(note_file)
-            rendered = generated.render(
-                file, values, note_text if note_file and same_note_file else ""
-            )
+            target = destination / os.path.relpath(file, source)
+            rendered = generated.render(file, values)
             self.unknown_placeholders.extend(rendered.unknown)
-            if rendered.unplaced:
-                self.unplaced_notes.append(str(file))
             # A link to a file may point anywhere, so setup doesn't write through it.
             if is_link(target):
                 self.status(
@@ -2179,11 +2166,8 @@ class Setup:
         self.sync_python_link(local_app_data, skip_registry=bool(settings.test_home_dir))
 
         # 3. Generated files: the skills, the scripts they share, and the operating rules, with
-        # this PC's paths filled in, at the same paths they have under templates/. The file each
-        # agent loads, a skill's SKILL.md or the operating rules, gets a note naming its
-        # template, because an agent in another project only ever sees this copy, and an edit
-        # here is lost at the next setup run. No other file gets one: the handoff template, for
-        # one, is copied into every new handoff.
+        # this PC's paths filled in, at the same paths they have under templates/. None carries a
+        # note saying not to edit it: each would cost tokens on every load (decision 0064).
         skill_sources = skill_templates()
         generated_skills = GENERATED_ROOT / "skills"
         for skill in skill_sources:
@@ -2191,29 +2175,15 @@ class Setup:
             skill_values = dict(values)
             skill_values["SKILL_DIR"] = forward(destination)
             skill_values["SKILL_STAMP"] = generated.skill_stamp(skill / "SKILL.md", skill_values)
-            skill_note = generated.note(
-                f"{forward(skill)}/",
-                "Changing the skill there changes dev-home-toolkit itself; skills of your own go "
-                f"in {values['CONTENT_DIR']}/skills/.",
-            )
-            self.sync_generated_folder(destination, skill_values, skill, "SKILL.md", skill_note)
+            self.sync_generated_folder(destination, skill_values, skill)
         skill_names = {os.path.normcase(skill.name) for skill in skill_sources}
         if generated_skills.exists():
             for folder in sorted(generated_skills.iterdir()):
                 stale = os.path.normcase(folder.name) not in skill_names
                 if folder.is_dir() and not is_link(folder) and stale:
                     self.sync_generated_folder(folder, values)
-        rules_note = generated.note(
-            forward(operating_template),
-            f"Put rules of your own in {forward(global_rules_file)}; changing the template "
-            "changes dev-home-toolkit itself.",
-        )
         self.sync_generated_folder(
-            GENERATED_ROOT / "operating-rules",
-            values,
-            operating_template.parent,
-            operating_template.name,
-            rules_note,
+            GENERATED_ROOT / "operating-rules", values, operating_template.parent
         )
         # The scripts the skills share. The skills run them from here, at the path
         # SHARED_SKILL_SCRIPTS_DIR gives.
@@ -2245,13 +2215,6 @@ class Setup:
 
         for unknown in dict.fromkeys(self.unknown_placeholders):
             self.status("PROBLEM", f"A placeholder setup does not know, left as it is: {unknown}")
-        for unplaced in dict.fromkeys(self.unplaced_notes):
-            self.status(
-                "PROBLEM",
-                f"{unplaced} starts with frontmatter that has no closing --- line, so its "
-                "generated copy has no note saying not to edit it. Close the frontmatter with a "
-                "line of three dashes.",
-            )
         label = "Skills, their shared scripts, and operating rules with this PC's paths"
         if self.generated_changes > 0:
             self.status(

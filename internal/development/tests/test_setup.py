@@ -157,48 +157,20 @@ def test_stamps_each_skills_commands_with_one_stamp_of_its_own(box: Sandbox) -> 
     assert handoff != knowledge
 
 
-def test_notes_each_skills_template_right_after_its_frontmatter(box: Sandbox) -> None:
-    toolkit, content = forward(box.toolkit), forward(box.content)
-    files = sorted((box.generated / "skills").glob("*/SKILL.md"))
-    unnoted = []
-    for file in files:
-        name = file.parent.name
-        text = read(file)
-        close = text.find("\n---\n", 3)
-        after = text[close + 5 :] if close > 0 else ""
-        if not (
-            text.startswith(f"---\nname: {name}\n")
-            and after.startswith(
-                f"{MARKER}{toolkit}/templates/skills/{name}/. Do not edit this copy"
-            )
-            and f"skills of your own go in {content}/skills/. -->" in text
-        ):
-            unnoted.append(str(file))
-    assert len(files) >= 2
-    assert unnoted == []
-
-
-def test_notes_the_operating_rules_template_at_the_top(box: Sandbox) -> None:
-    toolkit, content = forward(box.toolkit), forward(box.content)
-    rules = read(box.generated / "operating-rules" / "operating-rules.md")
-    source = (
-        f"{MARKER}{toolkit}/templates/operating-rules/operating-rules.md. Do not edit this copy"
-    )
-    assert rules.startswith(source)
-    assert f"Put rules of your own in {content}/global-rules/global-rules.md;" in rules
-    assert "\n\n# Private repo: dev-home (rules loaded)" in rules
-
-
-def test_notes_no_other_generated_file(box: Sandbox) -> None:
-    # Such as the handoff template, which is copied into every new handoff.
-    noted = {*(box.generated / "skills").glob("*/SKILL.md")}
-    noted.add(box.generated / "operating-rules" / "operating-rules.md")
-    extra = [
+def test_no_generated_file_carries_a_note(box: Sandbox) -> None:
+    # A note would cost tokens every time an agent loads the file (decision 0064).
+    noted = [
         str(path)
         for path in box.generated.rglob("*")
-        if path.is_file() and path not in noted and MARKER in path.read_text(errors="replace")
+        if path.is_file() and MARKER in path.read_text(errors="replace")
     ]
-    assert extra == []
+    assert noted == []
+    skills = sorted((box.generated / "skills").glob("*/SKILL.md"))
+    assert len(skills) >= 2
+    for skill in skills:
+        assert read(skill).startswith(f"---\nname: {skill.parent.name}\n"), skill
+    rules = read(box.generated / "operating-rules" / "operating-rules.md")
+    assert rules.startswith("# Private repo: dev-home (rules loaded)\n")
 
 
 @pytest.mark.parametrize("folder", [".claude/skills", ".agents/skills"])
@@ -1281,30 +1253,6 @@ def test_a_changed_template_reaches_the_generated_copy_and_codexs_rules(box: San
         setup(box)
     assert "A line added to the operating rules." in codex, str(result)
     assert "A line added to the operating rules." in generated
-
-
-def test_frontmatter_that_ends_in_an_unusual_way(box: Sandbox) -> None:
-    # One closing line with trailing spaces, and one with no closing line at all.
-    spaced = box.toolkit / "templates" / "skills" / "spaced"
-    unclosed = box.toolkit / "templates" / "skills" / "unclosed"
-    write_text(
-        spaced / "SKILL.md",
-        "---\nname: spaced\ndescription: Trailing spaces.\n---  \n\n# Spaced\n",
-    )
-    write_text(unclosed / "SKILL.md", "---\nname: unclosed\ndescription: Never ends.\n")
-    try:
-        result = setup(box)
-        spaced_text = read(box.generated / "skills" / "spaced" / "SKILL.md")
-        unclosed_text = read(box.generated / "skills" / "unclosed" / "SKILL.md")
-    finally:
-        shutil.rmtree(spaced)
-        shutil.rmtree(unclosed)
-    assert f"\n---  \n{MARKER}" in spaced_text
-    assert result.code == 1 and result.has_line(r"^PROBLEM\s.*unclosed.*no closing"), str(result)
-    assert unclosed_text.startswith("---\nname: unclosed\n") and MARKER not in unclosed_text
-    result = setup(box)
-    assert result.code == 0, str(result)
-    assert not (box.generated / "skills" / "unclosed").exists(), "removes those two again"
 
 
 def test_removes_a_generated_folder_with_no_templates_and_moves_a_link_off_it(

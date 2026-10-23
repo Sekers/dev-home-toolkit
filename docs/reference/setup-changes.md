@@ -14,9 +14,7 @@ folder link as a directory junction, which needs no admin rights and no Develope
     places. Setup writes a copy with this PC's real paths filled in, and that copy is what the
     agents use. The paths have to be written out in full, because the commands a skill may run
     without asking you are matched by their exact text. Setup rewrites this folder whenever it
-    runs, so don't edit it; put skills of your own in your dev-home. Each skill's `SKILL.md` and
-    the operating rules carry a note saying so, with the path of the template to change
-    instead, because an agent working in another project sees only this copy. Python adds
+    runs, so don't edit it; put skills of your own in your dev-home. Python adds
     `__pycache__` folders beside the scripts when they run, so they start faster next time;
     setup leaves those alone. Setup also writes `skill-states.json` there: whether it added each
     skill to your agents on this PC, and if not, why, which `/dev-home skills` shows. And when a
