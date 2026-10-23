@@ -64,7 +64,10 @@ TYPE_TEXT = {
     "folder": "a folder",
     "yes-no": "true or false",
     "hours": "a whole number of hours, 0 or more",
+    "kib": "a whole number of KiB, 0 or more",
 }
+# The unit of each kind of setting that holds a whole number, 0 or more.
+UNITS = {"hours": "hours", "kib": "KiB"}
 MISSING = object()
 # A value's path in the settings as its keys, for where a key can hold a dot, as a folder's name
 # can.
@@ -74,9 +77,10 @@ KeyPath = tuple[str, ...]
 @dataclass(frozen=True)
 class Setting:
     """A setting with a single value: one of dev-home-toolkit's own, or a skill's preference. type
-    is "folder", "yes-no", or "hours" (a whole number of hours, 0 or more, where 0 means every
-    time). has_default says whether default means anything; asked, whether setup asks about it.
-    former_names are the names it was saved under before."""
+    is "folder", "yes-no", "hours" (a whole number of hours, 0 or more, where 0 means every time),
+    or "kib" (a whole number of KiB, 0 or more, whose help says what 0 means). has_default says
+    whether default means anything; asked, whether setup asks about it. former_names are the names
+    it was saved under before."""
 
     path: str
     type: str
@@ -130,6 +134,10 @@ BY_PATH = {setting.path: setting for setting in SETTINGS}
 # say: for dev-home itself, and for dev-home-toolkit's updates.
 DEFAULT_HOURS = {s.path: s.default for s in SETTINGS if s.type == "hours" and s.has_default}
 AUTO_UPDATE = "updates.installAutomatically"
+# The size of the end user's rules for one agent on this PC past which a sync warns, and the least
+# each Codex home's project_doc_max_bytes is set to, each in KiB (decision 0065).
+RULES_WARN_ABOVE = "rules.warnAboveKiB"
+CODEX_INSTRUCTIONS_MAX = "codex.instructionsMaxKiB"
 # Each agent's folders setup knows of, an entry for each with its answer, setUp, in the same shape
 # for both agents, such as {"~/.claude": {"setUp": true}}.
 CLAUDE_FOLDERS = "claudeCode.folders"
@@ -278,9 +286,11 @@ def setting_value(data: dict[str, Any], path: str) -> tuple[Any, bool, bool]:
 
 
 def value_text(setting: Setting, value: Any) -> str:
-    """A setting's value in words, such as "every 12 hours" or "yes"."""
+    """A setting's value in words, such as "every 12 hours", "32 KiB", or "yes"."""
     if setting.type == "hours":
         return hours_text(int(value))
+    if setting.type == "kib":
+        return f"{value} KiB"
     if setting.type == "yes-no":
         return "yes" if value else "no"
     return str(value)
@@ -292,6 +302,8 @@ def counts_as_text(setting: Setting) -> str:
         return "not answered yet" if setting.asked else "not set"
     if setting.type == "hours":
         return hours_text(int(setting.default))
+    if setting.type == "kib":
+        return f"{setting.default} KiB, its default"
     return f"{json.dumps(setting.default)}, its default"
 
 

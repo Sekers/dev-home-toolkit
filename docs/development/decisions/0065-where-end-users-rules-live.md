@@ -1,7 +1,7 @@
 # 0065: Where end users' rules live
 
-**Built:** yes, except: the two size settings, the handoff skill's own check of a path's length,
-and `built-in/`, which comes with built-in rules. Setup skips its check of dev-home's path in a
+**Built:** yes, except: the handoff skill's own check of a path's length, and `built-in/`, which
+comes with built-in rules. Setup skips its check of dev-home's path in a
 test profile, whose dev-home sits deep in the repo's folder, so the tests check it directly.
 
 **Decision:** dev-home's `global-rules/` becomes `rules/`, with four levels:
@@ -19,7 +19,7 @@ Each level holds `mine/`, the end user's rule files. `_all-agents/` and each `<a
 never the per-PC levels, and `pcs/<pc>/<agent>/` also holds `unanswered/`
 ([0064: Each agent's rules file](0064-each-agents-rules-file.md)).
 Decided by the developer on 2026-10-17 and 2026-10-18, and changed on 2026-10-22 (a code block
-left open, the order inside a merged section, and `# My rules`).
+left open, the order inside a merged section, `# My rules`, and the size settings' details).
 
 - **Names.** `<pc>` is the computer's name in lowercase, any other character a hyphen.
   `claude-code/` and `codex/` exist only for agents set up on some PC.
@@ -64,11 +64,13 @@ left open, the order inside a merged section, and `# My rules`).
   as UTF-8, each bad byte shown as the replacement character, NUL bytes dropped. A file that isn't
   clean UTF-8, or is UTF-16, is reported on every sync until it's saved as UTF-8; setup never
   rewrites it.
-- **Size.** Two settings per PC, changeable through `/dev-home configure` or setup's menu. A Codex
-  instruction budget, 128 KiB by default: setup makes sure each Codex home's
-  `project_doc_max_bytes` is at least that (64 KiB as built), leaving a bigger value alone. A
-  warning when the end user's own rules for one agent on one PC pass 32 KiB; its status word, and
-  how often skills repeat it, are settled when building.
+- **Size.** Two settings per PC, in KiB, changeable through `/dev-home configure` or setup's
+  menu. `codex.instructionsMaxKiB`, "Codex's instruction limit", 128 by default: setup makes sure
+  Codex reads at least that much in each Codex home, raising `project_doc_max_bytes`, or adding
+  it where Codex's own default of 32 KiB is less, and never lowering it. `rules.warnAboveKiB`,
+  "Warn when your rules for one agent pass", 32 by default: while the end user's own rules for
+  one agent on one PC are past it, every sync says so in a `LARGE` line, until they shrink or the
+  end user raises the size; 0 never warns (the developer, 2026-10-22).
 - **Path length.** Caps of 40 characters on built-in skill and rule names, 24 on agent folder
   names, and 32 on PC folder names, with moved-file names cut to 60. A longer computer name is cut
   to 32 characters; two PCs whose names agree that far would share a folder, which is accepted as
@@ -115,7 +117,10 @@ left open, the order inside a merged section, and `# My rules`).
   at 63 bytes a line, and its own length warning doesn't show in the desktop app's or VS Code's
   `/status` (the developer's screenshots, 2026-10-18). 32 KiB is Codex's whole default budget, and
   about twice Claude Code's advice. Measured 2026-10-18: the operating rules 2,439 bytes, one
-  end user's global rules 13,832, and Codex's joined file 16,289.
+  end user's global rules 13,832, and Codex's joined file 16,289. The warning is its own word,
+  not `PROBLEM`, since rules kept large on purpose aren't a failure. Saying it on every sync, as
+  `NEW` does for a folder with no answer, needs no saved state, and raising the size stops it.
+  Setup only ever raises what Codex reads, so a small limit can't cut Codex below its default.
 - Path length: Windows refuses a path over 260 characters by default, counting dev-home's own
   folder; Git for Windows won't check out a longer one without `core.longpaths`; and macOS and Linux
   cap each name at 255. Windows' own long-path switch needs admin rights, so setup leaves it alone.
@@ -148,6 +153,11 @@ left open, the order inside a merged section, and `# My rules`).
   parsing); keeping an unclosed comment's text; collapsing runs of blank lines.
 - A fixed 64 KiB; growing the budget automatically; Codex's default; no warning; a warning at
   16 KiB.
+- For the warning: `PROBLEM` (setup would count rules kept large on purpose as a failure, with
+  exit code 1); a general `WARNING` word (unrelated lines would gather under it); once a day, or
+  once when the size is first passed (both need saved state, and the second is easy to miss).
+  The names `rules.largeAboveKiB` and `codex.projectDocMaxKiB` (Codex's jargon, which suggests
+  only the project's file).
 - Limits worked out per PC (rule files sync between PCs, so names would be renamed back and
   forth); relying on long-path support alone; no caps and no check.
 - No OS limit for the end user's rules (a Windows rule loads on every Mac, or is copied into each

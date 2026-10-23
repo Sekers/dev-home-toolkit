@@ -261,7 +261,7 @@ def new_sandbox(name: str, *, toolkit_repo: bool = False) -> Sandbox:
     write_text(box.profile / ".claude" / "settings.json", json.dumps(claude, indent=2) + "\n")
     write_text(
         box.profile / ".codex" / "config.toml",
-        "project_doc_max_bytes = 65536\n\n[sandbox_workspace_write]\n"
+        "project_doc_max_bytes = 131072\n\n[sandbox_workspace_write]\n"
         f"writable_roots = ['{box.content}']\n",
     )
     make_junction(box.python_bin, Path(sys.base_prefix))

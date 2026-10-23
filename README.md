@@ -172,6 +172,11 @@ one's name is its path, which `--configure` takes too:
 - `updates.checkEveryHours` and `devHome.checkEveryHours` say how often a sync checks GitHub for
   dev-home-toolkit updates (24 hours unless set) and, in single-PC mode, for dev-home's changes
   (12 hours unless set), where 0 means every time.
+- `rules.warnAboveKiB` is the size, in KiB, past which a sync warns, in a `LARGE` line, that your
+  rules for one agent on this PC have grown (32 unless set). 0 never warns.
+- `codex.instructionsMaxKiB` is how much of `AGENTS.md`, from its home and a project's folders
+  together, Codex reads, in KiB (128 unless set): setup raises each Codex home's
+  `project_doc_max_bytes` to match, and never lowers it. With no value there, Codex reads 32 KiB.
 - `skills.<name>.addedToAgents` is whether setup adds a skill to your agents on this PC: `true`
   or `false`. Until you choose, it follows the skill's default, and setup saves it as
   `{"$state": "unanswered"}`. `dev-home` is always added, so it has none.

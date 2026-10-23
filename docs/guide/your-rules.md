@@ -89,3 +89,9 @@ right `mine/`, delete the file, then run setup again.
 Every line costs tokens in every session, in every agent that loads it. Claude Code advises
 keeping each instructions file under 200 lines, and each agent's file holds the operating rules
 as well as yours.
+
+A sync says so, in a `LARGE` line, when your rules for one agent on a PC pass 32 KiB. To change
+that size, or turn the warning off with 0, change "Warn when your rules for one agent pass" with
+`/dev-home configure`. Codex reads `AGENTS.md`, from its home and a project's folders together,
+only up to "Codex's instruction limit", 128 KiB unless you change it, and leaves the rest out
+without saying so.

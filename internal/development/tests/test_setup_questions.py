@@ -524,8 +524,9 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_codex(
         f"Codex homes: {homes} Every Codex home reads the same skills, so they share one answer. "
         "A 'yes' sets up dev-home's skills and rules in each home. In each home's config.toml, "
         "it also adds your dev-home folder to writable_roots, so Codex can write there from any "
-        "project, and sets project_doc_max_bytes to 65536, so Codex reads all of your rules. "
-        "A 'no' removes all of that but project_doc_max_bytes, if it's there. Setup backs up "
+        "project, and raises project_doc_max_bytes to 131072 where it's lower, so Codex reads all "
+        "of your rules. A 'no' removes all of that but project_doc_max_bytes, if it's there. "
+        "Setup backs up "
         "each file first."
     )
     assert codex in words, out
@@ -652,7 +653,7 @@ def test_no_answer_about_a_claude_folder_gives_the_new_line_a_sync_gives(
     assert "~/.claude-later" not in saved["claudeCode"]["folders"], saved
     # The menu after the questions says the same: setup asked, but has no answer.
     row = (
-        r"^\s+5\s+Claude Code folders to set up\s+~/\.claude: yes, ~/\.claude-later: no answer "
+        r"^\s+7\s+Claude Code folders to set up\s+~/\.claude: yes, ~/\.claude-later: no answer "
         r"yet$"
     )
     assert re.search(row, out, re.M), out
@@ -1264,6 +1265,8 @@ MENU = r"^Number to change, 'a' to go through them all, or Enter to go on: $"
 ANSWERED_CLAUDE = r"^Set up Claude Code in .*\.claude\? \[Y/n\]: $"
 UPDATE_HOURS = r"^Check GitHub for dev-home-toolkit updates every how many hours .*\[24\]: $"
 CONTENT_HOURS = r"^Check GitHub for dev-home's changes every how many hours .*\[12\]: $"
+RULES_WARNING = r"^Warn when your rules for one agent on this PC pass how many KiB .*\[32\]: $"
+CODEX_LIMIT = r"^Codex's instruction limit, in how many KiB \[128\]: $"
 
 
 @pytest.fixture
@@ -1276,12 +1279,12 @@ def backups_removed(settings: Path) -> Iterator[Path]:
 def test_the_menu_changes_the_setting_picked_and_keeps_a_backup(
     box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    person.answers.update({MENU: ["9", "2", ""], UPDATES: "y"})
+    person.answers.update({MENU: ["10", "2", ""], UPDATES: "y"})
     returned = setup_here(box, "--configure")
     out = capsys.readouterr().out
     assert returned == 0, out
     assert "dev-home-toolkit settings" in out and "Shared by every copy of dev-home" in out, out
-    assert "Type a number from 1 to 7, or 'a', or press Enter to go on." in out, out
+    assert "Type a number from 1 to 9, or 'a', or press Enter to go on." in out, out
     saved = json.loads(backups_removed.read_text(encoding="utf-8"))
     assert saved["updates"]["installAutomatically"] is True, saved
     assert re.search(r"^SET\s+This PC's settings: .* Backup of the old file: ", out, re.M), out
@@ -1290,7 +1293,8 @@ def test_the_menu_changes_the_setting_picked_and_keeps_a_backup(
 def test_the_menu_goes_through_every_setting_with_its_answer_as_the_default(
     box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # Enter keeps each answer, except the update check's hours, set to 6.
+    # Enter keeps each answer, except the update check's hours, set to 6, and the rules warning,
+    # set to 48 KiB.
     content = json.loads(backups_removed.read_text(encoding="utf-8"))["devHome"]["folder"]
     person.answers.update(
         {
@@ -1299,6 +1303,8 @@ def test_the_menu_goes_through_every_setting_with_its_answer_as_the_default(
             UPDATES: "",
             UPDATE_HOURS: ["six", "6"],
             CONTENT_HOURS: "",
+            RULES_WARNING: ["48 KiB", "48"],
+            CODEX_LIMIT: "",
             ANSWERED_CLAUDE: "",
             CODEX_ANSWERED: "",
             ELSEWHERE_YES: "",
@@ -1309,7 +1315,10 @@ def test_the_menu_goes_through_every_setting_with_its_answer_as_the_default(
     saved = json.loads(backups_removed.read_text(encoding="utf-8"))
     assert returned == 0, out
     assert "Type a whole number of hours: 0 or more." in out, out
+    assert "Type a whole number of KiB: 0 or more." in out, out
     assert saved["updates"]["checkEveryHours"] == 6, saved
+    assert saved["rules"] == {"warnAboveKiB": 48}, saved
+    assert any(re.search(CODEX_LIMIT, p) for p in person.asked), person.asked
     assert "checkEveryHours" not in saved["devHome"], saved
     assert saved["devHome"]["folder"] == content, saved
     assert saved["updates"]["installAutomatically"] is False, saved
@@ -1331,12 +1340,12 @@ def test_the_menu_answers_codex_once_for_every_home(
         write_text(backups_removed, json.dumps(start, indent=2) + "\n")
         remove = rf"^{re.escape(str(gone))} no longer exists\. Remove it from the settings\? "
         remove += r"\[y/N\]: $"
-        person.answers.update({MENU: ["6", ""], remove: "y", CODEX_ANSWERED: "n"})
+        person.answers.update({MENU: ["8", ""], remove: "y", CODEX_ANSWERED: "n"})
         returned = setup_here(box, "--configure")
         out = capsys.readouterr().out
         saved = json.loads(backups_removed.read_text(encoding="utf-8"))
     assert returned == 0, out
-    row = r"^\s+6\s+Codex homes to set up\s+~/\.codex: yes, ~/\.codex-gone: yes \(not found\)$"
+    row = r"^\s+8\s+Codex homes to set up\s+~/\.codex: yes, ~/\.codex-gone: yes \(not found\)$"
     assert re.search(row, out, re.M), out
     asked = [p for p in person.asked if re.search(remove, p) or re.search(CODEX_ANSWERED, p)]
     assert len(asked) == 2 and re.search(remove, asked[0]), person.asked
@@ -1405,7 +1414,7 @@ def test_the_menu_shows_a_folders_reminder_and_enter_keeps_it(
         rf"^Set up Claude Code in {re.escape(str(later))}\? 'y', 'n', a number of days until "
         r"setup asks again, or Enter to keep the reminder for 2999-01-01 \[y/n/<days>\]: $"
     )
-    person.answers.update({MENU: ["5", "5", ""], ANSWERED_CLAUDE: ["", ""], keep: ["", "y"]})
+    person.answers.update({MENU: ["7", "7", ""], ANSWERED_CLAUDE: ["", ""], keep: ["", "y"]})
     try:
         returned = setup_here(box, "--configure")
         out = capsys.readouterr().out
@@ -1417,7 +1426,7 @@ def test_the_menu_shows_a_folders_reminder_and_enter_keeps_it(
         shutil.rmtree(later)
     assert returned == 0, out
     row = (
-        r"^\s+5\s+Claude Code folders to set up\s+~/\.claude: yes, ~/\.claude-later: remind me "
+        r"^\s+7\s+Claude Code folders to set up\s+~/\.claude: yes, ~/\.claude-later: remind me "
         r"on 2999-01-01$"
     )
     assert re.search(row, out, re.M), out
@@ -1445,13 +1454,13 @@ def test_the_menu_keeps_codexs_reminder_at_enter_and_a_yes_reaches_every_home(
         reminder = {"setUp": {"$state": "remind", "on": "2999-01-01"}}
         start["codex"]["homes"] = {"~/.codex": reminder, "~/.codex-gone": reminder}
         write_text(backups_removed, json.dumps(start, indent=2) + "\n")
-        person.answers.update({MENU: ["6", "6", ""], remove: ["", ""], keep: ["", "y"]})
+        person.answers.update({MENU: ["8", "8", ""], remove: ["", ""], keep: ["", "y"]})
         returned = setup_here(box, "--configure")
         out = capsys.readouterr().out
         saved = json.loads(backups_removed.read_text(encoding="utf-8"))
     assert returned == 0, out
     row = (
-        r"^\s+6\s+Codex homes to set up\s+~/\.codex: remind me on 2999-01-01, ~/\.codex-gone: "
+        r"^\s+8\s+Codex homes to set up\s+~/\.codex: remind me on 2999-01-01, ~/\.codex-gone: "
         r"remind me on 2999-01-01 \(not found\)$"
     )
     assert re.search(row, out, re.M), out
@@ -1470,7 +1479,7 @@ def test_the_menu_removes_a_gone_folder_with_its_reminder(
     write_text(backups_removed, json.dumps(start, indent=2) + "\n")
     remove = rf"^{re.escape(str(gone))} no longer exists\. Remove it from the settings\? "
     remove += r"\[y/N\]: $"
-    person.answers.update({MENU: ["5", ""], remove: "y", ANSWERED_CLAUDE: ""})
+    person.answers.update({MENU: ["7", ""], remove: "y", ANSWERED_CLAUDE: ""})
     returned = setup_here(box, "--configure")
     out = capsys.readouterr().out
     saved = json.loads(backups_removed.read_text(encoding="utf-8"))
@@ -1488,14 +1497,14 @@ def test_the_menu_says_when_setup_finds_no_codex_home(
     del other["codex"]
     other["testHomeDir"] = profile.as_posix()
     write_text(settings, json.dumps(other, indent=2) + "\n")
-    person.answers[MENU] = ["6", ""]
+    person.answers[MENU] = ["8", ""]
     try:
         returned = setup_here(box, "--configure")
         out = capsys.readouterr().out
     finally:
         shutil.rmtree(profile)
     assert returned == 0, out
-    assert re.search(r"^\s+6\s+Codex homes to set up\s+none found$", out, re.M), out
+    assert re.search(r"^\s+8\s+Codex homes to set up\s+none found$", out, re.M), out
     assert re.search(r"^Setup found no Codex homes\.$", out, re.M), out
     assert not any(re.search(CODEX, asked) for asked in person.asked), person.asked
 
@@ -1506,7 +1515,7 @@ def test_a_no_in_the_menu_replaces_the_answer_a_new_codex_home_got_from_the_main
     # So the line saying the new home was set up to match never shows.
     work = box.profile / ".codex-work"
     write_text(work / "config.toml", (box.profile / ".codex" / "config.toml").read_text("utf-8"))
-    person.answers.update({MENU: ["6", ""], CODEX_ANSWERED: "n"})
+    person.answers.update({MENU: ["8", ""], CODEX_ANSWERED: "n"})
     with profile_kept(box):
         try:
             returned = setup_here(box, "--configure")
@@ -1552,7 +1561,7 @@ def test_the_menu_keeps_several_copies_unless_the_others_are_retired(
 ) -> None:
     person.answers.update(
         {
-            MENU: ["7", ""],
+            MENU: ["9", ""],
             ELSEWHERE_YES: "n",
             RETIRED: "n",
         }
@@ -1571,7 +1580,7 @@ def test_the_menu_says_when_dev_homes_check_interval_is_used(
     # Picked in multi-PC mode, then again after switching to single-PC mode, which isn't saved.
     person.answers.update(
         {
-            MENU: ["4", "7", "4", ""],
+            MENU: ["4", "9", "4", ""],
             CONTENT_HOURS: ["", ""],
             ELSEWHERE_YES: "n",
             RETIRED: "y",
@@ -1638,11 +1647,11 @@ def test_a_run_by_hand_makes_a_codex_homes_config_change_in_its_toml(
         for backup in path.parent.glob("config.toml.bak-*"):
             backup.unlink()
     assert returned == 0, out
-    assert changed.startswith('model = "x"\nproject_doc_max_bytes = 65536\n'), changed
+    assert changed.startswith('model = "x"\nproject_doc_max_bytes = 131072\n'), changed
     assert f"writable_roots = ['{box.content}']" in changed, changed
     pattern = (
         r"^SET\s+Codex config in \.codex: added dev-home to writable_roots, and "
-        r"project_doc_max_bytes, in .*config\.toml\. Backup of the old file: "
+        r"project_doc_max_bytes = 131072 in .*config\.toml\. Backup of the old file: "
     )
     assert re.search(pattern, out, re.M), out
 

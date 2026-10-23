@@ -83,6 +83,15 @@ dev-home-toolkit's folder, and rewrites a file only while it still matches that 
 there's no copy and the file already holds what setup would write. Any other file there is left as
 it is and reported on every sync.
 
+## Size
+
+Setup measures your part of each agent's file on a PC, as UTF-8 bytes. Past
+`rules.warnAboveKiB`, 32 KiB unless set, every sync says so in a `LARGE` line; 0 never warns. In
+each Codex home, it raises `project_doc_max_bytes` to at least `codex.instructionsMaxKiB`, 128 KiB
+unless set, and never lowers it. With no `project_doc_max_bytes` in its `config.toml`, Codex
+reads 32 KiB of `AGENTS.md`, its home's and a project's together, and leaves the rest out without
+saying so.
+
 ## Path length
 
 dev-home's folder can be up to 89 characters long, so the longest path `rules/` can hold, with

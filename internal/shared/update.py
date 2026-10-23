@@ -295,6 +295,8 @@ def declared_defaults() -> dict[str, Default]:
 def default_text(default: Default) -> str:
     if default.type == "hours" and isinstance(default.value, int):
         return hours_text(default.value)
+    if default.type == "kib" and isinstance(default.value, int):
+        return f"{default.value} KiB"
     if isinstance(default.value, bool):
         return "yes" if default.value else "no"
     return str(default.value)

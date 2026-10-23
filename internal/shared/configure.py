@@ -33,14 +33,17 @@ from .settings import (
     BY_PATH,
     CLAUDE_CODE,
     CODEX,
-    DEFAULT_HOURS,
+    CODEX_INSTRUCTIONS_MAX,
     DEV_HOME_SETTINGS,
     FOLDER_SETTINGS,
     MISSING,
+    RULES_WARN_ABOVE,
     SETTINGS,
     SETTINGS_PATH,
     STATE,
     TOOLKIT_ROOT,
+    TYPE_TEXT,
+    UNITS,
     Agent,
     LocalSettings,
     Reminder,
@@ -68,7 +71,7 @@ AGENT_FOR = {agent.setting: agent for agent in AGENTS}
 # leaves an operator after it, so claudeCode.folders-=<folder> reads as -=.
 ASSIGNMENT = re.compile(r"([A-Za-z][\w.-]*?)(\+=|-=|\?=|=)(.*)", re.DOTALL)
 # What each type of setting takes, as USAGE shows it.
-PLACEHOLDERS = {"folder": "<folder>", "hours": "<hours>", "yes-no": "true|false"}
+PLACEHOLDERS = {"folder": "<folder>", "hours": "<hours>", "kib": "<KiB>", "yes-no": "true|false"}
 USAGE_COLUMN = 36
 USAGE_WIDTH = 100
 
@@ -385,6 +388,8 @@ def menu(run: "Setup", settings: LocalSettings) -> bool:
         AUTO_UPDATE: change_auto_update,
         "updates.checkEveryHours": change_update_hours,
         "devHome.checkEveryHours": change_content_hours,
+        RULES_WARN_ABOVE: change_rules_warning,
+        CODEX_INSTRUCTIONS_MAX: change_codex_limit,
     }
     # Numbered as overview numbers the rows: dev-home-toolkit's own settings in the order
     # setting-definitions.json has them, then each agent's folders, then the shared setting.
@@ -445,7 +450,8 @@ def change_auto_update(run: "Setup", settings: LocalSettings) -> bool:
     return True
 
 
-def change_hours(run: "Setup", settings: LocalSettings, path: str, question: str) -> bool:
+def change_number(run: "Setup", settings: LocalSettings, path: str, question: str) -> bool:
+    """Asks for a setting that holds a whole number, 0 or more, such as a number of hours."""
     current = setting_value(settings.data, path)[0]
     while True:
         answer = run.ask(question, str(current))
@@ -453,16 +459,16 @@ def change_hours(run: "Setup", settings: LocalSettings, path: str, question: str
             return False
         if re.fullmatch(r"\d+", answer):
             break
-        run.line("Type a whole number of hours: 0 or more.")
-    hours = int(answer)
-    if keeps(settings, path, hours):
+        run.line(f"Type a whole number of {UNITS[BY_PATH[path].type]}: 0 or more.")
+    number = int(answer)
+    if keeps(settings, path, number):
         return False
-    put(settings.data, path, hours)
+    put(settings.data, path, number)
     return True
 
 
 def change_update_hours(run: "Setup", settings: LocalSettings) -> bool:
-    return change_hours(
+    return change_number(
         run,
         settings,
         "updates.checkEveryHours",
@@ -484,11 +490,31 @@ def change_content_hours(run: "Setup", settings: LocalSettings) -> bool:
             f"dev-home {mode}, so {commands} check GitHub for its changes every time. The number "
             "you set here is used only in single-PC mode."
         )
-    return change_hours(
+    return change_number(
         run,
         settings,
         "devHome.checkEveryHours",
         "Check GitHub for dev-home's changes every how many hours (0 for every time)",
+    )
+
+
+def change_rules_warning(run: "Setup", settings: LocalSettings) -> bool:
+    return change_number(
+        run,
+        settings,
+        RULES_WARN_ABOVE,
+        "Warn when your rules for one agent on this PC pass how many KiB (0 never warns)",
+    )
+
+
+def change_codex_limit(run: "Setup", settings: LocalSettings) -> bool:
+    run.line(
+        "Codex reads AGENTS.md, from its home and the project's folders together, up to this size, "
+        "and leaves the rest out without saying so. Setup only ever raises project_doc_max_bytes "
+        "in each Codex home's config.toml; with no value there, Codex reads 32 KiB."
+    )
+    return change_number(
+        run, settings, CODEX_INSTRUCTIONS_MAX, "Codex's instruction limit, in how many KiB"
     )
 
 
@@ -709,9 +735,9 @@ def assign(run: "Setup", settings: LocalSettings, text: str) -> None:
                 return
             run.wanted_copies = yes
             return
-    elif name in DEFAULT_HOURS:
+    elif name in BY_PATH and BY_PATH[name].type in UNITS:
         if not re.fullmatch(r"\d+", value):
-            raise SettingError(f"{name} is a whole number of hours, 0 or more, not {value}.")
+            raise SettingError(f"{name} is {TYPE_TEXT[BY_PATH[name].type]}, not {value}.")
         put(settings.data, name, int(value))
     elif name == "devHome.folder":
         settings.content_dir = checked_dev_home(value)

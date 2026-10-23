@@ -24,6 +24,18 @@
       "default": 12,
       "label": "Check GitHub for dev-home's changes",
       "help": "How often /handoff, plain /knowledge, and /knowledge add check GitHub for dev-home's changes in single-PC mode. In multi-PC mode they check every time. 0 checks every time."
+    },
+    "rules.warnAboveKiB": {
+      "type": "kib",
+      "default": 32,
+      "label": "Warn when your rules for one agent pass",
+      "help": "The size, in KiB, at which a sync warns, in a LARGE line, that your rules for one agent on this PC have grown. Every session loads them, so each KiB costs tokens in every session. 0 never warns."
+    },
+    "codex.instructionsMaxKiB": {
+      "type": "kib",
+      "default": 128,
+      "label": "Codex's instruction limit",
+      "help": "The least each Codex home's project_doc_max_bytes is set to, in KiB: how much of AGENTS.md, from its home and the project's folders together, Codex reads before it leaves the rest out without saying so. Setup only ever raises it. With no value in config.toml, Codex reads 32 KiB."
     }
   }
 }

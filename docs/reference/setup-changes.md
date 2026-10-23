@@ -75,11 +75,11 @@ and your rules joined, which setup writes again at each sync.
     `AGENTS.md` it didn't write, or one with changes it didn't make.
   - `config.toml` gets dev-home in `[sandbox_workspace_write]` `writable_roots`, so Codex can
     edit handoffs and knowledge from any project. Your yes to Codex approves this, and every sync
-    puts it back if it goes missing, with a backup. It also gets
-    `project_doc_max_bytes = 65536`. Codex joins its global `AGENTS.md` with a project's own
-    `AGENTS.md` files and stops reading at 32 KiB by default. The global file comes first, so
-    the cut would fall on the project's own instructions, without a warning. Twice the default
-    leaves room.
+    puts it back if it goes missing, with a backup. Its `project_doc_max_bytes` is raised to at
+    least `codex.instructionsMaxKiB`, 128 KiB unless set, and never lowered. Codex joins its
+    global `AGENTS.md` with a project's own `AGENTS.md` files and stops reading at 32 KiB by
+    default. The global file comes first, so the cut would fall on the project's own
+    instructions, without a warning.
 - **If you say no later,** to a Claude Code folder or to Codex, setup removes what it set up
   there, naming each as it goes:
   - In a Claude Code folder: its links in `skills\`, its `rules\dev-home-rules.md`, your

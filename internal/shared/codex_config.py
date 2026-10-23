@@ -15,6 +15,18 @@ MULTI_LINE_STRING = re.compile(r"'''|\"\"\"")
 # A string in a masked line, whose insides masked_line has turned to underscores.
 MASKED_STRING = re.compile(r"'[^']*'|\"[^\"]*\"")
 SANDBOX = "sandbox_workspace_write"
+# How much of the AGENTS.md files Codex reads with no project_doc_max_bytes in config.toml. Setup
+# only ever raises what Codex reads, so it adds the setting only to ask for more than this.
+CODEX_DEFAULT_DOC_BYTES = 32 * 1024
+# The largest whole number TOML holds. Python's reader takes bigger ones, but Codex's doesn't, so a
+# bigger project_doc_max_bytes would leave Codex unable to read its config.toml.
+TOML_MAX_INTEGER = 2**63 - 1
+
+
+def reads_enough(max_bytes: int | None, min_doc_bytes: int) -> bool:
+    """Whether Codex reads at least min_doc_bytes, given its project_doc_max_bytes, or None when
+    config.toml doesn't set it."""
+    return (CODEX_DEFAULT_DOC_BYTES if max_bytes is None else max_bytes) >= min_doc_bytes
 
 
 @dataclass(frozen=True)
@@ -139,33 +151,37 @@ def is_configured(text: str, writable_root: str, min_doc_bytes: int) -> bool:
 
 def configured_parts(text: str, writable_root: str, min_doc_bytes: int) -> tuple[bool, bool]:
     """Whether the text has writable_root in [sandbox_workspace_write] writable_roots, and
-    whether it has a top-level project_doc_max_bytes of at least min_doc_bytes. Comments and other
-    tables don't count. For a file the reader can't follow, it falls back to a plain text
-    search."""
+    whether Codex reads at least min_doc_bytes: a top-level project_doc_max_bytes that big, or
+    none, when min_doc_bytes is no more than Codex reads by default. Comments and other tables
+    don't count. For a file the reader can't follow, it falls back to a plain text search."""
     pattern = path_pattern(writable_root)
     lines = to_lines(text)
     layout = None if MULTI_LINE_STRING.search(text) else read_layout(lines)
     if layout is None or layout.reason:
         roots = re.search(r"writable_roots\s*=\s*\[[^\]]*" + pattern, text, re.IGNORECASE)
-        max_bytes = re.search(r"(?m)^\s*project_doc_max_bytes\s*=\s*(\d+)", text)
-        return (
-            roots is not None,
-            max_bytes is not None and int(max_bytes.group(1)) >= min_doc_bytes,
-        )
+        found = re.search(r"(?m)^\s*project_doc_max_bytes\s*=\s*(\d+)", text)
+        max_bytes = int(found.group(1)) if found else None
+        return roots is not None, reads_enough(max_bytes, min_doc_bytes)
     has_root = False
-    has_max_bytes = False
+    max_bytes = None
+    set_somehow = False
     for key in layout.keys:
-        if key.table == "" and key.name == "project_doc_max_bytes":
+        if key.table == "" and names_key("project_doc_max_bytes", key):
+            set_somehow = True
             number = re.search(r"=\s*([0-9][0-9_]*)\s*$", value_text(lines, key))
-            if number and int(number.group(1).replace("_", "")) >= min_doc_bytes:
-                has_max_bytes = True
+            if key.name == "project_doc_max_bytes" and number:
+                max_bytes = int(number.group(1).replace("_", ""))
         elif (
             key.table == "sandbox_workspace_write"
             and key.name == "writable_roots"
             and re.search(pattern, value_text(lines, key), re.IGNORECASE)
         ):
             has_root = True
-    return has_root, has_max_bytes
+    # A value this reader can't follow counts as too small, so setup plans a change, which says
+    # why it can't make it.
+    if set_somehow and max_bytes is None:
+        return has_root, False
+    return has_root, reads_enough(max_bytes, min_doc_bytes)
 
 
 def names_key(name: str, key: Key) -> bool:
@@ -188,10 +204,11 @@ class Insert:
 
 
 def plan(path: Path, writable_root: str, min_doc_bytes: int) -> Plan:
-    """Plans the change that adds writable_root to writable_roots and raises
-    project_doc_max_bytes to at least min_doc_bytes, as whole-line insertions and edits, leaving
-    every other line as it was. The new text is read again to confirm it's still TOML this reader
-    follows, with each setting defined once and set as needed."""
+    """Plans the change that adds writable_root to writable_roots and makes Codex read at least
+    min_doc_bytes, raising project_doc_max_bytes, or adding it when Codex's default is less, as
+    whole-line insertions and edits, leaving every other line as it was. The new text is read
+    again to confirm it's still TOML this reader follows, with each setting defined once and set
+    as needed."""
     pattern = path_pattern(writable_root)
     file = read_settings_file(path)
     result = Plan(file, reason=file.reason)
@@ -228,7 +245,7 @@ def plan(path: Path, writable_root: str, min_doc_bytes: int) -> Plan:
             changes[key.start] = (
                 line[: number.start(1)] + str(min_doc_bytes) + line[number.end(1) :]
             )
-    else:
+    elif not reads_enough(None, min_doc_bytes):
         new_line = f"project_doc_max_bytes = {min_doc_bytes}"
         top_keys = [key for key in layout.keys if key.table == ""]
         if top_keys:
@@ -357,7 +374,7 @@ def plan(path: Path, writable_root: str, min_doc_bytes: int) -> Plan:
         after.reason
         or not is_configured(new_text, writable_root, min_doc_bytes)
         or len(set(names)) != len(names)
-        or len(top_max) != 1
+        or len(top_max) > 1
         or len(sandbox_roots) != 1
     ):
         result.reason = "a check of the planned change failed"
@@ -596,11 +613,10 @@ def same_apart_from_change(
         return False
     new_max = new.pop("project_doc_max_bytes", None)
     old_max = old.pop("project_doc_max_bytes", None)
-    if not isinstance(new_max, int) or new_max < min_doc_bytes:
+    if old_max is not None and not isinstance(old_max, int):
         return False
-    if old_max is not None and (
-        not isinstance(old_max, int) or new_max != max(old_max, min_doc_bytes)
-    ):
+    # What Codex read before stays when it's enough, and otherwise becomes min_doc_bytes.
+    if new_max != (old_max if reads_enough(old_max, min_doc_bytes) else min_doc_bytes):
         return False
     old_sandbox = old.get("sandbox_workspace_write", {})
     new_sandbox = new.get("sandbox_workspace_write")

@@ -198,8 +198,10 @@ from .settings import (
     BY_PATH,
     CLAUDE_CODE,
     CODEX,
+    CODEX_INSTRUCTIONS_MAX,
     DEV_HOME_SETTINGS,
     MISSING,
+    RULES_WARN_ABOVE,
     SCHEMA_VERSION,
     SETTINGS_PATH,
     STATE,
@@ -246,11 +248,6 @@ from .settings_files import (
     write_settings_file,
 )
 
-# Codex joins its global AGENTS.md with the project's AGENTS.md files and stops reading at
-# project_doc_max_bytes, 32 KiB by default. The global file comes first, so the cut would fall on
-# the project's own instructions, without a warning. Twice the default leaves room for long
-# project files.
-CODEX_DOC_BYTES = 65536
 # What each folder Claude Code's settings.json gets in additionalDirectories is called, in the
 # order settings_checks lists them.
 ALLOWED_NAMES = ("dev-home", "dev-home-toolkit")
@@ -421,6 +418,9 @@ class Setup:
         self.problems: list[str] = []
         self.unknown_placeholders: list[str] = []
         self.generated_changes = 0
+        # The least each Codex home's project_doc_max_bytes is set to, from this PC's settings as
+        # this run has them (see codex_doc_bytes).
+        self.codex_doc_bytes = codex_doc_bytes({})
         # The line saying which of a shared agent's folders got the main folder's answer, by the
         # agent's setting, printed once the settings are saved, unless a person answers for the
         # agent's folders first.
@@ -521,7 +521,12 @@ class Setup:
         self.line()
         self.line(f"{kind}: {folder_list(folders) or 'none found yet'}")
         self.line()
-        does = yes_does(agent, several=len(folders) > 1, guarded=self.any_guarded(agent, folders))
+        does = yes_does(
+            agent,
+            several=len(folders) > 1,
+            guarded=self.any_guarded(agent, folders),
+            doc_bytes=self.codex_doc_bytes,
+        )
         for text in textwrap.wrap(does, console.LINE_WIDTH):
             self.line(text)
         self.line()
@@ -1679,6 +1684,7 @@ class Setup:
 
     def run(self, content_dir_option: str) -> None:
         settings, read = self.read_settings()
+        self.codex_doc_bytes = codex_doc_bytes(settings.data)
         # A PC's first setup: no dev-home folder saved yet, such as after settings are set aside.
         first_setup = not settings.content_dir
         if self.configure is not None:
@@ -1730,6 +1736,7 @@ class Setup:
                 raise CannotGoOnError
             settled = self.settle(settings, read, declared)
             saved = self.save(settled)
+            self.codex_doc_bytes = codex_doc_bytes(settled.settings.data)
             for matched in settled.matched.values():
                 if self.what_if:
                     self.line(f"What if: {matched}")
@@ -1992,7 +1999,12 @@ class Setup:
                             console.ListItem(str(f), True, folder_question(agent, f))
                             for f in unanswered
                         ],
-                        yes_does(agent, several=True, guarded=self.any_guarded(agent, unanswered)),
+                        yes_does(
+                            agent,
+                            several=True,
+                            guarded=self.any_guarded(agent, unanswered),
+                            doc_bytes=self.codex_doc_bytes,
+                        ),
                     )
                 if answer is not None:
                     for folder in unanswered:
@@ -2390,6 +2402,16 @@ class Setup:
         ]
         for problem in dict.fromkeys(problems):
             self.status("PROBLEM", problem)
+        # Rules every session loads, big enough to cost tokens worth noticing: said on every sync,
+        # until they shrink or the end user raises the size (decision 0065).
+        warn_kib = int(setting_value(settings.data, RULES_WARN_ABOVE)[0])
+        large = [
+            (requirements.AGENT_NAMES[agent], result.own_bytes)
+            for agent, result in joined.items()
+            if warn_kib and result.own_bytes > warn_kib * 1024
+        ]
+        if large:
+            self.status("LARGE", large_rules_text(large, warn_kib))
 
         # 6. What setup set up in each folder answered no, each removal listed as it goes: the
         # links it made in a Claude Code folder, and for Codex, the links it made in
@@ -2634,37 +2656,45 @@ class Setup:
                 f"{path} could not be read, so its settings were not checked. {error}",
             )
         subject = f"Codex config in {home.name}"
-        has_root, has_doc_bytes = codex_config.configured_parts(text, content_root, CODEX_DOC_BYTES)
+        doc_bytes = self.codex_doc_bytes
+        has_root, has_doc_bytes = codex_config.configured_parts(text, content_root, doc_bytes)
         if has_root and has_doc_bytes:
             return ("OK", f"{subject}: writable_roots and project_doc_max_bytes")
-        added = (
-            f"project_doc_max_bytes = {CODEX_DOC_BYTES}"
+        doc_done = (
+            f"raised project_doc_max_bytes to {doc_bytes}"
+            if re.search(r"(?m)^\s*project_doc_max_bytes\s*=", text)
+            else f"added project_doc_max_bytes = {doc_bytes}"
+        )
+        done = (
+            doc_done
             if has_root
-            else "dev-home to writable_roots"
+            else "added dev-home to writable_roots"
             if has_doc_bytes
-            else "dev-home to writable_roots, and project_doc_max_bytes,"
+            else f"added dev-home to writable_roots, and {doc_done.removeprefix('added ')}"
         )
         try:
-            plan = codex_config.plan(path, content_root, CODEX_DOC_BYTES)
+            plan = codex_config.plan(path, content_root, doc_bytes)
         except Exception as error:
             plan = Plan(SettingsFile(), reason=f"planning the change failed ({describe(error)})")
+        needs = [] if has_root else ["dev-home in writable_roots"]
+        how_to = "Merge this into the file."
         snippet = (
-            f"          project_doc_max_bytes = {CODEX_DOC_BYTES}\n\n"
-            "          [sandbox_workspace_write]\n"
-            f"          writable_roots = ['{content_root}']"
+            f"          [sandbox_workspace_write]\n          writable_roots = ['{content_root}']"
         )
-        return SettingsChange(
-            subject,
-            path,
-            f"dev-home in writable_roots, and project_doc_max_bytes of at least {CODEX_DOC_BYTES} "
-            "(Codex stops reading AGENTS.md files at 32 KiB by default)",
-            plan,
-            "Merge this into the file. project_doc_max_bytes goes above the first [section]. If "
-            "the file already has [sandbox_workspace_write], add only the writable_roots line "
-            "under it:",
-            snippet,
-            f"added {added}",
+        # Only to raise what Codex reads: the setting never lowers it.
+        if not has_doc_bytes:
+            needs.append(
+                f"project_doc_max_bytes of at least {doc_bytes} (Codex stops reading AGENTS.md "
+                "files at 32 KiB by default)"
+            )
+            how_to += " project_doc_max_bytes goes above the first [section]."
+            snippet = f"          project_doc_max_bytes = {doc_bytes}\n\n{snippet}"
+        how_to += (
+            " If the file already has [sandbox_workspace_write], add only the writable_roots line "
+            "under it:"
         )
+        need = ", and ".join(needs)
+        return SettingsChange(subject, path, need, plan, how_to, snippet, done)
 
     def claude_changes_to_remove(
         self, claude_dir: Path, wanted_dirs: list[str]
@@ -2781,21 +2811,38 @@ def folder_question(agent: Agent, folder: Path) -> str:
     return f"Set up {agent.name} in {folder}?"
 
 
-def yes_does(agent: Agent, *, several: bool, guarded: bool = False) -> str:
+def codex_doc_bytes(data: dict[str, Any]) -> int:
+    """The least each Codex home's project_doc_max_bytes is set to, in bytes, from this PC's
+    settings, given as the file's data. Codex joins its global AGENTS.md with the project's
+    AGENTS.md files and stops reading at project_doc_max_bytes, 32 KiB by default. The global
+    file comes first, so the cut would fall on the project's own instructions, without a
+    warning. A size past what config.toml can hold, which can only mean all of it, is that
+    most."""
+    kib = int(setting_value(data, CODEX_INSTRUCTIONS_MAX)[0])
+    return min(kib * 1024, codex_config.TOML_MAX_INTEGER)
+
+
+def yes_does(agent: Agent, *, several: bool, doc_bytes: int, guarded: bool = False) -> str:
     """What a yes to setting up an agent's folders does, and a no, said before the question: the
     change setup also makes in each folder's settings file, which the yes approves (see
     repair_setting), and its removal, which the no approves, included. guarded says some of the
-    folders get home_claude_excludes, and why."""
+    folders get home_claude_excludes, and why. doc_bytes is the least a Codex home's
+    project_doc_max_bytes is set to (see codex_doc_bytes)."""
     yes, no = console.key("yes"), console.key("no")
     # Adding an agent: see AGENTS_SKILLS. An agent that reads ~/.agents/skills, as Codex
     # does, shares that folder's links with Codex, and its question says so.
     if agent.shared:
+        raises = (
+            f", and raises project_doc_max_bytes to {doc_bytes} where it's lower, so "
+            f"{agent.name} reads all of your rules"
+            if not codex_config.reads_enough(None, doc_bytes)
+            else ""
+        )
         return (
             f"Every {agent.name} {agent.folder} reads the same skills, so they share one answer. A "
             f"{yes} sets up dev-home's skills and rules in each {agent.folder}. In each "
             f"{agent.folder}'s config.toml, it also adds your dev-home folder to writable_roots, "
-            f"so {agent.name} can write there from any project, and sets project_doc_max_bytes to "
-            f"{CODEX_DOC_BYTES}, so {agent.name} reads all of your rules. A {no} removes all of "
+            f"so {agent.name} can write there from any project{raises}. A {no} removes all of "
             "that but project_doc_max_bytes, if it's there. Setup backs up each file first."
         )
     where, settings_file, backup, adds, whose = (
@@ -2844,6 +2891,18 @@ def and_list(items: Sequence[str]) -> str:
     if len(items) < 3:
         return " and ".join(items)
     return ", ".join(items[:-1]) + ", and " + items[-1]
+
+
+def large_rules_text(large: Sequence[tuple[str, int]], warn_kib: int) -> str:
+    """The LARGE line: each agent, by its name, whose rules on this PC, the end user's part of its
+    rules file, pass warn_kib, with their size in bytes."""
+    names = and_list([name for name, _ in large])
+    sizes = and_list([f"{size / 1024:.1f} KiB" for _, size in large])
+    return (
+        f"Your rules for {names} on this PC are {sizes}, past {warn_kib} KiB. Every session loads "
+        "them, so they cost tokens in every session: shorten them, or raise "
+        f'"{BY_PATH[RULES_WARN_ABOVE].label}" with /dev-home configure.'
+    )
 
 
 def unanswered_text(agent: Agent, folders: Sequence[Path], *, session: bool = False) -> str:

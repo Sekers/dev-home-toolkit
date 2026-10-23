@@ -282,6 +282,35 @@ def test_puts_back_a_my_rules_md_that_was_deleted_and_commits_it(box: Sandbox) -
     assert committed == ["rules: add my-rules.md", "", "rules/codex/mine/my-rules.md"], committed
 
 
+def test_says_in_a_large_line_when_the_end_users_rules_for_an_agent_pass_the_size(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    # On every sync while they're past it, without counting as a problem; 0 never warns.
+    big = box.content / "rules" / "codex" / "mine" / "big.md"
+    write_text(big, "- " + "x" * (33 * 1024) + "\n")
+    try:
+        result = setup(box)
+        again = setup(box)
+        turned_off = setup_configure(box, "rules.warnAboveKiB=0")
+        off = setup(box)
+        setup_configure(box, "rules.warnAboveKiB=40")
+        raised = setup(box)
+    finally:
+        big.unlink()
+        setup(box)
+    pattern = (
+        r"^LARGE\s+Your rules for Codex on this PC are 33\.\d KiB, past 32 KiB\. Every session "
+        r"loads them, so they cost tokens in every session: shorten them, or raise "
+        r'"Warn when your rules for one agent pass" with /dev-home configure\.$'
+    )
+    assert result.code == 0 and result.has_line(pattern), str(result)
+    assert not result.has_line(r"^LARGE\s+.*Claude Code"), str(result)
+    assert again.has_line(pattern), str(again)
+    assert turned_off.code == 0 and off.code == 0, str(turned_off)
+    assert not off.has_line(r"^LARGE"), str(off)
+    assert not raised.has_line(r"^LARGE"), str(raised)
+
+
 def test_a_second_run_changes_nothing_and_prints_nothing_else(box: Sandbox) -> None:
     result = setup(box)
     assert result.code == 0, str(result)
@@ -545,14 +574,14 @@ def test_a_sync_puts_back_the_settings_a_folder_answered_yes_needs(box: Sandbox)
     assert result.code == 0 and result.has_line(pattern), str(result)
     pattern = (
         r"^SET\s+Codex config in \.codex: added dev-home to writable_roots, and "
-        r"project_doc_max_bytes, in .*config\.toml\. Backup of the old file: "
+        r"project_doc_max_bytes = 131072 in .*config\.toml\. Backup of the old file: "
     )
     assert result.has_line(pattern), str(result)
     assert (
         claude_data["model"] == "x"
         and len(claude_data["permissions"]["additionalDirectories"]) == 2
     )
-    assert codex_data["model"] == "x" and codex_data["project_doc_max_bytes"] == 65536
+    assert codex_data["model"] == "x" and codex_data["project_doc_max_bytes"] == 131072
     assert backups == ['{\n  "model": "x"\n}\n', 'model = "x"\n'], backups
     assert again.code == 0 and not again.has_line(r"^SET"), str(again)
 
@@ -1966,7 +1995,14 @@ def test_configure_alone_shows_the_settings_and_how_to_change_them(
     assert result.has_line(r"^\s+2\s+Install dev-home-toolkit updates automatically\s+no$"), str(
         result
     )
-    assert result.has_line(r"^\s+6\s+Codex homes to set up\s+~/\.codex: yes$"), str(result)
+    # The two size settings, in KiB, then each agent's folders.
+    assert result.has_line(
+        r"^\s+5\s+Warn when your rules for one agent pass\s+32 KiB \(the default\)$"
+    ), str(result)
+    pattern = r"^\s+6\s+Codex's instruction limit\s+128 KiB \(the default\)$"
+    assert result.has_line(pattern), str(result)
+    assert result.has_line(r"^\s+rules\.warnAboveKiB=<KiB>\s"), str(result)
+    assert result.has_line(r"^\s+8\s+Codex homes to set up\s+~/\.codex: yes$"), str(result)
     assert result.has_line(r"^\s+codex\.homes\+=<folder>\s+Set up a Codex home, such as"), str(
         result
     )
@@ -1978,7 +2014,7 @@ def test_configure_alone_shows_the_settings_and_how_to_change_them(
     assert result.has_line(pattern), str(result)
     pattern = r"^\s+codex\.homes\?=<folder>@<days>\s+Ask again in that many days whether to set up"
     assert result.has_line(pattern), str(result)
-    pattern = r"^\s+7\s+Copies of dev-home in active use\s+several \(multi-PC mode\)$"
+    pattern = r"^\s+9\s+Copies of dev-home in active use\s+several \(multi-PC mode\)$"
     assert result.has_line(pattern), str(result)
     assert result.has_line(r"^\s+multiMachine=true\|false\s"), str(result)
     # Whether each skill is added, with the name to change it by, but dev-home's, which is fixed.
@@ -2041,7 +2077,7 @@ def test_configure_alone_shows_how_often_dev_home_is_checked_in_each_mode(
     finally:
         path.write_bytes(before)
     assert result.has_line(rf"^\s+4\s+Check GitHub for dev-home's changes\s+{hours}$"), str(result)
-    assert result.has_line(rf"^\s+7\s+Copies of dev-home in active use\s+{copies}$"), str(result)
+    assert result.has_line(rf"^\s+9\s+Copies of dev-home in active use\s+{copies}$"), str(result)
 
 
 def test_configure_alone_shows_an_interval_of_your_own_without_a_note(
@@ -2119,6 +2155,75 @@ def test_configure_sets_a_setting_back_to_following_its_default(
     assert shown.has_line(r"^A setting with a default also takes default, such as "), str(shown)
 
 
+def test_configure_sets_a_size_in_kib(box: Sandbox, settings_kept: Path) -> None:
+    # The run that saves it raises each Codex home's project_doc_max_bytes to match.
+    config = box.profile / ".codex" / "config.toml"
+    before = config.read_bytes()
+    try:
+        result = setup_configure(box, "codex.instructionsMaxKiB=256")
+        saved = json.loads(read(settings_kept))
+        after = tomllib.loads(read(config))
+        shown = run_python(box, "setup.py", "--configure")
+    finally:
+        config.write_bytes(before)
+        remove_backups(config)
+    assert result.code == 0, str(result)
+    assert saved["codex"]["instructionsMaxKiB"] == 256, saved
+    assert after["project_doc_max_bytes"] == 256 * 1024, after
+    assert shown.has_line(r"^\s+6\s+Codex's instruction limit\s+256 KiB$"), str(shown)
+
+
+def test_a_sync_raises_a_smaller_project_doc_max_bytes_and_says_so(box: Sandbox) -> None:
+    # As on a PC set up before the limit became a setting, at 64 KiB.
+    config = box.profile / ".codex" / "config.toml"
+    before = config.read_bytes()
+    assert "project_doc_max_bytes = 131072" in read(config), read(config)
+    write_text(config, read(config).replace("131072", "65536"))
+    try:
+        result = setup(box)
+        after = tomllib.loads(read(config))
+    finally:
+        config.write_bytes(before)
+        remove_backups(config)
+    pattern = (
+        r"^SET\s+Codex config in \.codex: raised project_doc_max_bytes to 131072 in "
+        r".*config\.toml\. Backup of the old file: "
+    )
+    assert result.code == 0 and result.has_line(pattern), str(result)
+    assert after["project_doc_max_bytes"] == 131072, after
+
+
+def test_codex_never_gets_a_limit_bigger_than_toml_holds(box: Sandbox) -> None:
+    # Python reads a bigger number, but Codex wouldn't read its config.toml.
+    setup_module = shared_module(box, "setup")
+    huge = {"codex": {"instructionsMaxKiB": 10**17}}
+    assert setup_module.codex_doc_bytes(huge) == 2**63 - 1
+    assert setup_module.codex_doc_bytes({}) == 128 * 1024
+
+
+def test_what_to_add_by_hand_to_a_codex_config_never_lowers_what_codex_reads(
+    box: Sandbox,
+) -> None:
+    # Setup doesn't edit a file with multi-line strings, so it says what to add instead: only
+    # writable_roots, since Codex already reads more than the limit here.
+    config = box.profile / ".codex" / "config.toml"
+    before = config.read_bytes()
+    write_text(config, 'note = """\nx\n"""\nproject_doc_max_bytes = 262144\n')
+    try:
+        result = run_python(box, "setup.py")
+        after = config.read_bytes()
+    finally:
+        config.write_bytes(before)
+    pattern = (
+        r"^PROBLEM\s+Codex config in \.codex: .*config\.toml needs dev-home in writable_roots\.$"
+    )
+    assert result.has_line(pattern), str(result)
+    pattern = r"^\s+Merge this into the file\. If the file already has \[sandbox_workspace_write\]"
+    assert result.has_line(pattern), str(result)
+    assert not any("project_doc_max_bytes =" in line for line in result.lines), str(result)
+    assert after == b'note = """\nx\n"""\nproject_doc_max_bytes = 262144\n'
+
+
 def test_the_settings_definitions_declare_what_setup_needs(box: Sandbox) -> None:
     settings = shared_module(box, "settings")
     declared = {setting.path: setting for setting in settings.SETTINGS}
@@ -2127,6 +2232,8 @@ def test_the_settings_definitions_declare_what_setup_needs(box: Sandbox) -> None
         "updates.installAutomatically",
         "updates.checkEveryHours",
         "devHome.checkEveryHours",
+        "rules.warnAboveKiB",
+        "codex.instructionsMaxKiB",
     ]
     # The folders of each agent, all in one shape, an entry for each with its answer. Only Codex's
     # homes share one answer, which only setup's code knows.
@@ -2138,6 +2245,9 @@ def test_the_settings_definitions_declare_what_setup_needs(box: Sandbox) -> None
     # Today's behavior: no automatic updates until the user says so.
     assert declared["updates.installAutomatically"].default is True
     assert settings.DEFAULT_HOURS == {"updates.checkEveryHours": 24, "devHome.checkEveryHours": 12}
+    # The sizes of decision 0065, in KiB: a warning past 32, and Codex reading 128.
+    assert declared["rules.warnAboveKiB"].default == 32
+    assert declared["codex.instructionsMaxKiB"].default == 128
 
 
 def test_git_ignores_this_pcs_settings_and_what_saving_them_leaves_beside_them(
@@ -2233,6 +2343,10 @@ def test_the_dev_home_skills_configure_commands_work_as_written(
         (
             "updates.checkEveryHours=-1",
             r"updates\.checkEveryHours is a whole number of hours, 0 or more",
+        ),
+        (
+            "rules.warnAboveKiB=32KiB",
+            r"rules\.warnAboveKiB is a whole number of KiB, 0 or more, not 32KiB\.",
         ),
         ("claudeCode.folders=~/.claude-x", r"claudeCode\.folders changes one folder at a time"),
         (
@@ -3589,6 +3703,39 @@ TABLE = "\n\n[sandbox_workspace_write]\nwritable_roots = "
 )
 def test_codex_config_is_configured(box: Sandbox, text: str, configured: bool) -> None:
     assert shared_module(box, "codex_config").is_configured(text, ROOT, 65536) is configured
+
+
+@pytest.mark.parametrize(
+    ("text", "kib", "after"),
+    [
+        ("", 32, None),
+        ("", 0, None),
+        ("", 33, 33 * 1024),
+        ("project_doc_max_bytes = 16384\n", 32, 32 * 1024),
+        ("project_doc_max_bytes = 262144\n", 128, 262144),
+    ],
+    ids=[
+        "no value, and Codex's default is enough",
+        "no value, and a limit of 0",
+        "no value, and more than Codex's default",
+        "a smaller value",
+        "a bigger value",
+    ],
+)
+def test_codex_config_makes_codex_read_at_least_the_limit_and_only_ever_raises_it(
+    box: Sandbox, text: str, kib: int, after: int | None
+) -> None:
+    # With no project_doc_max_bytes, Codex reads 32 KiB.
+    codex = shared_module(box, "codex_config")
+    path = box.root / "plans" / "limit.toml"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    plan = codex.plan(path, ROOT, kib * 1024)
+    assert not plan.reason, plan.reason
+    assert tomllib.loads(plan.new_text).get("project_doc_max_bytes") == after, plan.new_text
+    assert codex.configured_parts(plan.new_text, ROOT, kib * 1024) == (True, True)
+    enough = after is None or f"= {after}" in text
+    assert codex.configured_parts(text, ROOT, kib * 1024) == (False, enough)
 
 
 @pytest.mark.parametrize(
