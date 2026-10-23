@@ -2,7 +2,9 @@
 one file setup writes for each agent. The design and its reasons are in docs/development/
 decisions/, in decision 0065, "Where end users' rules live", and decision 0066, "Notes in rule
 files". This module only reads: setup writes each agent's file, and the my-rules.md files it
-finds missing (decision 0064, "Each agent's rules file").
+finds missing (decision 0064, "Each agent's rules file"). It also works out what setup moves into
+rules/ from an agent's file: the lines setup didn't write, with the headings they sat under, the
+moved file's name and note, and whether a file there already holds the same text.
 
 rules/ has four levels, and an agent's file joins them in this order, each one's mine/ folder,
 the end user's own files:
@@ -28,13 +30,20 @@ from each file in join order, then its subsections, each where it first appears,
 heading before a shallower one, so text keeps the heading it had. What a file has outside a
 top-level heading of its own goes under # My rules, so none of it reads as part of the operating
 rules, and a heading with nothing under it is left out. The operating rules come first and never
-merge, and nothing is ever deduplicated."""
+merge, and nothing is ever deduplicated.
 
+Setup tells its own lines in an agent's file from anyone else's by the copy it keeps of what it
+last wrote there. Joining puts the lines someone added back in the same section, by the headings
+they keep, and a file that was there before setup moves whole."""
+
+import bisect
+import difflib
 import hashlib
 import os
 import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 from .links import is_link
@@ -48,6 +57,13 @@ UNANSWERED = "unanswered"
 MY_RULES = "my-rules.md"
 # The heading the end user's rules go under, as many an end user's own rules file starts.
 MY_RULES_HEADING = "# My rules"
+# The first line of the operating rules, which every rules file setup writes starts with, kept
+# first (docs/development/skills.md).
+OPERATING_HEADING = "# Private repo: dev-home (rules loaded)"
+# What the name of each file setup moves into rules/ starts with (see moved_name).
+MOVED = "moved"
+# The most pairs of lines matched_lines has difflib compare at once, such as 100 lines with 100.
+SMALL_COMPARISON = 10_000
 # The longest a name in rules/ may be (decision 0065): a PC's folder, an agent's folder, a
 # built-in rule's name, and the name of a file setup moves there, .md included.
 PC_NAME_LIMIT = 32
@@ -450,6 +466,288 @@ def missing_my_rules(rules_root: Path, pc: str, agents: Iterable[str]) -> list[P
         if MY_RULES not in names:
             missing.append(rules_root / folder / MY_RULES)
     return missing
+
+
+# What setup moves into rules/ from an agent's file
+
+
+@dataclass(frozen=True)
+class ToMove:
+    """What setup moves into rules/ from an agent's rules file: text, as a file of its own, or ""
+    when there's nothing to move; and whole, set when that's the whole file, one that was there
+    before setup wrote its own."""
+
+    text: str
+    whole: bool = False
+
+
+@dataclass(frozen=True)
+class Context:
+    """Where a line of a file sits: the headings it's under, outermost first, the one open at each
+    level, and fence, the line that opened the code block it's in, or "" outside one."""
+
+    headings: tuple[str, ...]
+    fence: str
+
+
+def to_move(current: str, kept: str | None, new: str, operating: str) -> ToMove:
+    """What setup moves into rules/ from an agent's rules file, current, before it writes new there
+    (decision 0064, "Each agent's rules file"): the lines that aren't in kept, the copy of what it
+    last wrote there. With no copy, a file that doesn't start with the operating rules' heading
+    isn't setup's, so it moves whole. One that does is setup's own, from another PC or from before
+    its copy was lost, so the lines that aren't in new move, though they may be setup's own older
+    text. Nothing moves from a file of blank lines alone. operating is the operating rules as setup
+    writes them now (see added_text)."""
+    if not current.strip():
+        return ToMove("")
+    if kept is not None:
+        return ToMove(added_text(current, kept, operating))
+    if not current.startswith(OPERATING_HEADING):
+        return ToMove("\n".join(trimmed(current.split("\n"))), whole=True)
+    return ToMove(added_text(current, new, operating))
+
+
+def added_text(current: str, before: str, operating: str) -> str:
+    """The lines in current that aren't in before, as the text of a file of their own, or "" when
+    only blank lines were added. Each run of added lines keeps the headings it sat under, so
+    joining puts it back in the same section, and runs under the same heading share it. A line
+    under one of the top-level headings in operating, the operating rules, keeps none, since those
+    aren't the end user's headings, and goes under # My rules, as joining puts any line outside a
+    heading. A run that starts or ends inside a code block gets that block's fence, so it stays
+    code. Lines are compared without the spaces at their ends, so an editor that trims them adds
+    nothing (see matched_lines)."""
+    lines = current.split("\n")
+    matched = matched_lines(
+        [line.rstrip() for line in before.split("\n")], [*map(str.rstrip, lines)]
+    )
+    runs: list[tuple[int, int]] = []
+    start = -1
+    for index in range(len(lines) + 1):
+        if index < len(lines) and index not in matched:
+            start = index if start < 0 else start
+            continue
+        if start >= 0 and any(line.strip() for line in lines[start:index]):
+            runs.append((start, index))
+        start = -1
+    contexts = contexts_at(lines, [start for start, _ in runs], top_level_keys(operating))
+    return join(run_text(lines[start:end], contexts[start]) for start, end in runs)
+
+
+def matched_lines(before: Sequence[str], after: Sequence[str]) -> set[int]:
+    """The lines of after, by index, that match lines of before in the same order, found as
+    patience diff finds them (git diff --patience): the lines both share at either end match,
+    then the lines that occur once on each side, in the longest run in the same order in both,
+    anchor the rest, and the lines between two anchors are compared the same way. Where no line
+    between them occurs once on each side, difflib compares them when they're few, and none match
+    when they're many. difflib alone takes minutes on a large file whose lines repeat, such as
+    blank lines and code fences, since it tries every pair of them."""
+    matched: set[int] = set()
+    pending = [(0, len(before), 0, len(after))]
+    while pending:
+        low, high, after_low, after_high = pending.pop()
+        while low < high and after_low < after_high and before[low] == after[after_low]:
+            matched.add(after_low)
+            low, after_low = low + 1, after_low + 1
+        while low < high and after_low < after_high and before[high - 1] == after[after_high - 1]:
+            high, after_high = high - 1, after_high - 1
+            matched.add(after_high)
+        if low == high or after_low == after_high:
+            continue
+        anchors = unique_anchors(before, after, (low, high), (after_low, after_high))
+        if anchors:
+            for index, after_index in anchors:
+                matched.add(after_index)
+                pending.append((low, index, after_low, after_index))
+                low, after_low = index + 1, after_index + 1
+            pending.append((low, high, after_low, after_high))
+        elif (high - low) * (after_high - after_low) <= SMALL_COMPARISON:
+            blocks = difflib.SequenceMatcher(
+                None, before[low:high], after[after_low:after_high], autojunk=False
+            ).get_matching_blocks()
+            for block in blocks:
+                matched.update(range(after_low + block.b, after_low + block.b + block.size))
+    return matched
+
+
+def unique_anchors(
+    before: Sequence[str],
+    after: Sequence[str],
+    span: tuple[int, int],
+    after_span: tuple[int, int],
+) -> list[tuple[int, int]]:
+    """The lines that occur once in before's span and once in after's, as pairs of their indexes,
+    the longest run of them in the same order in both, found by patience sorting."""
+
+    def once(lines: Sequence[str], low: int, high: int) -> dict[str, int]:
+        found: dict[str, int] = {}
+        for index in range(low, high):
+            found[lines[index]] = -1 if lines[index] in found else index
+        return found
+
+    in_after = once(after, *after_span)
+    pairs = sorted(
+        (
+            (index, in_after[line])
+            for line, index in once(before, *span).items()
+            if index >= 0 and in_after.get(line, -1) >= 0
+        ),
+        key=lambda pair: pair[1],
+    )
+    # Patience sorting: tops holds, for each length of run so far, the smallest index in before
+    # that ends one, and ends which pair that is; back links each pair to the one before it.
+    tops: list[int] = []
+    ends: list[int] = []
+    back: list[int] = []
+    for number, (index, _) in enumerate(pairs):
+        place = bisect.bisect_left(tops, index)
+        back.append(ends[place - 1] if place else -1)
+        if place == len(tops):
+            tops.append(index)
+            ends.append(number)
+        else:
+            tops[place], ends[place] = index, number
+    run: list[tuple[int, int]] = []
+    number = ends[-1] if ends else -1
+    while number >= 0:
+        run.append(pairs[number])
+        number = back[number]
+    return run[::-1]
+
+
+def top_level_keys(operating: str) -> set[tuple[int, str]]:
+    """What the operating rules' top-level headings match others by (see heading_key): those in
+    operating, outside fenced code, and always OPERATING_HEADING."""
+    keys = {section.key for section in parsed(operating).children if section.level == 1}
+    return keys | {heading_key(1, OPERATING_HEADING[2:])}
+
+
+def contexts_at(
+    lines: Sequence[str], starts: Sequence[int], operating: set[tuple[int, str]]
+) -> dict[int, Context]:
+    """Where each line in starts sits in lines (see Context), in one pass. A line whose outermost
+    heading is one of operating's keys sits under no headings."""
+    wanted = set(starts)
+    found: dict[int, Context] = {}
+    open_headings: list[tuple[int, tuple[int, str], str]] = []
+    fence = fence_line = ""
+    for index, line in enumerate(lines[: max(starts, default=-1) + 1]):
+        if index in wanted:
+            mine = not open_headings or open_headings[0][1] not in operating
+            headings = tuple(heading for _, _, heading in open_headings) if mine else ()
+            found[index] = Context(headings, fence_line)
+        if fence:
+            if closes(fence, line):
+                fence = fence_line = ""
+            continue
+        if opened := FENCE.match(line):
+            fence, fence_line = opened.group(1), line
+            continue
+        heading = HEADING.match(line)
+        if heading is None:
+            continue
+        level = len(heading.group(1))
+        while open_headings and open_headings[-1][0] >= level:
+            open_headings.pop()
+        open_headings.append((level, heading_key(level, heading.group(2) or ""), line))
+    return found
+
+
+def run_text(run: Sequence[str], context: Context) -> str:
+    """A run of added lines as it moves, without blank lines at either end: after the headings it
+    sat under, and inside the fence of the code block it starts in, if any, with a code block it
+    leaves open closed right after its last line."""
+    run = trimmed(run)
+    fence = ""
+    if context.fence:
+        opened = FENCE.match(context.fence)
+        fence = opened.group(1) if opened else ""
+    for line in run:
+        if fence:
+            if closes(fence, line):
+                fence = ""
+        elif opened := FENCE.match(line):
+            fence = opened.group(1)
+    fenced = [context.fence] if context.fence else []
+    closing = [fence] if fence else []
+    return "\n".join([*context.headings, *fenced, *run, *closing])
+
+
+def slug(text: str) -> str:
+    """text in lowercase, with each run of other characters than letters and digits as one hyphen,
+    and none at either end."""
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+
+
+def moved_name(pc: str, folder: Path, path: Path, taken: Iterable[str]) -> str:
+    """The name of a file setup moves into a mine/ or unanswered/ folder (decision 0066, "Notes in
+    rule files"): moved-<pc>-<folder>-<path>.md, where <pc> is this PC's folder under pcs/ (see
+    pc_folder), <folder> the agent folder's name, such as codex for ~/.codex, and <path> the
+    file's path inside it, path, without .md, each as slug writes it. The whole name, .md
+    included, is cut to MOVED_NAME_LIMIT. A name in taken, the names already in that folder, in
+    any letter case, gets the first free -2, -3, and so on before .md, still within the limit, so a
+    file already there is never overwritten."""
+    inner = path.as_posix()
+    if inner.lower().endswith(".md"):
+        inner = inner[: -len(".md")]
+    stem = "-".join(part for part in (MOVED, slug(pc), slug(folder.name), slug(inner)) if part)
+    used = {name.lower() for name in taken}
+    number = 1
+    while True:
+        suffix = f"-{number}" if number > 1 else ""
+        name = stem[: MOVED_NAME_LIMIT - len(".md") - len(suffix)].rstrip("-") + suffix + ".md"
+        if name.lower() not in used:
+            return name
+        number += 1
+
+
+def moved_file(text: str, *, when: datetime, pc: str, source: Path, about: str) -> str:
+    """A file setup moves into rules/, as it writes it: a note saying who moved it, when, on which
+    PC, and from where, with about, a sentence on what it holds, then text (decision 0066). when
+    carries its offset from UTC, as datetime.now().astimezone() gives it, and pc is the PC's
+    folder under pcs/."""
+    note = [
+        NOTE_START,
+        "by: setup",
+        f"when: {when.isoformat(sep=' ', timespec='seconds')}",
+        f"pc: {pc}",
+        f"from: {source}",
+        "",
+        about,
+        "-->",
+    ]
+    return "\n".join([*note, "", text.strip("\n"), ""])
+
+
+def duplicate_of(text: str, folder: Path) -> Path | None:
+    """The file in folder, subfolders included, that already holds text, a file setup is about to
+    move there, so setup doesn't add it twice (decision 0066): the same text, each without its
+    note, and with line endings and blank lines at either end evened out. None when none does."""
+    wanted = evened(text)
+    for path in markdown_files(folder):
+        try:
+            data = path.read_bytes()
+        except OSError:
+            continue
+        if evened(decode(path, data)[0]) == wanted:
+            return path
+    return None
+
+
+def evened(text: str) -> str:
+    """text without the note it starts with, if any, with LF line breaks and no blank lines at
+    either end, as duplicate_of compares files."""
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return "\n".join(trimmed(without_note(lines)))
+
+
+def without_note(lines: Sequence[str]) -> list[str]:
+    """lines without the note they start with, if they start with one: through the line where it
+    ends, or all of them, when it never ends."""
+    start = next((index for index, line in enumerate(lines) if line.strip()), len(lines))
+    if start == len(lines) or lines[start].strip() != NOTE_START:
+        return list(lines)
+    end = next((index for index in range(start + 1, len(lines)) if "-->" in lines[index]), None)
+    return [] if end is None else list(lines[end + 1 :])
 
 
 def longest_rules_path() -> int:

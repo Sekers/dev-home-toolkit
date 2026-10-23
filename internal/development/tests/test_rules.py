@@ -1,7 +1,10 @@
 """Reading dev-home's rules/ and joining it into each agent's file (internal/shared/rules.py):
-which files join, in what order, how each is read, and how their headings combine."""
+which files join, in what order, how each is read, and how their headings combine. And what setup
+moves into rules/ from an agent's file: the lines it didn't write, with their headings, and the
+moved file's name, note, and duplicates."""
 
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from types import ModuleType
 
@@ -404,6 +407,220 @@ def test_the_operating_rules_never_merge_and_nothing_is_deduplicated(
     assert text == (
         f"{OPERATING}\n# Private repo: dev-home (rules loaded)\n\n- An operating rule.\n\n- Mine\n"
     )
+
+
+# What setup moves into rules/ from an agent's file
+
+# What setup last wrote in an agent's file, the operating rules and then the end user's.
+WRITTEN = (
+    f"{OPERATING}\n# My rules\n\n## Writing style\n\n- Never use em dashes.\n\n"
+    "## Git\n\n- Sign every commit.\n"
+)
+
+
+def added(
+    code: ModuleType, current: str, written: str = WRITTEN, operating: str = OPERATING
+) -> str:
+    text: str = code.added_text(current, written, operating)
+    return text
+
+
+def test_lines_added_to_setups_file_keep_the_headings_they_sat_under(code: ModuleType) -> None:
+    current = WRITTEN.replace(
+        "- Never use em dashes.\n", "- Never use em dashes.\n- Use sentence case in headings.\n"
+    )
+    assert (
+        added(code, current) == "# My rules\n\n## Writing style\n\n- Use sentence case in headings."
+    )
+
+
+@pytest.mark.parametrize("level", ["#", "##"])
+def test_lines_added_under_the_operating_rules_keep_none_of_their_headings(
+    code: ModuleType, level: str
+) -> None:
+    # The operating rules' own sections, such as a skill's block, at either level.
+    operating = f"{OPERATING}\n{level} When the `handoff` skill is available\n\n- A skill's rule.\n"
+    written = WRITTEN.replace(OPERATING, operating)
+    for after in ("- An operating rule.\n", "- A skill's rule.\n"):
+        current = written.replace(after, f"{after}- My own line.\n")
+        assert added(code, current, written, operating) == "# My rules\n\n- My own line."
+
+
+def test_runs_of_added_lines_share_the_headings_they_have_in_common(code: ModuleType) -> None:
+    current = (
+        WRITTEN.replace("## Writing style\n\n", "## Writing style\n\n- First.\n\n")
+        .replace("- Never use em dashes.\n", "- Never use em dashes.\n- Second.\n")
+        .replace("- Sign every commit.\n", "- Sign every commit.\n- Third.\n")
+    )
+    assert added(code, current) == (
+        "# My rules\n\n## Writing style\n\n- First.\n\n- Second.\n\n## Git\n\n- Third."
+    )
+
+
+def test_a_changed_line_counts_as_added_and_a_removed_one_adds_nothing(code: ModuleType) -> None:
+    changed = WRITTEN.replace("- Never use em dashes.", "- Never use em dashes, ever.")
+    assert added(code, changed) == "# My rules\n\n## Writing style\n\n- Never use em dashes, ever."
+    assert added(code, WRITTEN.replace("- Sign every commit.\n", "")) == ""
+
+
+def test_blank_lines_and_spaces_at_a_lines_end_add_nothing(code: ModuleType) -> None:
+    current = WRITTEN.replace("- Never use em dashes.\n", "- Never use em dashes.  \n\n\n")
+    assert added(code, current) == ""
+
+
+def test_a_heading_in_fenced_code_isnt_one_that_lines_sit_under(code: ModuleType) -> None:
+    written = f"{OPERATING}\n# My rules\n\n## Examples\n\n```\n# Not a heading\n```\n"
+    assert added(code, f"{written}- Added.\n", written) == "# My rules\n\n## Examples\n\n- Added."
+
+
+def test_added_lines_in_a_code_block_stay_code(code: ModuleType) -> None:
+    written = f"{OPERATING}\n# My rules\n\n## Examples\n\n~~~text\nold command\n~~~\n"
+    # Changed inside the block: the block's fence goes around it.
+    changed = written.replace("old command", "new command")
+    assert added(code, changed, written) == (
+        "# My rules\n\n## Examples\n\n~~~text\nnew command\n~~~"
+    )
+    # A block added whose fence never closes is closed at the run's end.
+    opened = f"{written}\n```\nunclosed\n"
+    assert added(code, opened, written) == "# My rules\n\n## Examples\n\n```\nunclosed\n```"
+    # Every block changed, each fence matching the same line in many places.
+    blocks = f"{OPERATING}\n# My rules\n\n## A\n\n```\none\n```\n\n## B\n\n```\ntwo\n```\n"
+    renamed = blocks.replace("one", "uno").replace("two", "dos")
+    assert added(code, renamed, blocks) == (
+        "# My rules\n\n## A\n\n```\nuno\n```\n\n## B\n\n```\ndos\n```"
+    )
+
+
+def test_what_moves_depends_on_the_copy_and_the_operating_rules_heading(
+    code: ModuleType,
+) -> None:
+    more = WRITTEN.replace("- Sign every commit.\n", "- Sign every commit.\n- Push often.\n")
+    new = f"{OPERATING}\n# My rules\n\n- A newer rule.\n"
+
+    def to_move(current: str, kept: str | None) -> object:
+        return code.to_move(current, kept, new, OPERATING)
+
+    # With a copy, the lines that aren't in it.
+    assert to_move(more, WRITTEN) == code.ToMove("# My rules\n\n## Git\n\n- Push often.")
+    # With no copy, a file that isn't setup's moves whole.
+    theirs = "\n\n# Mine\n\n- An old rule.\n\n"
+    assert to_move(theirs, None) == code.ToMove("# Mine\n\n- An old rule.", whole=True)
+    # With no copy, setup's own from another PC: the lines that aren't in what it writes now.
+    assert to_move(WRITTEN, None) == code.ToMove(
+        "# My rules\n\n## Writing style\n\n- Never use em dashes.\n\n## Git\n\n- Sign every commit."
+    )
+    assert to_move(new, None) == code.ToMove("")
+    # Nothing moves from a file of blank lines alone.
+    assert to_move("\n \n", None) == code.ToMove("")
+
+
+def test_a_large_file_with_every_rule_changed_moves_every_rule(code: ModuleType) -> None:
+    """Thousands of blank lines, which difflib alone would pair with each other for over a
+    minute."""
+    own = "\n\n".join(f"## Section {n}\n\n- Rule {n}, with some words." for n in range(1500))
+    written = f"{OPERATING}\n# My rules\n\n{own}\n"
+    moved = added(code, written.replace("some words", "other words"), written)
+    assert moved == f"# My rules\n\n{own.replace('some words', 'other words')}"
+
+
+@pytest.mark.parametrize(("repeats", "between"), [(50, "\n"), (150, "- Same.\n" * 148)])
+def test_lines_between_anchors_that_all_repeat_match_only_when_few(
+    code: ModuleType, repeats: int, between: str
+) -> None:
+    """No line between the first and the last change occurs once on each side, so difflib
+    compares them only when there are few: two runs move. With many, every line moves."""
+    written = f"{OPERATING}\n# My rules\n\n" + "- Same.\n" * repeats
+    lines = written.split("\n")
+    first, last = lines.index("- Same."), len(lines) - 2
+    lines[first], lines[last] = "- First.", "- Last."
+    assert added(code, "\n".join(lines), written) == f"# My rules\n\n- First.\n{between}- Last."
+
+
+@pytest.mark.parametrize(
+    ("pc", "folder", "path", "name"),
+    [
+        ("office", "C:/Users/you/.codex", "AGENTS.md", "moved-office-codex-agents.md"),
+        (
+            "office",
+            "C:/Users/you/.claude",
+            "rules/dev-home-rules.md",
+            "moved-office-claude-rules-dev-home-rules.md",
+        ),
+        (
+            "office",
+            "C:/Users/you/.claude-work",
+            "rules/dev-home-rules.MD",
+            "moved-office-claude-work-rules-dev-home-rules.md",
+        ),
+        # A PC's folder can end in a hyphen, as pc_folder writes Caf\u00e9; the name has one.
+        ("caf-", "C:/Users/you/.codex", "AGENTS.md", "moved-caf-codex-agents.md"),
+    ],
+)
+def test_a_moved_files_name_says_where_it_came_from(
+    code: ModuleType, pc: str, folder: str, path: str, name: str
+) -> None:
+    assert code.moved_name(pc, Path(folder), Path(path), []) == name
+
+
+def test_a_taken_name_in_any_letter_case_gets_the_first_free_number(code: ModuleType) -> None:
+    taken = ["MOVED-OFFICE-CODEX-AGENTS.md", "moved-office-codex-agents-2.md", "my-rules.md"]
+    name = code.moved_name("office", Path("C:/Users/you/.codex"), Path("AGENTS.md"), taken)
+    assert name == "moved-office-codex-agents-3.md"
+
+
+def test_a_moved_files_name_with_its_number_is_cut_to_60_characters(code: ModuleType) -> None:
+    pc = "a" * 32
+    folder, path = Path("C:/Users/you/.claude-work"), Path("rules/dev-home-rules.md")
+    # Cut where a hyphen would end it, the hyphen goes too.
+    first = code.moved_name(pc, folder, path, [])
+    assert first == f"moved-{pc}-claude-work-rules.md"
+    second = code.moved_name(pc, folder, path, [first])
+    assert second == f"moved-{pc}-claude-work-rule-2.md"
+    assert (len(first), len(second)) == (59, 60)
+
+
+def test_a_moved_file_starts_with_a_note_setup_reads_and_joining_leaves_out(
+    code: ModuleType, rules: Path
+) -> None:
+    source = Path("C:/Users/you/.codex/AGENTS.md")
+    when = datetime(2030, 1, 15, 9, 30, tzinfo=timezone(timedelta(hours=1)))
+    about = "Moved here when setup took over this PC's Codex home."
+    text = code.moved_file("\n- A rule.\n\n", when=when, pc="office", source=source, about=about)
+    assert text == (
+        "<!-- note\nby: setup\nwhen: 2030-01-15 09:30:00+01:00\npc: office\n"
+        f"from: {source}\n\n{about}\n-->\n\n- A rule.\n"
+    )
+    assert code.note_fields(text.split("\n")) == {
+        "by": "setup",
+        "when": "2030-01-15 09:30:00+01:00",
+        "pc": "office",
+        "from": str(source),
+    }
+    write(rules / "_all-agents" / "mine" / "moved.md", text)
+    assert own(code, rules) == RULE.replace("- Rule", "- A rule.")
+
+
+def test_a_file_that_already_holds_the_text_is_found_whatever_its_note(
+    code: ModuleType, rules: Path
+) -> None:
+    mine = rules / "_all-agents" / "mine"
+    write(mine / "my-rules.md", "- Something else.\n")
+    # Its own note, Windows line endings, and blank lines at its end.
+    copied = b"<!-- note\r\nby: user\r\n-->\r\n\r\n- A rule.\r\n\r\n"
+    (mine / "older").mkdir()
+    (mine / "older" / "copied.md").write_bytes(copied)
+    when = datetime(2030, 1, 15, 9, 30, tzinfo=UTC)
+    moving = code.moved_file(
+        "- A rule.", when=when, pc="office", source=Path("AGENTS.md"), about="Moved."
+    )
+    assert code.duplicate_of(moving, mine) == mine / "older" / "copied.md"
+    assert code.duplicate_of("- Another rule.", mine) is None
+    assert code.duplicate_of("- A rule.", rules / "codex" / "mine") is None
+
+
+def test_a_note_that_never_ends_takes_the_whole_file(code: ModuleType) -> None:
+    assert code.evened("\n<!-- note\nby: user\n\n- Inside the note.\n") == ""
+    assert code.evened("- No note.\n<!-- note\n-->\n") == "- No note.\n<!-- note\n-->"
 
 
 # The path's length

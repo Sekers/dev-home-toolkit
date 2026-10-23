@@ -293,9 +293,6 @@ FOLDER_NOTE = (
     "scripts run, to start them faster, and setup leaves those alone.\n"
 )
 OPERATING_TEMPLATE = TOOLKIT_ROOT / "templates" / "operating-rules" / "operating-rules.md"
-# The first line of the operating rules, which every rules file setup writes starts with, kept
-# first (docs/development/skills.md).
-OPERATING_HEADING = "# Private repo: dev-home (rules loaded)"
 # The rules file setup writes in each Claude Code folder's rules/, which Claude Code loads with
 # every other .md file there, and in each Codex home, the one file Codex reads there.
 CLAUDE_RULES_FILE = "dev-home-rules.md"
@@ -1812,7 +1809,7 @@ class Setup:
             self.status("PROBLEM", f"{label}: {path} couldn't be read, so setup left it. {error}")
             return
         if current is not None and current not in (data, kept):
-            if kept is None and not current.startswith(OPERATING_HEADING.encode("utf-8")):
+            if kept is None and not current.startswith(rules.OPERATING_HEADING.encode("utf-8")):
                 said = "already exists, and setup didn't write it"
             else:
                 said = "has changes setup didn't make, so the rules in it may be out of date"
