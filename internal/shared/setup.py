@@ -2,7 +2,8 @@
 this PC's paths and links them into Claude Code and Codex, writes each agent's always-on rules,
 and checks the settings they need.
 
-Safe to run any number of times. It rewrites only its own generated files and rules files,
+Safe to run any number of times. It rewrites only its own generated files and rules files, and
+dev-home's AGENTS.md and CLAUDE.md, sending a hand edit to either to the Recycle Bin first. It
 creates missing links, replaces links whose target is gone, removes links it made to skills that
 no longer exist, removes what it set up in a folder answered no, and reports anything else without
 changing it.
@@ -22,7 +23,8 @@ A run goes in this order, so the questions come first and the work after:
    the first run. A no is saved too, so it's asked about once. Every run, quiet ones included,
    also gives each Codex home the main home's answer, saying so.
 3. At a console, the settings menu that --configure shows, so any setting can be changed.
-4. The change to confirm to dev-home.json.
+4. The change to confirm to dev-home.json. Then each hand edit to dev-home's AGENTS.md or
+   CLAUDE.md that the Recycle Bin can't take, shown, with whether to delete it for good.
 5. The work, which asks nothing, and holds the sync's lock, so a sync in another session waits
    for it, while no sync ever waits for a person's answer. It reads local-settings.json, in
    dev-home-toolkit's folder, again, since another run may have saved it meanwhile, makes there only
@@ -64,7 +66,13 @@ commits them: the knowledge index, with only its title, and a my-rules.md, empty
 rules/ for every agent set up here. One that git still has, the end user's change not committed
 yet, isn't committed over: the index is put back as git has it, and a my-rules.md waits. A new
 dev-home starts with the files in templates/dev-home/, which dev-home-toolkit owns, and
-dev-home.json (decision 0070, "Who owns each file in dev-home").
+dev-home.json (decision 0070, "Who owns each file in dev-home"). Two of those, AGENTS.md and
+CLAUDE.md, hold this PC's commands, so they're never committed: dev-home's .gitignore lists them,
+and setup writes them on every run, keeping a copy of what it wrote in last-written/, as for the
+agents' rules files. Any other text there is a hand edit, which goes to the Recycle Bin before
+setup puts the file back (decision 0069, "Dropped text"). When the bin can't take it, the file
+stays as edited, named in a PROBLEM line on each run, until a run whose bin takes it, or a
+person's answer at a console.
 
 Each Claude Code folder and Codex home setup sets up needs a change in its settings file, so the
 agent can reach dev-home from any project, and in a Claude Code folder other than ~/.claude, so its
@@ -182,6 +190,7 @@ from . import (
     console,
     generated,
     python_link,
+    recycle_bin,
     requirements,
     rules,
 )
@@ -265,8 +274,9 @@ GLOB_SPECIAL = "*?[]{}()!@+\\"
 GENERATED_ROOT = TOOLKIT_ROOT / "internal" / ".generated"
 PYTHON_LINK = TOOLKIT_ROOT / "internal" / ".python"
 GENERATED_FOLDERS = ("skills", "shared-skill-scripts", "last-written")
-# A copy of the rules file setup last wrote in each agent's folder, by which it tells that file
-# from one an end user changed (decision 0064, "Each agent's rules file"), on this PC only.
+# A copy of the rules file setup last wrote in each agent's folder, and of dev-home's AGENTS.md
+# and CLAUDE.md, by which it tells each from one an end user changed (decision 0064, "Each agent's
+# rules file"), on this PC only.
 LAST_WRITTEN = GENERATED_ROOT / "last-written"
 # What setup decided for each skill on this PC, which facts.py's skills topic shows.
 SKILL_STATES = GENERATED_ROOT / "skill-states.json"
@@ -276,11 +286,11 @@ FAILED_PYTHONS = GENERATED_ROOT / "failed-pythons.json"
 FOLDER_NOTE = (
     "Setup writes everything in this folder: the files from templates/skills/ and\n"
     "templates/shared-skill-scripts/, with this PC's paths filled in; last-written/, a copy of\n"
-    "the rules file it last wrote in each agent's folder; skill-states.json, what it decided for\n"
-    "each skill on this PC; and, while there are any, failed-pythons.json, the Pythons that\n"
-    "didn't run when setup checked them. Don't edit it: the next setup run rewrites it. Python\n"
-    "writes the __pycache__ folders when the scripts run, to start them faster, and setup leaves\n"
-    "those alone.\n"
+    "the rules file it last wrote in each agent's folder, and of dev-home's AGENTS.md and\n"
+    "CLAUDE.md; skill-states.json, what it decided for each skill on this PC; and, while there\n"
+    "are any, failed-pythons.json, the Pythons that didn't run when setup checked them. Don't\n"
+    "edit it: the next setup run rewrites it. Python writes the __pycache__ folders when the\n"
+    "scripts run, to start them faster, and setup leaves those alone.\n"
 )
 OPERATING_TEMPLATE = TOOLKIT_ROOT / "templates" / "operating-rules" / "operating-rules.md"
 # The first line of the operating rules, which every rules file setup writes starts with, kept
@@ -295,6 +305,12 @@ REQUIRES_NAMES = {shown: name for name, shown in requirements.AGENT_NAMES.items(
 # The files dev-home-toolkit owns in a dev-home that a new one starts with, filled in with this
 # PC's paths (decision 0070, "Who owns each file in dev-home").
 DEV_HOME_TEMPLATES = TOOLKIT_ROOT / "templates" / "dev-home"
+# The two of those with this PC's commands, which setup writes in dev-home on every run and never
+# commits, since dev-home's .gitignore lists them: its guidance for agents working there.
+DEV_HOME_GUIDANCE = ("AGENTS.md", "CLAUDE.md")
+# A test profile's Recycle Bin, a folder in the profile, so the tests never reach the real one
+# (see Setup.to_the_bin).
+TEST_BIN = "Recycle Bin"
 # What setup creates the knowledge index with when it's missing: only its title.
 KNOWLEDGE_INDEX_TEXT = "# Knowledge base\n"
 # The skills folder every Codex home reads, in the profile folder. Of the agents setup sets up, only
@@ -381,6 +397,46 @@ class Settled:
     out_of_order: bool = False
 
 
+@dataclass(frozen=True)
+class Guidance:
+    """One of dev-home's AGENTS.md and CLAUDE.md as setup finds it: its path; the copy setup keeps
+    of what it last wrote there; data, what it writes there now, from the template with this PC's
+    paths filled in; current, what's there, or None when nothing is; and kept, the copy's text, or
+    None when there's no copy."""
+
+    name: str
+    path: Path
+    copy: Path
+    data: bytes
+    current: bytes | None
+    kept: bytes | None
+
+    @property
+    def edited(self) -> bool:
+        """Whether it has a hand edit: text that's neither what setup writes now nor what it last
+        wrote. With no copy, that's any text but what setup writes now, so text that may be setup's
+        own older version goes to the Recycle Bin too, and nothing is lost."""
+        return self.current is not None and self.current not in (self.data, self.kept)
+
+    @property
+    def before(self) -> bytes:
+        """What the hand edit changed: the copy of what setup last wrote, or with no copy, what it
+        writes now."""
+        return self.data if self.kept is None else self.kept
+
+
+@dataclass(frozen=True)
+class GuidanceChoice:
+    """What became of a hand edit at this run's questions (see Setup.ask_about_guidance): "sent",
+    the Recycle Bin took it; "delete", the bin couldn't, and a person chose to delete it for good;
+    or "leave", the bin couldn't, and they chose to leave the file as edited, with why_not, why the
+    bin couldn't take it. current is the file as it was then."""
+
+    choice: str
+    current: bytes
+    why_not: str = ""
+
+
 def cleanup(checked: Checked) -> list[str]:
     """What check_settings removed and moved, a sentence for each, for the line that says so."""
     sentences = []
@@ -452,6 +508,11 @@ class Setup:
         self.created = False
         # The profile folder to set up: yours, unless local-settings.json sets testHomeDir.
         self.home = Path.home()
+        # Set when local-settings.json sets testHomeDir, whose profile has its own Recycle Bin.
+        self.test_profile = False
+        # What became of each hand edit to dev-home's AGENTS.md and CLAUDE.md at this run's
+        # questions, by the file's name (see ask_about_guidance).
+        self.guidance_choices: dict[str, GuidanceChoice] = {}
 
     # Talking to the person
 
@@ -1175,7 +1236,13 @@ class Setup:
             return
         path.mkdir(parents=True, exist_ok=True)
         contents: dict[str, bytes] = {}
-        for file in sorted(f for f in DEV_HOME_TEMPLATES.rglob("*") if f.is_file()):
+        # AGENTS.md and CLAUDE.md are never committed: the work writes them for this PC.
+        templates = [
+            f
+            for f in DEV_HOME_TEMPLATES.rglob("*")
+            if f.is_file() and f.relative_to(DEV_HOME_TEMPLATES).as_posix() not in DEV_HOME_GUIDANCE
+        ]
+        for file in sorted(templates):
             rendered = generated.render(file, values)
             self.unknown_placeholders.extend(rendered.unknown)
             contents[file.relative_to(DEV_HOME_TEMPLATES).as_posix()] = rendered.data
@@ -1515,6 +1582,196 @@ class Setup:
             return
         self.status("WROTE", f"The knowledge index, put back from the last commit: {path}")
 
+    # dev-home's AGENTS.md and CLAUDE.md
+
+    def find_guidance(
+        self, content_root: Path, values: dict[str, str], name: str
+    ) -> Guidance | str:
+        """One of dev-home's AGENTS.md and CLAUDE.md as it is now (see Guidance), or why setup
+        can't work with it, as a sentence for a PROBLEM line. A link whose target is gone counts
+        as no file, and the work replaces it; any other link stays, as setup never writes through
+        one."""
+        path = content_root / name
+        copy = LAST_WRITTEN / rules.copy_name(path)
+        rendered = generated.render(DEV_HOME_TEMPLATES / name, values)
+        self.unknown_placeholders.extend(rendered.unknown)
+        existing = link_info(path)
+        current = None
+        if existing is not None and existing.is_link:
+            if existing.target is not None and Path(existing.target).exists():
+                return (
+                    f"dev-home's {name}: {path} links to {existing.target}, so setup left it "
+                    "alone. Setup writes this file on every run: move anything you want to keep "
+                    f"into your rules, in {content_root / rules.RULES}, delete the link, then run "
+                    "setup.py again."
+                )
+        elif existing is not None:
+            try:
+                current = path.read_bytes()
+            except OSError as error:
+                return f"dev-home's {name}: {path} couldn't be read, so setup left it. {error}"
+        try:
+            kept = copy.read_bytes() if copy.is_file() else None
+        except OSError as error:
+            return (
+                f"dev-home's {name}: setup couldn't read its copy, {copy}, so it left it. {error}"
+            )
+        return Guidance(name, path, copy, rendered.data, current, kept)
+
+    def ask_about_guidance(self, content_root: Path) -> None:
+        """At a console, before the work: sends each hand edit to dev-home's AGENTS.md and
+        CLAUDE.md to the Recycle Bin, so the work can put the file back. When the bin can't take
+        it, shows the edit and asks whether to delete it for good or leave the file as edited
+        (decision 0069, "Dropped text"). The file stays as it is until the work, which acts on
+        what happened here only while the file is still the same. A run that can't ask leaves it
+        all to the work (see sync_guidance)."""
+        if not self.can_ask or self.what_if:
+            return
+        values = template_values(content_root)
+        for name in DEV_HOME_GUIDANCE:
+            found = self.find_guidance(content_root, values, name)
+            if isinstance(found, str) or found.current is None or not found.edited:
+                continue
+            sent = self.edit_to_the_bin(found)
+            if sent.in_bin:
+                self.guidance_choices[name] = GuidanceChoice("sent", found.current)
+                continue
+            rules_root = content_root / rules.RULES
+            self.line()
+            self.line(
+                f"dev-home's {name} has edits setup didn't make. Setup sent a copy of the file to "
+                f"the Recycle Bin, and the bin couldn't take it. {sentence(sent.why_not)}"
+            )
+            self.line(
+                "Setup rewrites this file on every run. Your guidance for every session goes in "
+                f"your rules, in {rules_root}."
+            )
+            against = "what setup last wrote" if found.kept is not None else "what setup writes now"
+            self.line(f"The edits, against {against}:")
+            self.print_diff(
+                found.before.decode("utf-8", errors="replace"),
+                found.current.decode("utf-8", errors="replace"),
+            )
+            self.line(
+                f"The file stays as it is until you answer, so you can copy anything from "
+                f"{found.path} first. {console.key('n')} leaves it as edited, and each sync names "
+                "it until the bin takes the edits."
+            )
+            delete = self.choose(
+                f"Delete these edits for good, and put back setup's {name}?", False
+            )
+            self.guidance_choices[name] = GuidanceChoice(
+                "delete" if delete else "leave", found.current, sent.why_not
+            )
+
+    def sync_guidance(self, content_root: Path, values: dict[str, str]) -> None:
+        """Writes dev-home's AGENTS.md and CLAUDE.md with this PC's commands (decision 0070, "Who
+        owns each file in dev-home") when there's none, or when it's what setup last wrote, such
+        as setup's own older version. A hand edit goes to the Recycle Bin first, or as a person
+        chose at this run's questions (see ask_about_guidance); then setup puts the file back and
+        says so. When the bin can't take it, the file stays as edited, named in a PROBLEM line,
+        and the next run tries again (decision 0069, "Dropped text"). Setup keeps a copy of what
+        it wrote, as for the agents' rules files."""
+        rules_root = content_root / rules.RULES
+        for name in DEV_HOME_GUIDANCE:
+            found = self.find_guidance(content_root, values, name)
+            if isinstance(found, str):
+                self.status("PROBLEM", found)
+                continue
+            label = f"dev-home's {name}"
+            if found.current == found.data:
+                self.status("OK", label)
+            elif not found.edited:
+                if not self.write_guidance(found, f"Write {name} with this PC's commands"):
+                    continue
+                self.status("WROTE", f"{label}, with this PC's commands: {found.path}")
+            elif not self.put_back_guidance(found, rules_root):
+                continue
+            if found.kept != found.data and self.should(
+                found.copy, f"Keep a copy of the {name} setup wrote"
+            ):
+                try:
+                    found.copy.parent.mkdir(parents=True, exist_ok=True)
+                    found.copy.write_bytes(found.data)
+                except OSError as error:
+                    self.status("PROBLEM", f"Could not write {found.copy}. {error}")
+
+    def put_back_guidance(self, found: Guidance, rules_root: Path) -> bool:
+        """Puts back setup's text over a hand edit, once the Recycle Bin has the edit or a person
+        chose to delete it, and says so. Returns whether it did."""
+        if found.current is None:
+            return False
+        chosen = self.guidance_choices.get(found.name)
+        # A file that changed after the question has a new edit, which goes to the bin.
+        if chosen is not None and chosen.current != found.current:
+            chosen = None
+        if chosen is not None and chosen.choice == "leave":
+            self.status("PROBLEM", left_text(found, rules_root, chosen.why_not))
+            return False
+        if chosen is None:
+            if not self.should(
+                found.path, "Send its edits to the Recycle Bin, then put back setup's file"
+            ):
+                return False
+            sent = self.edit_to_the_bin(found)
+            if not sent.in_bin:
+                self.status("PROBLEM", left_text(found, rules_root, sent.why_not))
+                return False
+            chosen = GuidanceChoice("sent", found.current)
+        if not self.write_guidance(found, "Put back setup's file"):
+            return False
+        if chosen.choice == "sent":
+            said = (
+                "it had edits setup didn't make, which are in the Recycle Bin as "
+                f'"{bin_name(found.name)}"'
+            )
+        else:
+            said = "its edits are deleted, as you chose"
+        self.status(
+            "WROTE",
+            f"dev-home's {found.name}, put back: {said}. Setup rewrites this file on every run, "
+            f"so put guidance for every session in your rules, in {rules_root}.",
+        )
+        return True
+
+    def write_guidance(self, found: Guidance, action: str) -> bool:
+        """Writes setup's text in one of dev-home's AGENTS.md and CLAUDE.md, in place of a link
+        whose target is gone, if that's there. Returns whether it did."""
+        if not self.should(found.path, action):
+            return False
+        try:
+            if is_link(found.path):
+                found.path.unlink()
+            elif found.current is not None:
+                make_writable(found.path)
+            found.path.write_bytes(found.data)
+        except OSError as error:
+            self.status(
+                "PROBLEM", f"dev-home's {found.name}: could not write {found.path}. {error}"
+            )
+            return False
+        return True
+
+    def edit_to_the_bin(self, found: Guidance) -> recycle_bin.Sent:
+        """Sends a copy of the file with its hand edit, byte for byte, to the Recycle Bin, named
+        for what it holds (see bin_name)."""
+        return self.to_the_bin(found.current or b"", bin_name(found.name))
+
+    def to_the_bin(self, data: bytes, name: str) -> recycle_bin.Sent:
+        """Sends data to the Recycle Bin as a file called name, and says whether the bin has it
+        (decision 0069, "Dropped text"). A test profile's bin is its folder TEST_BIN, so the tests
+        never reach the real one, and a file in that folder's place stands for a bin that can't
+        take it."""
+        if not self.test_profile:
+            return recycle_bin.send_data(data, name)
+        try:
+            folder = self.home / TEST_BIN
+            folder.mkdir(exist_ok=True)
+            (folder / name).write_bytes(data)
+        except OSError as error:
+            return recycle_bin.Sent(False, f"The test profile's bin couldn't take it: {error}")
+        return recycle_bin.Sent(True)
+
     # Each agent's rules file
 
     def sync_rules_file(self, folder: Path, path: Path, text: str, rules_root: Path) -> None:
@@ -1802,8 +2059,11 @@ class Setup:
                 self.cloned = self.created = False
         declared = self.skills_declared(settings)
 
-        # 4. The change to dev-home.json to confirm, shown and asked about before the work.
+        # 4. The change to dev-home.json to confirm, shown and asked about before the work, and
+        # what to do with a hand edit to dev-home's AGENTS.md or CLAUDE.md that the Recycle Bin
+        # can't take.
         self.confirm_copies(content_root)
+        self.ask_about_guidance(content_root)
 
         # 5. The work, on this PC's settings as it saves them: the file as it is by then, with
         # this run's answers, and setup's own changes worked out again (see settle). Skills this
@@ -1862,6 +2122,7 @@ class Setup:
         settings: LocalSettings = loaded
         if settings.test_home_dir:
             self.home = Path(comparable(settings.test_home_dir))
+            self.test_profile = True
             if not self.home.is_dir():
                 self.status(
                     "PROBLEM",
@@ -2296,8 +2557,8 @@ class Setup:
         plans: dict[str, SkillPlan],
     ) -> None:
         """Everything setup sets up besides this PC's settings and the agents' settings files, in
-        order: dev-home's git config, its dev-home.json, and the end user's files setup keeps
-        there, Python for the skills' scripts, the
+        order: dev-home's git config, its dev-home.json, the end user's files setup keeps there,
+        and its AGENTS.md and CLAUDE.md, Python for the skills' scripts, the
         generated files and each skill's state, the skills' links in each skills folder in
         folders, as plans says, and the always-on rules."""
         values = template_values(content_root)
@@ -2336,6 +2597,7 @@ class Setup:
             *([codex] if agent_folders.codex_homes else []),
         ]
         self.sync_own_files(content_root, pc, agents)
+        self.sync_guidance(content_root, values)
 
         # 2. Python, for the skills' scripts. A test profile has its own AppData folder.
         if settings.test_home_dir:
@@ -2980,6 +3242,31 @@ def large_rules_text(large: Sequence[tuple[str, int]], warn_kib: int) -> str:
         "them, so they cost tokens in every session: shorten them, or raise "
         f'"{BY_PATH[RULES_WARN_ABOVE].label}" with /dev-home configure.'
     )
+
+
+def bin_name(name: str) -> str:
+    """What the copy of one of dev-home's AGENTS.md and CLAUDE.md with a hand edit is called in
+    the Recycle Bin, so an end user can tell what it holds."""
+    return f"{Path(name).stem} from dev-home, as edited.md"
+
+
+def left_text(found: Guidance, rules_root: Path, why_not: str) -> str:
+    """The PROBLEM line for one of dev-home's AGENTS.md and CLAUDE.md left as edited, since the
+    Recycle Bin couldn't take a copy of its hand edit: on each run, until a run whose bin takes it,
+    or a person's answer at a console."""
+    return (
+        f"dev-home's {found.name}: {found.path} has edits setup didn't make, and the Recycle Bin "
+        f"couldn't take a copy of them, so setup left the file as edited. {sentence(why_not)} "
+        "Setup rewrites this file on every run, and puts it back once the bin takes the edits: "
+        f"move anything you want to keep into your rules, in {rules_root}, first. To delete the "
+        f"edits for good instead, run {by_hand('setup.py')} in a terminal."
+    )
+
+
+def sentence(text: str) -> str:
+    """text as a sentence, ending with a full stop, for a reason such as the Recycle Bin's, which
+    may end with an error's own text."""
+    return text if text.endswith((".", "!", "?")) else f"{text}."
 
 
 def unanswered_text(agent: Agent, folders: Sequence[Path], *, session: bool = False) -> str:

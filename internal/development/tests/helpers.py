@@ -276,8 +276,11 @@ def new_sandbox(name: str, *, toolkit_repo: bool = False) -> Sandbox:
     # dev-home, with a remote and some content.
     git("init", "--quiet", "--bare", "-b", "main", str(box.remote))
     git("clone", "--quiet", str(box.remote), str(box.content))
-    # Several active copies, so a sync fetches every time unless a test says otherwise.
+    # Several active copies, so a sync fetches every time unless a test says otherwise. The
+    # .gitignore a new dev-home starts with keeps setup's AGENTS.md and CLAUDE.md out of git.
+    gitignore = box.toolkit / "templates" / "dev-home" / ".gitignore"
     files = {
+        ".gitignore": gitignore.read_text(encoding="utf-8"),
         "dev-home.json": '{\n  "schemaVersion": 1,\n  "multiMachine": true\n}\n',
         "rules/_all-agents/mine/my-rules.md": "# My rules\n\n- Personal rule one.\n",
         "knowledge/README.md": "# Knowledge base\n",

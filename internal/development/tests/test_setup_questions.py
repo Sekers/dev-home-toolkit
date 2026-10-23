@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tomllib
 from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -2215,18 +2216,20 @@ def test_creates_a_new_dev_home_from_templates_and_dev_home_json(
     assert re.search(r"^CREATED\s+New private repo my-dev-home on GitHub", out, re.M), out
     assert f"{toolkit}/sync.py" in agents
     # The files in templates/dev-home/, with dev-home.json and the knowledge index, then the
-    # my-rules.md files, each empty, for each agent set up.
+    # my-rules.md files, each empty, for each agent set up. AGENTS.md and CLAUDE.md hold this
+    # PC's commands, so they're written but never committed, and git ignores them.
     created, added = "dev-home: new dev-home", "rules: add my-rules.md"
     assert subjects == [on_this_pc(box, added), on_this_pc(box, created)], subjects
     assert sorted(first) == [
         ".gitattributes",
         ".gitignore",
-        "AGENTS.md",
-        "CLAUDE.md",
         "README.md",
         "dev-home.json",
         "knowledge/README.md",
     ], first
+    assert (new_home / "CLAUDE.md").is_file()
+    ignored = git("-C", str(new_home), "status", "--porcelain", "--ignored", "--", "*.md")
+    assert sorted(ignored) == ["!! AGENTS.md", "!! CLAUDE.md"], ignored
     assert (new_home / "knowledge" / "README.md").read_text(encoding="utf-8") == (
         "# Knowledge base\n"
     )
@@ -2246,3 +2249,118 @@ def test_creates_a_new_dev_home_from_templates_and_dev_home_json(
     problems = [line for line in out.splitlines() if line.startswith("PROBLEM")]
     assert returned == (1 if problems else 0), out
     assert all(re.search(r"left it alone|left unchanged", line) for line in problems), out
+
+
+# A hand edit to dev-home's AGENTS.md or CLAUDE.md, at a console.
+
+DELETE_EDITS = r"^Delete these edits for good, and put back setup's AGENTS\.md\? \[y/N\]: $"
+
+
+@dataclass(frozen=True)
+class Edited:
+    """dev-home's AGENTS.md, setup's text for it, the file with a hand edit, and the test
+    profile's Recycle Bin, which setup uses in place of the real one."""
+
+    path: Path
+    setups: bytes
+    edited: bytes
+    bin: Path
+
+
+@pytest.fixture
+def edited(box: Sandbox) -> Iterator[Edited]:
+    """dev-home's AGENTS.md with a hand edit, put back as it was after the test, with setup's
+    copy of it, and the test profile's Recycle Bin emptied."""
+    path = box.content / "AGENTS.md"
+    copy = box.generated / "last-written" / shared_module(box, "rules").copy_name(path)
+    setups, copy_before = path.read_bytes(), copy.read_bytes()
+    path.write_bytes(setups + b"- A hand edit.\n")
+    found = Edited(path, setups, path.read_bytes(), box.profile / "Recycle Bin")
+    yield found
+    path.write_bytes(setups)
+    copy.write_bytes(copy_before)
+    if found.bin.is_dir():
+        shutil.rmtree(found.bin)
+    else:
+        found.bin.unlink(missing_ok=True)
+
+
+@pytest.mark.parametrize("answer", ["y", "n", ""])
+def test_at_a_console_a_hand_edit_the_bin_cant_take_is_shown_then_deleted_or_left(
+    box: Sandbox, person: Person, edited: Edited, capsys: pytest.CaptureFixture[str], answer: str
+) -> None:
+    # A file in the bin's place: the bin can't take anything. Enter leaves the file.
+    write_text(edited.bin, "")
+    person.answers.update({MENU: "", DELETE_EDITS: answer})
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert any(re.search(DELETE_EDITS, asked) for asked in person.asked), person.asked
+    shown = (
+        "dev-home's AGENTS.md has edits setup didn't make. Setup sent a copy of the file to the "
+        "Recycle Bin, and the bin couldn't take it. The test profile's bin couldn't take it: "
+    )
+    assert shown in out, out
+    assert "The edits, against what setup last wrote:" in out, out
+    assert re.search(r"\+ - A hand edit\.", out), out
+    assert f"so you can copy anything from {edited.path} first." in out, out
+    if answer == "y":
+        assert returned == 0, out
+        pattern = (
+            r"^WROTE\s+dev-home's AGENTS\.md, put back: its edits are deleted, as you chose\. "
+            r"Setup rewrites this file on every run"
+        )
+        assert re.search(pattern, out, re.M), out
+        assert edited.path.read_bytes() == edited.setups
+    else:
+        assert returned == 1, out
+        pattern = r"^PROBLEM\s+dev-home's AGENTS\.md: .* so setup left the file as edited\."
+        assert re.search(pattern, out, re.M), out
+        assert edited.path.read_bytes() == edited.edited
+
+
+def test_at_a_console_what_if_neither_asks_about_a_hand_edit_nor_sends_it_to_the_bin(
+    box: Sandbox, person: Person, edited: Edited, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_text(edited.bin, "")
+    person.answers.update({MENU: "", DELETE_EDITS: "y"})
+    setup_here(box, "--what-if")
+    out = capsys.readouterr().out
+    assert not any(re.search(DELETE_EDITS, asked) for asked in person.asked), person.asked
+    assert "What if: Send its edits to the Recycle Bin, then put back setup's file: " in out, out
+    assert edited.path.read_bytes() == edited.edited
+    assert edited.bin.is_file()
+
+
+def test_at_a_console_a_hand_edit_the_bin_takes_is_put_back_without_a_question(
+    box: Sandbox, person: Person, edited: Edited, capsys: pytest.CaptureFixture[str]
+) -> None:
+    person.answers[MENU] = ""
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert returned == 0, out
+    assert not any(re.search(DELETE_EDITS, asked) for asked in person.asked), person.asked
+    assert re.search(r"^WROTE\s+dev-home's AGENTS\.md, put back: it had edits", out, re.M), out
+    assert edited.path.read_bytes() == edited.setups
+    assert (edited.bin / "AGENTS from dev-home, as edited.md").read_bytes() == edited.edited
+
+
+def test_at_a_console_an_edit_made_after_the_question_goes_to_the_bin_as_a_new_one(
+    box: Sandbox, person: Person, edited: Edited, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The answer was for the file as it was shown, so the work doesn't act on it once the file
+    # changes, such as in another session: that edit goes to the bin, which can take it now.
+    write_text(edited.bin, "")
+    again = edited.edited + b"- Another edit.\n"
+
+    def answer_and_edit(prompt: str) -> str:
+        edited.bin.unlink()
+        edited.path.write_bytes(again)
+        return "y"
+
+    person.answers.update({MENU: "", DELETE_EDITS: answer_and_edit})
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert returned == 0, out
+    assert re.search(r"^WROTE\s+dev-home's AGENTS\.md, put back: it had edits", out, re.M), out
+    assert edited.path.read_bytes() == edited.setups
+    assert (edited.bin / "AGENTS from dev-home, as edited.md").read_bytes() == again

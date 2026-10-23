@@ -241,6 +241,231 @@ def test_gives_each_level_for_an_agent_set_up_here_a_my_rules_md_and_commits_it(
     assert git("-C", str(box.content), "status", "--porcelain") == []
 
 
+# dev-home's AGENTS.md and CLAUDE.md, which setup writes with this PC's commands.
+
+GUIDANCE = ("AGENTS.md", "CLAUDE.md")
+
+
+def guidance_copy(box: Sandbox, name: str) -> Path:
+    """Setup's copy of the AGENTS.md or CLAUDE.md it last wrote in dev-home."""
+    return copy_of(box, box.content / name)
+
+
+def bin_of(box: Sandbox) -> Path:
+    """The test profile's Recycle Bin, a folder setup uses in place of the real one."""
+    return box.profile / "Recycle Bin"
+
+
+@pytest.fixture
+def guidance_kept(box: Sandbox) -> Iterator[None]:
+    """dev-home's AGENTS.md and CLAUDE.md, and setup's copies of them, put back as they were after
+    the test, and the test profile's Recycle Bin emptied."""
+    paths = [box.content / name for name in GUIDANCE]
+    paths += [guidance_copy(box, name) for name in GUIDANCE]
+    before = {path: path.read_bytes() for path in paths}
+    yield
+    for path, data in before.items():
+        if path.is_symlink():
+            path.unlink()
+        path.write_bytes(data)
+    in_bin = bin_of(box)
+    if in_bin.is_dir():
+        shutil.rmtree(in_bin)
+    elif in_bin.exists():
+        in_bin.unlink()
+
+
+def test_writes_dev_homes_agents_md_and_claude_md_for_this_pc_and_git_ignores_them(
+    box: Sandbox,
+) -> None:
+    agents, claude = (read(box.content / name) for name in GUIDANCE)
+    assert f"{forward(box.toolkit)}/sync.py" in agents, agents
+    assert "{{" not in agents
+    assert claude == read(box.toolkit / "templates" / "dev-home" / "CLAUDE.md")
+    for name in GUIDANCE:
+        assert guidance_copy(box, name).read_bytes() == (box.content / name).read_bytes()
+    ignored = git("-C", str(box.content), "status", "--porcelain", "--ignored", "--", "*.md")
+    assert sorted(ignored) == ["!! AGENTS.md", "!! CLAUDE.md"], ignored
+
+
+def test_rewrites_dev_homes_agents_md_while_it_matches_what_setup_last_wrote(
+    box: Sandbox, guidance_kept: None
+) -> None:
+    # Such as setup's own older version, after an update changes the template.
+    path, copy = box.content / "AGENTS.md", guidance_copy(box, "AGENTS.md")
+    now = path.read_bytes()
+    path.write_bytes(b"# An older AGENTS.md\n")
+    copy.write_bytes(b"# An older AGENTS.md\n")
+    result = setup(box)
+    assert result.code == 0, str(result)
+    pattern = r"^WROTE\s+dev-home's AGENTS\.md, with this PC's commands: .*[\\/]AGENTS\.md$"
+    assert result.has_line(pattern), str(result)
+    assert path.read_bytes() == now and copy.read_bytes() == now
+    assert not bin_of(box).exists()
+
+
+@pytest.mark.parametrize("kept_copy", [True, False])
+def test_a_hand_edit_to_dev_homes_claude_md_goes_to_the_bin_then_setup_puts_it_back(
+    box: Sandbox, guidance_kept: None, kept_copy: bool
+) -> None:
+    # With no copy, such as on the first run after it was lost, any other text counts as an edit,
+    # so nothing is lost.
+    path = box.content / "CLAUDE.md"
+    now = path.read_bytes()
+    append(path, "- Only in dev-home sessions.")
+    edited = path.read_bytes()
+    if not kept_copy:
+        guidance_copy(box, "CLAUDE.md").unlink()
+    result = setup(box)
+    assert result.code == 0, str(result)
+    pattern = (
+        r"^WROTE\s+dev-home's CLAUDE\.md, put back: it had edits setup didn't make, which are in "
+        r'the Recycle Bin as "CLAUDE from dev-home, as edited\.md"\. Setup rewrites this file on '
+        r"every run, so put guidance for every session in your rules, in .*[\\/]rules\.$"
+    )
+    assert result.has_line(pattern), str(result)
+    assert path.read_bytes() == now
+    assert (bin_of(box) / "CLAUDE from dev-home, as edited.md").read_bytes() == edited
+    assert guidance_copy(box, "CLAUDE.md").read_bytes() == now
+    # The real bin takes only a plain file name.
+    for name in GUIDANCE:
+        named = shared_module(box, "setup").bin_name(name)
+        assert shared_module(box, "recycle_bin").plain_name(named), named
+
+
+def test_a_hand_edit_that_isnt_utf_8_goes_to_the_bin_byte_for_byte_even_from_a_read_only_file(
+    box: Sandbox, guidance_kept: None
+) -> None:
+    # Such as a line saved in another encoding, by an editor that also left the file read-only.
+    path = box.content / "AGENTS.md"
+    now = path.read_bytes()
+    edited = now + b"- caf\xe9\r\n"
+    path.write_bytes(edited)
+    path.chmod(stat.S_IREAD)
+    try:
+        result = setup(box)
+    finally:
+        path.chmod(stat.S_IREAD | stat.S_IWRITE)
+    assert result.code == 0, str(result)
+    assert path.read_bytes() == now
+    assert (bin_of(box) / "AGENTS from dev-home, as edited.md").read_bytes() == edited
+
+
+def test_setup_goes_on_past_a_folder_where_dev_homes_agents_md_goes(
+    box: Sandbox, guidance_kept: None
+) -> None:
+    path = box.content / "AGENTS.md"
+    path.unlink()
+    path.mkdir()
+    try:
+        result = setup(box)
+    finally:
+        path.rmdir()
+    pattern = (
+        r"^PROBLEM\s+dev-home's AGENTS\.md: .*[\\/]AGENTS\.md couldn't be read, so setup left it\."
+    )
+    assert result.code == 1 and result.has_line(pattern), str(result)
+    problems = [line for line in result.lines if line.startswith("PROBLEM")]
+    assert len(problems) == 1, str(result)
+
+
+def test_writes_back_a_missing_copy_of_dev_homes_agents_md_that_already_matches(
+    box: Sandbox, guidance_kept: None
+) -> None:
+    # Such as after internal/.generated/ was deleted: the file is setup's, so nothing is said.
+    copy = guidance_copy(box, "AGENTS.md")
+    copy.unlink()
+    result = setup(box)
+    assert result.code == 0 and not result.has_line(r"dev-home's AGENTS\.md"), str(result)
+    assert copy.read_bytes() == (box.content / "AGENTS.md").read_bytes()
+    assert not bin_of(box).exists()
+
+
+def test_leaves_a_hand_edit_the_bin_cant_take_and_puts_it_back_once_it_can(
+    box: Sandbox, guidance_kept: None
+) -> None:
+    path, copy = box.content / "AGENTS.md", guidance_copy(box, "AGENTS.md")
+    now = path.read_bytes()
+    append(path, "- A hand edit.")
+    edited = path.read_bytes()
+    # A file in the bin's place: the bin can't take anything.
+    write_text(bin_of(box), "")
+    for _ in range(2):
+        result = setup(box)
+        assert result.code == 1, str(result)
+        pattern = (
+            r"^PROBLEM\s+dev-home's AGENTS\.md: .*[\\/]AGENTS\.md has edits setup didn't make, "
+            r"and the Recycle Bin couldn't take a copy of them, so setup left the file as edited\. "
+            r"The test profile's bin couldn't take it: .* Setup rewrites this file on every run, "
+            r"and puts it back once the bin takes the edits: move anything you want to keep into "
+            r"your rules, in .*[\\/]rules, first\. To delete the edits for good instead, run "
+            r".*setup\.py in a terminal\.$"
+        )
+        assert result.has_line(pattern), str(result)
+        assert path.read_bytes() == edited and copy.read_bytes() == now
+    bin_of(box).unlink()
+    result = setup(box)
+    assert result.code == 0, str(result)
+    assert result.has_line(r"^WROTE\s+dev-home's AGENTS\.md, put back: "), str(result)
+    assert path.read_bytes() == now
+    assert (bin_of(box) / "AGENTS from dev-home, as edited.md").read_bytes() == edited
+
+
+def test_what_if_names_putting_back_a_hand_edit_and_changes_nothing(
+    box: Sandbox, guidance_kept: None
+) -> None:
+    path = box.content / "AGENTS.md"
+    append(path, "- A hand edit.")
+    edited = path.read_bytes()
+    result = setup(box, "--what-if")
+    pattern = (
+        r"^What if: Send its edits to the Recycle Bin, then put back setup's file: "
+        r".*[\\/]AGENTS\.md$"
+    )
+    assert result.has_line(pattern), str(result)
+    assert path.read_bytes() == edited
+    assert not bin_of(box).exists()
+
+
+def test_writes_dev_homes_agents_md_where_a_link_to_nothing_was(
+    box: Sandbox, guidance_kept: None
+) -> None:
+    path = box.content / "AGENTS.md"
+    now = path.read_bytes()
+    path.unlink()
+    try:
+        path.symlink_to(box.root / "gone.md")
+    except OSError:
+        path.write_bytes(now)
+        pytest.skip("Creating a file symlink needs admin rights or Developer Mode on this PC.")
+    result = setup(box)
+    assert result.code == 0, str(result)
+    assert not path.is_symlink() and path.read_bytes() == now
+    assert not (box.root / "gone.md").exists()
+
+
+def test_leaves_alone_a_link_in_place_of_dev_homes_agents_md(
+    box: Sandbox, guidance_kept: None
+) -> None:
+    path, target = box.content / "AGENTS.md", box.root / "my-agents.md"
+    write_text(target, "# Mine\n")
+    path.unlink()
+    try:
+        path.symlink_to(target)
+    except OSError:
+        pytest.skip("Creating a file symlink needs admin rights or Developer Mode on this PC.")
+    try:
+        result = setup(box)
+    finally:
+        path.unlink()
+    pattern = (
+        r"^PROBLEM\s+dev-home's AGENTS\.md: .*[\\/]AGENTS\.md links to .*my-agents\.md, so setup "
+        r"left it alone\."
+    )
+    assert result.code == 1 and result.has_line(pattern), str(result)
+    assert read(target) == "# Mine\n"
+
+
 def test_turns_on_long_paths_in_dev_homes_git_config(box: Sandbox) -> None:
     # rules/ can need paths past Windows' default limit (decision 0065).
     config = git("-C", str(box.content), "config", "--local", "--get", "core.longpaths")

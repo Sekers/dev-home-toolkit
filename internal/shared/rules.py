@@ -107,10 +107,11 @@ def pc_folder(computer_name: str) -> str:
 
 
 def copy_name(folder: Path) -> str:
-    """The name of the copy setup keeps of the rules file it last wrote in an agent's folder, one
-    for each folder: the folder's full path in lowercase, with each run of other characters than
-    letters and digits as one hyphen, and a short hash of the path, so two folders whose names
-    differ only in such characters never share a copy."""
+    """The name of the copy setup keeps of a file it last wrote, by where it wrote it: an agent's
+    folder, for the rules file there, or a file's own path, for dev-home's AGENTS.md and
+    CLAUDE.md. It's that path in lowercase, with each run of other characters than letters and
+    digits as one hyphen, and a short hash of the path, so two paths that differ only in such
+    characters never share a copy."""
     full = str(folder).lower()
     readable = re.sub(r"[^a-z0-9]+", "-", full).strip("-")[-60:]
     return f"{readable}-{hashlib.sha256(full.encode('utf-8')).hexdigest()[:8]}.md"

@@ -124,7 +124,39 @@ def test_text_that_cant_be_written_is_reported_not_raised(
     sent = code.send_text(text, name)
     assert not sent.in_bin
     assert sent.why_not.startswith("Setup couldn't write the text to a file: "), sent
-    assert not folders[0].exists()
+    # Text UTF-8 can't hold fails before any folder is made.
+    assert not any(folder.exists() for folder in folders)
+
+
+def test_data_goes_to_the_bin_byte_for_byte(
+    code: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Such as a file saved in another encoding, which isn't UTF-8.
+    sent: list[bytes] = []
+
+    def to_the_bin(path: Path) -> object:
+        sent.append(path.read_bytes())
+        path.unlink()
+        return code.Sent(True)
+
+    monkeypatch.setattr(code, "send_file", to_the_bin)
+    data = b"\xff\xfe# Rules\r\n\x00caf\xe9\n"
+    assert code.send_data(data, "dropped.md") == code.Sent(True)
+    assert sent == [data]
+
+
+def test_a_temporary_folder_that_cant_be_made_is_reported_not_raised(
+    code: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def no_folder(**_options: str) -> str:
+        raise PermissionError("no temporary folder on purpose")
+
+    monkeypatch.setattr(code.tempfile, "mkdtemp", no_folder)
+    sent = code.send_data(b"# Rules\n", "dropped.md")
+    assert sent == code.Sent(
+        False,
+        "Setup couldn't make a folder in the temporary folder: no temporary folder on purpose",
+    )
 
 
 @windows_only

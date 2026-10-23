@@ -53,4 +53,6 @@ proposing a commit, and points here; its rules apply too.
   setup's code in the test process from the sandbox's copy). What the tests can't reach, so it
   gets checked by hand: a real console's prompts, a real clone or repo creation on GitHub,
   finding a Python through the registry, which a test profile skips, and sending a file to the
-  real Recycle Bin, which the tests leave alone. Say which of those a change affects.
+  real Recycle Bin, which the tests leave alone: a test profile's bin is its `Recycle Bin`
+  folder, and a file in that folder's place stands for a bin that can't take anything. Say which
+  of those a change affects.

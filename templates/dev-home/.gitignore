@@ -1,6 +1,10 @@
 # Scratch space for text that leaves this repo, such as GitHub issue bodies
 .drafts/
 
+# Guidance for agents working here, which setup writes on each PC with that PC's commands
+/AGENTS.md
+/CLAUDE.md
+
 # Files Windows creates: thumbnail caches, folder settings, and shortcuts
 Thumbs.db
 Thumbs.db:encryptable

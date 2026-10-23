@@ -1,11 +1,11 @@
 # 0070: Who owns each file in dev-home
 
-**Built:** yes, except: dev-home's per-PC `AGENTS.md` and `CLAUDE.md`; keeping `README.md`,
-`.gitignore`, and `.gitattributes` current, with hand edits to them, which waits for the version
-check below, since without it two PCs on different versions would undo each other's copies;
-built-in rules' files and the `unanswered/` folders, which come with those parts; withdrawn files;
-and a release that changes line endings. Until then, a new dev-home starts with the files in
-`templates/dev-home/`, filled in, and nothing updates them.
+**Built:** yes, except: keeping `README.md`, `.gitignore`, and `.gitattributes` current, with hand
+edits to them, which waits for the version check below, since without it two PCs on different
+versions would undo each other's copies; built-in rules' files and the `unanswered/` folders,
+which come with those parts; withdrawn files; and a release that changes line endings. Until then,
+a new dev-home starts with the other files in `templates/dev-home/`, filled in, and nothing
+updates them.
 
 **Decision:** each file dev-home-toolkit puts in a dev-home has one owner. Either dev-home-toolkit
 owns it, and setup writes it and keeps it current, or the end user does, and setup creates it only
@@ -44,7 +44,11 @@ still has, and no place for an end user's guidance for dev-home sessions alone).
   end user's guidance for every session goes in their rules, in `rules/`; nothing holds guidance
   for dev-home sessions alone (the developer, 2026-10-23). When the bin can't take it on a quiet
   sync, which can't ask, setup leaves the file as edited and names it in a `PROBLEM` line on each
-  sync until a run that can ask, which asks as 0069 says.
+  sync until a run that can ask, which asks as 0069 says. Setup tells a hand edit to dev-home's
+  `AGENTS.md` and `CLAUDE.md` by a copy of what it last wrote there, as for the agents' rules
+  files ([0064](0064-each-agents-rules-file.md)). With no copy, such as after the copy is lost,
+  any text but what setup writes now counts as one, so text that may be setup's own older
+  version goes to the bin too, and nothing is lost.
 - **A file dev-home-toolkit stops writing,** such as `CLAUDE.md` if Claude Code someday needs no
   pointer, is listed in that release's `withdrawn` list, with `kind: "file"` and its reason
   ([0060: The release data file](0060-the-release-data-file.md)),

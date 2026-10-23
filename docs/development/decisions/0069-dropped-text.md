@@ -1,8 +1,11 @@
 # 0069: Dropped text
 
-**Built:** yes, except: everything that drops text, which comes with the rules work. The module
-that sends it to the Recycle Bin, `internal/shared/recycle_bin.py`, is built, and nothing uses it
-yet.
+**Built:** yes, except: dropping an agent's rules, which comes with the rules work's takeovers and
+added lines; and answering through `/dev-home configure` what to do with a hand edit the bin can't
+take, which comes with them, since both need a way for an agent to answer setup's questions about
+files (the developer, 2026-10-23). Until then, the `PROBLEM` line for such an edit says to run
+setup in a terminal. Hand edits to dev-home's `AGENTS.md` and `CLAUDE.md` go to the bin through
+`internal/shared/recycle_bin.py`.
 
 **Decision:** text an end user tells setup to drop goes to the Recycle Bin, as a file, before
 setup removes or overwrites anything. Decided by the developer on 2026-10-18, and changed on
@@ -37,7 +40,10 @@ setup removes or overwrites anything. Decided by the developer on 2026-10-18, an
   quiet sync, setup leaves the file as edited, and prints a `PROBLEM` line naming it on each sync,
   until a run that can ask. When the bin can't take a hand edit on a run that can ask, at a
   console or through `/dev-home configure`, setup shows the edited lines, then asks whether to
-  delete them for good or leave the file as edited. Leaving it takes the quiet sync's path: the
+  delete them for good or leave the file as edited. At a console, setup tries the bin, and asks
+  when it can't take the edit, before the work, with its other questions
+  ([0034: Runs of setup by hand](0034-runs-of-setup-by-hand.md)); the work acts on that only
+  while the file is still as it was then. Leaving it takes the quiet sync's path: the
   `PROBLEM` line stays, and a later run whose bin takes the edit puts the file back. This question
   covers dev-home's `AGENTS.md` and `CLAUDE.md`, the only hand edits setup puts back so far; each
   other file dev-home-toolkit owns gets its choice when setup starts keeping it current.

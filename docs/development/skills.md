@@ -12,8 +12,8 @@ AGENTS.md points here; its rules apply too.
   `templates/shared-skill-scripts/` when skills share it. The same goes for anything else a
   skill has: one skill's in its own folder, and what several skills share in a
   `templates/shared-skill-*` folder for its kind.
-- `templates/dev-home/` holds only files dev-home-toolkit owns in a dev-home, which a new one
-  starts with
+- `templates/dev-home/` holds only files dev-home-toolkit owns in a dev-home: those a new one
+  starts with, and `AGENTS.md` and `CLAUDE.md`, which setup writes on every run
   ([0070: Who owns each file in dev-home](decisions/0070-who-owns-each-file-in-dev-home.md)).
   An end user's own file, such as the knowledge index or a `my-rules.md`, never goes there:
   setup's code creates it when it's missing. Until the version check of decision 0070 is built, a
@@ -38,8 +38,10 @@ AGENTS.md points here; its rules apply too.
   the agents, and the skills run the shared scripts from there. `templates/operating-rules/` is
   filled in on every setup run too, but goes straight into each agent's rules file (see
   "Operating rules", below). `templates/dev-home/` has no copy there either: setup fills it in
-  only for a new dev-home. Python adds `__pycache__` folders there when the scripts
-  run, and setup leaves those, and any link, alone.
+  for a new dev-home, apart from `AGENTS.md` and `CLAUDE.md`, which hold each PC's commands, so
+  setup fills them in on every run and writes them straight into dev-home, never committed.
+  Python adds `__pycache__` folders there when the scripts run, and setup leaves those, and any
+  link, alone.
 - A file and its folder keep the same name at every stage: template, generated copy, and link,
   such as `skills/handoff/SKILL.md`.
 - Pre-approvals in `allowed-tools` match the literal command text, so write every command with a

@@ -20,9 +20,10 @@ and your rules joined, which setup writes again at each sync.
     run, so they start faster next time; setup leaves those alone. Setup also writes
     `skill-states.json` there: whether it added each skill to your agents on this PC, and if not,
     why, which `/dev-home skills` shows. In `last-written\`, it keeps a copy of the rules file it
-    last wrote in each agent's folder, by which it knows that file is still its own. And when a
-    Python doesn't run as setup checks it, setup notes it in `failed-pythons.json` there, so
-    syncs don't wait for it again until that Python changes.
+    last wrote in each agent's folder, and of your dev-home's `AGENTS.md` and `CLAUDE.md`, by
+    which it knows each file is still its own. And when a Python doesn't run as setup checks it,
+    setup notes it in `failed-pythons.json` there, so syncs don't wait for it again until that
+    Python changes.
   - `internal\.python\`: a directory junction to the folder of the Python the skills' scripts
     run with, so every skill command can name `internal\.python\python.exe` here: a short path,
     the same on every PC, with no spaces to quote. Setup only uses a Python you've installed,
@@ -105,15 +106,24 @@ and your rules joined, which setup writes again at each sync.
 - **In your dev-home's own git config:** commit signing off, pulls that merge rather than rebase,
   and `core.longpaths` on, since `rules\` can need paths longer than Windows' default limit. With
   signing off, a commit never stops in the middle of a sync to ask for your signing passphrase.
-  Your project repos keep signing as usual. Setup does this only in a folder that looks like a
-  dev-home, with `knowledge\README.md`.
+  Your project repos keep signing as usual. Setup does this only in a folder that is a dev-home,
+  with `dev-home.json`.
 - **In your dev-home itself:** an empty `my-rules.md` wherever one is missing in `rules\`, for
   every agent and for each agent set up on this PC (see [Your rules](../guide/your-rules.md)),
   committed and pushed. And after your yes, `dev-home.json`, which says whether dev-home is in
   active use on one PC or on several, so each sync knows how often to check GitHub. Every copy
   shares it, so setup commits and pushes the change; git's history is its backup.
+- **`AGENTS.md` and `CLAUDE.md` in your dev-home:** what an agent working in dev-home needs to
+  know, with this PC's commands, so they differ from PC to PC, and dev-home's `.gitignore`
+  keeps them out of git. Setup rewrites both whenever it runs. An edit you make to either goes
+  to the Recycle Bin first, as a file named such as `AGENTS from dev-home, as edited.md`, and
+  setup puts the file back and says so. Your own guidance for agents goes in your rules. If the
+  Recycle Bin can't take the edit, setup leaves the file as you edited it and says so on every
+  sync, until the bin takes it. Running setup in a terminal tries the bin again, and if it still
+  can't take the edit, shows it to you and asks whether to delete it for good instead.
 
 **To remove it all:** delete each link with `cmd /c rmdir <link>`, `internal\.python` included,
 delete the rules file setup wrote in each agent's folder, `rules\dev-home-rules.md` in each
 Claude Code folder and `AGENTS.md` in each Codex home, take the added lines out of the settings
-files, then delete your dev-home-toolkit folder. Your dev-home stays as it is.
+files, then delete your dev-home-toolkit folder. Your dev-home stays as it is, but its
+`AGENTS.md` and `CLAUDE.md` name commands in the folder you deleted, so delete them too.

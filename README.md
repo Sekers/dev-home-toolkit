@@ -258,7 +258,8 @@ A typical day with the included skills:
 | `knowledge/` | Your knowledge base. `knowledge/README.md` is its index. |
 | `rules/` | Your rules: your own preferences, loaded in every session, for every agent or one, on every PC or one (see [Your rules](docs/guide/your-rules.md)). |
 | `skills/` | Skills of your own, if you add any. |
-| `AGENTS.md`, `README.md` | Notes on working in dev-home itself, for agents and for you. |
+| `README.md` | Notes on working in dev-home itself. |
+| `AGENTS.md`, `CLAUDE.md` | The same for agents, with this PC's commands. Setup writes them on each PC, so git ignores them. |
 | `dev-home.json` | Settings every copy of your dev-home shares. Setup tells a dev-home from any other folder by this file, so keep it. |
 | `.drafts/` | Scratch space for text that leaves dev-home, such as GitHub issue bodies. Git ignores it. |
 
@@ -270,6 +271,10 @@ kinds back when they go missing:
   none, with only its title.
 - **Each `my-rules.md` setup keeps:** empty. When you rename or delete one, setup waits until that
   change is committed, so your other PCs never get an empty file in the meantime.
+
+`AGENTS.md` and `CLAUDE.md` are setup's own: it rewrites them on every run. An edit you make to
+either goes to the Recycle Bin before setup puts the file back, so put your own guidance for
+agents in `rules/`.
 
 ## Documentation
 
@@ -350,7 +355,7 @@ Everything beyond getting started is in the `docs/` folder:
 | `templates/operating-rules/` | The operating rules every session loads, before the end user's rules. Filled in on every setup run, into each agent's rules file. |
 | `templates/skills/` | The skills, one folder each. Filled in on every setup run, into `internal/.generated/`. |
 | `templates/shared-skill-scripts/` | Python scripts that the skills share and only agents run. Filled in on every setup run, into `internal/.generated/`. |
-| `templates/dev-home/` | The files dev-home-toolkit owns in each dev-home. A new dev-home starts with them, filled in. |
+| `templates/dev-home/` | The files dev-home-toolkit owns in each dev-home. A new dev-home starts with them, filled in, apart from `AGENTS.md` and `CLAUDE.md`, which every setup run fills in for that PC. |
 | `internal/` | dev-home-toolkit's own machinery, which nobody runs directly. |
 | `internal/shared/` | The code the scripts load, one file per job: `setup.py`, `sync.py`, and `update.py`, and the modules they share, such as `git.py` and `output.py`. The skills' `prepare.py` loads it too. |
 | `internal/development/` | Only for changing dev-home-toolkit: the development tools' settings (`pyproject.toml`, `uv.lock`) and the tests (`tests/`, run with pytest). People who only use dev-home-toolkit never need it. |

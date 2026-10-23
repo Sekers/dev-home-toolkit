@@ -82,19 +82,31 @@ class Sent:
 
 
 def send_text(text: str, name: str) -> Sent:
-    """Writes text, as UTF-8, to a file called name in a new folder of the system's temporary
-    folder, and sends that file to the Recycle Bin, where an end user finds it by that name. The
-    folder is removed afterwards, and the file too when the bin didn't take it. name has to be a
-    plain file name, with none of the characters Windows keeps out of one."""
-    if not plain_name(name):
-        raise ValueError(f"{name!r} isn't a plain file name.")
-    folder = Path(tempfile.mkdtemp(prefix="dev-home-toolkit-"))
+    """Sends text, as UTF-8, to the Recycle Bin as a file called name (see send_data)."""
+    check_name(name)
+    try:
+        data = text.encode("utf-8")
+    except UnicodeError as error:
+        return Sent(False, f"Setup couldn't write the text to a file: {error}")
+    return send_data(data, name)
+
+
+def send_data(data: bytes, name: str) -> Sent:
+    """Writes data, byte for byte, to a file called name in a new folder of the system's
+    temporary folder, and sends that file to the Recycle Bin, where an end user finds it by that
+    name. The folder is removed afterwards, and the file too when the bin didn't take it. name has
+    to be a plain file name, with none of the characters Windows keeps out of one. Any other
+    failure is a Sent that says why, never an error raised."""
+    check_name(name)
+    try:
+        folder = Path(tempfile.mkdtemp(prefix="dev-home-toolkit-"))
+    except OSError as error:
+        return Sent(False, f"Setup couldn't make a folder in the temporary folder: {error}")
     path = folder / name
     try:
         try:
-            with path.open("w", encoding="utf-8", newline="") as file:
-                file.write(text)
-        except (OSError, UnicodeError) as error:
+            path.write_bytes(data)
+        except OSError as error:
             return Sent(False, f"Setup couldn't write the text to a file: {error}")
         return send_file(path)
     finally:
@@ -104,6 +116,13 @@ def send_text(text: str, name: str) -> Sent:
             path.unlink(missing_ok=True)
         with contextlib.suppress(OSError):
             folder.rmdir()
+
+
+def check_name(name: str) -> None:
+    """Raises ValueError for a name that isn't a plain file name (see plain_name): a caller's
+    mistake, not something to report."""
+    if not plain_name(name):
+        raise ValueError(f"{name!r} isn't a plain file name.")
 
 
 def plain_name(name: str) -> bool:
