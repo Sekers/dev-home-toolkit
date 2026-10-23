@@ -106,3 +106,4 @@ file and link to the new one.
 - [0081: Writing decisions](0081-writing-decisions.md)
 - [0082: markdownlint's rules](0082-markdownlints-rules.md)
 - [0083: The PC's name](0083-the-pcs-name.md)
+- [0084: dev-home's commit history](0084-dev-homes-commit-history.md)
