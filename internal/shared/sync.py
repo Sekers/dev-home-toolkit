@@ -94,7 +94,7 @@ from pathlib import Path
 from typing import IO
 
 from .git import GIT_MISSING, GitResult, last_fetch_age, run_git, with_pc_name
-from .output import commit_count, describe, first_line, status_line
+from .output import commit_count, describe, first_line, listed_files, status_line
 from .programs import by_hand, find_program, run_setup
 from .settings import (
     DEFAULT_HOURS,
@@ -450,8 +450,7 @@ class Sync:
                     f"still in progress in dev-home. Ask the user. git: {first_line(abort.err)}",
                 )
             return
-        # Git lists the files that stopped it on indented lines.
-        files = [line.strip() for line in merge.err + merge.out if re.match(r"\s+\S", line)]
+        files = listed_files(merge.err + merge.out)
         if files:
             self.status(
                 "PROBLEM",

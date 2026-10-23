@@ -379,10 +379,41 @@ def test_with_auto_update_on_never_overwrites_a_local_edit(box: Sandbox) -> None
     finally:
         set_auto_update(box, False)
     assert result.code == 0, str(result)
-    assert result.has_line(r"^UPDATE\s.*not installed"), str(result)
+    # Git names the file on a line of its own, below its reason, and the line names it too.
+    pattern = r"^UPDATE\s.*not installed\. git: .*overwritten by merge: templates/skills/handoff/"
+    assert result.has_line(pattern + r"SKILL\.md$"), str(result)
     assert "A local edit." in edited
     assert after.has_line(r"^PULLED\s"), str(after)
     assert "Upstream change one-b." in generated_skill(box)
+
+
+def test_an_update_that_would_overwrite_a_file_names_it(box: Sandbox) -> None:
+    # Such as a .vscode/settings.json an editor wrote here before an update adds one.
+    added = Path("docs") / "added-by-an-update.md"
+    write_text(box.upstream / added, "From the update.\n")
+    git("-C", str(box.upstream), "add", "--", added.as_posix())
+    git("-C", str(box.upstream), "commit", "--quiet", "-m", "docs: add a page")
+    git("-C", str(box.upstream), "push", "--quiet")
+    local = box.toolkit / added
+    write_text(local, "Written here first.\n")
+    set_auto_update(box, True)
+    try:
+        try:
+            quiet = sync(box)
+            by_hand = run_python(box, "update.py", answer="y")
+        finally:
+            local.unlink()
+        after = sync(box)
+    finally:
+        set_auto_update(box, False)
+    file = re.escape(added.as_posix())
+    assert quiet.code == 0, str(quiet)
+    assert quiet.has_line(rf"^UPDATE\s.*not installed\. git: .* {file}$"), str(quiet)
+    assert by_hand.code == 1, str(by_hand)
+    # The line goes on from the question, "Pull them now? [y/N] ".
+    assert by_hand.has_line(rf"Could not pull them\. git: .* {file}$"), str(by_hand)
+    assert after.has_line(r"^PULLED\s"), str(after)
+    assert (box.toolkit / added).read_text(encoding="utf-8") == "From the update.\n"
 
 
 def test_setup_after_an_update_runs_the_new_code(box: Sandbox) -> None:

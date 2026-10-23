@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any
 
 from .git import GIT_MISSING, last_fetch_age, run_git
-from .output import CYAN, GREEN, RED, color, commit_count, first_line, status_line
+from .output import CYAN, GREEN, RED, color, commit_count, first_line, git_reason, status_line
 from .paths import comparable
 from .programs import by_hand, find_program, run_setup
 from .settings import (
@@ -194,7 +194,7 @@ def check(*, quiet: bool) -> tuple[int, bool]:
             status_line(
                 "UPDATE",
                 f"{waiting} waiting in dev-home-toolkit, not installed. "
-                f"git: {first_line(merge.err + merge.out)}",
+                f"git: {git_reason(merge.err + merge.out)}",
             )
             return 0, False
         notice = changed_defaults_notice(before, declared_defaults(), settings)
@@ -233,7 +233,7 @@ def check(*, quiet: bool) -> tuple[int, bool]:
         before = declared_defaults()
         merge = run_git(TOOLKIT_ROOT, "merge", "--ff-only", "--quiet", commit)
     if merge.code != 0:
-        problem = f"Could not pull them. git: {first_line(merge.err + merge.out)}"
+        problem = f"Could not pull them. git: {git_reason(merge.err + merge.out)}"
         return stop(quiet, problem), False
     notice = changed_defaults_notice(before, declared_defaults(), read_settings())
     print(color(f"Pulled {waiting}.{notice}", CYAN))

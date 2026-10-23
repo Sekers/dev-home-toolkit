@@ -85,6 +85,21 @@ def first_line(lines: Iterable[str]) -> str:
     return (reasons or texts or ["(no message)"])[0]
 
 
+def listed_files(lines: Iterable[str]) -> list[str]:
+    """The files git lists on indented lines below its reason, such as those a merge would
+    overwrite."""
+    return [line.strip() for line in lines if line[:1].isspace() and line.strip()]
+
+
+def git_reason(lines: Iterable[str]) -> str:
+    """Git's reason in one line, as first_line gives it, followed by the files git lists below
+    it, if any: for a merge that would overwrite files, the reason alone doesn't name them."""
+    lines = list(lines)
+    files = listed_files(lines)
+    reason = first_line(lines)
+    return f"{reason} {', '.join(files)}" if files else reason
+
+
 def describe(error: BaseException) -> str:
     """An error in one line: its kind, then its message, which alone can be empty."""
     return f"{type(error).__name__}: {error}"
