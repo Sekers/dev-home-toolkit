@@ -74,6 +74,9 @@ starter's macOS and Linux section in `.gitignore` reaches existing dev-homes by 
   they were committed, every PC's sync would commit its own version, and the PCs would keep undoing
   each other. Listing them in `.gitignore` is visible where git users look, covers a copy from the
   moment it's cloned, and is the standard way.
+- Stale commands mislead: in a `claude -p` test in dev-home on 2026-10-17, its committed
+  `AGENTS.md`, whose commands were out of date, loaded alongside the operating rules' current
+  ones, and the agent picked the right ones only by inference.
 - `.gitignore` and `.gitattributes` hold what dev-home-toolkit's own machinery relies on: the
   sync's merges, LF line endings, and `merge=union` for the knowledge index. So they change with
   the code that relies on them, and leftovers, such as a `*.ps1` line from when the scripts were
