@@ -7,8 +7,8 @@ answers of their own, aren't built.
 **Decision:** every question that offers something a person can take or turn down uses the same
 answers, built and planned offers alike: issue and knowledge candidates, setup's optional lists
 (skills and recommended settings), the `NEW` line, dev-home-toolkit updates, and copied skills.
-Built-in rules have answers of their own, a departure below. Changed on 2026-10-16 and
-2026-10-18. Two terms:
+Built-in rules have answers of their own, a departure below. Changed on 2026-10-16, 2026-10-18,
+and 2026-10-24 (a recommended setting is an offer, with no diff to approve). Two terms:
 
 - **Session:** one conversation with an agent. A new conversation, or `/clear`, starts a new
   one; resuming a conversation continues it. At a terminal, one run of setup is one session.
@@ -38,9 +38,9 @@ Built-in rules have answers of their own, a departure below. Changed on 2026-10-
 - A knowledge candidate's reminder or no needs a record in dev-home of the finding and its
   evidence, with the answer; where it's kept is decided when it's built.
 
-**Departure:** approving exact text, such as a draft's "Save, commit, and push this?" or a
-settings diff's typed yes, stays yes or no. It's one change shown once, not an offer that comes
-back.
+**Departure:** approving exact text, such as a draft's "Save, commit, and push this?" or the
+change to `dev-home.json` that setup shows, stays yes or no. It's one change shown once, not an
+offer that comes back.
 
 **Departure:** the `NEW` line for a new skill is a notice, not an offer. The skill already works
 at its default, so the line says once what happened and how to change it, with no answers, as a

@@ -4,7 +4,8 @@
 
 **Decision:** an update or a sync can bring new items: a dev-home-toolkit skill or recommended
 setting, a personal skill made on another PC, or a Claude Code folder or Codex home setup hasn't
-asked about. Changed on 2026-10-16 and 2026-10-24 (`LARGE` lines share the skills' bullet).
+asked about. Changed on 2026-10-16 and 2026-10-24 (`LARGE` lines share the skills' bullet, and a
+recommended setting is asked in plain words).
 
 - When `update.py` runs at a console, the setup it runs afterward does too, and asks about the new
   items right then.
@@ -23,7 +24,8 @@ asked about. Changed on 2026-10-16 and 2026-10-24 (`LARGE` lines share the skill
   Saying nothing skips it for the session.
 - A new recommended setting gets a `NEW` line on every sync until it's answered, where one answer
   covers a batch, with the shared prompt's choices, in chat or at the next run of setup by hand,
-  whichever comes first. It still shows its diff and needs a yes.
+  whichever comes first. It's asked in plain words, and nothing is written without a yes
+  ([0032: Recommended settings](0032-recommended-settings.md)).
 - A `NEW` line never sets the exit code. The skills pass `NEW` and `UPDATE` lines on with one
   bullet, worded the same in every skill, which `LARGE` lines share
   ([0065: Where end users' rules live](0065-where-end-users-rules-live.md)): "`UPDATE`, `NEW`, and

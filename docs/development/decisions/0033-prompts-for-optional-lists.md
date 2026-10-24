@@ -6,18 +6,21 @@ Claude Code folders are asked through it.
 **Decision:** every list of optional items setup offers, recommended settings and skills now and
 later lists such as built-in rules, is asked with one prompt: **All**, **All recommended** (the
 default, which Enter takes), **None**, or **Ask for each**, where each item's question defaults to
-whether it's recommended (`[Y/n]` or `[y/N]`). All is left out when it would do the same as All
-recommended, and so is None: with every item recommended, `a` means All recommended, and with
-none, `n` does, so a letter and Enter shown as the same are always the same answer. The prompt
-also takes `s`, to skip every item for now, or a number of days, for a reminder about every item,
-and Ask for each asks each item the same: yes, no, skip, or a number of days. A list of one asks
-those for its item. Setup says back the date a number gives, as `Setup asks again from
-YYYY-MM-DD.`, so a typo shows at once. What skip and a reminder save is each list's own; for a
-folder, see [0049: Answers in the settings](0049-answers-in-the-settings.md). In the settings
+whether it's recommended (`[Y/n]` or `[y/N]`); whether a recommended setting is recommended for a
+folder depends on what that folder's settings have now
+([0032: Recommended settings](0032-recommended-settings.md)). All is left out when it would do
+the same as All recommended, and so is None: with every item recommended, `a` means All
+recommended, and with none, `n` does, so a letter and Enter shown as the same are always the
+same answer. The prompt also takes `s`, to skip every item for now, or a number of days, for a
+reminder about every item, and Ask for each asks each item the same: yes, no, skip, or a number
+of days. A list of one asks those for its item. Setup says back the date a number gives, as
+`Setup asks again from YYYY-MM-DD.`, so a typo shows at once. What skip and a reminder save is
+each list's own; for a folder, see [0049: Answers in the settings](0049-answers-in-the-settings.md). In the settings
 menu, the question about an item that has a reminder offers no skip: Enter keeps the reminder
 there, which is what saying nothing does. The prompt covers only the items not answered yet, and
 chat offers the same answers. Changed on 2026-10-20, with skip and the reminders that
-[0040: Answers to offers](0040-answers-to-offers.md) set out.
+[0040: Answers to offers](0040-answers-to-offers.md) set out, and by the developer on 2026-10-24
+(a recommended setting's default depends on the file).
 
 **Why:** one prompt to learn, however long the lists grow, and each new list costs only its
 catalog. Someone in a hurry presses Enter, and someone careful goes through each. With every

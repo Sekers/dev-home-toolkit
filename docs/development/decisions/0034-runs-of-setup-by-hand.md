@@ -21,8 +21,10 @@
    whether to delete it for good ([0069: Dropped text](0069-dropped-text.md)).
 5. The work, without stopping, holding the sync's lock: save this PC's answers, commit
    `dev-home.json` if it changed, then dev-home's `AGENTS.md` and `CLAUDE.md`, the Python link,
-   the generated files, the skill links, the rules, and the settings files. A settings file that
-   changed since its change was planned is left alone until the next run. `dev-home.json` is read
+   the generated files, the skill links, the rules, and the settings files, then each yes to a
+   recommended setting, which is saved only once its change is written
+   ([0032: Recommended settings](0032-recommended-settings.md)). A settings file that changed
+   since the work planned its change is left alone until the next run. `dev-home.json` is read
    again too, and left as it is, with a `PROBLEM`, if it changed since its change was shown.
 
 A run with no console, such as a quiet one, asks nothing and shows no menu, and does the rest in
@@ -46,7 +48,8 @@ made it, each `~/.codex-*` folder that holds a `config.toml` or an `auth.json`, 
 ([0052: Codex homes](0052-codex-homes.md)).
 Until it's answered, setup adds no links and removes none, as for a folder.
 
-Changed on 2026-10-15, 2026-10-16, 2026-10-20, and 2026-10-23.
+Changed on 2026-10-15, 2026-10-16, 2026-10-20, 2026-10-23, and 2026-10-24 (when a yes to a
+recommended setting is saved).
 
 **Why:** running setup by hand is a normal way to use dev-home-toolkit, so it should offer every
 setting, not only the unanswered ones. Questions first and the work after is what people expect

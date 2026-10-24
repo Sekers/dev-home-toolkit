@@ -1,6 +1,7 @@
 # 0053: What a folder's yes approves
 
-**Built:** yes.
+**Built:** yes, except: keeping only the last copy of a recommended setting written more than
+once, which comes with recommended settings.
 
 **Decision:** the yes to setting up a Claude Code folder, or Codex in every Codex home, also
 approves the one change setup makes in that folder's settings file: dev-home and dev-home-toolkit
@@ -19,8 +20,12 @@ In a Claude Code folder other than `~/.claude`, the yes also approves two patter
 `claudeMdExcludes`, which keep `~/.claude`'s instructions out of that folder's sessions
 ([0074: Instructions in other Claude Code folders](0074-instructions-in-other-claude-code-folders.md)),
 and the no approves taking them out. They grant no access, so the question's note about access
-doesn't cover them; the question for the folder says what they do and why. Changed on 2026-10-16
-and 2026-10-19.
+doesn't cover them; the question for the folder says what they do and why.
+
+In a Claude Code folder set up, every run also keeps only the last copy of a recommended setting
+written more than once, which changes nothing Claude Code does
+([0032: Recommended settings](0032-recommended-settings.md)). Changed on 2026-10-16, 2026-10-19,
+and 2026-10-24 (the last copy of a recommended setting).
 
 **Why:** every way a folder got answered, except a yes at a terminal, left it half set up, with a
 `PROBLEM` line on every sync. That covered a yes in chat through `/dev-home configure`, a new
