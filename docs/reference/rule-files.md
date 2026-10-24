@@ -11,6 +11,7 @@ rules](../guide/your-rules.md) explains them from the start.
 | `rules/<agent>/mine/` | one agent, on every PC: `claude-code` or `codex` |
 | `rules/pcs/<pc>/_all-agents/mine/` | every agent, on the PC named `<pc>` |
 | `rules/pcs/<pc>/<agent>/mine/` | one agent, on the PC named `<pc>` |
+| `rules/pcs/<pc>/<agent>/unanswered/` | each file only in the agent's rules file it came from, until you say where it goes |
 
 - `<pc>` is the computer's host name, the name you gave it, up to its first dot, in lowercase,
   with any character other than a letter or a digit as a hyphen, cut to 32 characters.
@@ -20,6 +21,24 @@ rules](../guide/your-rules.md) explains them from the start.
   case: in `_all-agents/mine/` and in `<agent>/mine/` for each agent set up on the PC, at both the
   every-PC level and the PC's own. While a rename or delete of one isn't committed, it waits. It
   never changes any other file there.
+- `unanswered/` is setup's. It holds the lines setup found in an agent's file but didn't write, set
+  aside by a sync, which can't ask where they go (see [Where they go](#where-they-go)). Each file
+  loads only in the file it came from, which its note's `from` names, so lines from one Claude
+  Code account never load in another; from a folder you said no to, or one that's gone, it loads
+  nowhere. Every sync names its files in a `NEW` line until you answer. Running setup in a
+  terminal asks about each one, or you can move a file out yourself, which counts as an answer.
+
+## Moved files
+
+A file setup moves into `mine/` or `unanswered/` is named `moved-<pc>-<folder>-<path>.md`, where
+`<folder>` is the agent's folder, such as `codex` for `~\.codex`, and `<path>` is the file's path
+inside it, such as `moved-office-codex-agents.md`. The name is cut to 60 characters, and a name
+already taken gets `-2`, `-3`, and so on. It starts with a note: `by: setup`, `when`, `pc`, and
+`from`, the file the lines came from. When a file already holds the same text where it would
+join, setup adds nothing, and names that file: a file in any level's `mine/` for that agent on
+the PC, or one in `unanswered/` that came from the same file. A file in `unanswered/` whose text a
+`mine/` file there already holds is removed, the same way. If a commit fails, setup takes back
+what it wrote and removed, so `rules/` never holds a file it couldn't commit.
 
 ## The order they join in
 
@@ -80,9 +99,26 @@ system and is reported, with the name it may mean. Every other field is yours.
 | Codex | `AGENTS.md` in each Codex home, such as `~\.codex\AGENTS.md` |
 
 Setup keeps its own copy of what it last wrote to each, in `internal\.generated\last-written\` in
-dev-home-toolkit's folder, and rewrites a file only while it still matches that copy, or while
-there's no copy and the file already holds what setup would write. Any other file there is left as
-it is and reported on every sync.
+dev-home-toolkit's folder, by which it tells the lines it didn't write there. Those are lines
+someone added, or a whole file that was there before setup's, which it takes over. With no copy, a
+file that starts with the operating rules' first line counts as setup's own, from another PC or
+from before the copy was lost, and only its lines that setup wouldn't write now are moved; they
+may be setup's own older text.
+
+Before setup rewrites the file, or removes it for a folder you said no to, it moves those lines
+into a file of their own in your dev-home (see [Moved files](#moved-files)), with the headings they
+were under, so they join back in the same section. Lines under one of the operating rules'
+headings keep none of them, and go under `# My rules`. Setup commits and pushes them first, and
+leaves the agent's file as it is until they're committed.
+
+| Run | Where the lines go |
+| --- | --- |
+| In a terminal | Setup shows them and asks: into one of the four `mine/` folders that join for that agent on the PC, or dropped, to the Recycle Bin. When the bin can't take them, it asks again: one of those, or deleted for good. Enter leaves them for later, as a sync does. |
+| A sync, or anything else that can't ask | Set aside in `rules/pcs/<pc>/<agent>/unanswered/`. |
+
+A Codex home's `AGENTS.override.md` is never changed. While it has text, Codex reads it there in
+place of `AGENTS.md`, so it loads neither the operating rules nor your rules, and every sync says
+so in a `PROBLEM` line.
 
 ## Size
 

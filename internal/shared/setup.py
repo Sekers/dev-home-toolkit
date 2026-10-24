@@ -3,10 +3,10 @@ this PC's paths and links them into Claude Code and Codex, writes each agent's a
 and checks the settings they need.
 
 Safe to run any number of times. It rewrites only its own generated files and rules files, and
-dev-home's AGENTS.md and CLAUDE.md, sending a hand edit to either to the Recycle Bin first. It
-creates missing links, replaces links whose target is gone, removes links it made to skills that
-no longer exist, removes what it set up in a folder answered no, and reports anything else without
-changing it.
+dev-home's AGENTS.md and CLAUDE.md, sending a hand edit to either to the Recycle Bin first, and
+moving the lines it didn't write in a rules file into dev-home first. It creates missing links,
+replaces links whose target is gone, removes links it made to skills that no longer exist, removes
+what it set up in a folder answered no, and reports anything else without changing it.
 
 A run goes in this order, so the questions come first and the work after:
 
@@ -24,7 +24,9 @@ A run goes in this order, so the questions come first and the work after:
    also gives each Codex home the main home's answer, saying so.
 3. At a console, the settings menu that --configure shows, so any setting can be changed.
 4. The change to confirm to dev-home.json. Then each hand edit to dev-home's AGENTS.md or
-   CLAUDE.md that the Recycle Bin can't take, shown, with whether to delete it for good.
+   CLAUDE.md that the Recycle Bin can't take, shown, with whether to delete it for good. Then the
+   lines setup didn't write in each agent's rules file, and each file waiting in this PC's
+   unanswered/ folders, shown, with where they go.
 5. The work, which asks nothing, and holds the sync's lock, so a sync in another session waits
    for it, while no sync ever waits for a person's answer. It reads local-settings.json, in
    dev-home-toolkit's folder, again, since another run may have saved it meanwhile, makes there only
@@ -56,10 +58,18 @@ each Claude Code folder's rules/, which Claude Code loads with every other .md f
 AGENTS.md in each Codex home. It holds the operating rules, from their template with this PC's
 paths filled in, then the end user's rules from dev-home's rules/, joined for that agent on this PC
 (rules.py). Setup keeps a copy of what it last wrote there, in internal/.generated/last-written/,
-and rewrites the file only while it still matches that copy, or while there's none and the file is
-already what setup would write; it reports any other file there, and leaves it as it is. The
-design is in docs/development/decisions/, in decisions 0064, "Each agent's rules file", and 0065,
-"Where end users' rules live".
+by which it tells the lines it didn't write: ones someone added, or a whole file that was there
+before setup wrote its own. Before it rewrites or removes the file, those lines move into a file of
+their own in dev-home's rules/, with the headings they were under: at a console, into the mine/
+the person picks, or to the Recycle Bin; otherwise, set aside in this PC's unanswered/ for that
+agent, named in a NEW line on every run until a person answers. A file there joins after mine/,
+only in the rules file it came from, as its note's from field names it, so one Claude Code
+account's lines never load in another's. Setup commits and pushes them before it touches the file,
+and leaves the file as it is while they aren't committed, or once it changes after setup read it.
+It never changes a Codex home's AGENTS.override.md, and reports one with text,
+which Codex reads in place of AGENTS.md. The design is in docs/development/decisions/, in
+decisions 0064, "Each agent's rules file", 0065, "Where end users' rules live", and 0066, "Notes in
+rule files".
 
 In dev-home, setup creates the end user's files it keeps there wherever they're missing, and
 commits them: the knowledge index, with only its title, and a my-rules.md, empty, at each level of
@@ -95,7 +105,7 @@ the answer to ask again in a number of days. A folder with no yes or no isn't se
 no links there and removes none. A sync names each one with no answer yet, or a reminder that's
 due, in a NEW line, which says how to answer; until a reminder is due, setup doesn't ask about
 its folder, and syncs don't name it. In a folder answered no, setup removes the links it made and
-its rules file, while that still matches the copy of what it last wrote, and takes dev-home and
+its rules file, once the lines it didn't write there are saved in rules/, and takes dev-home and
 dev-home-toolkit, and its claudeMdExcludes patterns, back out of its settings.json, and leaves the
 rest alone. One answered yes that no longer exists is skipped.
 
@@ -178,8 +188,8 @@ import stat
 import subprocess
 import textwrap
 from collections.abc import Iterable, Iterator, Sequence
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import dataclass, field
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -297,6 +307,13 @@ OPERATING_TEMPLATE = TOOLKIT_ROOT / "templates" / "operating-rules" / "operating
 # every other .md file there, and in each Codex home, the one file Codex reads there.
 CLAUDE_RULES_FILE = "dev-home-rules.md"
 CODEX_RULES_FILE = "AGENTS.md"
+# The file Codex reads in a home in place of AGENTS.md while it has text, which its docs call a
+# temporary override. Setup never changes it, and reports it (decision 0064).
+CODEX_OVERRIDE = "AGENTS.override.md"
+# What the note of each file setup moves into rules/ from an agent's rules file says it holds
+# (decision 0066).
+MOVED_WHOLE = "The whole file, as it was before setup wrote its own there."
+MOVED_LINES = "Lines setup didn't write in that file, under the headings they were under there."
 # Each agent setup sets up, by the name a skill's supportedOn gives it, such as claude-code.
 REQUIRES_NAMES = {shown: name for name, shown in requirements.AGENT_NAMES.items()}
 # The files dev-home-toolkit owns in a dev-home that a new one starts with, filled in with this
@@ -434,6 +451,56 @@ class GuidanceChoice:
     why_not: str = ""
 
 
+@dataclass(frozen=True)
+class RulesTarget:
+    """An agent's rules file: folder, the agent's folder; path, the file; agent, the agent's name
+    in rules/, such as codex; and setting_up, whether the folder is answered yes, so setup writes
+    the file, or no, so it removes it."""
+
+    folder: Path
+    path: Path
+    agent: str
+    setting_up: bool
+
+
+@dataclass(frozen=True)
+class FoundLines:
+    """Lines setup didn't write in an agent's rules file: target, the file; current, its bytes;
+    and moving, what moves into rules/ (see rules.to_move)."""
+
+    target: RulesTarget
+    current: bytes
+    moving: rules.ToMove
+
+
+@dataclass(frozen=True)
+class RulesChoice:
+    """What a person chose at this run's questions for lines setup didn't write in an agent's
+    rules file, or for a file in unanswered/: "move", into the mine/ of level, a level folder
+    relative to rules/, such as codex; "sent", the Recycle Bin took them; or "delete", the bin
+    couldn't, and they chose to delete them for good. current is the file as it was then: the
+    work acts on the choice only while the file is still the same (see Setup.ask_about_rules)."""
+
+    choice: str
+    current: bytes
+    level: str = ""
+
+
+@dataclass
+class RulesChanges:
+    """What a run changes in rules/ to save lines setup didn't write, all in one commit (see
+    Setup.save_lines): the paths to commit; what each change does, for the commit's message;
+    each file it wrote; each it removed, with what it held; and each file in unanswered/ a
+    person answered, by how setup names it. A failed commit takes the writes and removals back,
+    so nothing setup couldn't commit stays."""
+
+    paths: list[Path] = field(default_factory=list)
+    actions: list[str] = field(default_factory=list)
+    written: list[Path] = field(default_factory=list)
+    removed: dict[Path, bytes] = field(default_factory=dict)
+    answered: list[str] = field(default_factory=list)
+
+
 def cleanup(checked: Checked) -> list[str]:
     """What check_settings removed and moved, a sentence for each, for the line that says so."""
     sentences = []
@@ -510,6 +577,9 @@ class Setup:
         # What became of each hand edit to dev-home's AGENTS.md and CLAUDE.md at this run's
         # questions, by the file's name (see ask_about_guidance).
         self.guidance_choices: dict[str, GuidanceChoice] = {}
+        # Where a person chose at this run's questions that lines setup didn't write go, by the
+        # path of the agent's rules file or of the file in unanswered/ (see ask_about_rules).
+        self.rules_choices: dict[str, RulesChoice] = {}
 
     # Talking to the person
 
@@ -1771,25 +1841,592 @@ class Setup:
 
     # Each agent's rules file
 
-    def sync_rules_file(self, folder: Path, path: Path, text: str, rules_root: Path) -> None:
-        """Writes an agent's rules file, path, in its folder, as long as it's setup's own: when
-        there's none; when it still matches the copy setup keeps of what it last wrote there; or,
-        with no copy, when it already holds what setup would write. Any other file there holds the
-        end user's lines, so setup leaves it as it is and says what to do. A link whose target is
-        gone is replaced; any other link stays, as setup never writes through one."""
+    def rules_targets(self, agent_folders: AgentFolders) -> list[RulesTarget]:
+        """Each agent's rules file: the one setup writes in each folder answered yes, then the one
+        it removes in each folder answered no, unless that folder's rules are really a folder set
+        up here, through a junction, whose file stays (see remove_rules_file)."""
+        claude_code, codex = REQUIRES_NAMES[CLAUDE_CODE.name], REQUIRES_NAMES[CODEX.name]
+
+        def claude(dirs: Iterable[str], setting_up: bool) -> list[RulesTarget]:
+            within = Path("rules") / CLAUDE_RULES_FILE
+            return [RulesTarget(Path(d), Path(d) / within, claude_code, setting_up) for d in dirs]
+
+        def codex_homes(homes: Iterable[str], setting_up: bool) -> list[RulesTarget]:
+            return [
+                RulesTarget(Path(h), Path(h) / CODEX_RULES_FILE, codex, setting_up) for h in homes
+            ]
+
+        targets = claude(agent_folders.claude_dirs, True)
+        targets += codex_homes(agent_folders.codex_homes, True)
+        declined = claude(agent_folders.declined_claude_dirs, False)
+        declined += codex_homes(agent_folders.declined_codex_homes, False)
+        if declined:
+            set_up = {real_path(target.path.parent) for target in targets}
+            declined = [t for t in declined if real_path(t.path.parent) not in set_up]
+        return targets + declined
+
+    def join_rules(
+        self, operating: str, rules_root: Path, pc: str, targets: Sequence[RulesTarget]
+    ) -> dict[str, rules.Joined]:
+        """What setup writes in each agent's rules file in a folder set up, by the file's path: the
+        operating rules, then the end user's rules for that agent on this PC, joined (see
+        rules.joined_rules), with each file in unanswered/ only in the rules file it came from.
+        So each of an agent's files is joined on its own only while that agent has files in
+        unanswered/; otherwise they share one join."""
+        system = requirements.operating_system()
+        joined: dict[str, rules.Joined] = {}
+        shared: dict[str, rules.Joined] = {}
+        for target in targets:
+            if not target.setting_up:
+                continue
+            waiting = rules_root / rules.PCS / pc / target.agent / rules.UNANSWERED
+            if rules.markdown_files(waiting):
+                result = rules.joined_rules(
+                    operating, rules_root, pc, target.agent, system, target.path
+                )
+            elif target.agent in shared:
+                result = shared[target.agent]
+            else:
+                result = rules.joined_rules(operating, rules_root, pc, target.agent, system)
+                shared[target.agent] = result
+            joined[str(target.path)] = result
+        return joined
+
+    def lines_found(self, target: RulesTarget, new: str, operating: str) -> FoundLines | None:
+        """An agent's rules file that's neither what setup last wrote there nor, in a folder set
+        up, new, what it writes there now, with the lines setup didn't write in it, which go into
+        rules/ before setup writes or removes the file (see rules.to_move): none, when someone
+        only took lines out. None for any other file; for a link, or a file that can't be read,
+        which writing it reports; and in a folder answered no, for a file setup has no copy of:
+        one it never wrote isn't its to remove."""
+        copy = LAST_WRITTEN / rules.copy_name(target.folder)
+        try:
+            if is_link(target.path) or not target.path.is_file():
+                return None
+            current = target.path.read_bytes()
+            kept = copy.read_bytes() if copy.is_file() else None
+        except OSError:
+            return None
+        if current == kept or (target.setting_up and current == new.encode("utf-8")):
+            return None
+        if kept is None and not target.setting_up:
+            return None
+        moving = rules.to_move(
+            rules.decode(target.path, current)[0],
+            None if kept is None else rules.decode(copy, kept)[0],
+            new,
+            operating,
+        )
+        return FoundLines(target, current, moving)
+
+    def ask_about_rules(self, content_root: Path, settings: LocalSettings) -> None:
+        """At a console, before the work: asks where the lines setup didn't write in each agent's
+        rules file go, a file at a time, and where each file in this PC's unanswered/ folders goes
+        (decision 0064, "Each agent's rules file"): into one of the four mine/ folders that join
+        for that agent here, or to the Recycle Bin, which takes them at once. When the bin can't,
+        it asks again: one of those, or delete them for good (decision 0069, "Dropped text").
+        Enter leaves them for later, in unanswered/. The files stay as they are until the work,
+        which acts on what was chosen here only while each file is still the same. A run that
+        can't ask leaves it all to the work, which sets the lines aside (see save_lines).
+
+        Each file is asked about once, though two folders lead to it through a junction, as the
+        work handles it once. Lines a file in rules/ already holds aren't asked about, nor is that
+        file, while they're still in the agent's file: a run stopped by Ctrl+C, say, didn't
+        finish saving them, and the work finishes it. Nor is a waiting file a mine/ file already
+        holds: the work removes it (see answer_waiting)."""
+        if not self.can_ask or self.what_if:
+            return
+        pc = rules.pc_folder(computer_name())
+        system = requirements.operating_system()
+        rules_root = content_root / rules.RULES
+        targets = self.rules_targets(self.agent_folders(settings))
+        waiting = unanswered_files(rules_root, pc)
+        if not targets and not waiting:
+            return
+        rendered = generated.render(OPERATING_TEMPLATE, template_values(content_root))
+        operating = rendered.data.decode("utf-8")
+        joined = self.join_rules(operating, rules_root, pc, targets)
+        asked: set[str] = set()
+        pending: set[str] = set()
+        for target in targets:
+            real = real_path(target.path)
+            if real in asked:
+                continue
+            asked.add(real)
+            new = joined[str(target.path)].text if target.setting_up else ""
+            found = self.lines_found(target, new, operating)
+            if found is None or not found.moving.text:
+                continue
+            holder = rules.already_held(
+                found.moving.text, rules_root, pc, target.agent, system, target.path
+            )
+            if holder is not None:
+                pending.add(str(holder))
+                continue
+            self.ask_where_lines_go(found, pc)
+        # Each rules file setup writes, by its real path, where a waiting file loads.
+        written = {real_path(target.path): target.path for target in targets if target.setting_up}
+        for path in waiting:
+            if str(path) not in pending:
+                self.ask_where_file_goes(path, rules_root, pc, system, written)
+
+    def ask_where_lines_go(self, found: FoundLines, pc: str) -> None:
+        """Shows the lines setup didn't write in an agent's rules file, and asks where they go (see
+        ask_about_rules)."""
+        target, moving = found.target, found.moving
+        shown = requirements.AGENT_NAMES[target.agent]
+        self.line()
+        if moving.whole:
+            self.line(
+                f"{target.path} was there before setup wrote {shown}'s rules there. Setup writes "
+                "its own file there, so these rules move into your rules, in dev-home:"
+            )
+            data, kept = found.current, "as it was before setup"
+        else:
+            does = (
+                "rewrites that file on every run"
+                if target.setting_up
+                else f"removes that file, since you said no to setting up {target.folder}"
+            )
+            self.line(
+                f"{shown}'s rules file, {target.path}, has lines setup didn't write. Setup "
+                f"{does}, so they move into your rules, in dev-home, with the headings they were "
+                "under:"
+            )
+            data, kept = f"{moving.text}\n".encode(), "lines setup didn't write"
+        self.show_rules(moving.text)
+        waiting = f"rules/{rules.PCS}/{pc}/{target.agent}/{rules.UNANSWERED}/"
+        loads = f"load only in {target.path}" if target.setting_up else "load nowhere"
+        self.choose_where(
+            str(target.path),
+            found.current,
+            (data, f"{target.path.stem} from {target.folder.name}, {kept}.md"),
+            (target.agent, pc),
+            f"they wait in {waiting}, and {loads}",
+        )
+
+    def ask_where_file_goes(
+        self, path: Path, rules_root: Path, pc: str, system: str, written: dict[str, Path]
+    ) -> None:
+        """Shows a file in this PC's unanswered/ folders, and asks where it goes (see
+        ask_about_rules), unless a mine/ file that joins for its agent here already holds it.
+        written has each rules file setup writes, by its real path: the file loads only in the
+        one its note's from field names, if any."""
+        agent = path.relative_to(rules_root).parts[2]
+        try:
+            current = path.read_bytes()
+        except OSError:
+            return
+        text = rules.decode(path, current)[0]
+        if rules.already_held(text, rules_root, pc, agent, system, None, skip=path):
+            return
+        lines = text.split("\n")
+        source = rules.note_fields(lines).get("from")
+        where = f" from {source}" if source else ""
+        loads = written.get(real_path(source)) if source else None
+        self.line()
+        self.line(
+            f"Rules setup set aside{where}, in dev-home's {relative(rules_root.parent, path)}:"
+        )
+        self.show_rules("\n".join(rules.trimmed(rules.without_note(lines))))
+        until = f"they stay there, and {f'load only in {loads}' if loads else 'load nowhere'}"
+        self.choose_where(str(path), current, (current, path.name), (agent, pc), until)
+
+    def show_rules(self, text: str) -> None:
+        """Rules shown in a question, set in from the left, between blank lines."""
+        self.line()
+        for line in text.split("\n"):
+            self.line(f"    {line}" if line else "")
+        self.line()
+
+    def choose_where(
+        self,
+        key: str,
+        current: bytes,
+        dropped: tuple[bytes, str],
+        agent_pc: tuple[str, str],
+        later: str,
+    ) -> None:
+        """Asks where rules go (see ask_where), and keeps the answer for the work, by key, with
+        current, the file as it is now. A drop sends dropped, its data and the name it gets, to
+        the Recycle Bin at once. later says where Enter leaves them, and where they load."""
+        agent, pc = agent_pc
+        self.line(f"Where do they go? Until you say, {later}.")
+        level = self.ask_where(agent, pc, drop=True)
+        if level == "drop":
+            sent = self.to_the_bin(*dropped)
+            if sent.in_bin:
+                self.rules_choices[key] = RulesChoice("sent", current)
+                return
+            self.line(
+                f"The Recycle Bin couldn't take them. {sentence(sent.why_not)} Keep them as one of "
+                "your rules instead, or delete them for good?"
+            )
+            level = self.ask_where(agent, pc, drop=False)
+        if level == "delete":
+            self.rules_choices[key] = RulesChoice("delete", current)
+        elif level is not None:
+            self.rules_choices[key] = RulesChoice("move", current, level)
+
+    def ask_where(self, agent: str, pc: str, *, drop: bool) -> str | None:
+        """Where rules go: the level whose mine/ they go into, one of the four that join for the
+        agent on this PC, relative to rules/; "drop", for the Recycle Bin; or, once the bin
+        couldn't take them, "delete", for good. None when no answer came."""
+        levels = level_choices(agent, pc)
+        width = max(len(label) for _, label in levels) + 2
+        for number, (level, label) in enumerate(levels, 1):
+            self.line(f"  {color(str(number), GREEN)}  {label:<{width}}rules/{level}/{rules.MINE}/")
+        self.line(
+            f"  {color('5', GREEN)}  "
+            + ("drop them, to the Recycle Bin" if drop else "delete them for good")
+        )
+        while True:
+            answer = self.ask("Number, or Enter to decide later")
+            if not answer:
+                return None
+            if answer in ("1", "2", "3", "4"):
+                return levels[int(answer) - 1][0]
+            if answer == "5":
+                return "drop" if drop else "delete"
+            self.line("Type a number from 1 to 5, or press Enter to decide later.")
+
+    def save_lines(
+        self,
+        content_root: Path,
+        pc: str,
+        targets: Sequence[RulesTarget],
+        operating: str,
+        joined: dict[str, rules.Joined],
+    ) -> tuple[dict[str, bytes | None], bool]:
+        """Saves the lines setup didn't write in each agent's rules file, before setup writes or
+        removes it (decision 0064, "Each agent's rules file"): into the mine/ a person chose at
+        this run's questions, or else set aside in this PC's unanswered/ for that agent, which
+        joins after mine/ only in the file it came from. Each goes in a file of its own, with a
+        note saying where it came from, unless a file that joins for that agent already holds the
+        same text (decision 0066, "Notes in rule files"). Lines a person chose to drop, which the
+        Recycle Bin has, or to delete for good,
+        go nowhere. A file in unanswered/ a person answered moves into the mine/ they chose, or is
+        removed, and one whose text a mine/ file that joins for it already holds is removed. All
+        of it is committed and pushed in one commit; when that fails, setup takes it all back, so
+        nothing it couldn't commit stays, and the next run tries again.
+
+        Returns each rules file that's neither what setup last wrote nor what it writes now, by
+        its path, with what it held when its lines were saved, which setup may overwrite or
+        remove only while the file still holds that, or None when they couldn't be saved, since a
+        write or the commit failed; and whether anything in rules/ may have changed, so the
+        agents' rules are joined again."""
+        rules_root = content_root / rules.RULES
+        when = datetime.now().astimezone()
+        system = requirements.operating_system()
+        checked: dict[str, bytes | None] = {}
+        # Each rules file whose lines are in a file in rules/ this run commits, by its path, with
+        # what setup found, and that file.
+        saved: dict[str, tuple[FoundLines, Path]] = {}
+        # Each rules file handled, by its real path, with its path; and each other rules file
+        # that leads to one of them through a junction, by its path, with that one's.
+        handled: dict[str, str] = {}
+        aliases: dict[str, str] = {}
+        changes = RulesChanges()
+        for target in targets:
+            key = str(target.path)
+            real = real_path(target.path)
+            if real in handled:
+                aliases[key] = handled[real]
+                continue
+            handled[real] = key
+            new = joined[key].text if target.setting_up else ""
+            found = self.lines_found(target, new, operating)
+            if found is None:
+                continue
+            # What the file holds now, which setup may overwrite once its lines are saved, or at
+            # once when it has none to save, as when someone only took lines out.
+            checked[key] = found.current
+            if not found.moving.text:
+                continue
+            what = (
+                f"The rules in {target.path}, from before setup"
+                if found.moving.whole
+                else f"Lines setup didn't write in {target.path}"
+            )
+            chosen = self.rules_choices.get(key)
+            if chosen is not None and chosen.current != found.current:
+                # The file changed after the question: its new lines have no answer yet.
+                chosen = None
+            if chosen is not None and chosen.choice != "move":
+                done = "in the Recycle Bin" if chosen.choice == "sent" else "deleted for good"
+                self.status("REMOVED", f"{what}: {done}, as you chose")
+                self.keep_saved(found)
+                continue
+            level = chosen.level if chosen else f"{rules.PCS}/{pc}/{target.agent}"
+            folder = rules_root / level / (rules.MINE if chosen else rules.UNANSWERED)
+            inside = target.path.relative_to(target.folder)
+            # Wherever it joins for this file, such as where a run stopped by Ctrl+C left it:
+            # added again, the lines would load twice.
+            holder = rules.already_held(
+                found.moving.text, rules_root, pc, target.agent, system, target.path
+            )
+            if holder is not None:
+                if not self.should(holder, f"{what}: already in dev-home, in"):
+                    continue
+                self.status(
+                    "REMOVED",
+                    f"{what}, which dev-home's {relative(content_root, holder)} already holds, so "
+                    "setup didn't add them again",
+                )
+            else:
+                holder = folder / rules.moved_name(pc, target.folder, inside, names_in(folder))
+                place = "moved into your rules" if chosen else "set aside in dev-home"
+                if not self.should(holder, f"{what}, {place}, then committed and pushed"):
+                    continue
+                about = MOVED_WHOLE if found.moving.whole else MOVED_LINES
+                text = rules.moved_file(
+                    found.moving.text, when=when, pc=pc, source=target.path, about=about
+                )
+                if not self.write_new_file(holder, text, f"{what}: setup couldn't save them in"):
+                    checked[key] = None
+                    continue
+                self.status("WROTE", f"{what}, {place}: {relative(content_root, holder)}")
+                changes.written.append(holder)
+            saved[key] = (found, holder)
+            changes.paths.append(holder)
+            label = f"{target.folder.name}/{inside.as_posix()}"
+            # Named for where the lines are, which may be where an earlier run put them.
+            into = holder.parent.relative_to(rules_root).as_posix()
+            changes.actions.append(
+                f"set aside lines setup didn't write in {label}"
+                if rules.UNANSWERED in holder.relative_to(rules_root).parts
+                else f"move lines setup didn't write in {label} into {into}"
+            )
+        # The files a person answered first, so that one moved into a mine/ is found holding the
+        # text of any other left waiting, which would load twice.
+        waiting = unanswered_files(rules_root, pc)
+        for path in sorted(waiting, key=lambda path: str(path) not in self.rules_choices):
+            self.answer_waiting(content_root, pc, system, path, changes)
+        # Its sync may also merge in other PCs' commits, which change rules/ too.
+        changed = bool(changes.paths)
+        if changes.paths:
+            if self.commit_rules(content_root, changes.paths, changes.actions):
+                for found, _ in saved.values():
+                    self.keep_saved(found)
+            else:
+                self.take_back(content_root, changes)
+                for key in saved:
+                    checked[key] = None
+                    self.status(
+                        "PROBLEM",
+                        f"{key} has lines setup didn't write, which setup couldn't commit in "
+                        "dev-home, so it left the file as it is. Setup tries again on its next "
+                        "run.",
+                    )
+        for alias, key in aliases.items():
+            if key in checked:
+                checked[alias] = checked[key]
+        return checked, changed
+
+    def take_back(self, content_root: Path, changes: RulesChanges) -> None:
+        """After a failed commit: removes each file this run wrote in rules/, and puts back each
+        it removed, so nothing it couldn't commit stays there, where it would join, and might
+        never be committed. Says so for each file in unanswered/ a person answered: setup asks
+        again at its next run in a terminal."""
+        for path in changes.written:
+            try:
+                remove_generated_file(path)
+            except OSError as error:
+                self.status(
+                    "PROBLEM", f"Could not take back {path}, which isn't committed. {error}"
+                )
+        for path, data in changes.removed.items():
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+            except OSError as error:
+                self.status("PROBLEM", f"Could not put back {path}. {error}")
+        for shown in changes.answered:
+            self.status(
+                "PROBLEM",
+                f"{shown}: setup couldn't commit what you chose for it, so it put the file back. "
+                "Setup asks again at its next run in a terminal.",
+            )
+
+    def keep_saved(self, found: FoundLines) -> None:
+        """Keeps what an agent's rules file held once the lines setup didn't write in it are
+        saved, as setup's copy for that folder, in place of what it last wrote there. A later run
+        then finds only the lines added since, even when the file can't be written this run, such
+        as when it changed meanwhile, and never saves the same lines twice."""
+        copy = LAST_WRITTEN / rules.copy_name(found.target.folder)
+        if not self.should(
+            copy, "Keep a copy of the rules file as it was when its lines were saved"
+        ):
+            return
+        try:
+            copy.parent.mkdir(parents=True, exist_ok=True)
+            copy.write_bytes(found.current)
+        except OSError as error:
+            self.status("PROBLEM", f"Could not write {copy}. {error}")
+
+    def answer_waiting(
+        self, content_root: Path, pc: str, system: str, path: Path, changes: RulesChanges
+    ) -> None:
+        """A file in this PC's unanswered/ folders, while it's still as it was at this run's
+        questions: moved into the mine/ a person chose, or removed, which the Recycle Bin has, or
+        a person chose to delete for good. One whose text a mine/ file that joins for that agent
+        on this PC already holds is only removed, answered or not, such as one whose twin from
+        another folder a person moved into a mine/: it would load twice. What it does goes in
+        changes."""
+        chosen = self.rules_choices.get(str(path))
+        try:
+            current = path.read_bytes()
+        except OSError:
+            return
+        if chosen is not None and current != chosen.current:
+            chosen = None
+        rules_root = content_root / rules.RULES
+        text = rules.decode(path, current)[0]
+        agent = path.relative_to(rules_root).parts[2]
+        # Only a mine/ counts: a file set aside counts only for where it came from.
+        holder = rules.already_held(text, rules_root, pc, agent, system, None, skip=path)
+        if chosen is None and holder is None:
+            return
+        shown = relative(content_root, path)
+        wrote: Path | None = None
+        # The file in rules/ that holds the text once this one is gone, committed with it.
+        keeps: list[Path] = []
+        if holder is not None:
+            held = relative(content_root, holder)
+            if not self.should(path, f"Remove it: dev-home's {held} already holds it"):
+                return
+            state, said = "REMOVED", f"{held} already holds it, so setup removed it"
+            action = f"remove {shown}, which {held} already holds"
+            keeps.append(holder)
+        elif chosen is not None and chosen.choice == "move":
+            folder = rules_root / chosen.level / rules.MINE
+            wrote = folder / rules.free_name(path.stem, names_in(folder))
+            moved = relative(content_root, wrote)
+            if not self.should(path, f"Move it into your rules, as {moved}"):
+                return
+            if not self.write_new_file(wrote, text, f"{shown}: setup couldn't move it into"):
+                return
+            state, said = "WROTE", f"moved into your rules, as you chose: {moved}"
+            action = f"move {shown} into {chosen.level}/{rules.MINE}"
+            keeps.append(wrote)
+        else:
+            if not self.should(path, "Remove it"):
+                return
+            state = "REMOVED"
+            said = (
+                "in the Recycle Bin, as you chose"
+                if chosen is not None and chosen.choice == "sent"
+                else "deleted for good, as you chose"
+            )
+            action = f"drop {shown}"
+        try:
+            remove_generated_file(path)
+        except OSError as error:
+            self.status("PROBLEM", f"Could not remove {path}. {error}")
+            # The copy would load beside it, and never be committed.
+            if wrote is not None:
+                with contextlib.suppress(OSError):
+                    remove_generated_file(wrote)
+            return
+        if wrote is not None:
+            changes.written.append(wrote)
+        changes.removed[path] = current
+        changes.paths += [*keeps, path]
+        changes.actions.append(action)
+        if chosen is not None:
+            changes.answered.append(shown)
+        # Setup owns unanswered/, so it doesn't leave one empty. Git keeps no empty folder.
+        with contextlib.suppress(OSError):
+            path.parent.rmdir()
+        self.status(state, f"{shown}: {said}")
+
+    def write_new_file(self, path: Path, text: str, failed: str) -> bool:
+        """Writes text to path, a file setup moves into rules/, as UTF-8 with LF line breaks, never
+        over a file already there. Says what failed, and returns whether it wrote it."""
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("x", encoding="utf-8", newline="\n") as file:
+                file.write(text)
+        except OSError as error:
+            self.status("PROBLEM", f"{failed} {path}. {error}")
+            return False
+        return True
+
+    def commit_rules(
+        self, content_root: Path, paths: Sequence[Path], actions: Sequence[str]
+    ) -> bool:
+        """Commits and pushes the files in rules/ that save lines setup didn't write, in one
+        commit, through the sync, as sync_own_files does. Returns whether the commit is made,
+        whatever happened after it: a push that waits for GitHub, or a merge the sync couldn't
+        make, which it reports, leaves the lines committed on this PC."""
+        names = sorted({relative(content_root, path) for path in paths})
+        message = f"rules: {'; '.join(dict.fromkeys(actions))}"
+        # Loaded only now, so a sync that can't load stops only this commit, not setup.
+        try:
+            sync = importlib.import_module(f"{__package__}.sync")
+            result = sync.setup_commit(content_root, names, message, holds_lock=True)
+        except Exception as error:
+            self.status("PROBLEM", f"Could not commit {', '.join(names)}: {describe(error)}")
+            return False
+        if result.code != 0:
+            # The sync has said what went wrong.
+            self.problems.append(f"Committing {', '.join(names)}")
+        return bool(result.committed)
+
+    def report_waiting(self, content_root: Path, pc: str) -> None:
+        """The NEW line naming each file in this PC's unanswered/ folders, on every run until a
+        person says where each goes (decision 0064)."""
+        waiting = unanswered_files(content_root / rules.RULES, pc)
+        if not waiting:
+            return
+        listed = ", ".join(relative(content_root, path) for path in waiting)
+        self.status(
+            "NEW",
+            f"Setup set aside rules it didn't write, found in an agent's rules file: {listed}. "
+            "Until you say where they go, each loads only in the file it came from. Run "
+            f"{by_hand('setup.py')} in a terminal, and it asks.",
+        )
+
+    def report_overrides(self, homes: Sequence[str]) -> None:
+        """A PROBLEM line for each Codex home whose AGENTS.override.md has text, on every run while
+        it does: Codex reads it there in place of setup's AGENTS.md. Setup never changes it."""
+        for home in homes:
+            path = Path(home) / CODEX_OVERRIDE
+            try:
+                data = path.read_bytes() if path.is_file() else b""
+            except OSError:
+                continue
+            if data.decode("utf-8-sig", errors="replace").strip():
+                self.status(
+                    "PROBLEM",
+                    f"Codex home {home}: its {CODEX_OVERRIDE} has text, so Codex reads it instead "
+                    f"of setup's {CODEX_RULES_FILE} there, and loads neither the operating rules "
+                    "nor your rules. Codex's docs call it a temporary override: remove it to load "
+                    "setup's file again.",
+                )
+
+    def sync_rules_file(
+        self, target: RulesTarget, text: str, rules_root: Path, checked: dict[str, bytes | None]
+    ) -> None:
+        """Writes an agent's rules file in its folder: when there's none; when it still matches
+        the copy setup keeps of what it last wrote there; when it already holds what setup would
+        write; or while it still holds what it held once the lines setup didn't write in it were
+        saved in rules/, as checked has it (see save_lines). Any other file stays as it is: one
+        whose lines setup couldn't save, which save_lines has said, or one that changed since, and
+        the next run saves its lines. A link whose target is gone is replaced; any other link
+        stays, as setup never writes through one."""
+        folder, path = target.folder, target.path
         label = f"Rules file in {folder.name}"
         copy = LAST_WRITTEN / rules.copy_name(folder)
         data = text.encode("utf-8")
-        move = (
-            f"Move anything you want to keep into {rules_root}, delete the file, then run setup.py"
-        )
         existing = link_info(path)
         if existing is not None and existing.is_link:
             if existing.target is not None and Path(existing.target).exists():
                 self.status(
                     "PROBLEM",
-                    f"{label}: {path} links to {existing.target}, so setup left it alone. "
-                    f"{move.replace('the file', 'the link')} again.",
+                    f"{label}: {path} links to {existing.target}, so setup left it alone. Move "
+                    f"anything you want to keep into {rules_root}, delete the link, then run "
+                    "setup.py again.",
                 )
                 return
             if not self.should(
@@ -1808,12 +2445,11 @@ class Setup:
         except OSError as error:
             self.status("PROBLEM", f"{label}: {path} couldn't be read, so setup left it. {error}")
             return
-        if current is not None and current not in (data, kept):
-            if kept is None and not current.startswith(rules.OPERATING_HEADING.encode("utf-8")):
-                said = "already exists, and setup didn't write it"
-            else:
-                said = "has changes setup didn't make, so the rules in it may be out of date"
-            self.status("PROBLEM", f"{label}: {path} {said}. Setup left it as it is. {move} again.")
+        if (
+            current is not None
+            and current not in (data, kept)
+            and checked.get(str(path)) != current
+        ):
             return
         if current == data:
             self.status("OK", label)
@@ -2056,11 +2692,12 @@ class Setup:
                 self.cloned = self.created = False
         declared = self.skills_declared(settings)
 
-        # 4. The change to dev-home.json to confirm, shown and asked about before the work, and
-        # what to do with a hand edit to dev-home's AGENTS.md or CLAUDE.md that the Recycle Bin
-        # can't take.
+        # 4. The change to dev-home.json to confirm, shown and asked about before the work; what
+        # to do with a hand edit to dev-home's AGENTS.md or CLAUDE.md that the Recycle Bin can't
+        # take; and where lines setup didn't write in each agent's rules file go.
         self.confirm_copies(content_root)
         self.ask_about_guidance(content_root)
+        self.ask_about_rules(content_root, settings)
 
         # 5. The work, on this PC's settings as it saves them: the file as it is by then, with
         # this run's answers, and setup's own changes worked out again (see settle). Skills this
@@ -2713,25 +3350,26 @@ class Setup:
 
         # 5. Always-on rules: one file in each agent's folder, the operating rules and then the end
         # user's rules from dev-home's rules/, joined for that agent on this PC (see the
-        # description above). Each line about a problem in the end user's files is said once,
-        # though a file in _all-agents/ joins for every agent.
+        # description above). First the lines setup didn't write in each agent's file go into
+        # rules/, so the files are joined from what rules/ holds then. Each line about a problem
+        # in the end user's files is said once, though a file in _all-agents/ joins for every
+        # agent.
         rules_root = content_root / rules.RULES
         operating = operating_rendered.data.decode("utf-8")
-        system = requirements.operating_system()
-        rules_files = [
-            *(
-                (Path(d), Path(d) / "rules" / CLAUDE_RULES_FILE, claude_code)
-                for d in agent_folders.claude_dirs
-            ),
-            *((Path(h), Path(h) / CODEX_RULES_FILE, codex) for h in agent_folders.codex_homes),
-        ]
-        joined: dict[str, rules.Joined] = {}
-        problems: list[str] = []
-        for folder, path, agent in rules_files:
-            if agent not in joined:
-                joined[agent] = rules.joined_rules(operating, rules_root, pc, agent, system)
-                problems += joined[agent].problems
-            self.sync_rules_file(folder, path, joined[agent].text, rules_root)
+        targets = self.rules_targets(agent_folders)
+        joined = self.join_rules(operating, rules_root, pc, targets)
+        checked, changed = self.save_lines(content_root, pc, targets, operating, joined)
+        if changed:
+            joined = self.join_rules(operating, rules_root, pc, targets)
+        # The most the end user's rules take in any of each agent's files on this PC, which differ
+        # only by the files in unanswered/ that came from each.
+        sizes: dict[str, int] = {}
+        for rules_file in targets:
+            if rules_file.setting_up:
+                result = joined[str(rules_file.path)]
+                self.sync_rules_file(rules_file, result.text, rules_root, checked)
+                sizes[rules_file.agent] = max(sizes.get(rules_file.agent, 0), result.own_bytes)
+        problems = [problem for result in joined.values() for problem in result.problems]
         problems += [
             rules.stray_file_problem(rules_root, path)
             for path in rules.stray_files(rules_root, pc, agents)
@@ -2742,26 +3380,28 @@ class Setup:
         # until they shrink or the end user raises the size (decision 0065).
         warn_kib = int(setting_value(settings.data, RULES_WARN_ABOVE)[0])
         large = [
-            (requirements.AGENT_NAMES[agent], result.own_bytes)
-            for agent, result in joined.items()
-            if warn_kib and result.own_bytes > warn_kib * 1024
+            (requirements.AGENT_NAMES[agent], size)
+            for agent, size in sizes.items()
+            if warn_kib and size > warn_kib * 1024
         ]
         if large:
             self.status("LARGE", large_rules_text(large, warn_kib))
+        self.report_waiting(content_root, pc)
+        self.report_overrides(agent_folders.codex_homes)
 
         # 6. What setup set up in each folder answered no, each removal listed as it goes: the
         # links it made in a Claude Code folder, and for Codex, the links it made in
-        # ~/.agents/skills; and the rules file it wrote in each, while that still matches the copy
-        # of what it last wrote. A link counts as setup's when it points where setup's links
-        # point, so one of the person's own stays, as does anything that isn't a link. A folder
-        # that is really one setup sets up, through a junction, such as ~/.claude/skills made a
-        # junction to ~/.agents/skills to share skills, keeps its links and its rules file. What a
-        # yes added to the agents' settings files is taken out last, with the other settings
-        # changes (see settings_checks).
+        # ~/.agents/skills; and the rules file it wrote in each, once the lines it didn't write
+        # there are saved in rules/ (step 5). A link counts as setup's when it points where
+        # setup's links point, so one of the person's own stays, as does anything that isn't a
+        # link. A folder that is really one setup sets up, through a junction, such as
+        # ~/.claude/skills made a junction to ~/.agents/skills to share skills, keeps its links
+        # and its rules file. What a yes added to the agents' settings files is taken out last,
+        # with the other settings changes (see settings_checks).
         set_up: set[str] = set()
         if agent_folders.declined_claude_dirs or agent_folders.declined_codex_homes:
             set_up = {real_path(folder) for folder in tool_skill_folders}
-            set_up |= {real_path(path.parent) for _, path, _ in rules_files}
+            set_up |= {real_path(target.path.parent) for target in targets if target.setting_up}
         for claude_dir in agent_folders.declined_claude_dirs:
             self.remove_links_in(
                 Path(claude_dir) / "skills",
@@ -2771,9 +3411,9 @@ class Setup:
                 "Link in a folder you said no to",
             )
             path = Path(claude_dir) / "rules" / CLAUDE_RULES_FILE
-            self.remove_rules_file(Path(claude_dir), path, set_up, rules_root)
+            self.remove_rules_file(Path(claude_dir), path, set_up, checked)
         for home in agent_folders.declined_codex_homes:
-            self.remove_rules_file(Path(home), Path(home) / CODEX_RULES_FILE, set_up, rules_root)
+            self.remove_rules_file(Path(home), Path(home) / CODEX_RULES_FILE, set_up, checked)
         # Adding an agent: see AGENTS_SKILLS. Only Codex reads that folder today, of the
         # agents setup sets up, so a no to Codex is enough to remove the links there.
         if agent_folders.declined_codex_homes:
@@ -2815,13 +3455,15 @@ class Setup:
             self.status("PROBLEM", f"Could not remove the link {link}. {error}")
 
     def remove_rules_file(
-        self, folder: Path, path: Path, set_up: set[str], rules_root: Path
+        self, folder: Path, path: Path, set_up: set[str], checked: dict[str, bytes | None]
     ) -> None:
         """Removes the rules file setup wrote in a folder answered no, path, and its copy of it,
-        while the file still matches that copy. A file with changes setup didn't make stays, and
-        is reported; one setup has no copy of isn't setup's, and stays, as does a link. In a
-        folder that's really one setup sets up, through a junction, the file is that folder's, so
-        only this folder's copy goes."""
+        while the file still matches that copy, or still holds what it held once the lines setup
+        didn't write in it were saved in rules/, as checked has it (see save_lines). Any other
+        file stays, as does setup's copy, and the next run tries again: one whose lines setup
+        couldn't save, which save_lines has said, or one that changed since. One setup has no
+        copy of isn't setup's, and stays, as does a link. In a folder that's really one setup sets
+        up, through a junction, the file is that folder's, so only this folder's copy goes."""
         copy = LAST_WRITTEN / rules.copy_name(folder)
         if not copy.is_file():
             return
@@ -2835,13 +3477,7 @@ class Setup:
         except OSError as error:
             self.status("PROBLEM", f"{path} couldn't be read, so setup left it as it is. {error}")
             return
-        if current is not None and current != kept:
-            self.status(
-                "PROBLEM",
-                f"{path} has changes setup didn't make, so setup left it, though you said no to "
-                f"setting up {folder}. Move anything you want to keep into {rules_root}, then "
-                "delete it.",
-            )
+        if current is not None and current != kept and checked.get(str(path)) != current:
             return
         if current is not None:
             if not self.should(
@@ -3239,6 +3875,42 @@ def large_rules_text(large: Sequence[tuple[str, int]], warn_kib: int) -> str:
         "them, so they cost tokens in every session: shorten them, or raise "
         f'"{BY_PATH[RULES_WARN_ABOVE].label}" with /dev-home configure.'
     )
+
+
+def level_choices(agent: str, pc: str) -> list[tuple[str, str]]:
+    """The four levels of rules/ whose mine/ joins for agent on the PC whose folder is pc, from
+    the widest, each relative to rules/, with what it applies to (decision 0065)."""
+    shown = requirements.AGENT_NAMES[agent]
+    this_pc = f"{rules.PCS}/{pc}"
+    return [
+        (rules.ALL_AGENTS, "every agent, on every PC"),
+        (agent, f"{shown}, on every PC"),
+        (f"{this_pc}/{rules.ALL_AGENTS}", "every agent, on this PC"),
+        (f"{this_pc}/{agent}", f"{shown}, on this PC"),
+    ]
+
+
+def unanswered_files(rules_root: Path, pc: str) -> list[Path]:
+    """Each file in this PC's unanswered/ folders, for each agent setup knows, which joins for it
+    after mine/ until a person says where it goes (decision 0064)."""
+    return [
+        path
+        for agent in requirements.AGENT_NAMES
+        for path in rules.markdown_files(rules_root / rules.PCS / pc / agent / rules.UNANSWERED)
+    ]
+
+
+def names_in(folder: Path) -> list[str]:
+    """The names of what's in folder, or none when it isn't there."""
+    try:
+        return [entry.name for entry in os.scandir(folder)]
+    except OSError:
+        return []
+
+
+def relative(content_root: Path, path: Path) -> str:
+    """path as dev-home's own files name it, relative to its folder, with forward slashes."""
+    return path.relative_to(content_root).as_posix()
 
 
 def bin_name(name: str) -> str:

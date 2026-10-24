@@ -72,7 +72,7 @@ widest level to the narrowest, into one file for each agent:
 Setup writes that file again at each sync, which comes at the start of nearly every skill
 command, and whenever you run setup. A session loads it when it starts, so a change reaches
 sessions started after that. When you answer no for an agent's folder in setup, setup removes
-its file there, as long as it holds only what setup wrote; your rules stay in dev-home.
+its file there, and your rules stay in dev-home.
 
 After the operating rules, whatever a file of yours has that isn't under a top-level heading (`#`)
 of its own goes under `# My rules`. Headings with the same text and level, under the same heading,
@@ -80,11 +80,27 @@ combine into one section, letter case aside, so a `## Writing style` in two of y
 one section. Comments that start a line, notes included, are left out, so they cost nothing. A
 heading with nothing under it is left out too.
 
-Edit your rules in dev-home, never in those files: setup keeps its own copy of what it last wrote
-to each, and rewrites one only while it still matches that copy. When one of those files has
-lines setup didn't write, or was there before setup, setup leaves it as it is, so that agent keeps
-loading its old text, and says so on every sync. Move anything you want to keep from it into the
-right `mine/`, delete the file, then run setup again.
+## Lines in those files that setup didn't write
+
+Edit your rules in dev-home, never in those files: setup rewrites them. When one of them has lines
+setup didn't write, such as a rule an agent added there, or an `AGENTS.md` you had in Codex's
+folder before you set it up, setup moves them into your dev-home first, and commits and pushes
+them, so nothing is lost. It keeps the headings they were under, so they join back in the same
+section.
+
+- **In setup, in a terminal,** it shows them and asks where they go: into one of the four `mine/`
+  folders that apply to that agent on this PC, or to the Recycle Bin.
+- **A sync can't ask,** so it sets them aside in `rules/pcs/<pc>/<agent>/unanswered/`. There they
+  keep loading only in the file they came from, so a line added in one Claude Code account's file
+  doesn't reach your other accounts, and every sync names them in a `NEW` line until you say where
+  they go. Run setup in a terminal and it asks, or move the file into a `mine/` yourself.
+
+To get dropped lines back, look in the Recycle Bin for a file named for where they came from, such
+as `AGENTS from .codex, lines setup didn't write.md`.
+
+A Codex home can also hold an `AGENTS.override.md`, which Codex reads in place of `AGENTS.md`
+while it has text, so it loads none of your rules there. Setup never changes it, and says so on
+every sync: Codex's docs call it a temporary override, so remove it when you're done with it.
 
 ## Keep them short
 

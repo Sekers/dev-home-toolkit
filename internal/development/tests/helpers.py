@@ -541,6 +541,33 @@ def profile_kept(box: Sandbox) -> Iterator[None]:
         run_python(box, "setup.py", "--quiet")
 
 
+@contextlib.contextmanager
+def moved_rules_removed(box: Sandbox) -> Iterator[None]:
+    """For a test whose setup moves rules into dev-home's rules/, from an agent's rules file or
+    out of unanswered/: afterwards, removes every moved- file in rules/ and every file in an
+    unanswered/ folder, commits and pushes that, and runs setup, which writes each agent's rules
+    file again for the tests after it."""
+    try:
+        yield
+    finally:
+        rules = box.content / "rules"
+        moved = [
+            path
+            for path in rules.rglob("*.md")
+            if path.name.startswith("moved-") or "unanswered" in path.relative_to(rules).parts
+        ]
+        content = str(box.content)
+        if moved:
+            names = [path.relative_to(box.content).as_posix() for path in moved]
+            git("-C", content, "rm", "--quiet", "--cached", "--ignore-unmatch", "--", *names)
+            for path in moved:
+                path.unlink()
+            if git("-C", content, "diff", "--cached", "--name-only"):
+                git("-C", content, "commit", "--quiet", "-m", "test: remove the moved rules")
+                git("-C", content, "push", "--quiet")
+        run_python(box, "setup.py", "--quiet")
+
+
 # Each process start_python started, by its process ID, until finish checks what it changed in
 # the files the layout lists cover: its command, and its check.
 STARTED: dict[int, tuple[list[str], LayoutCheck]] = {}

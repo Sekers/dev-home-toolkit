@@ -27,6 +27,8 @@ from helpers import (
     git,
     layouts_checked,
     link_target,
+    make_junction,
+    moved_rules_removed,
     on_this_pc,
     profile_kept,
     remove_link,
@@ -2364,3 +2366,464 @@ def test_at_a_console_an_edit_made_after_the_question_goes_to_the_bin_as_a_new_o
     assert re.search(r"^WROTE\s+dev-home's AGENTS\.md, put back: it had edits", out, re.M), out
     assert edited.path.read_bytes() == edited.setups
     assert (edited.bin / "AGENTS from dev-home, as edited.md").read_bytes() == again
+
+
+# Rules setup didn't write in an agent's rules file, at a console.
+
+WHERE = r"^Number, or Enter to decide later: $"
+
+
+@dataclass(frozen=True)
+class InTheWay:
+    """A Codex home's AGENTS.md that setup didn't write, which was there before it, with no copy
+    of what setup wrote there; its text; this PC's folder under rules/pcs/; and the test profile's
+    Recycle Bin."""
+
+    path: Path
+    text: bytes
+    pc: str
+    bin: Path
+
+    def moved(self, box: Sandbox, folder: str) -> Path:
+        """Where setup moves it, in a folder of rules/."""
+        return box.content / "rules" / folder / f"moved-{self.pc}-codex-agents.md"
+
+
+@pytest.fixture
+def in_the_way(box: Sandbox) -> Iterator[InTheWay]:
+    """A Codex home's AGENTS.md that setup didn't write (see InTheWay). Afterwards, the file and
+    setup's copy are put back, what the test moved into rules/ is removed, and the test profile's
+    Recycle Bin is emptied."""
+    home = box.profile / ".codex"
+    path = home / "AGENTS.md"
+    copy = box.generated / "last-written" / shared_module(box, "rules").copy_name(home)
+    before, copy_before = path.read_bytes(), copy.read_bytes()
+    text = b"# Mine\n\n- My own Codex rule.\n"
+    path.write_bytes(text)
+    copy.unlink()
+    pc = shared_module(box, "rules").pc_folder(shared_module(box, "computer").computer_name())
+    found = InTheWay(path, text, pc, box.profile / "Recycle Bin")
+    with moved_rules_removed(box):
+        yield found
+        path.write_bytes(before)
+        copy.write_bytes(copy_before)
+    if found.bin.is_dir():
+        shutil.rmtree(found.bin)
+    else:
+        found.bin.unlink(missing_ok=True)
+
+
+def waiting_files(box: Sandbox) -> list[Path]:
+    """The files in the sandbox's unanswered/ folders."""
+    return [path for path in (box.content / "rules").rglob("*.md") if "unanswered" in path.parts]
+
+
+def last_commit(box: Sandbox) -> list[str]:
+    """The subject of dev-home's last commit, then the files it changed, a moved file under both
+    of its names."""
+    lines = git("-C", str(box.content), "log", "-1", "--no-renames", "--name-only", "--format=%s")
+    return [lines[0], *sorted(lines[2:])]
+
+
+@pytest.mark.parametrize(
+    ("answer", "level"),
+    [("1", "_all-agents"), ("2", "codex"), ("3", "pcs/{pc}/_all-agents"), ("4", "pcs/{pc}/codex")],
+)
+def test_at_a_console_lines_setup_didnt_write_move_into_the_mine_picked(
+    box: Sandbox,
+    person: Person,
+    in_the_way: InTheWay,
+    capsys: pytest.CaptureFixture[str],
+    answer: str,
+    level: str,
+) -> None:
+    person.answers.update({MENU: "", WHERE: answer})
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    level = level.format(pc=in_the_way.pc)
+    moved = in_the_way.moved(box, f"{level}/mine")
+    assert returned == 0, out
+    shown = (
+        f"{in_the_way.path} was there before setup wrote Codex's rules there. Setup writes its own "
+        "file there, so these rules move into your rules, in dev-home:\n\n    # Mine\n\n"
+        "    - My own Codex rule.\n\nWhere do they go? Until you say, they wait in "
+        f"rules/pcs/{in_the_way.pc}/codex/unanswered/, and load only in {in_the_way.path}.\n"
+    )
+    assert shown in out, out
+    for level_shown in ("_all-agents", "codex", f"pcs/{in_the_way.pc}/_all-agents"):
+        assert f"rules/{level_shown}/mine/\n" in out, out
+    assert "  5  drop them, to the Recycle Bin\n" in out, out
+    relative = moved.relative_to(box.content).as_posix()
+    pattern = (
+        r"^WROTE\s+The rules in .*AGENTS\.md, from before setup, moved into your rules: "
+        rf"{re.escape(relative)}$"
+    )
+    assert re.search(pattern, out, re.M), out
+    subject = f"rules: move lines setup didn't write in .codex/AGENTS.md into {level}/mine"
+    assert last_commit(box) == [on_this_pc(box, subject), relative]
+    assert moved.read_text(encoding="utf-8").endswith("-->\n\n# Mine\n\n- My own Codex rule.\n")
+    assert waiting_files(box) == []
+    assert not re.search(r"^NEW\s+Setup set aside rules", out, re.M), out
+    # Codex loads the rule from there, as one of the user's own.
+    assert b"\n\n# Mine\n\n- My own Codex rule.\n" in in_the_way.path.read_bytes()
+
+
+def test_at_a_console_enter_leaves_the_lines_waiting_in_unanswered(
+    box: Sandbox, person: Person, in_the_way: InTheWay, capsys: pytest.CaptureFixture[str]
+) -> None:
+    person.answers.update({MENU: "", WHERE: ""})
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert returned == 0, out
+    moved = in_the_way.moved(box, f"pcs/{in_the_way.pc}/codex/unanswered")
+    assert waiting_files(box) == [moved], out
+    assert re.search(r"^WROTE\s+The rules in .*, set aside in dev-home: ", out, re.M), out
+    assert re.search(r"^NEW\s+Setup set aside rules it didn't write, ", out, re.M), out
+
+
+def test_at_a_console_a_drop_goes_to_the_bin_at_once(
+    box: Sandbox, person: Person, in_the_way: InTheWay, capsys: pytest.CaptureFixture[str]
+) -> None:
+    person.answers.update({MENU: "", WHERE: "5"})
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert returned == 0, out
+    dropped = in_the_way.bin / "AGENTS from .codex, as it was before setup.md"
+    assert dropped.read_bytes() == in_the_way.text
+    pattern = r"^REMOVED\s+The rules in .*AGENTS\.md, from before setup: in the Recycle Bin, as you"
+    assert re.search(pattern, out, re.M), out
+    assert waiting_files(box) == [] and not list((box.content / "rules").rglob("moved-*"))
+    assert b"My own Codex rule" not in in_the_way.path.read_bytes()
+
+
+@pytest.mark.parametrize(("second", "kept"), [("5", None), ("2", "codex/mine")])
+def test_at_a_console_a_drop_the_bin_cant_take_is_asked_again_keep_or_delete(
+    box: Sandbox,
+    person: Person,
+    in_the_way: InTheWay,
+    capsys: pytest.CaptureFixture[str],
+    second: str,
+    kept: str | None,
+) -> None:
+    # A file in the bin's place: the bin can't take anything.
+    write_text(in_the_way.bin, "")
+    person.answers.update({MENU: "", WHERE: ["5", second]})
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert returned == 0, out
+    asked = "The Recycle Bin couldn't take them. The test profile's bin couldn't take it: "
+    assert asked in out and "  5  delete them for good\n" in out, out
+    if kept is None:
+        pattern = r"^REMOVED\s+The rules in .*: deleted for good, as you chose$"
+        assert re.search(pattern, out, re.M), out
+        assert not list((box.content / "rules").rglob("moved-*"))
+    else:
+        assert in_the_way.moved(box, kept).is_file(), out
+    assert waiting_files(box) == []
+
+
+def test_at_a_console_a_file_waiting_in_unanswered_moves_into_the_mine_picked(
+    box: Sandbox, person: Person, in_the_way: InTheWay, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run_python(box, "setup.py", "--quiet")
+    waiting = in_the_way.moved(box, f"pcs/{in_the_way.pc}/codex/unanswered")
+    assert waiting_files(box) == [waiting]
+    person.answers.update({MENU: "", WHERE: "4"})
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert returned == 0, out
+    relative = waiting.relative_to(box.content).as_posix()
+    shown = f"Rules setup set aside from {in_the_way.path}, in dev-home's {relative}:\n\n    # Mine"
+    assert shown in out, out
+    moved = in_the_way.moved(box, f"pcs/{in_the_way.pc}/codex/mine")
+    subject = f"rules: move {relative} into pcs/{in_the_way.pc}/codex/mine"
+    assert last_commit(box) == [
+        on_this_pc(box, subject),
+        *sorted([relative, moved.relative_to(box.content).as_posix()]),
+    ]
+    # The file moves as it was, its note and all, and setup removes the folder it left empty.
+    assert moved.read_text(encoding="utf-8").startswith("<!-- note\nby: setup\n")
+    assert waiting_files(box) == [] and not waiting.parent.exists()
+
+
+def test_at_a_console_a_file_changed_after_the_question_waits_instead(
+    box: Sandbox, person: Person, in_the_way: InTheWay, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The answer was for the file as it was shown, so the work doesn't act on it once the file
+    # changes, such as in another session: its lines are set aside to wait for a new answer.
+    def answer_and_edit(prompt: str) -> str:
+        in_the_way.path.write_bytes(in_the_way.text + b"- Another rule.\n")
+        return "1"
+
+    person.answers.update({MENU: "", WHERE: answer_and_edit})
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert returned == 0, out
+    waiting = in_the_way.moved(box, f"pcs/{in_the_way.pc}/codex/unanswered")
+    assert waiting_files(box) == [waiting], out
+    assert waiting.read_text(encoding="utf-8").endswith("- My own Codex rule.\n- Another rule.\n")
+    assert not in_the_way.moved(box, "_all-agents/mine").exists()
+
+
+def test_at_a_console_what_if_asks_nothing_about_lines_setup_didnt_write(
+    box: Sandbox, person: Person, in_the_way: InTheWay, capsys: pytest.CaptureFixture[str]
+) -> None:
+    person.answers.update({MENU: "", WHERE: "1"})
+    setup_here(box, "--what-if")
+    out = capsys.readouterr().out
+    assert not any(re.search(WHERE, asked) for asked in person.asked), person.asked
+    assert "What if: The rules in " in out, out
+    assert in_the_way.path.read_bytes() == in_the_way.text
+    assert waiting_files(box) == []
+
+
+def test_a_line_added_while_the_lines_are_committed_is_never_overwritten(
+    box: Sandbox, in_the_way: InTheWay, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Such as by an agent in another session, while the commit pushes: the file then holds
+    # something setup hasn't saved, so it stays, and the next run sets only the new line aside.
+    code = shared_module(box, "setup")
+    commit = code.Setup.commit_rules
+    added = in_the_way.text + b"- Added meanwhile.\n"
+
+    def commit_and_meanwhile(run: Any, *args: Any) -> bool:
+        in_the_way.path.write_bytes(added)
+        result: bool = commit(run, *args)
+        return result
+
+    monkeypatch.setattr(code.Setup, "commit_rules", commit_and_meanwhile)
+    returned = setup_here(box, "--quiet")
+    assert returned == 0
+    assert in_the_way.path.read_bytes() == added
+    monkeypatch.setattr(code.Setup, "commit_rules", commit)
+    assert setup_here(box, "--quiet") == 0
+    written = in_the_way.path.read_text(encoding="utf-8")
+    first = in_the_way.moved(box, f"pcs/{in_the_way.pc}/codex/unanswered")
+    second = first.with_name(first.name.replace(".md", "-2.md"))
+    assert sorted(waiting_files(box)) == sorted([first, second])
+    assert second.read_text(encoding="utf-8").endswith("-->\n\n# Mine\n\n- Added meanwhile.\n")
+    # Each rule is saved, and joined, once.
+    assert written.count("- My own Codex rule.") == 1, written
+    assert written.count("- Added meanwhile.") == 1, written
+
+
+def test_at_a_console_lines_in_a_folder_answered_no_are_asked_about_before_its_removal(
+    box: Sandbox, person: Person, settings: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    folder = box.profile / ".claude-edited"
+    path = folder / "rules" / "dev-home-rules.md"
+    copy = box.generated / "last-written" / shared_module(box, "rules").copy_name(folder)
+    write_text(path, "# Private repo: dev-home (rules loaded)\n\n- A line added by hand.\n")
+    write_text(copy, "# Private repo: dev-home (rules loaded)\n")
+    saved = json.loads(settings.read_text(encoding="utf-8"))
+    saved["claudeCode"]["folders"]["~/.claude-edited"] = {"setUp": False}
+    settings.write_text(json.dumps(saved, indent=2) + "\n", encoding="utf-8")
+    person.answers.update({MENU: "", WHERE: "2"})
+    try:
+        with moved_rules_removed(box):
+            returned = setup_here(box)
+            out = capsys.readouterr().out
+            moved = list((box.content / "rules" / "claude-code" / "mine").glob("moved-*.md"))
+            left = path.exists(), copy.exists()
+    finally:
+        shutil.rmtree(folder)
+        copy.unlink(missing_ok=True)
+    assert returned == 0, out
+    shown = (
+        f"Claude Code's rules file, {path}, has lines setup didn't write. Setup removes that file, "
+        f"since you said no to setting up {folder}, so they move into your rules, in dev-home"
+    )
+    assert shown in out, out
+    assert len(moved) == 1 and left == (False, False), out
+
+
+@contextlib.contextmanager
+def commits_failing(box: Sandbox) -> Iterator[None]:
+    """dev-home's commits failing, through a hook that refuses every one."""
+    hook = box.content / ".git" / "hooks" / "pre-commit"
+    write_text(hook, "#!/bin/sh\nexit 1\n")
+    try:
+        yield
+    finally:
+        hook.unlink()
+
+
+def in_dev_home(box: Sandbox, path: Path) -> str:
+    """A path in the sandbox's dev-home, as git and setup name it."""
+    return path.relative_to(box.content).as_posix()
+
+
+def test_a_failed_commit_takes_back_what_it_wrote_so_a_retry_saves_the_lines_once(
+    box: Sandbox, person: Person, in_the_way: InTheWay, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Left behind, the file in mine/ would join beside a later copy, and might never be
+    # committed.
+    person.answers.update({MENU: "", WHERE: "1"})
+    with commits_failing(box):
+        failed = setup_here(box)
+    status = git("-C", str(box.content), "status", "--porcelain")
+    assert failed == 1 and not in_the_way.moved(box, "_all-agents/mine").exists()
+    assert in_the_way.path.read_bytes() == in_the_way.text and status == []
+    capsys.readouterr()
+    retried = setup_here(box, "--quiet")
+    out = capsys.readouterr().out
+    assert retried == 0, out
+    assert len(waiting_files(box)) == 1, out
+    assert in_the_way.path.read_bytes().count(b"- My own Codex rule.") == 1
+
+
+def test_lines_committed_before_a_problem_syncing_them_count_as_saved(
+    box: Sandbox,
+    in_the_way: InTheWay,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Such as a merge the sync can't make: the lines are in a commit on this PC all the same.
+    def refuse(run: Any, fetch_first: bool) -> None:
+        run.status("PROBLEM", "A made-up problem after the commit.")
+
+    monkeypatch.setattr(shared_module(box, "sync").Sync, "sync_remote", refuse)
+    returned = setup_here(box, "--quiet")
+    out = capsys.readouterr().out
+    assert returned == 1 and "A made-up problem after the commit." in out, out
+    assert "not committed" not in out, out
+    written = in_the_way.path.read_bytes()
+    assert written != in_the_way.text and written.count(b"- My own Codex rule.") == 1, out
+
+
+def set_aside_by_hand(path: Path, source: Path, text: str) -> None:
+    """A file in unanswered/ as setup sets one aside, from source, holding text."""
+    write_text(path, f"<!-- note\nby: setup\nfrom: {source}\n-->\n\n{text}")
+
+
+def test_at_a_console_a_save_an_earlier_run_didnt_finish_is_finished_without_a_question(
+    box: Sandbox, person: Person, in_the_way: InTheWay, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # As a run stopped by Ctrl+C after writing it would leave it, not committed yet.
+    waiting = in_the_way.moved(box, f"pcs/{in_the_way.pc}/codex/unanswered")
+    set_aside_by_hand(waiting, in_the_way.path, in_the_way.text.decode())
+    person.answers.update({MENU: "", WHERE: "1"})
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert returned == 0, out
+    assert not any(re.search(WHERE, asked) for asked in person.asked), person.asked
+    assert in_dev_home(box, waiting) in last_commit(box), out
+    assert in_the_way.path.read_bytes().count(b"- My own Codex rule.") == 1
+
+
+def test_at_a_console_a_rules_file_two_folders_lead_to_is_asked_about_once(
+    box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    claude = box.profile / ".claude"
+    alias = box.profile / ".claude-alias"
+    rules_file = claude / "rules" / "dev-home-rules.md"
+    settings = box.toolkit / "local-settings.json"
+    with profile_kept(box), moved_rules_removed(box):
+        make_junction(alias, claude)
+        try:
+            saved = json.loads(settings.read_text(encoding="utf-8"))
+            saved["claudeCode"]["folders"]["~/.claude-alias"] = {"setUp": True}
+            settings.write_text(json.dumps(saved, indent=2) + "\n", encoding="utf-8")
+            with rules_file.open("a", encoding="utf-8", newline="\n") as file:
+                file.write("- Added by hand.\n")
+            person.answers.update({MENU: "", WHERE: ""})
+            returned = setup_here(box)
+            out = capsys.readouterr().out
+            asked = [prompt for prompt in person.asked if re.search(WHERE, prompt)]
+            waiting = waiting_files(box)
+            written = rules_file.read_text(encoding="utf-8")
+        finally:
+            remove_link(alias)
+    assert returned == 0, out
+    assert len(asked) == 1 and len(waiting) == 1, out
+    assert written.count("- Added by hand.") == 1, written
+
+
+@dataclass(frozen=True)
+class Twins:
+    """Two files waiting in the sandbox's unanswered/ for Codex with the same rule, set aside
+    from two Codex homes: the sandbox's own, and one that's gone."""
+
+    first: Path
+    second: Path
+    codex_rules: Path
+
+
+@pytest.fixture
+def twins(box: Sandbox) -> Iterator[Twins]:
+    pc = shared_module(box, "rules").pc_folder(shared_module(box, "computer").computer_name())
+    folder = box.content / "rules" / "pcs" / pc / "codex" / "unanswered"
+    codex_rules = box.profile / ".codex" / "AGENTS.md"
+    found = Twins(folder / "moved-a.md", folder / "moved-b.md", codex_rules)
+    with moved_rules_removed(box):
+        set_aside_by_hand(found.first, codex_rules, "- A twin rule.\n")
+        set_aside_by_hand(
+            found.second, Path("C:/Users/you/.codex-gone/AGENTS.md"), "- A twin rule.\n"
+        )
+        # Committed, as setup commits each file it sets aside.
+        names = [in_dev_home(box, found.first), in_dev_home(box, found.second)]
+        git("-C", str(box.content), "add", "--", *names)
+        git("-C", str(box.content), "commit", "--quiet", "-m", "rules: two twins", "--", *names)
+        yield found
+
+
+def test_at_a_console_a_waiting_twin_of_one_moved_into_a_mine_is_removed(
+    box: Sandbox, person: Person, twins: Twins, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Left waiting, it would load beside the copy in mine/.
+    person.answers.update({MENU: "", WHERE: ["2", ""]})
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert returned == 0, out
+    moved = box.content / "rules" / "codex" / "mine" / "moved-a.md"
+    assert moved.is_file() and waiting_files(box) == [], out
+    pattern = (
+        rf"^REMOVED\s+{re.escape(in_dev_home(box, twins.second))}: "
+        rf"{re.escape(in_dev_home(box, moved))} already holds it, so setup removed it$"
+    )
+    assert re.search(pattern, out, re.M), out
+    assert twins.codex_rules.read_text(encoding="utf-8").count("- A twin rule.") == 1
+
+
+def test_at_a_console_an_answer_whose_commit_fails_is_taken_back(
+    box: Sandbox, person: Person, twins: Twins, capsys: pytest.CaptureFixture[str]
+) -> None:
+    before = twins.first.read_bytes()
+    person.answers.update({MENU: "", WHERE: ["2", "2"]})
+    with commits_failing(box):
+        returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    assert twins.first.read_bytes() == before and twins.second.is_file(), out
+    assert not list((box.content / "rules" / "codex" / "mine").glob("moved-*")), out
+    shown = in_dev_home(box, twins.first)
+    pattern = (
+        rf"^PROBLEM\s+{re.escape(shown)}: setup couldn't commit what you chose for it, so it put "
+        r"the file back\. Setup asks again at its next run in a terminal\.$"
+    )
+    assert re.search(pattern, out, re.M), out
+
+
+def test_at_a_console_a_waiting_file_that_cant_be_removed_takes_its_copy_back(
+    box: Sandbox,
+    person: Person,
+    twins: Twins,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Both would load, and the copy would never be committed.
+    code = shared_module(box, "setup")
+    remove = code.remove_generated_file
+
+    def refuse(path: Path) -> None:
+        if path == twins.first:
+            raise PermissionError("in use")
+        remove(path)
+
+    monkeypatch.setattr(code, "remove_generated_file", refuse)
+    person.answers.update({MENU: "", WHERE: ["2", ""]})
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert returned == 1 and "Could not remove " in out, out
+    assert twins.first.is_file() and twins.second.is_file(), out
+    assert not list((box.content / "rules" / "codex" / "mine").glob("moved-*")), out

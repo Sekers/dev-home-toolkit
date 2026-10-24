@@ -42,6 +42,11 @@ points here; its rules apply too.
   [0016: The root](decisions/0016-the-root.md) says why the code isn't in the root.
 - Safe to re-run. setup.py overwrites or deletes only these:
   - its own generated files
+  - each agent's rules file, which it writes, once the lines it didn't write there are saved in
+    dev-home's `rules/` and committed, in the `mine/` the person picked, or set aside in
+    `unanswered/`, or dropped to the Recycle Bin, or deleted for good, as the person chose
+    ([0064: Each agent's rules file](decisions/0064-each-agents-rules-file.md))
+  - a file in `unanswered/`, once the person answers where it goes
   - links whose target is gone
   - links it made to skills that no longer exist
   - links it made to a skill that isn't added to the agents in that skills folder: by this PC's

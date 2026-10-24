@@ -53,8 +53,8 @@ and your rules joined, which setup writes again at each sync.
     from dev-home; see [A skill's dev-home-skill.json](dev-home-skill-json.md)).
   - `rules\dev-home-rules.md`: the operating rules and your rules joined, which Claude Code loads
     with every other `.md` file in `rules\` (see [Rule files](rule-files.md)). Setup rewrites it
-    whenever it runs, while it still matches what setup last wrote there, and never replaces one
-    with changes it didn't make.
+    whenever it runs. Lines it didn't write there, such as one added by hand, it first moves into
+    your dev-home, and commits and pushes them, so it never replaces them unsaved.
   - `settings.json` gets your dev-home and dev-home-toolkit folders in
     `permissions.additionalDirectories`, so Claude Code can use them from any project. Your yes to
     the folder approves this, and every sync puts it back if it goes missing, with a backup.
@@ -72,8 +72,10 @@ and your rules joined, which setup writes again at each sync.
     agents on this PC.
   - `AGENTS.md` in each home, such as `~\.codex\AGENTS.md`: the operating rules and your rules
     joined, as for Claude Code, since Codex reads one always-on file there. Setup rewrites it
-    whenever it runs, while it still matches what setup last wrote there, and never replaces an
-    `AGENTS.md` it didn't write, or one with changes it didn't make.
+    whenever it runs, first moving into your dev-home any lines it didn't write there, or an
+    `AGENTS.md` that was there before setup, as for Claude Code. It never changes an
+    `AGENTS.override.md`, and says so on every sync while one has text, since Codex then reads it
+    in place of `AGENTS.md`.
   - `config.toml` gets dev-home in `[sandbox_workspace_write]` `writable_roots`, so Codex can
     edit handoffs and knowledge from any project. Your yes to Codex approves this, and every sync
     puts it back if it goes missing, with a backup. Its `project_doc_max_bytes` is raised to at
@@ -91,8 +93,8 @@ and your rules joined, which setup writes again at each sync.
     dev-home in each `config.toml`'s `writable_roots`, with a backup.
     `project_doc_max_bytes` stays, since it gives Codex no access.
 
-  A rules file with changes setup didn't make stays, and setup says so: move anything you want to
-  keep into your dev-home's `rules\`, then delete it. Your own files, links, and settings there
+  Lines setup didn't write in a rules file it removes go into your dev-home first, as on any run
+  (see [Rule files](rule-files.md#where-they-go)). Your own files, links, and settings there
   stay, though an entry you added yourself for the same folder, or the same pattern, goes too;
   the backup keeps it. Other agents that read those
   skills folders lose dev-home's skills too: GitHub Copilot, Gemini CLI, and Cursor read

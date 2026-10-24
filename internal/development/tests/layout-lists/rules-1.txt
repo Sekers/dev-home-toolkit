@@ -4,3 +4,8 @@ rules/_all-agents/mine/my-rules.md
 rules/<agent>/mine/my-rules.md
 rules/pcs/<pc>/_all-agents/mine/my-rules.md
 rules/pcs/<pc>/<agent>/mine/my-rules.md
+rules/_all-agents/mine/<moved>
+rules/<agent>/mine/<moved>
+rules/pcs/<pc>/_all-agents/mine/<moved>
+rules/pcs/<pc>/<agent>/mine/<moved>
+rules/pcs/<pc>/<agent>/unanswered/<moved>

@@ -28,6 +28,7 @@ from helpers import (
     layouts_checked,
     link_target,
     make_junction,
+    moved_rules_removed,
     new_sandbox,
     on_this_pc,
     profile_kept,
@@ -200,6 +201,11 @@ def pc_folder(box: Sandbox) -> str:
     computer_name = shared_module(box, "computer").computer_name
     name: str = shared_module(box, "rules").pc_folder(computer_name())
     return name
+
+
+def relative(box: Sandbox, path: Path) -> str:
+    """A path in the sandbox's dev-home as setup names it, relative to dev-home."""
+    return path.relative_to(box.content).as_posix()
 
 
 @pytest.mark.parametrize("agent", ["claude-code", "codex"])
@@ -1482,7 +1488,7 @@ def test_a_claude_folder_answered_no_loses_what_setup_set_up_there(box: Sandbox)
     assert again.code == 0 and not again.has_line(r"^(REMOVED|SET)\s"), str(again)
 
 
-def test_a_rules_file_with_changes_setup_didnt_make_stays_after_a_no(
+def test_a_no_sets_aside_lines_added_to_setups_rules_file_then_removes_it(
     box: Sandbox, settings_kept: Path
 ) -> None:
     folder = box.profile / ".claude-edited"
@@ -1492,21 +1498,29 @@ def test_a_rules_file_with_changes_setup_didnt_make_stays_after_a_no(
     saved = json.loads(read(settings_kept))
     saved["claudeCode"]["folders"]["~/.claude-edited"] = {"setUp": False}
     write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
-    try:
-        result = setup(box)
-        kept = read(path)
-        copy_kept = copy_of(box, folder).exists()
-    finally:
-        remove_claude_folder(folder)
-        copy_of(box, folder).unlink(missing_ok=True)
-    pattern = (
-        r"^PROBLEM\s+.*[\\/]\.claude-edited[\\/]rules[\\/]dev-home-rules\.md has changes setup "
-        r"didn't make, so setup left it, though you said no to setting up .*\.claude-edited\. Move "
-        r"anything you want to keep into .*[\\/]rules, then delete it\.$"
+    pc = pc_folder(box)
+    moved = (
+        box.content
+        / f"rules/pcs/{pc}/claude-code/unanswered/moved-{pc}-claude-edited-rules-dev-home-rules.md"
     )
-    assert result.code == 1 and result.has_line(pattern), str(result)
-    assert kept.endswith("- A line added by hand.\n")
-    assert copy_kept
+    with moved_rules_removed(box):
+        try:
+            result = setup(box)
+            left = path.exists(), copy_of(box, folder).exists()
+            text = read(moved)
+        finally:
+            remove_claude_folder(folder)
+            copy_of(box, folder).unlink(missing_ok=True)
+    assert result.code == 0, str(result)
+    pattern = (
+        r"^WROTE\s+Lines setup didn't write in .*[\\/]\.claude-edited[\\/]rules[\\/]"
+        rf"dev-home-rules\.md, set aside in dev-home: {re.escape(relative(box, moved))}$"
+    )
+    assert result.has_line(pattern), str(result)
+    assert result.has_line(r"^REMOVED\s+Rules file in a folder you said no to: "), str(result)
+    assert left == (False, False), str(result)
+    # Lines under the operating rules' heading keep none of its headings.
+    assert text.endswith("-->\n\n# My rules\n\n- A line added by hand.\n"), text
 
 
 def test_a_folder_answered_no_that_is_really_one_set_up_keeps_what_it_uses(
@@ -1770,36 +1784,198 @@ def test_replaces_a_link_whose_target_is_gone(box: Sandbox) -> None:
     assert link_target(link) == box.generated / "skills" / "handoff"
 
 
+def waiting_line(box: Sandbox, *files: Path) -> str:
+    """The NEW line naming files in this PC's unanswered/ folders, as a pattern."""
+    listed = ", ".join(re.escape(relative(box, path)) for path in files)
+    return (
+        r"^NEW\s+Setup set aside rules it didn't write, found in an agent's rules file: "
+        rf"{listed}\. Until you say where they go, each loads only in the file it came from\. "
+        r"Run py .*setup\.py in a terminal, and it asks\.$"
+    )
+
+
 @pytest.mark.parametrize(
-    ("kept_copy", "said"),
+    ("kept_copy", "what", "about"),
     [
-        (True, "has changes setup didn't make, so the rules in it may be out of date"),
-        (False, "already exists, and setup didn't write it"),
+        (True, "Lines setup didn't write in", "Lines setup didn't write in that file"),
+        (False, "The rules in", "The whole file, as it was before setup wrote its own there."),
     ],
 )
-def test_leaves_alone_a_rules_file_that_isnt_setups_and_says_what_to_do(
-    box: Sandbox, kept_copy: bool, said: str
+def test_a_run_that_cant_ask_sets_aside_what_setup_didnt_write_then_writes_its_file(
+    box: Sandbox, kept_copy: bool, what: str, about: str
 ) -> None:
-    # With setup's copy, an edited file; with none, a file of the person's own, such as an
-    # AGENTS.md they wrote before setting Codex up.
-    rules, copy = box.profile / ".codex" / "AGENTS.md", copy_of(box, box.profile / ".codex")
-    before, copy_before = rules.read_bytes(), copy.read_bytes()
-    write_text(rules, "my own codex rules\n")
+    # With setup's copy, a file someone edited; with none, a file of the person's own, such as
+    # an AGENTS.md they wrote before setting Codex up, which moves whole.
+    home = box.profile / ".codex"
+    rules_file, copy = home / "AGENTS.md", copy_of(box, home)
+    write_text(rules_file, "# Mine\n\n- My own Codex rule.\n")
     if not kept_copy:
         copy.unlink()
+    pc = pc_folder(box)
+    moved = box.content / f"rules/pcs/{pc}/codex/unanswered/moved-{pc}-codex-agents.md"
+    with moved_rules_removed(box):
+        result = setup(box)
+        written, text = read(rules_file), read(moved)
+        last = git("-C", str(box.content), "log", "-1", "--name-only", "--format=%s")
+        status = git("-C", str(box.content), "status", "--porcelain")
+        again = setup(box)
+        unchanged = read(rules_file) == written
+    assert result.code == 0, str(result)
+    from_before = ", from before setup" if not kept_copy else ""
+    pattern = (
+        rf"^WROTE\s+{what} .*[\\/]\.codex[\\/]AGENTS\.md{from_before}, set aside in dev-home: "
+        rf"{re.escape(relative(box, moved))}$"
+    )
+    assert result.has_line(pattern), str(result)
+    subject = "rules: set aside lines setup didn't write in .codex/AGENTS.md"
+    assert last == [on_this_pc(box, subject), "", relative(box, moved)], last
+    assert status == [], status
+    assert result.has_line(waiting_line(box, moved)), str(result)
+    # Its note says where it came from; joining leaves the note out.
+    assert text.startswith("<!-- note\nby: setup\nwhen: "), text
+    assert f"\npc: {pc}\nfrom: {rules_file}\n\n{about}" in text, text
+    assert text.endswith("-->\n\n# Mine\n\n- My own Codex rule.\n"), text
+    # The rules file holds them again, after the rest, from unanswered/.
+    assert written.startswith("# Private repo: dev-home (rules loaded)\n"), written
+    assert written.endswith("\n\n# Mine\n\n- My own Codex rule.\n"), written
+    assert "<!-- note" not in written, written
+    assert again.code == 0 and not again.has_line(r"^(WROTE|REMOVED)\s"), str(again)
+    assert again.has_line(waiting_line(box, moved)) and unchanged, str(again)
+
+
+def test_lines_set_aside_load_only_in_the_folder_they_came_from(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    # Such as a work account's: until the end user says where they go, the other accounts on
+    # this PC don't load them.
+    second = box.profile / ".claude-second"
+    write_text(second / "settings.json", "{}\n")
+    saved = json.loads(read(settings_kept))
+    saved["claudeCode"]["folders"]["~/.claude-second"] = {"setUp": True}
+    write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
+    own_file = box.profile / ".claude" / "rules" / "dev-home-rules.md"
+    second_file = second / "rules" / "dev-home-rules.md"
+    with moved_rules_removed(box):
+        try:
+            assert setup(box).code == 0
+            append(second_file, "- A rule for the second account.")
+            first = setup(box)
+            texts = read(own_file), read(second_file)
+            # The same line added to both, which each keeps: one set aside from the other file
+            # loads only there, so it doesn't count as already saved for this one.
+            append(own_file, "- A rule in both.")
+            append(second_file, "- A rule in both.")
+            both = setup(box)
+            again = read(own_file), read(second_file)
+            waiting = [path for path in box.content.rglob("*.md") if "unanswered" in path.parts]
+        finally:
+            remove_claude_folder(second)
+            copy_of(box, second).unlink(missing_ok=True)
+    assert first.code == 0 and both.code == 0, f"{first}\n{both}"
+    assert "- A rule for the second account." not in texts[0], texts[0]
+    assert texts[1].endswith("- A rule for the second account.\n"), texts[1]
+    assert [text.count("- A rule in both.") for text in again] == [1, 1], again
+    assert len(waiting) == 3, str(both)
+
+
+def test_added_lines_keep_their_headings_and_are_set_aside_once(box: Sandbox) -> None:
+    rules_file = box.profile / ".claude" / "rules" / "dev-home-rules.md"
+    pc = pc_folder(box)
+    folder = box.content / f"rules/pcs/{pc}/claude-code/unanswered"
+    moved = folder / f"moved-{pc}-claude-rules-dev-home-rules.md"
+    with moved_rules_removed(box):
+        append(rules_file, "- Added by hand.")
+        result = setup(box)
+        written = read(rules_file)
+        # The same line added again, as when a backup of the edited file is put back.
+        append(rules_file, "- Added by hand.")
+        again = setup(box)
+        text, files = read(moved), sorted(path.name for path in folder.iterdir())
+    assert result.code == 0 and again.code == 0, f"{result}\n{again}"
+    assert text.endswith("-->\n\n# My rules\n\n- Added by hand.\n"), text
+    # Joined back under the heading it had.
+    assert written.endswith("# My rules\n\n- Personal rule one.\n\n- Added by hand.\n"), written
+    pattern = (
+        r"^REMOVED\s+Lines setup didn't write in .*dev-home-rules\.md, which dev-home's "
+        rf"{re.escape(relative(box, moved))} already holds, so setup didn't add them again$"
+    )
+    assert again.has_line(pattern), str(again)
+    assert files == [moved.name], files
+
+
+def test_lines_whose_commit_fails_stay_in_the_rules_file_until_a_run_commits_them(
+    box: Sandbox,
+) -> None:
+    # Setup takes back what it wrote, so nothing it couldn't commit is left in rules/, where it
+    # would join, and a line added before the retry is saved once.
+    rules_file = box.profile / ".claude" / "rules" / "dev-home-rules.md"
+    hook = box.content / ".git" / "hooks" / "pre-commit"
+    with moved_rules_removed(box):
+        append(rules_file, "- Added by hand.")
+        edited = read(rules_file)
+        write_text(hook, "#!/bin/sh\nexit 1\n")
+        try:
+            failed = setup(box)
+            kept = read(rules_file)
+            left = git("-C", str(box.content), "status", "--porcelain")
+        finally:
+            hook.unlink()
+        append(rules_file, "- Added before the retry.")
+        retried = setup(box)
+        written = read(rules_file)
+        status = git("-C", str(box.content), "status", "--porcelain")
+    pattern = (
+        r"^PROBLEM\s+.*dev-home-rules\.md has lines setup didn't write, which setup couldn't "
+        r"commit in dev-home, so it left the file as it is\. Setup tries again on its next run\.$"
+    )
+    assert failed.code == 1 and failed.has_line(pattern), str(failed)
+    assert kept == edited and left == [], f"{failed}\n{left}"
+    assert retried.code == 0 and retried.has_line(r"^COMMITTED\s"), str(retried)
+    assert written.count("- Added by hand.") == 1, written
+    assert written.endswith("- Added by hand.\n- Added before the retry.\n"), written
+    assert status == [], status
+
+
+def test_a_run_with_what_if_says_what_it_would_set_aside_and_changes_nothing(box: Sandbox) -> None:
+    rules_file = box.profile / ".claude" / "rules" / "dev-home-rules.md"
+    before = read(rules_file)
+    append(rules_file, "- Added by hand.")
+    edited = read(rules_file)
+    try:
+        result = setup(box, "--what-if")
+        kept = read(rules_file)
+        rules = box.content / "rules"
+        unanswered = [path for path in rules.rglob("*.md") if "unanswered" in path.parts]
+    finally:
+        write_text(rules_file, before)
+    pattern = (
+        r"^What if: Lines setup didn't write in .*dev-home-rules\.md, set aside in dev-home, then "
+        r"committed and pushed: .*[\\/]unanswered[\\/]moved-.*\.md$"
+    )
+    assert result.has_line(pattern), str(result)
+    assert kept == edited and unanswered == [], str(result)
+
+
+@pytest.mark.parametrize(("text", "reported"), [("- A temporary rule.\n", True), ("\n \n", False)])
+def test_reports_a_codex_override_with_text_and_never_changes_it(
+    box: Sandbox, text: str, reported: bool
+) -> None:
+    override = box.profile / ".codex" / "AGENTS.override.md"
+    write_text(override, text)
     try:
         result = setup(box)
-        kept = read(rules)
+        kept = read(override)
     finally:
-        rules.write_bytes(before)
-        copy.write_bytes(copy_before)
+        override.unlink()
     pattern = (
-        rf"^PROBLEM\s+Rules file in \.codex: .*[\\/]\.codex[\\/]AGENTS\.md {re.escape(said)}\. "
-        r"Setup left it as it is\. Move anything you want to keep into .*[\\/]rules, delete the "
-        r"file, then run setup\.py again\.$"
+        r"^PROBLEM\s+Codex home .*[\\/]\.codex: its AGENTS\.override\.md has text, so Codex reads "
+        r"it instead of setup's AGENTS\.md there, and loads neither the operating rules nor your "
+        r"rules\. Codex's docs call it a temporary override: remove it to load setup's file "
+        r"again\.$"
     )
-    assert result.code == 1 and result.has_line(pattern), str(result)
-    assert kept == "my own codex rules\n"
+    assert result.has_line(pattern) is reported, str(result)
+    assert result.code == (1 if reported else 0), str(result)
+    assert kept == text
 
 
 def test_takes_a_rules_file_it_has_no_copy_of_when_it_holds_what_setup_would_write(

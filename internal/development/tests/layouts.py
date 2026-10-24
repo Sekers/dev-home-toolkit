@@ -12,8 +12,9 @@ being added, renamed, or removed. A saved state, such as {"$state": "remind", "o
 adds each of its keys after its setting's path. Lines starting with # are comments.
 
 dev-home's rules/ has a list too, rules-1.txt: the path of each file the code creates there, from
-dev-home's folder, with <pc> for a PC's folder and <agent> for an agent's. rules/ has no layout
-version of its own yet, so its layout is 1.
+dev-home's folder, with <pc> for a PC's folder, <agent> for an agent's, and <moved> for the name of
+a file setup moves there, which starts with moved-. rules/ has no layout version of its own yet,
+so its layout is 1.
 
 helpers.py checks every run of the scripts in a test: each key path the run adds to one of these
 files must be on that file's list for the layout its schemaVersion names, and each file it creates
@@ -89,7 +90,8 @@ def listed(part: Part, version: object) -> set[str] | None:
 
 def rules_key(relative: Sequence[str]) -> str:
     """A file's path in rules/, given its parts after rules/, as rules' list writes it: rules/,
-    then the parts, with <pc> for a PC's folder and <agent> for an agent's."""
+    then the parts, with <pc> for a PC's folder, <agent> for an agent's, and <moved> for the name
+    of a file setup moved there."""
     parts = list(relative)
     agent = 0
     if len(parts) > 1 and parts[0] == "pcs":
@@ -97,6 +99,8 @@ def rules_key(relative: Sequence[str]) -> str:
         agent = 2
     if len(parts) > agent + 1 and parts[agent] != "_all-agents":
         parts[agent] = "<agent>"
+    if parts and parts[-1].startswith("moved-"):
+        parts[-1] = "<moved>"
     return "/".join([RULES_FOLDER, *parts])
 
 

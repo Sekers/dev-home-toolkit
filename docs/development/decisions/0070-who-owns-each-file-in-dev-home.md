@@ -2,8 +2,8 @@
 
 **Built:** yes, except: keeping `README.md`, `.gitignore`, and `.gitattributes` current, with hand
 edits to them, which waits for the version check below, since without it two PCs on different
-versions would undo each other's copies; built-in rules' files and the `unanswered/` folders,
-which come with those parts; withdrawn files; and a release that changes line endings. Until then,
+versions would undo each other's copies; built-in rules' files, which come with that part;
+withdrawn files; and a release that changes line endings. Until then,
 a new dev-home starts with the other files in `templates/dev-home/`, filled in, and nothing
 updates them.
 

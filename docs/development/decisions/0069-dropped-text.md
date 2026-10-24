@@ -1,11 +1,11 @@
 # 0069: Dropped text
 
-**Built:** yes, except: dropping an agent's rules, which comes with the rules work's takeovers and
-added lines; and answering through `/dev-home configure` what to do with a hand edit the bin can't
-take, which comes with them, since both need a way for an agent to answer setup's questions about
-files (the developer, 2026-10-23). Until then, the `PROBLEM` line for such an edit says to run
-setup in a terminal. Hand edits to dev-home's `AGENTS.md` and `CLAUDE.md` go to the bin through
-`internal/shared/recycle_bin.py`.
+**Built:** yes, except: answering through `/dev-home configure`, both where an agent's rules go,
+dropping them included, and what to do with a hand edit the bin can't take, since both need a way
+for an agent to answer setup's questions about files (the developer, 2026-10-23). Until then, the
+`PROBLEM` line for such an edit, and the `NEW` line for rules set aside, say to run setup in a
+terminal. Dropped rules, and hand edits to dev-home's `AGENTS.md` and `CLAUDE.md`, go to the bin
+through `internal/shared/recycle_bin.py`.
 
 **Decision:** text an end user tells setup to drop goes to the Recycle Bin, as a file, before
 setup removes or overwrites anything. Decided by the developer on 2026-10-18, and changed on

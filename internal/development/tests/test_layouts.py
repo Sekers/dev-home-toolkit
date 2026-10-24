@@ -10,7 +10,16 @@ from typing import Any
 import pytest
 
 import layouts
-from helpers import REPO_ROOT, LayoutCheck, Sandbox, layout_snapshot, run_python, sandbox_for
+from helpers import (
+    REPO_ROOT,
+    LayoutCheck,
+    Sandbox,
+    layout_snapshot,
+    layouts_checked,
+    run_python,
+    sandbox_for,
+    shared_module,
+)
 
 
 @pytest.fixture(scope="module")
@@ -35,7 +44,9 @@ def seen(box: Sandbox, found: dict[tuple[str, object], set[str]]) -> None:
         found.setdefault((part.file, value.get("schemaVersion")), set()).update(paths)
 
 
-def test_each_list_holds_exactly_what_the_code_writes(box: Sandbox) -> None:
+def test_each_list_holds_exactly_what_the_code_writes(
+    box: Sandbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # Each form a key can take, written by the code: a setting and a preference as a plain value
     # and as their default, a skill's answer, a reminder for a Claude Code folder and for Codex,
     # whose homes share one answer, so its answer goes first, and dev-home.json's own setting.
@@ -64,6 +75,35 @@ def test_each_list_holds_exactly_what_the_code_writes(box: Sandbox) -> None:
     result = run_python(box, "setup.py", "--configure", f"codex.homes?={codex}@3")
     assert result.code == 0, str(result)
     seen(box, found)
+    # The files setup moves into rules/ from an agent's rules file: set aside in unanswered/ by a
+    # run that can't ask, then into each level's mine/, as a person picks at a console. The file
+    # set aside is asked about too, at the first console run.
+    claude_rules = box.profile / ".claude" / "rules" / "dev-home-rules.md"
+
+    def add_a_line(number: int) -> None:
+        with claude_rules.open("a", encoding="utf-8", newline="\n") as file:
+            file.write(f"- A line added by hand, {number}.\n")
+
+    add_a_line(0)
+    result = run_python(box, "setup.py", "--quiet")
+    assert result.code == 0, str(result)
+    seen(box, found)
+    monkeypatch.setattr(shared_module(box, "console"), "is_console", lambda: True)
+    for number in range(1, 5):
+        add_a_line(number)
+
+        def answer(prompt: str, number: int = number) -> str:
+            if prompt == "Number, or Enter to decide later: ":
+                return str(number)
+            if prompt.startswith("Number to change"):
+                return ""
+            raise EOFError
+
+        monkeypatch.setattr("builtins.input", answer)
+        with layouts_checked(box):
+            returned = shared_module(box, "setup").main([])
+        assert returned == 0
+        seen(box, found)
 
     # Each file kept the layout the code writes now. A key path the code writes but the list
     # lacks fails the run that wrote it, in helpers.py, so only a key path it no longer writes can

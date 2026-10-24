@@ -36,8 +36,17 @@ def write(path: Path, text: str) -> None:
     write_text(path, text)
 
 
+# The Codex home's rules file the joined rules are for.
+SOURCE = Path("C:/Users/you/.codex/AGENTS.md")
+
+
 def joined(code: ModuleType, rules: Path, system: str = "windows") -> object:
-    return code.joined_rules(OPERATING, rules, "office", "codex", system)
+    return code.joined_rules(OPERATING, rules, "office", "codex", system, SOURCE)
+
+
+def set_aside_from(source: Path, text: str) -> str:
+    """A file setup set aside in unanswered/, from source, holding text."""
+    return f"<!-- note\nby: setup\nfrom: {source}\n-->\n\n{text}"
 
 
 def own(code: ModuleType, rules: Path, system: str = "windows") -> str:
@@ -70,13 +79,13 @@ def test_levels_join_in_order_with_this_pcs_unanswered_lines_last(
     code: ModuleType, rules: Path
 ) -> None:
     for folder, text in [
-        ("pcs/office/codex/unanswered", "Six"),
         ("pcs/office/codex/mine", "Five"),
         ("pcs/office/_all-agents/mine", "Four"),
         ("codex/mine", "Three"),
         ("_all-agents/mine", "One"),
     ]:
         write(rules / folder / "my-rules.md", f"- {text}\n")
+    write(rules / "pcs/office/codex/unanswered/moved.md", set_aside_from(SOURCE, "- Six\n"))
     write(rules / "_all-agents" / "mine" / "zz.md", "- Two\n")
     # Another agent's, and another PC's, never join.
     write(rules / "claude-code" / "mine" / "my-rules.md", "- Claude Code's\n")
@@ -84,6 +93,50 @@ def test_levels_join_in_order_with_this_pcs_unanswered_lines_last(
     assert own(code, rules) == (
         "# My rules\n\n- One\n\n- Two\n\n- Three\n\n- Four\n\n- Five\n\n- Six"
     )
+
+
+def test_a_file_set_aside_joins_only_for_the_rules_file_its_note_names(
+    code: ModuleType, rules: Path
+) -> None:
+    waiting = rules / "pcs" / "office" / "codex" / "unanswered"
+    # Its note names the file in any letter case, with either kind of slash.
+    write(waiting / "a.md", set_aside_from(Path(str(SOURCE).upper()), "- From this home.\n"))
+    write(waiting / "b.md", set_aside_from(Path("C:/Users/you/.codex-work/AGENTS.md"), "- Work.\n"))
+    write(waiting / "c.md", "- No note, so from nowhere setup knows.\n")
+    # Outside unanswered/, the note's from field changes nothing.
+    write(rules / "codex" / "mine" / "d.md", set_aside_from(Path("C:/elsewhere.md"), "- Mine.\n"))
+    assert own(code, rules) == "# My rules\n\n- Mine.\n\n- From this home."
+
+
+def test_rules_already_held_count_only_where_they_join_for_the_file_they_come_from(
+    code: ModuleType, rules: Path
+) -> None:
+    waiting = rules / "pcs" / "office" / "codex" / "unanswered"
+    work = Path("C:/Users/you/.codex-work/AGENTS.md")
+    write(waiting / "work.md", set_aside_from(work, "- A rule.\n"))
+
+    def held(text: str, source: Path | None, skip: Path | None = None) -> object:
+        return code.already_held(text, rules, "office", "codex", "windows", source, skip)
+
+    # Set aside from another home, it loads only there.
+    assert held("- A rule.", SOURCE) is None
+    assert held("- A rule.", work) == waiting / "work.md"
+    # In any mine/ that joins for the agent here, it counts for every file.
+    write(rules / "pcs" / "office" / "_all-agents" / "mine" / "kept.md", "- A rule.\n")
+    assert (
+        held("- A rule.", SOURCE) == rules / "pcs" / "office" / "_all-agents" / "mine" / "kept.md"
+    )
+    # Another agent's, or another PC's, doesn't.
+    write(rules / "claude-code" / "mine" / "other.md", "- Another.\n")
+    write(rules / "pcs" / "lab" / "codex" / "mine" / "lab.md", "- Another.\n")
+    assert held("- Another.", SOURCE) is None
+    # A file never counts as holding its own text.
+    assert held("- A rule.", None, skip=waiting / "work.md") == (
+        rules / "pcs" / "office" / "_all-agents" / "mine" / "kept.md"
+    )
+    # One whose note leaves this system out doesn't load here, so it doesn't count.
+    write(rules / "codex" / "mine" / "mac.md", "<!-- note\nos: macos\n-->\n\n- On a Mac.\n")
+    assert held("- On a Mac.", SOURCE) is None
 
 
 def test_files_join_alphabetically_by_path_subfolders_included_in_any_case(

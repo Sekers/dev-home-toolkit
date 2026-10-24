@@ -42,8 +42,10 @@ left open, the order inside a merged section, `# My rules`, and the size setting
   ...?", and the rule loads everywhere until it's fixed.
 - **Joining.** Each agent's file holds the operating rules first, never merged, then
   `_all-agents`, `<agent>`, `pcs/<pc>/_all-agents`, and `pcs/<pc>/<agent>`, each with
-  `built-in/on/` before `mine/`, and `pcs/<pc>/<agent>/unanswered/` after them, files alphabetically
-  by path. No sentence says which rule wins. Matching headings combine: the same level and text
+  `built-in/on/` before `mine/`, and `pcs/<pc>/<agent>/unanswered/` after them, each file there
+  only in the rules file it came from
+  ([0064: Each agent's rules file](0064-each-agents-rules-file.md)), files alphabetically by
+  path. No sentence says which rule wins. Matching headings combine: the same level and text
   (letter case and surrounding spaces ignored) under the same parent. A merged section sits where
   its heading first appears, and holds its own text first, from each file in join order, then its
   subsections, each where it first appears, but a deeper heading before a shallower one, so text

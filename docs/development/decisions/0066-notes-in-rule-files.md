@@ -1,12 +1,11 @@
 # 0066: Notes in rule files
 
-**Built:** yes, except: built-in rules' fields, and setup moving files, which comes with taking
-over an agent's file. `internal/shared/rules.py` reads a note's fields, acts on `os`, and works
-out a moved file's note and name, and whether a file already holds its text.
+**Built:** yes, except: built-in rules' fields.
 
 **Decision:** any rule file in dev-home's `rules/` may start with a note: an HTML comment whose
 first line is only `note`, then fields, then a blank line and free text. Decided by the
-developer on 2026-10-17 and 2026-10-18.
+developer on 2026-10-17 and 2026-10-18, and changed on 2026-10-23 (duplicates in every folder
+that joins, and `from` read in `unanswered/`).
 
 ```markdown
 <!-- note
@@ -34,10 +33,13 @@ Moved here when setup took over this PC's Codex home.
   A field written twice counts its last value, and both are kept. A value is the rest of its line,
   needing no quotes, with one pair forgiven. It isn't YAML. The free text is never read by setup,
   and only `-->` can't appear in it. A note covers its whole file.
-- **What setup reads:** only `built-in` and `state` in `built-in/`, and `os` in every rule file
+- **What setup reads:** only `built-in` and `state` in `built-in/`, `os` in every rule file
   outside `built-in/`, since in a built-in rule's file setup writes `os` from the rule's JSON
-  instead. It checks nothing else. End users and agents may write, change, or remove any note, and nothing
-  tells agents to write one.
+  instead, and `from` in `unanswered/`, where a file joins only in the rules file that field names
+  ([0064: Each agent's rules file](0064-each-agents-rules-file.md)). It checks nothing else. End
+  users and agents may write, change, or remove any note, and nothing tells agents to write one;
+  a file in `unanswered/` whose `from` no longer names a rules file setup writes loads nowhere
+  until it's answered.
 - **Moved files.** Each file setup moves into `mine/` or `unanswered/` gets a note with `by: setup`,
   `when`, `pc`, and `from`, and the move is named in its commit message. Each moved file stays a
   file of its own, even when one takeover moves several. It's named `moved-<pc>-<folder>-<path>.md`,
@@ -48,8 +50,12 @@ Moved here when setup took over this PC's Codex home.
   file already in `mine/` is never overwritten. The file setup creates in each `mine/` is always
   `my-rules.md`, never a `moved-` name.
 - **Duplicates.** A file to be moved whose text, without its note and with line endings and edge
-  blank lines evened out, exactly matches a file already in the `mine/` picked isn't added again:
-  setup removes the original and names the file that holds the text, in one line.
+  blank lines evened out, exactly matches a file already where it would join, isn't added again:
+  setup removes the original and names the file that holds the text, in one line. That's any
+  level's `mine/` for that agent on that PC, or a file in the PC's `unanswered/` that came from the
+  same rules file, and only one whose `os` field, if any, names that PC's system. A file in
+  `unanswered/` whose text such a `mine/` file holds is removed the same way, answered or not, such
+  as one whose twin from another folder was moved into a `mine/`.
 
 **Why:**
 
@@ -69,7 +75,9 @@ Moved here when setup took over this PC's Codex home.
   a plain name, and end users don't expect file names to rank rules: order within a folder matters
   only to Codex, whose docs say later text overrides, while Claude Code's say it may pick either.
 - Duplicates: one file copied to several PCs is common, and its rules would load twice. A move
-  retried after a failed removal is caught too.
+  retried after a failed removal is caught too. Every folder that joins counts, not only the one
+  picked: a run retrying after a failed commit has no answer, so it would otherwise set the lines
+  aside a second time, beside the copy the answer put in `mine/`, and both would load.
 
 **Options set aside:**
 

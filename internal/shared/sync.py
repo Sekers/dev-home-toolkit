@@ -90,6 +90,7 @@ import re
 import sys
 import time
 from collections.abc import Callable, Iterator, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import IO
 
@@ -254,6 +255,8 @@ class Sync:
         # only when nothing else was.
         self.reported = False
         self.stopped = False
+        # Set once the files given are in a commit on this PC, made now or already there.
+        self.committed = False
         # Set once commits from GitHub are merged in, since they may bring skills that setup must
         # link.
         self.brought_in = False
@@ -388,6 +391,7 @@ class Sync:
             return
         staged = self.git("--literal-pathspecs", "diff", "--cached", "--quiet", "--", *paths)
         if staged.code == 0:
+            self.committed = True
             self.status("OK", f"Nothing to commit: {listed} already match the last commit.")
             return
         # With paths, git commits only those paths, and anything another session staged stays out.
@@ -411,6 +415,7 @@ class Sync:
                     f"Ask the user. git: {first_line(unstage.err)}",
                 )
             return
+        self.committed = True
         self.status("COMMITTED", f'"{message}" ({listed})')
 
     def merge_upstream(self, ahead: int, behind: int) -> None:
@@ -804,6 +809,16 @@ def sync(argv: Sequence[str]) -> int:
     return sync_root(root, paths, message, fetch_when, check_hours)
 
 
+@dataclass(frozen=True)
+class SetupCommit:
+    """What a commit setup asked for came to: code, 0, or 1 when the user needs to act; and
+    committed, whether the files given are in a commit on this PC, made now or already there,
+    whatever the sync after it ran into, such as a merge it couldn't make."""
+
+    code: int
+    committed: bool
+
+
 def commit_for_setup(
     root: Path, paths: list[str], message: str, *, holds_lock: bool = False
 ) -> int:
@@ -811,11 +826,24 @@ def commit_for_setup(
     sync.py --message does. Setup runs this, so it skips the update check and setup, which a sync
     that brings in commits otherwise runs: setup would start again inside itself. Setup says
     when it holds the lock already, which this sync would otherwise wait for. Returns 0, or 1
-    when the user needs to act, and never raises."""
+    when the user needs to act, and never raises (see setup_commit)."""
+    return setup_commit(root, paths, message, holds_lock=holds_lock).code
+
+
+def setup_commit(
+    root: Path, paths: list[str], message: str, *, holds_lock: bool = False
+) -> SetupCommit:
+    """Commits files and syncs, as commit_for_setup does, and says whether the commit was made
+    (see SetupCommit). Never raises."""
     try:
-        return sync_root(root, paths, message, FETCH_WHEN[0], 0, then=False, holds_lock=holds_lock)
+        code, run = run_root(
+            root, paths, message, FETCH_WHEN[0], 0, then=False, holds_lock=holds_lock
+        )
     except Exception as error:
-        return problem(f"The commit of {', '.join(paths)} stopped: {describe(error)}")
+        return SetupCommit(
+            problem(f"The commit of {', '.join(paths)} stopped: {describe(error)}"), False
+        )
+    return SetupCommit(code, run is not None and run.committed)
 
 
 def sync_root(
@@ -829,18 +857,35 @@ def sync_root(
     holds_lock: bool = False,
 ) -> int:
     """One run on the dev-home at root, once the arguments are checked. With holds_lock, the
-    caller holds the lock already."""
+    caller holds the lock already. Returns 0, or 1 when the user needs to act."""
+    code, _ = run_root(
+        root, paths, message, fetch_when, check_hours, then=then, holds_lock=holds_lock
+    )
+    return code
+
+
+def run_root(
+    root: Path,
+    paths: list[str],
+    message: str,
+    fetch_when: str,
+    check_hours: int,
+    *,
+    then: bool = True,
+    holds_lock: bool = False,
+) -> tuple[int, Sync | None]:
+    """sync_root's run, with the Sync that ran, or None when none could."""
     if find_program("git") is None:
-        return problem(f"dev-home was not synced. {GIT_MISSING}")
+        return problem(f"dev-home was not synced. {GIT_MISSING}"), None
     found = run_git(root, "rev-parse", "--absolute-git-dir")
     if found.code != 0:
-        return problem(f"{root} is not a git repo. git: {first_line(found.err)}")
+        return problem(f"{root} is not a git repo. git: {first_line(found.err)}"), None
     git_dir = Path(first_line(found.out))
 
     run = Sync(root, git_dir, fetch_when, check_hours, then=then)
     if holds_lock:
         run.run(paths, message)
-        return 1 if run.problems else 0
+        return 1 if run.problems else 0, run
     try:
         with one_run_at_a_time(git_dir) as owned:
             if owned:
@@ -856,5 +901,5 @@ def sync_root(
         return problem(
             "Nothing was synced: each sync holds a lock on a file in dev-home's .git folder, so "
             f"only one runs at a time, and {error}. Ask the user."
-        )
-    return 1 if run.problems else 0
+        ), run
+    return 1 if run.problems else 0, run

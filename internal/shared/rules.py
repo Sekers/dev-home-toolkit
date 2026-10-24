@@ -15,7 +15,8 @@ the end user's own files:
     rules/pcs/<pc>/<agent>/         one agent, one PC
 
 then rules/pcs/<pc>/<agent>/unanswered/, the lines setup set aside while it couldn't ask where they
-go. In each folder, every .md file joins, subfolders included, alphabetically by path.
+go, each only in the rules file it came from, as its note's from field names it. In each folder,
+every .md file joins, subfolders included, alphabetically by path.
 
 Each file is read as UTF-8 unless a byte-order mark says otherwise, and joins with: its note, and
 every other HTML comment that starts a line outside fenced code, left out, whole lines and all, as
@@ -47,6 +48,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .links import is_link
+from .paths import real_path
 from .requirements import OS_NAMES, advice, closest, quoted
 
 RULES = "rules"
@@ -85,12 +87,14 @@ NOTE_FIELD = re.compile(r"([A-Za-z0-9-]+):(.*)")
 @dataclass(frozen=True)
 class RuleFile:
     """A rule file as it joins: its text, the operating systems its note limits it to, if any,
-    and a line for each problem with it, each naming the file."""
+    and a line for each problem with it, each naming the file. origin is its note's from field,
+    the file setup moved it from, or "" for none."""
 
     path: Path
     text: str
     systems: tuple[str, ...]
     problems: tuple[str, ...]
+    origin: str = ""
 
 
 @dataclass(frozen=True)
@@ -306,7 +310,8 @@ def read_rule(path: Path) -> RuleFile:
     text, problems = decode(path, data)
     lines = text.split("\n")
     systems: tuple[str, ...] = ()
-    os_field = note_fields(lines).get("os")
+    fields = note_fields(lines)
+    os_field = fields.get("os")
     if os_field is not None:
         systems, found = systems_in(path, os_field)
         problems += found
@@ -321,7 +326,8 @@ def read_rule(path: Path) -> RuleFile:
             f"{path} opens a code block with {fence} that never closes, so setup closes it at the "
             "file's end: close it where it should end."
         )
-    return RuleFile(path, "\n".join(trimmed(kept)), systems, tuple(problems))
+    text = "\n".join(trimmed(kept))
+    return RuleFile(path, text, systems, tuple(problems), fields.get("from", ""))
 
 
 def heading_key(level: int, text: str) -> tuple[int, str]:
@@ -409,20 +415,63 @@ def join(texts: Iterable[str]) -> str:
     return "\n".join(rendered(root))
 
 
-def joined_rules(operating: str, rules_root: Path, pc: str, agent: str, system: str) -> Joined:
+def joined_rules(
+    operating: str, rules_root: Path, pc: str, agent: str, system: str, source: Path | None = None
+) -> Joined:
     """An agent's rules on a PC whose operating system is system, by the name a skill's file
-    uses: the operating rules' text, then the end user's files in rules_root, joined."""
+    uses: the operating rules' text, then the end user's files in rules_root, joined, for source,
+    the agent's rules file setup writes them into. A file in this PC's unanswered/ joins only for
+    the rules file its note's from field names, the one setup set it aside from (see came_from):
+    until a person says where its lines go, they load only where they were."""
     texts: list[str] = []
     problems: list[str] = []
+    waiting = Path(PCS, pc, agent, UNANSWERED)
     for folder in joined_folders(pc, agent):
         for path in markdown_files(rules_root / folder):
             rule = read_rule(path)
             problems += rule.problems
+            if folder == waiting and not came_from(rule, source):
+                continue
             if not rule.systems or system in rule.systems:
                 texts.append(rule.text)
     own = join(texts)
     parts = [operating.strip("\n"), own] if own else [operating.strip("\n")]
     return Joined("\n\n".join(parts) + "\n", len(own.encode("utf-8")), problems)
+
+
+def already_held(
+    text: str,
+    rules_root: Path,
+    pc: str,
+    agent: str,
+    system: str,
+    source: Path | None,
+    skip: Path | None = None,
+) -> Path | None:
+    """The file that already holds text, rules setup is about to move into rules/ from source, an
+    agent's rules file, where it joins for that file on a PC whose operating system is system:
+    any level's mine/ for agent on this PC, or a file in this PC's unanswered/ that came from
+    source, other than skip (see duplicate_of). Added again, the rules would load twice. One set
+    aside from another file loads only there, and one whose note's os field leaves this system
+    out doesn't load here, so neither counts. None when no file does."""
+    wanted = evened(text)
+    waiting = Path(PCS, pc, agent, UNANSWERED)
+    for folder in joined_folders(pc, agent):
+        for path in markdown_files(rules_root / folder):
+            if path == skip or not holds(path, wanted):
+                continue
+            rule = read_rule(path)
+            if rule.systems and system not in rule.systems:
+                continue
+            if folder != waiting or came_from(rule, source):
+                return path
+    return None
+
+
+def came_from(rule: RuleFile, source: Path | None) -> bool:
+    """Whether a rule file's note names source, an agent's rules file, as the file setup moved it
+    from, following links, since two folders can lead to one file through a junction."""
+    return bool(source and rule.origin) and real_path(rule.origin) == real_path(str(source))
 
 
 def stray_files(rules_root: Path, pc: str, agents: Iterable[str]) -> list[Path]:
@@ -690,6 +739,12 @@ def moved_name(pc: str, folder: Path, path: Path, taken: Iterable[str]) -> str:
     if inner.lower().endswith(".md"):
         inner = inner[: -len(".md")]
     stem = "-".join(part for part in (MOVED, slug(pc), slug(folder.name), slug(inner)) if part)
+    return free_name(stem, taken)
+
+
+def free_name(stem: str, taken: Iterable[str]) -> str:
+    """stem.md, cut to MOVED_NAME_LIMIT, .md included, or when a name in taken is that, in any
+    letter case, the first free stem-2.md, stem-3.md, and so on, still within the limit."""
     used = {name.lower() for name in taken}
     number = 1
     while True:
@@ -718,19 +773,24 @@ def moved_file(text: str, *, when: datetime, pc: str, source: Path, about: str) 
     return "\n".join([*note, "", text.strip("\n"), ""])
 
 
-def duplicate_of(text: str, folder: Path) -> Path | None:
+def duplicate_of(text: str, folder: Path, skip: Path | None = None) -> Path | None:
     """The file in folder, subfolders included, that already holds text, a file setup is about to
     move there, so setup doesn't add it twice (decision 0066): the same text, each without its
-    note, and with line endings and blank lines at either end evened out. None when none does."""
+    note, and with line endings and blank lines at either end evened out. None when none does,
+    other than skip, the file the text comes from."""
     wanted = evened(text)
-    for path in markdown_files(folder):
-        try:
-            data = path.read_bytes()
-        except OSError:
-            continue
-        if evened(decode(path, data)[0]) == wanted:
-            return path
-    return None
+    return next(
+        (path for path in markdown_files(folder) if path != skip and holds(path, wanted)), None
+    )
+
+
+def holds(path: Path, wanted: str) -> bool:
+    """Whether a file holds wanted, a text as evened gives it."""
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return False
+    return evened(decode(path, data)[0]) == wanted
 
 
 def evened(text: str) -> str:
