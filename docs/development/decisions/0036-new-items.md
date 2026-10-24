@@ -39,6 +39,12 @@ an answer, and saving it as `unanswered` is what lets its line be said once. `PR
 something is broken, and set the exit code. When the person is at a terminal, asking right then
 is clearest.
 
+The skills share one bullet for these lines: `UPDATE` already repeated on every sync while commits
+waited, and the skills told the end user each time; once per session follows "nothing asked
+twice in one session"; one text in every skill fits
+[0012: Shared skill text](0012-shared-skill-text.md), and a later line joins by adding its name,
+as `LARGE` did; and `/dev-home sync` still reports what's waiting, each part under its own name.
+
 **Options set aside:**
 
 - One line, the first time only, for an item that waits on an answer: easily lost.
@@ -47,6 +53,10 @@ is clearest.
 - Nothing in syncs, only at the next run by hand: weeks could pass.
 - A line for each item: a batch, such as after months without updating or from a set of copied
   skills, would flood the reply.
+- A bullet for `NEW` alone: 15 words, and `UPDATE` would still repeat.
+- No bullet: each skill's "pass on anything beyond `OK`" repeats the line on every command.
+- The instruction inside the line: a person at a terminal reads it too.
+- A `dev-home` bullet without "once per session": it breaks the one shared text.
 
 **Look again if:** the reminders come to feel like noise, such as many new personal skills a week
 across several PCs.
