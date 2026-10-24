@@ -149,8 +149,9 @@ the five cases, and the questions are dev-home-toolkit's own design.
 - Moving added lines without their headings: joining would put them at the top of `# My rules`,
   outside the heading they had.
 - Finding added lines with Python's difflib alone: minutes on a large file whose lines repeat,
-  such as blank lines and code fences. With its `autojunk`, which skips lines that repeat, it's
-  fast, but a skipped line can never match, so a code fence could move as if it were added.
+  such as blank lines and code fences. With its `autojunk` it's fast, but a line that repeats in
+  more than 1% of a file of 200 lines or more can't start a match, only extend one, so such a line
+  between two changed lines, a code fence say, moves as if it were added.
 - Leaving the agent's file alone until a question is answered; waiting files in `mine/`; one
   `rules/unanswered/`; not joining waiting files.
 - Joining waiting files for every folder of the agent on that PC (built so at first, and replaced
