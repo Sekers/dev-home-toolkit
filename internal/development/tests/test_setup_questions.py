@@ -2799,7 +2799,7 @@ def test_at_a_console_an_answer_whose_commit_fails_is_taken_back(
     shown = in_dev_home(box, twins.first)
     pattern = (
         rf"^PROBLEM\s+{re.escape(shown)}: setup couldn't commit what you chose for it, so it put "
-        r"the file back\. Setup asks again at its next run in a terminal\.$"
+        r"the file back, where it waits for your answer again\.$"
     )
     assert re.search(pattern, out, re.M), out
 

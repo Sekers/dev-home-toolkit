@@ -25,8 +25,9 @@ rules](../guide/your-rules.md) explains them from the start.
   aside by a sync, which can't ask where they go (see [Where they go](#where-they-go)). Each file
   loads only in the file it came from, which its note's `from` names, so lines from one Claude
   Code account never load in another; from a folder you said no to, or one that's gone, it loads
-  nowhere. Every sync names its files in a `NEW` line until you answer. Running setup in a
-  terminal asks about each one, or you can move a file out yourself, which counts as an answer.
+  nowhere. Every sync names its files in a `NEW` line until you answer: through
+  `/dev-home configure`, or by running setup in a terminal, which asks about each one, or by
+  moving a file out yourself, which counts as an answer.
 
 ## Moved files
 
@@ -115,6 +116,7 @@ leaves the agent's file as it is until they're committed.
 | --- | --- |
 | In a terminal | Setup shows them and asks: into one of the four `mine/` folders that join for that agent on the PC, or dropped, to the Recycle Bin. When the bin can't take them, it asks again: one of those, or deleted for good. Enter leaves them for later, as a sync does. |
 | A sync, or anything else that can't ask | Set aside in `rules/pcs/<pc>/<agent>/unanswered/`. |
+| `/dev-home configure`, for lines set aside | The agent shows you each file, says which of its lines your rules already have, and recommends where it goes, with the same answers as in a terminal. Your answer is the go-ahead, and setup commits and pushes it, only while the file is still what you were shown. When the bin can't take a file you drop, setup changes nothing, and you can keep it as one of your rules or delete it for good. |
 
 A Codex home's `AGENTS.override.md` is never changed. While it has text, Codex reads it there in
 place of `AGENTS.md`, so it loads neither the operating rules nor your rules, and every sync says

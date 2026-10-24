@@ -89,8 +89,10 @@ active use anywhere besides this PC (`multiMachine`), is shared by every copy, i
 backup of this PC's settings, and commits and pushes the shared one.
 
 1. Run `{{PYTHON}} -I {{TOOLKIT_DIR}}/setup.py --configure`. With nobody at a console to answer, it
-   prints every setting with its value, then how to change one, and changes nothing. Show the
-   user the settings, briefly.
+   prints every setting with its value, then how to change one, and changes nothing. When it has
+   a "Waiting for your answer" section, follow that section first, then go on. Run each item's
+   `--configure` as step 5 does, with no `--what-if` and no other yes. Show the user the settings,
+   briefly.
 2. Agree on one change: a setting's name and its new value, written as that output writes them.
    If the user described a change, check that it maps onto one setting and value; when it
    doesn't, or the value is unclear, ask. Never guess a folder. For several changes, make them

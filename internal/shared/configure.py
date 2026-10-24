@@ -7,8 +7,16 @@ setting is asked about, checked, and written one way.
 
 An agent can't answer at a console, so it gives one setting instead, as <name>=<value>, such as
 updates.installAutomatically=true, which its user approved in chat; nothing is asked. A setting's
-name is its path in local-settings.json. With neither a console nor a setting, it shows the
-settings and how to change them.
+name is its path in local-settings.json. With neither a console nor a setting, it shows what waits
+for a person's answer, then the settings and how to change them.
+
+What waits is what setup's questions at a console ask about files: a file setup set aside in this
+PC's unanswered/ folders, and a hand edit to dev-home's AGENTS.md or CLAUDE.md. For each, the
+listing shows what it holds, the answers, and the command that gives one, named by the file's path
+in dev-home, as <path>=<answer>@<fingerprint>. The fingerprint is of the file as the listing shows
+it, so setup acts on an answer only while the file is still what the person saw. The person's
+answer is the go-ahead, so an agent runs it with no preview, and the work acts on it as on an
+answer at a console (see Setup.answer_question).
 
 This PC's settings go in local-settings.json, which setup saves with a dated backup. dev-home's
 own setting, how many copies are in active use, goes in dev-home.json, which setup writes later in
@@ -16,6 +24,7 @@ its run, then commits and pushes, once dev-home's git config is in place.
 """
 
 import copy
+import hashlib
 import json
 import re
 import textwrap
@@ -23,7 +32,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from . import console
+from . import console, rules
 from .output import CYAN, GREEN, color, status_line
 from .paths import comparable, forward, is_inside, resolve_home, same_path, unsafe_reason
 from .settings import (
@@ -62,14 +71,15 @@ from .settings import (
 )
 
 if TYPE_CHECKING:
-    from .setup import Setup
+    from .setup import Guidance, Setup, Waiting, WaitingFile
 
 NAMES = (*(setting.path for setting in SETTINGS), *FOLDER_SETTINGS, "multiMachine")
 # Each agent by the name of its folders' setting.
 AGENT_FOR = {agent.setting: agent for agent in AGENTS}
-# A name is a path, which may hold dots and, in a skill's name, hyphens. The shortest name that
-# leaves an operator after it, so claudeCode.folders-=<folder> reads as -=.
-ASSIGNMENT = re.compile(r"([A-Za-z][\w.-]*?)(\+=|-=|\?=|=)(.*)", re.DOTALL)
+# A name is a setting's path, which may hold dots and, in a skill's name, hyphens, or the path in
+# dev-home of a file setup waits on an answer about, with slashes. The shortest name that leaves an
+# operator after it, so claudeCode.folders-=<folder> reads as -=.
+ASSIGNMENT = re.compile(r"([A-Za-z][\w./-]*?)(\+=|-=|\?=|=)(.*)", re.DOTALL)
 # What each type of setting takes, as USAGE shows it.
 PLACEHOLDERS = {"folder": "<folder>", "hours": "<hours>", "kib": "<KiB>", "yes-no": "true|false"}
 USAGE_COLUMN = 36
@@ -172,6 +182,11 @@ class SettingError(Exception):
     """An assignment --configure can't make, and why."""
 
 
+class AnswerError(SettingError):
+    """An answer to a question setup waits on that --configure can't take, and why. The listing
+    says how to answer, so the settings' usage doesn't follow it."""
+
+
 def change_settings(run: "Setup", settings: LocalSettings) -> None:
     """Makes --configure's change to this PC's settings, or chooses dev-home.json's answer, which
     setup writes later in its run. With nobody to answer and no setting given, shows the settings
@@ -180,11 +195,132 @@ def change_settings(run: "Setup", settings: LocalSettings) -> None:
     if run.assigned:
         assign(run, settings, run.configure or "")
     elif not run.can_ask:
+        show_waiting(run, settings)
         for line in overview(run, settings) + skills_overview(settings):
             run.line(line)
         run.line()
         run.line(USAGE)
         run.just_showing = True
+
+
+# What waits for an answer
+
+# How an agent asks about what waits, which the listing says before the first item.
+WAITING_INTRO = (
+    "Ask the user about each item, one at a time: show its text, say which of its lines are "
+    "already in the rules this session loaded, recommend an answer, and say what it does. The "
+    "go-ahead is the user's pick of exactly one answer the item lists, or that a PROBLEM line "
+    "about it offers: run that command, and pass on what setup prints. Run nothing for any other "
+    "reply: ask again, or, for not now, leave the item waiting. After a PROBLEM line or a "
+    "refusal, show the user what it says, run --configure again if it says the item changed, and "
+    "ask again."
+)
+
+
+def fingerprint(data: bytes) -> str:
+    """What --configure shows with something that waits for an answer, and takes back with the
+    answer, so setup acts on the answer only while that's still what the person saw: the first 12
+    hex digits of its SHA-256, as a skill's stamp is."""
+    return hashlib.sha256(data).hexdigest()[:12]
+
+
+def wrapped(run: "Setup", text: str, indent: str = "") -> None:
+    """Text as lines of USAGE's width, each set in by indent, broken only at spaces, so a path
+    stays whole however long it is."""
+    for line in textwrap.wrap(
+        text,
+        USAGE_WIDTH,
+        initial_indent=indent,
+        subsequent_indent=indent,
+        break_long_words=False,
+        break_on_hyphens=False,
+    ):
+        run.line(line)
+
+
+def answer_rows(run: "Setup", rows: list[tuple[str, str]]) -> None:
+    """Each answer an item takes, with what it does beside it."""
+    width = max(len(answer) for answer, _ in rows) + 2
+    for answer, does in rows:
+        run.line(f"    {answer:<{width}}{does}")
+
+
+def show_waiting(run: "Setup", settings: LocalSettings) -> None:
+    """For an agent, before the settings: what waits for a person's answer (see Setup.waiting),
+    each item with what it is, its answers, and the command that gives one, after a paragraph on
+    how to ask. Nothing while nothing waits."""
+    waiting = run.waiting(settings)
+    if waiting is None or not (waiting.files or waiting.guidance):
+        return
+    run.line(color("Waiting for your answer", CYAN))
+    run.line()
+    wrapped(run, WAITING_INTRO)
+    for file in waiting.files:
+        show_waiting_file(run, waiting, file)
+    for found in waiting.guidance:
+        show_waiting_guidance(run, waiting, found)
+    run.line()
+
+
+def show_waiting_file(run: "Setup", waiting: "Waiting", file: "WaitingFile") -> None:
+    """A file setup set aside in unanswered/, as the listing shows it."""
+    # Loaded here, since setup loads this module.
+    from .setup import level_choices, relative
+
+    name = relative(waiting.content_root, file.path)
+    if file.loads is not None:
+        loads = "they load only there."
+    elif file.source:
+        loads = "they load nowhere, since setup doesn't write that file now."
+    else:
+        loads = "they load nowhere."
+    source = f" from {file.source}" if file.source else ""
+    run.line()
+    run.line(name)
+    wrapped(run, f"Rules setup set aside{source}. Until the user says where they go, {loads}", "  ")
+    run.line()
+    for line in file.text.split("\n"):
+        run.line(f"      {line}" if line else "")
+    run.line()
+    run.line("  Answers, each committed and pushed in dev-home:")
+    rows = [
+        (level, f"into rules/{level}/{rules.MINE}/: {label}")
+        for level, label in level_choices(file.agent, waiting.pc)
+    ]
+    answer_rows(run, [*rows, ("drop", "to the Recycle Bin")])
+    run.line(f"  Command: --configure '{name}=<answer>@{fingerprint(file.current)}'")
+
+
+def show_waiting_guidance(run: "Setup", waiting: "Waiting", found: "Guidance") -> None:
+    """A hand edit to dev-home's AGENTS.md or CLAUDE.md, as the listing shows it."""
+    current = found.current or b""
+    against = "what setup last wrote" if found.kept is not None else "what setup writes now"
+    run.line()
+    run.line(found.name)
+    wrapped(
+        run,
+        f"dev-home's {found.name} has edits setup didn't make. Each sync sends such edits to the "
+        "Recycle Bin and puts back setup's file, but leaves the file as edited while the bin "
+        "can't take them. Guidance for every session goes in the user's rules, in "
+        f"{waiting.content_root / rules.RULES}. The edits, against {against}:",
+        "  ",
+    )
+    run.line()
+    run.print_diff(
+        found.before.decode("utf-8", errors="replace"),
+        current.decode("utf-8", errors="replace"),
+        " " * 6,
+    )
+    run.line()
+    run.line("  Answer:")
+    answer_rows(run, [("delete", "deletes the edits for good, and puts back setup's file")])
+    wrapped(
+        run,
+        "With no answer, each sync tries the bin again, and names the file while the bin can't "
+        "take the edits.",
+        "  ",
+    )
+    run.line(f"  Command: --configure '{found.name}=delete@{fingerprint(current)}'")
 
 
 # What the settings are now
@@ -693,12 +829,15 @@ def change_copies(run: "Setup", settings: LocalSettings) -> bool:
 
 
 def assign(run: "Setup", settings: LocalSettings, text: str) -> None:
-    """Makes one assignment, and shows the change to this PC's settings, if any. Raises
-    SettingError for one it can't make."""
+    """Makes one assignment, and shows the change to this PC's settings, if any, or takes one
+    answer to a question setup waits on (see Setup.answer_question). Raises SettingError for one
+    it can't make."""
     match = ASSIGNMENT.fullmatch(text.strip())
     if match is None:
         raise SettingError(f"--configure takes one setting as <name>=<value>, not {text}.")
     name, operator, value = match.group(1), match.group(2), match.group(3).strip()
+    if run.answer_question(settings, name, operator, value):
+        return
     if name not in NAMES and not name.startswith("skills."):
         raise SettingError(f"There is no setting named {name}.")
     agent = AGENT_FOR.get(name)

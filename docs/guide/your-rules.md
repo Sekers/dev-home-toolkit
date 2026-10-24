@@ -93,7 +93,8 @@ section.
 - **A sync can't ask,** so it sets them aside in `rules/pcs/<pc>/<agent>/unanswered/`. There they
   keep loading only in the file they came from, so a line added in one Claude Code account's file
   doesn't reach your other accounts, and every sync names them in a `NEW` line until you say where
-  they go. Run setup in a terminal and it asks, or move the file into a `mine/` yourself.
+  they go. Answer with `/dev-home configure`, which shows you each file and where it could go, or
+  run setup in a terminal and it asks, or move the file into a `mine/` yourself.
 
 To get dropped lines back, look in the Recycle Bin for a file named for where they came from, such
 as `AGENTS from .codex, lines setup didn't write.md`.

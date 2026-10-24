@@ -5,8 +5,9 @@
 **Decision:** `setup.py --configure` is how people and agents change a setting after the first
 run: `devHome.folder`, `updates.installAutomatically`, `updates.checkEveryHours`,
 `devHome.checkEveryHours`, the answer for each Claude Code folder and for Codex's homes, each
-skill's answer and preferences, and the shared `multiMachine`. Changed on 2026-10-17 and
-2026-10-20.
+skill's answer and preferences, and the shared `multiMachine`. It's also where an agent answers
+setup's questions about files. Changed on 2026-10-17, 2026-10-20, and 2026-10-23 (setup's
+questions).
 
 - At a console, it shows a menu: every setting with its current value, under "This PC" and
   "Shared by every copy of dev-home", in aligned columns, with headings and setup's colors, in
@@ -25,6 +26,23 @@ skill's answer and preferences, and the shared `multiMachine`. Changed on 2026-1
   already answered is refused, with the `+=` and `-=` that change its answer. `--what-if` shows
   any change first. With neither a console nor a setting, it prints the current settings and how
   to change them.
+- **Setup's questions about files go through it too,** for an agent: where rules setup set aside
+  in `unanswered/` go, and whether to delete a hand edit to dev-home's `AGENTS.md` or `CLAUDE.md`
+  that the Recycle Bin can't take
+  ([0064: Each agent's rules file](0064-each-agents-rules-file.md),
+  [0069: Dropped text](0069-dropped-text.md)). With neither a console nor a setting,
+  `--configure` first prints a "Waiting for your answer" section, only while one waits: how the
+  agent asks, then each question by its file's path in dev-home, with what the file holds, where
+  it loads, its answers, and its command, `--configure '<path>=<answer>@<fingerprint>'`, the
+  fingerprint being of the file as shown
+  ([0038: Recommended settings from chat](0038-recommended-settings-from-chat.md)). It lists the
+  same files the questions at a console ask about. The answers are the console's: for a waiting
+  file, one of the four `mine/` levels or `drop`, with `delete` named once the bin can't take a
+  drop, when setup changes nothing; for a hand edit, `delete`. The person's answer is the
+  go-ahead, so the agent runs it with no `--what-if` round, and setup takes it only while the
+  file still has that fingerprint. Each answer is a run of its own, and the work acts on it as on
+  an answer at a console, so a failed commit takes it all back. A refused answer gets no usage
+  text after it, since the listing says how to answer.
 - In the list printed with neither a console nor a setting, which in practice an agent reads and
   sums up for the person, a setting nobody has answered shows as "not answered yet (defaults to
   ...)" with its default, such as "yes", and the copies setting as "not answered yet (until then,
@@ -70,6 +88,13 @@ skill's answer and preferences, and the shared `multiMachine`. Changed on 2026-1
   change would ask three times: the preview, the change, and the question in chat.
 - The dev-home check, because setup turns commit signing off in that repo, and an agent can now
   change `devHome.folder`, so a mistake must not reach a project's repo.
+- Setup's questions here: decisions 0036, 0038, and 0067 already send every question an agent
+  answers to `/dev-home configure`, and one place keeps answers checked and acted on one way,
+  through the code the console's answers use. The listing carries the agent's steps, read only
+  while something waits, so the `dev-home` skill grows by one sentence. The listing is the
+  preview, so a second yes would only ask twice, and the fingerprint makes the answer as exact as
+  one at a console. A file's path names it as the `NEW` line does, so the agent can match the
+  two. The developer's choice, 2026-10-23.
 - The backup beside the file, because every other backup setup makes is beside its file, where
   the README teaches people to look. Git ignores it because it holds the PC's paths, and the
   repo is public.
@@ -95,6 +120,13 @@ skill's answer and preferences, and the shared `multiMachine`. Changed on 2026-1
   answers); changing the heading instead (a heading already approved, and it still wouldn't say
   why a "yes" skill is missing); the state on a second, indented line (an agent summing up the
   list could split one skill's two lines apart).
+- For setup's questions: a new `--answer` option (four more pre-approved command patterns and
+  more skill text, for nothing an end user would notice); the agent moving the files itself
+  (every safety rule becomes steps each agent must follow, and a deleted file skips the Recycle
+  Bin); naming a question by a number (it shifts as questions are answered) or by its file's name
+  alone (two agents' folders can give the same name); the fingerprint as an option of its own,
+  such as `--seen` (one more option, and easy to leave off); and the agent's steps in the skill
+  (read on every `/dev-home` command).
 
-**Look again if:** an agent can answer setup's questions, the settings outgrow a menu, or people
-often ask for a reminder on a date rather than in a number of days.
+**Look again if:** the settings outgrow a menu, or people often ask for a reminder on a date
+rather than in a number of days.

@@ -4,6 +4,7 @@ The tests run in order and share the sandbox, so each one starts from where the 
 left off, and puts back what it changed. test_setup_questions.py covers what needs a person.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -404,8 +405,8 @@ def test_leaves_a_hand_edit_the_bin_cant_take_and_puts_it_back_once_it_can(
             r"and the Recycle Bin couldn't take a copy of them, so setup left the file as edited\. "
             r"The test profile's bin couldn't take it: .* Setup rewrites this file on every run, "
             r"and puts it back once the bin takes the edits: move anything you want to keep into "
-            r"your rules, in .*[\\/]rules, first\. To delete the edits for good instead, run "
-            r".*setup\.py in a terminal\.$"
+            r"your rules, in .*[\\/]rules, first\. To delete the edits for good instead, answer "
+            r"with /dev-home configure, or run .*setup\.py in a terminal\.$"
         )
         assert result.has_line(pattern), str(result)
         assert path.read_bytes() == edited and copy.read_bytes() == now
@@ -1790,7 +1791,7 @@ def waiting_line(box: Sandbox, *files: Path) -> str:
     return (
         r"^NEW\s+Setup set aside rules it didn't write, found in an agent's rules file: "
         rf"{listed}\. Until you say where they go, each loads only in the file it came from\. "
-        r"Run py .*setup\.py in a terminal, and it asks\.$"
+        r"Answer with /dev-home configure, or run py .*setup\.py in a terminal, and it asks\.$"
     )
 
 
@@ -2908,6 +2909,298 @@ def test_configure_says_when_a_skills_file_cant_be_read(box: Sandbox, settings_k
     )
     assert result.code == 1 and result.has_line(says), str(result)
     assert read(settings_kept) == before
+
+
+# Setup's questions, answered through --configure, as an agent answers them.
+
+WAITING = r"^Waiting for your answer$"
+# A line of the settings' usage, which follows a refused setting but not a refused answer.
+USAGE_LINE = r"^\s+devHome\.folder=<folder>\s"
+
+
+def fingerprint(data: bytes) -> str:
+    """The fingerprint --configure shows for a file: the first 12 hex digits of its SHA-256."""
+    return hashlib.sha256(data).hexdigest()[:12]
+
+
+@dataclass(frozen=True)
+class SetAside:
+    """A line added by hand to the sandbox's Claude Code rules file, which a quiet run set aside
+    in unanswered/: the rules file, the file set aside, how --configure names it, and this PC's
+    folder under rules/pcs/."""
+
+    rules_file: Path
+    path: Path
+    name: str
+    pc: str
+
+    def answer(self, answer: str) -> str:
+        """The assignment that gives an answer, with the file's fingerprint as it is now."""
+        return f"{self.name}={answer}@{fingerprint(self.path.read_bytes())}"
+
+
+@pytest.fixture
+def set_aside(box: Sandbox) -> Iterator[SetAside]:
+    """A file set aside in unanswered/ (see SetAside), committed. Afterwards, every moved file is
+    removed (see moved_rules_removed), and the test profile's Recycle Bin is emptied."""
+    rules_file = box.profile / ".claude" / "rules" / "dev-home-rules.md"
+    pc = pc_folder(box)
+    path = box.content / "rules" / "pcs" / pc / "claude-code" / "unanswered"
+    path /= f"moved-{pc}-claude-rules-dev-home-rules.md"
+    with moved_rules_removed(box):
+        append(rules_file, "- Added by hand.")
+        result = setup(box)
+        assert result.code == 0 and path.is_file(), str(result)
+        yield SetAside(rules_file, path, relative(box, path), pc)
+    in_bin = bin_of(box)
+    if in_bin.is_dir():
+        shutil.rmtree(in_bin)
+    else:
+        in_bin.unlink(missing_ok=True)
+
+
+def test_configure_alone_lists_nothing_waiting_while_nothing_waits(box: Sandbox) -> None:
+    result = setup_configure(box)
+    assert result.code == 0 and not result.has_line(WAITING), str(result)
+
+
+def test_configure_alone_lists_a_file_set_aside_first_with_its_answers_and_command(
+    box: Sandbox, set_aside: SetAside
+) -> None:
+    result = setup_configure(box)
+    assert result.code == 0, str(result)
+    lines = [line for line in result.lines if not line.startswith("TEST ")]
+    start = lines.index(set_aside.name)
+    # First, before the settings: the heading, then how to ask, as one paragraph.
+    assert lines[:2] == ["Waiting for your answer", ""] and lines[start - 1] == "", str(result)
+    intro = (
+        "Ask the user about each item, one at a time: show its text, say which of its lines are "
+        "already in the rules this session loaded, recommend an answer, and say what it does. The "
+        "go-ahead is the user's pick of exactly one answer the item lists, or that a PROBLEM line "
+        "about it offers: run that command, and pass on what setup prints. Run nothing for any "
+        "other reply: ask again, or, for not now, leave the item waiting. After a PROBLEM line or "
+        "a refusal, show the user what it says, run --configure again if it says the item "
+        "changed, and ask again."
+    )
+    assert " ".join(lines[2 : start - 1]) == intro, str(result)
+    shown = "\n".join(lines[start + 1 : lines.index("dev-home-toolkit settings")])
+    about = (
+        f"Rules setup set aside from {set_aside.rules_file}. Until the user says where they go, "
+        "they load only there."
+    )
+    assert " ".join(shown.split("\n\n")[0].split()) == about, shown
+    assert "\n\n      # My rules\n\n      - Added by hand.\n\n" in shown, shown
+    pc = set_aside.pc
+    levels = [
+        ("_all-agents", "every agent, on every PC"),
+        ("claude-code", "Claude Code, on every PC"),
+        (f"pcs/{pc}/_all-agents", "every agent, on this PC"),
+        (f"pcs/{pc}/claude-code", "Claude Code, on this PC"),
+    ]
+    rows = [(level, f"into rules/{level}/mine/: {label}") for level, label in levels]
+    rows.append(("drop", "to the Recycle Bin"))
+    width = max(len(answer) for answer, _ in rows) + 2
+    expected = [
+        "  Answers, each committed and pushed in dev-home:",
+        *(f"    {answer:<{width}}{does}" for answer, does in rows),
+        f"  Command: --configure '{set_aside.answer('<answer>')}'",
+    ]
+    assert shown.endswith("\n".join(expected) + "\n"), shown
+
+
+@pytest.mark.parametrize("level", ["_all-agents", "claude-code", "pcs/{pc}/claude-code"])
+def test_configure_moves_a_file_set_aside_into_the_mine_answered_then_commits_and_pushes_it(
+    box: Sandbox, set_aside: SetAside, level: str
+) -> None:
+    level = level.format(pc=set_aside.pc)
+    result = setup_configure(box, set_aside.answer(level))
+    assert result.code == 0, str(result)
+    moved = box.content / "rules" / level / "mine" / set_aside.path.name
+    pattern = (
+        rf"^WROTE\s+{re.escape(set_aside.name)}: moved into your rules, as you chose: "
+        rf"{re.escape(relative(box, moved))}$"
+    )
+    assert result.has_line(pattern) and result.has_line(r"^PUSHED\s"), str(result)
+    log = ("log", "-1", "--no-renames", "--name-only", "--format=%s")
+    committed = git("-C", str(box.content), *log)
+    subject = on_this_pc(box, f"rules: move {set_aside.name} into {level}/mine")
+    assert committed[0] == subject, committed
+    assert sorted(committed[2:]) == sorted([set_aside.name, relative(box, moved)]), committed
+    assert git("-C", str(box.content), "status", "--porcelain") == []
+    assert not set_aside.path.exists() and moved.is_file()
+    assert not result.has_line(r"^NEW\s+Setup set aside rules"), str(result)
+    assert read(set_aside.rules_file).count("- Added by hand.") == 1
+
+
+def test_configure_drops_a_file_set_aside_to_the_recycle_bin(
+    box: Sandbox, set_aside: SetAside
+) -> None:
+    data = set_aside.path.read_bytes()
+    result = setup_configure(box, set_aside.answer("drop"))
+    assert result.code == 0, str(result)
+    assert (bin_of(box) / set_aside.path.name).read_bytes() == data
+    pattern = rf"^REMOVED\s+{re.escape(set_aside.name)}: in the Recycle Bin, as you chose$"
+    assert result.has_line(pattern), str(result)
+    committed = git("-C", str(box.content), "log", "-1", "--format=%s")
+    assert committed == [on_this_pc(box, f"rules: drop {set_aside.name}")], committed
+    assert not set_aside.path.exists()
+    assert "- Added by hand." not in read(set_aside.rules_file)
+
+
+def test_configure_a_drop_the_bin_cant_take_changes_nothing_then_delete_deletes_it(
+    box: Sandbox, set_aside: SetAside
+) -> None:
+    # A file in the bin's place: the bin can't take anything.
+    write_text(bin_of(box), "")
+    data, answer = set_aside.path.read_bytes(), set_aside.answer("drop")
+    dropped = setup_configure(box, answer)
+    pattern = (
+        rf"^PROBLEM\s+{re.escape(set_aside.name)}: the Recycle Bin couldn't take it, so setup left "
+        r"it where it is\. The test profile's bin couldn't take it: .* Keep it as one of your "
+        r"rules instead, with one of the other answers --configure lists for it, or delete it "
+        rf"for good: --configure '{re.escape(set_aside.answer('delete'))}'\.$"
+    )
+    assert dropped.code == 1 and dropped.has_line(pattern), str(dropped)
+    assert not dropped.has_line(USAGE_LINE), str(dropped)
+    assert set_aside.path.read_bytes() == data
+    deleted = setup_configure(box, set_aside.answer("delete"))
+    assert deleted.code == 0, str(deleted)
+    pattern = rf"^REMOVED\s+{re.escape(set_aside.name)}: deleted for good, as you chose$"
+    assert deleted.has_line(pattern) and not set_aside.path.exists(), str(deleted)
+
+
+def test_configure_with_what_if_shows_what_an_answer_would_do_and_does_nothing(
+    box: Sandbox, set_aside: SetAside
+) -> None:
+    data = set_aside.path.read_bytes()
+    moved = setup_configure(box, set_aside.answer("claude-code"), "--what-if")
+    assert moved.has_line(r"^What if: Move it into your rules, as rules/claude-code/mine/"), str(
+        moved
+    )
+    dropped = setup_configure(box, set_aside.answer("drop"), "--what-if")
+    pattern = rf"^What if: Send it to the Recycle Bin: .*{re.escape(set_aside.path.name)}$"
+    assert dropped.has_line(pattern), str(dropped)
+    assert set_aside.path.read_bytes() == data and not bin_of(box).exists()
+    assert not (box.content / "rules" / "claude-code" / "mine" / set_aside.path.name).exists()
+
+
+def test_configure_puts_back_an_answer_whose_commit_fails(
+    box: Sandbox, set_aside: SetAside
+) -> None:
+    data = set_aside.path.read_bytes()
+    hook = box.content / ".git" / "hooks" / "pre-commit"
+    write_text(hook, "#!/bin/sh\nexit 1\n")
+    try:
+        result = setup_configure(box, set_aside.answer("claude-code"))
+    finally:
+        hook.unlink()
+    pattern = (
+        rf"^PROBLEM\s+{re.escape(set_aside.name)}: setup couldn't commit what you chose for it, "
+        r"so it put the file back, where it waits for your answer again\.$"
+    )
+    assert result.code == 1 and result.has_line(pattern), str(result)
+    assert set_aside.path.read_bytes() == data
+    assert not (box.content / "rules" / "claude-code" / "mine" / set_aside.path.name).exists()
+    assert git("-C", str(box.content), "status", "--porcelain") == []
+
+
+@pytest.mark.parametrize(
+    ("answer", "says"),
+    [
+        ("{name}=everywhere@{fp}", "{name} takes one of these answers: {answers}, not everywhere"),
+        ("{name}+=claude-code@{fp}", "{name} takes one of these answers: {answers}, not "),
+        (
+            "{name}=claude-code",
+            "{name} needs the fingerprint --configure showed, as in {name}=<answer>@<fingerprint>",
+        ),
+        (
+            "{name}=claude-code@",
+            "{name} needs the fingerprint --configure showed, as in {name}=<answer>@<fingerprint>",
+        ),
+        (
+            "{name}=claude-code@0123456789ab",
+            "{name} changed since --configure showed it. Run --configure again to see it as it is "
+            "now",
+        ),
+        ("rules/pcs/{pc}/codex/unanswered/x.md=drop@{fp}", "Nothing waits for an answer under "),
+        ("AGENTS.md=delete@{fp}", "Nothing waits for an answer under AGENTS.md"),
+    ],
+    ids=[
+        "an unknown answer",
+        "another operator",
+        "no fingerprint",
+        "an empty fingerprint",
+        "another fingerprint",
+        "no file",
+        "no edit",
+    ],
+)
+def test_configure_refuses_an_answer_it_cant_take(
+    box: Sandbox, set_aside: SetAside, answer: str, says: str
+) -> None:
+    data = set_aside.path.read_bytes()
+    pc = set_aside.pc
+    answers = f"_all-agents, claude-code, pcs/{pc}/_all-agents, pcs/{pc}/claude-code, drop"
+    filled = {"name": set_aside.name, "fp": fingerprint(data), "pc": pc, "answers": answers}
+    result = setup_configure(box, answer.format(**filled))
+    pattern = rf"^PROBLEM\s+{re.escape(says.format(**filled))}.* Nothing was changed\.$"
+    assert result.code == 1 and result.has_line(pattern), str(result)
+    assert not result.has_line(USAGE_LINE), str(result)
+    assert set_aside.path.read_bytes() == data
+
+
+@pytest.mark.parametrize("from_gone", [True, False])
+def test_configure_alone_says_where_a_file_set_aside_from_elsewhere_loads(
+    box: Sandbox, from_gone: bool
+) -> None:
+    pc = pc_folder(box)
+    path = box.content / "rules" / "pcs" / pc / "codex" / "unanswered" / "moved-by-hand.md"
+    source = "from: C:/Users/you/.codex-gone/AGENTS.md\n" if from_gone else ""
+    with moved_rules_removed(box):
+        write_text(path, f"<!-- note\nby: setup\n{source}-->\n\n- A rule set aside by hand.\n")
+        result = setup_configure(box)
+    about = (
+        "Rules setup set aside from C:/Users/you/.codex-gone/AGENTS.md. Until the user says where "
+        "they go, they load nowhere, since setup doesn't write that file now."
+        if from_gone
+        else "Rules setup set aside. Until the user says where they go, they load nowhere."
+    )
+    lines = result.lines
+    start = lines.index(relative(box, path))
+    text = " ".join(" ".join(lines[start + 1 : start + 4]).split())
+    assert text.startswith(about), str(result)
+
+
+def test_configure_lists_a_hand_edit_to_agents_md_the_bin_cant_take_and_deletes_it(
+    box: Sandbox, guidance_kept: None
+) -> None:
+    path, copy = box.content / "AGENTS.md", guidance_copy(box, "AGENTS.md")
+    now = path.read_bytes()
+    append(path, "- A hand edit.")
+    edited = path.read_bytes()
+    # A file in the bin's place: the bin can't take anything, so a sync leaves the edit.
+    write_text(bin_of(box), "")
+    assert setup(box).code == 1
+    listed = setup_configure(box)
+    assert listed.code == 0 and listed.has_line(WAITING), str(listed)
+    start = listed.lines.index("AGENTS.md")
+    shown = "\n".join(listed.lines[start + 1 : listed.lines.index("dev-home-toolkit settings")])
+    about = (
+        "dev-home's AGENTS.md has edits setup didn't make. Each sync sends such edits to the "
+        "Recycle Bin and puts back setup's file, but leaves the file as edited while the bin can't "
+        "take them. Guidance for every session goes in the user's rules, in "
+        f"{box.content / 'rules'}. The edits, against what setup last wrote:"
+    )
+    assert " ".join(shown.split("\n\n")[0].split()) == about, shown
+    assert "\n      + - A hand edit.\n" in shown, shown
+    answers = "\n  Answer:\n    delete  deletes the edits for good, and puts back setup's file\n"
+    assert answers in shown, shown
+    answer = f"AGENTS.md=delete@{fingerprint(edited)}"
+    assert f"\n  Command: --configure '{answer}'" in shown, shown
+    deleted = setup_configure(box, answer)
+    pattern = r"^WROTE\s+dev-home's AGENTS\.md, put back: its edits are deleted, as you chose\. "
+    assert deleted.code == 0 and deleted.has_line(pattern), str(deleted)
+    assert path.read_bytes() == now and copy.read_bytes() == now
 
 
 def test_skill_preferences_are_read_checked_and_set(box: Sandbox, settings_kept: Path) -> None:

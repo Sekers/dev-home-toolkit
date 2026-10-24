@@ -8,7 +8,7 @@ skill itself: [`SKILL.md`](../../templates/skills/dev-home/SKILL.md).
 | --- | --- |
 | `/dev-home` | Lists these commands. It runs nothing, so typing the name alone never reaches GitHub. |
 | `/dev-home sync` | Syncs your dev-home with GitHub now, however many copies are in use: brings in commits from your other copies, pushes this PC's, and lists the files left uncommitted. Like every sync, it also checks for dev-home-toolkit updates and runs setup quietly. |
-| `/dev-home configure` | Shows every setting with its value, and changes one you choose. The agent shows you the exact change first, and makes it only after your yes. |
+| `/dev-home configure` | First asks about anything setup is waiting on your answer for. Then shows every setting with its value, and changes one you choose. The agent shows you the exact change first, and makes it only after your yes. |
 | `/dev-home configure <change>` | The same, starting from your change, such as `/dev-home configure check GitHub every 6 hours`. |
 | `/dev-home skills` | Lists every skill, dev-home-toolkit's own and then yours, with what each is for, whether it's added to your agents on this PC, and if not, why, and any program or Python version it needs that's missing. It changes nothing, and works in Codex too. |
 
@@ -20,6 +20,13 @@ skill itself: [`SKILL.md`](../../templates/skills/dev-home/SKILL.md).
   setting you agreed on, such as `devHome.checkEveryHours=6`: first with `--what-if`, to show you the
   change, then for real after your yes. Setup checks the value, and keeps a dated backup of
   `local-settings.json`.
+- **What setup is waiting on your answer for comes first:** rules it set aside from an agent's
+  rules file (see [Your rules](../guide/your-rules.md#lines-in-those-files-that-setup-didnt-write)),
+  and an edit to your dev-home's `AGENTS.md` or `CLAUDE.md` that the Recycle Bin couldn't take.
+  The agent asks about each one at a time: it shows it to you, says which of its lines your rules
+  already have, and recommends an answer. Your answer is the go-ahead, so the agent runs it with
+  no second question, and setup commits and pushes an answer about rules. Setup acts on it only
+  while the file is still what you were shown.
 - **A Claude Code folder or Codex home setup has no answer for** is left as it is, and a `NEW`
   line names it on every sync until you answer: set it up, no, or remind me in N days, such as
   `/dev-home configure remind me about ~/.claude-second in a week`. Setup works out the date, and

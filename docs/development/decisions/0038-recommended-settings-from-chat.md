@@ -10,6 +10,11 @@ shown, with a backup as usual. Only values from the recommended-settings list ca
 way, never an arbitrary key, and the `dev-home` skill keeps pre-approving
 `setup.py --configure *`, as the skills pre-approve their commits.
 
+The fingerprint goes at the end of the value, as `'<name>=<value>@<fingerprint>'`, as a reminder
+takes `@<days>`, and is the first 12 hex digits of the SHA-256 of what was shown, as a skill's
+stamp is. Answers to setup's questions through `--configure` already carry one this way
+([0026: setup.py --configure](0026-setup-py-configure.md)). Changed on 2026-10-23 (its form).
+
 **Why:** chat is where most later questions reach people, between runs of setup by hand. The
 fingerprint makes a yes in chat as exact as a typed yes, as `update.py` pulls exactly the commit
 it showed. If Claude Code changed the file in between, such as through `/config`, nothing is

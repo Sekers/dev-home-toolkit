@@ -62,7 +62,8 @@ by which it tells the lines it didn't write: ones someone added, or a whole file
 before setup wrote its own. Before it rewrites or removes the file, those lines move into a file of
 their own in dev-home's rules/, with the headings they were under: at a console, into the mine/
 the person picks, or to the Recycle Bin; otherwise, set aside in this PC's unanswered/ for that
-agent, named in a NEW line on every run until a person answers. A file there joins after mine/,
+agent, named in a NEW line on every run until a person answers, at a console or through an agent
+with --configure. A file there joins after mine/,
 only in the rules file it came from, as its note's from field names it, so one Claude Code
 account's lines never load in another's. Setup commits and pushes them before it touches the file,
 and leaves the file as it is while they aren't committed, or once it changes after setup read it.
@@ -82,7 +83,7 @@ and setup writes them on every run, keeping a copy of what it wrote in last-writ
 agents' rules files. Any other text there is a hand edit, which goes to the Recycle Bin before
 setup puts the file back (decision 0069, "Dropped text"). When the bin can't take it, the file
 stays as edited, named in a PROBLEM line on each run, until a run whose bin takes it, or a
-person's answer at a console.
+person's answer, at a console or through an agent with --configure.
 
 Each Claude Code folder and Codex home setup sets up needs a change in its settings file, so the
 agent can reach dev-home from any project, and in a Claude Code folder other than ~/.claude, so its
@@ -159,11 +160,13 @@ Options:
     --configure             Changes a setting after the first run. At a console, every run
                             shows a menu of every setting after its questions, with or without
                             this: pick one to change, or go through them all. Without a
-                            console, it shows the settings and how to change them.
+                            console, it shows what waits for an answer, then the settings and
+                            how to change them.
     --configure '<name>=<value>'
-                            Changes one setting, the way an agent does, with no questions, then
-                            prints only changes and problems. --configure with no setting says
-                            which names and values it takes.
+                            Changes one setting, or answers one question, the way an agent
+                            does, with no questions, then prints only changes and problems.
+                            --configure with no setting says which names and values it takes,
+                            and how to answer each question that waits.
     --what-if               Shows what it would change, without changing anything.
 
 It asks a question only when a person can see it and answer: never with --quiet, and only when
@@ -441,8 +444,9 @@ class Guidance:
 
 @dataclass(frozen=True)
 class GuidanceChoice:
-    """What became of a hand edit at this run's questions (see Setup.ask_about_guidance): "sent",
-    the Recycle Bin took it; "delete", the bin couldn't, and a person chose to delete it for good;
+    """What became of a hand edit at this run's questions (see Setup.ask_about_guidance), or by
+    an answer through --configure (see Setup.answer_question): "sent", the Recycle Bin took it;
+    "delete", a person chose to delete it for good, once the bin couldn't take it at a console;
     or "leave", the bin couldn't, and they chose to leave the file as edited, with why_not, why the
     bin couldn't take it. current is the file as it was then."""
 
@@ -476,10 +480,11 @@ class FoundLines:
 @dataclass(frozen=True)
 class RulesChoice:
     """What a person chose at this run's questions for lines setup didn't write in an agent's
-    rules file, or for a file in unanswered/: "move", into the mine/ of level, a level folder
-    relative to rules/, such as codex; "sent", the Recycle Bin took them; or "delete", the bin
-    couldn't, and they chose to delete them for good. current is the file as it was then: the
-    work acts on the choice only while the file is still the same (see Setup.ask_about_rules)."""
+    rules file, or for a file in unanswered/, there or through --configure (see
+    Setup.answer_question): "move", into the mine/ of level, a level folder relative to rules/,
+    such as codex; "sent", the Recycle Bin took them; or "delete", they chose to delete them for
+    good. current is the file as it was then: the work acts on the choice only while the file is
+    still the same (see Setup.ask_about_rules)."""
 
     choice: str
     current: bytes
@@ -499,6 +504,34 @@ class RulesChanges:
     written: list[Path] = field(default_factory=list)
     removed: dict[Path, bytes] = field(default_factory=dict)
     answered: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class WaitingFile:
+    """A file in this PC's unanswered/ folders that setup asks about: path; agent, its agent's
+    name in rules/, such as codex; current, its bytes; text, its rules without the note, as
+    shown; source, the rules file its note's from field names, or "" for none; and loads, that
+    rules file, where setup writes it, or None when the file loads nowhere."""
+
+    path: Path
+    agent: str
+    current: bytes
+    text: str
+    source: str
+    loads: Path | None
+
+
+@dataclass(frozen=True)
+class Waiting:
+    """What waits for a person's answer, as --configure lists it for an agent and takes answers
+    to it (see Setup.waiting): dev-home's folder; this PC's folder under rules/pcs/; each file in
+    unanswered/ that setup asks about; and each of dev-home's AGENTS.md and CLAUDE.md with a hand
+    edit."""
+
+    content_root: Path
+    pc: str
+    files: list[WaitingFile]
+    guidance: list[Guidance]
 
 
 def cleanup(checked: Checked) -> list[str]:
@@ -711,17 +744,18 @@ class Setup:
             current,
         )
 
-    def print_diff(self, old_text: str, new_text: str) -> None:
-        """The lines a change adds (+) and removes (-), with a few around them."""
+    def print_diff(self, old_text: str, new_text: str, indent: str = " " * 12) -> None:
+        """The lines a change adds (+) and removes (-), with a few around them, each set in by
+        indent."""
         diff = line_diff(to_lines(old_text), to_lines(new_text))
         limit = 40
         for diff_line in diff[:limit]:
             code = (
                 GREEN if diff_line.startswith("+ ") else RED if diff_line.startswith("- ") else ""
             )
-            self.line("            " + diff_line, code)
+            self.line(indent + diff_line, code)
         if len(diff) > limit:
-            self.line(f"            ...and {len(diff) - limit} more lines.")
+            self.line(f"{indent}...and {len(diff) - limit} more lines.")
 
     def finish(self) -> int:
         """Prints the summary, and returns 0 when there were no problems, 1 otherwise."""
@@ -1937,17 +1971,30 @@ class Setup:
         if not self.can_ask or self.what_if:
             return
         pc = rules.pc_folder(computer_name())
+        found, waiting = self.rules_questions(content_root, settings, pc)
+        for lines in found:
+            self.ask_where_lines_go(lines, pc)
+        for file in waiting:
+            self.ask_where_file_goes(file, content_root / rules.RULES, pc)
+
+    def rules_questions(
+        self, content_root: Path, settings: LocalSettings, pc: str
+    ) -> tuple[list[FoundLines], list[WaitingFile]]:
+        """What setup asks about rules, at a console or through --configure (see ask_about_rules):
+        the lines setup didn't write in each agent's rules file, a file at a time, and each file
+        in this PC's unanswered/ folders, pc being this PC's folder under rules/pcs/."""
         system = requirements.operating_system()
         rules_root = content_root / rules.RULES
         targets = self.rules_targets(self.agent_folders(settings))
-        waiting = unanswered_files(rules_root, pc)
-        if not targets and not waiting:
-            return
+        paths = unanswered_files(rules_root, pc)
+        if not targets and not paths:
+            return [], []
         rendered = generated.render(OPERATING_TEMPLATE, template_values(content_root))
         operating = rendered.data.decode("utf-8")
         joined = self.join_rules(operating, rules_root, pc, targets)
         asked: set[str] = set()
         pending: set[str] = set()
+        lines: list[FoundLines] = []
         for target in targets:
             real = real_path(target.path)
             if real in asked:
@@ -1963,12 +2010,37 @@ class Setup:
             if holder is not None:
                 pending.add(str(holder))
                 continue
-            self.ask_where_lines_go(found, pc)
+            lines.append(found)
         # Each rules file setup writes, by its real path, where a waiting file loads.
         written = {real_path(target.path): target.path for target in targets if target.setting_up}
-        for path in waiting:
-            if str(path) not in pending:
-                self.ask_where_file_goes(path, rules_root, pc, system, written)
+        files = [
+            file
+            for path in paths
+            if str(path) not in pending
+            and (file := self.waiting_file(path, rules_root, pc, system, written)) is not None
+        ]
+        return lines, files
+
+    def waiting_file(
+        self, path: Path, rules_root: Path, pc: str, system: str, written: dict[str, Path]
+    ) -> WaitingFile | None:
+        """A file in this PC's unanswered/ folders as setup asks about it (see WaitingFile), or None
+        when it can't be read, or a mine/ file that joins for its agent here already holds it,
+        which the work removes (see answer_waiting). written has each rules file setup writes, by
+        its real path: the file loads only in the one its note's from field names, if any."""
+        agent = path.relative_to(rules_root).parts[2]
+        try:
+            current = path.read_bytes()
+        except OSError:
+            return None
+        text = rules.decode(path, current)[0]
+        if rules.already_held(text, rules_root, pc, agent, system, None, skip=path):
+            return None
+        lines = text.split("\n")
+        source = rules.note_fields(lines).get("from") or ""
+        loads = written.get(real_path(source)) if source else None
+        shown = "\n".join(rules.trimmed(rules.without_note(lines)))
+        return WaitingFile(path, agent, current, shown, source, loads)
 
     def ask_where_lines_go(self, found: FoundLines, pc: str) -> None:
         """Shows the lines setup didn't write in an agent's rules file, and asks where they go (see
@@ -2005,32 +2077,23 @@ class Setup:
             f"they wait in {waiting}, and {loads}",
         )
 
-    def ask_where_file_goes(
-        self, path: Path, rules_root: Path, pc: str, system: str, written: dict[str, Path]
-    ) -> None:
+    def ask_where_file_goes(self, file: WaitingFile, rules_root: Path, pc: str) -> None:
         """Shows a file in this PC's unanswered/ folders, and asks where it goes (see
-        ask_about_rules), unless a mine/ file that joins for its agent here already holds it.
-        written has each rules file setup writes, by its real path: the file loads only in the
-        one its note's from field names, if any."""
-        agent = path.relative_to(rules_root).parts[2]
-        try:
-            current = path.read_bytes()
-        except OSError:
-            return
-        text = rules.decode(path, current)[0]
-        if rules.already_held(text, rules_root, pc, agent, system, None, skip=path):
-            return
-        lines = text.split("\n")
-        source = rules.note_fields(lines).get("from")
-        where = f" from {source}" if source else ""
-        loads = written.get(real_path(source)) if source else None
+        ask_about_rules)."""
+        where = f" from {file.source}" if file.source else ""
         self.line()
         self.line(
-            f"Rules setup set aside{where}, in dev-home's {relative(rules_root.parent, path)}:"
+            f"Rules setup set aside{where}, in dev-home's {relative(rules_root.parent, file.path)}:"
         )
-        self.show_rules("\n".join(rules.trimmed(rules.without_note(lines))))
-        until = f"they stay there, and {f'load only in {loads}' if loads else 'load nowhere'}"
-        self.choose_where(str(path), current, (current, path.name), (agent, pc), until)
+        self.show_rules(file.text)
+        loads = f"load only in {file.loads}" if file.loads else "load nowhere"
+        self.choose_where(
+            str(file.path),
+            file.current,
+            (file.current, file.path.name),
+            (file.agent, pc),
+            f"they stay there, and {loads}",
+        )
 
     def show_rules(self, text: str) -> None:
         """Rules shown in a question, set in from the left, between blank lines."""
@@ -2089,6 +2152,102 @@ class Setup:
             if answer == "5":
                 return "drop" if drop else "delete"
             self.line("Type a number from 1 to 5, or press Enter to decide later.")
+
+    # Setup's questions, answered through --configure
+
+    def waiting(self, settings: LocalSettings) -> Waiting | None:
+        """What waits for a person's answer (see Waiting): what --configure lists for an agent, and
+        takes answers to, as setup's questions at a console ask about it. None while no dev-home
+        folder is set, or it isn't a dev-home."""
+        if not settings.content_dir:
+            return None
+        content_root = Path(comparable(settings.content_dir))
+        if not is_dev_home(content_root):
+            return None
+        pc = rules.pc_folder(computer_name())
+        _, files = self.rules_questions(content_root, settings, pc)
+        values = template_values(content_root)
+        guidance = [
+            found
+            for name in DEV_HOME_GUIDANCE
+            if isinstance(found := self.find_guidance(content_root, values, name), Guidance)
+            and found.edited
+        ]
+        return Waiting(content_root, pc, files, guidance)
+
+    def answer_question(
+        self, settings: LocalSettings, name: str, operator: str, value: str
+    ) -> bool:
+        """Takes an agent's answer through --configure to a question setup waits on (see waiting),
+        named by its file's path in dev-home, as <name>=<answer>@<fingerprint>, where the
+        fingerprint is the one --configure showed with it, so setup acts only on what the person
+        saw. The work then acts on it, as on an answer at a console. A drop goes to the Recycle Bin
+        at once, and when the bin can't take it, setup says so and stops. Returns False for a name
+        that isn't a question's, which may be a setting's; raises configure.AnswerError for an
+        answer setup can't take."""
+        if "/" not in name and name not in DEV_HOME_GUIDANCE:
+            return False
+        waiting = self.waiting(settings)
+        file: WaitingFile | None = None
+        guidance: Guidance | None = None
+        if waiting is not None:
+            file = next(
+                (f for f in waiting.files if relative(waiting.content_root, f.path) == name), None
+            )
+            guidance = next((g for g in waiting.guidance if g.name == name), None)
+        if waiting is None or (file is None and guidance is None):
+            raise configure.AnswerError(f"Nothing waits for an answer under {name}.")
+        if file is not None:
+            answers = [level for level, _ in level_choices(file.agent, waiting.pc)] + ["drop"]
+            # Named only once the bin can't take a drop, as at a console.
+            taken = [*answers, "delete"]
+            current = file.current
+        else:
+            assert guidance is not None and guidance.current is not None
+            answers = taken = ["delete"]
+            current = guidance.current
+        answer, at, typed = value.rpartition("@")
+        answer = answer.strip() if at else value
+        if operator != "=" or answer not in taken:
+            given = answer if operator == "=" else f"{operator}{answer}"
+            raise configure.AnswerError(
+                f"{name} takes one of these answers: {', '.join(answers)}, not {given}."
+            )
+        if not at or not typed.strip():
+            raise configure.AnswerError(
+                f"{name} needs the fingerprint --configure showed, as in "
+                f"{name}=<answer>@<fingerprint>."
+            )
+        if configure.fingerprint(current) != typed.strip():
+            raise configure.AnswerError(
+                f"{name} changed since --configure showed it. Run --configure again to see it as "
+                "it is now."
+            )
+        if guidance is not None:
+            self.guidance_choices[name] = GuidanceChoice("delete", current)
+            return True
+        assert file is not None
+        if answer == "drop":
+            if self.what_if:
+                self.line(f"What if: Send it to the Recycle Bin: {file.path}")
+            else:
+                sent = self.to_the_bin(current, file.path.name)
+                if not sent.in_bin:
+                    self.status(
+                        "PROBLEM",
+                        f"{name}: the Recycle Bin couldn't take it, so setup left it where it is. "
+                        f"{sentence(sent.why_not)} Keep it as one of your rules instead, with one "
+                        "of the other answers --configure lists for it, or delete it for good: "
+                        f"--configure '{name}=delete@{typed.strip()}'.",
+                    )
+                    raise CannotGoOnError
+            choice = RulesChoice("sent", current)
+        elif answer == "delete":
+            choice = RulesChoice("delete", current)
+        else:
+            choice = RulesChoice("move", current, answer)
+        self.rules_choices[str(file.path)] = choice
+        return True
 
     def save_lines(
         self,
@@ -2226,8 +2385,8 @@ class Setup:
     def take_back(self, content_root: Path, changes: RulesChanges) -> None:
         """After a failed commit: removes each file this run wrote in rules/, and puts back each
         it removed, so nothing it couldn't commit stays there, where it would join, and might
-        never be committed. Says so for each file in unanswered/ a person answered: setup asks
-        again at its next run in a terminal."""
+        never be committed. Says so for each file in unanswered/ a person answered, which waits
+        for their answer again."""
         for path in changes.written:
             try:
                 remove_generated_file(path)
@@ -2244,8 +2403,8 @@ class Setup:
         for shown in changes.answered:
             self.status(
                 "PROBLEM",
-                f"{shown}: setup couldn't commit what you chose for it, so it put the file back. "
-                "Setup asks again at its next run in a terminal.",
+                f"{shown}: setup couldn't commit what you chose for it, so it put the file back, "
+                "where it waits for your answer again.",
             )
 
     def keep_saved(self, found: FoundLines) -> None:
@@ -2375,7 +2534,8 @@ class Setup:
 
     def report_waiting(self, content_root: Path, pc: str) -> None:
         """The NEW line naming each file in this PC's unanswered/ folders, on every run until a
-        person says where each goes (decision 0064)."""
+        person says where each goes, through /dev-home configure or at a console (decision
+        0064)."""
         waiting = unanswered_files(content_root / rules.RULES, pc)
         if not waiting:
             return
@@ -2383,8 +2543,8 @@ class Setup:
         self.status(
             "NEW",
             f"Setup set aside rules it didn't write, found in an agent's rules file: {listed}. "
-            "Until you say where they go, each loads only in the file it came from. Run "
-            f"{by_hand('setup.py')} in a terminal, and it asks.",
+            "Until you say where they go, each loads only in the file it came from. Answer with "
+            f"/dev-home configure, or run {by_hand('setup.py')} in a terminal, and it asks.",
         )
 
     def report_overrides(self, homes: Sequence[str]) -> None:
@@ -2660,7 +2820,8 @@ class Setup:
                     configure.change_settings(self, settings)
                 except configure.SettingError as error:
                     self.status("PROBLEM", f"{error} Nothing was changed.")
-                    self.line(configure.USAGE)
+                    if not isinstance(error, configure.AnswerError):
+                        self.line(configure.USAGE)
                     raise CannotGoOnError from error
             if self.just_showing:
                 raise CannotGoOnError
@@ -3922,13 +4083,14 @@ def bin_name(name: str) -> str:
 def left_text(found: Guidance, rules_root: Path, why_not: str) -> str:
     """The PROBLEM line for one of dev-home's AGENTS.md and CLAUDE.md left as edited, since the
     Recycle Bin couldn't take a copy of its hand edit: on each run, until a run whose bin takes it,
-    or a person's answer at a console."""
+    or a person's answer, through /dev-home configure or at a console."""
     return (
         f"dev-home's {found.name}: {found.path} has edits setup didn't make, and the Recycle Bin "
         f"couldn't take a copy of them, so setup left the file as edited. {sentence(why_not)} "
         "Setup rewrites this file on every run, and puts it back once the bin takes the edits: "
         f"move anything you want to keep into your rules, in {rules_root}, first. To delete the "
-        f"edits for good instead, run {by_hand('setup.py')} in a terminal."
+        "edits for good instead, answer with /dev-home configure, or run "
+        f"{by_hand('setup.py')} in a terminal."
     )
 
 

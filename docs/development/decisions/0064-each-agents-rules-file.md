@@ -1,8 +1,6 @@
 # 0064: Each agent's rules file
 
-**Built:** yes, except: answering through `/dev-home configure` where lines setup set aside go,
-and the always-on blocks of the skills. Until then, the `NEW` line naming those lines says to run
-setup in a terminal, which asks.
+**Built:** yes, except: the always-on blocks of the skills.
 
 **Decision:** every agent gets its always-on rules as one file that setup writes in the agent's
 own folder: each Codex home's `AGENTS.md`, and `dev-home-rules.md` in each Claude Code folder's

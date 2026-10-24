@@ -1,11 +1,6 @@
 # 0069: Dropped text
 
-**Built:** yes, except: answering through `/dev-home configure`, both where an agent's rules go,
-dropping them included, and what to do with a hand edit the bin can't take, since both need a way
-for an agent to answer setup's questions about files (the developer, 2026-10-23). Until then, the
-`PROBLEM` line for such an edit, and the `NEW` line for rules set aside, say to run setup in a
-terminal. Dropped rules, and hand edits to dev-home's `AGENTS.md` and `CLAUDE.md`, go to the bin
-through `internal/shared/recycle_bin.py`.
+**Built:** yes.
 
 **Decision:** text an end user tells setup to drop goes to the Recycle Bin, as a file, before
 setup removes or overwrites anything. Decided by the developer on 2026-10-18, and changed on
@@ -17,9 +12,9 @@ setup removes or overwrites anything. Decided by the developer on 2026-10-18, an
   At a console, dropped text never enters dev-home. Through `/dev-home configure`, dropping an
   `unanswered/` file deletes a file whose text is also in dev-home's git history.
 - **On Windows,** setup sends a file holding the text to the Recycle Bin through `IFileOperation`,
-  called with `ctypes`, which setup already uses, so nothing new gets installed. macOS's Trash and
-  Linux's trash folder come with those systems. A file in `unanswered/` that's dropped goes to the
-  bin itself.
+  called with `ctypes`, which setup already uses, so nothing new gets installed
+  (`internal/shared/recycle_bin.py`). macOS's Trash and Linux's trash folder come with those
+  systems. A file in `unanswered/` that's dropped goes to the bin itself.
 - **Setup overwrites the agent's file only once the text is safe.** It writes the text to a file
   of its own, named for what it holds, in a new folder of the system's temporary folder, and sends
   that file to the bin with a progress sink listening to `IFileOperation`. The sink's
@@ -31,7 +26,8 @@ setup removes or overwrites anything. Decided by the developer on 2026-10-18, an
   reported as not in the bin.
 - **When the bin can't take it,** setup says so and asks: keep it as one of the end user's rules,
   in the `mine/` they pick, or delete it for good. Through `/dev-home configure`, the agent asks
-  the same in chat. No backup file is left anywhere.
+  the same in chat, as [0026: setup.py --configure](0026-setup-py-configure.md) says. No backup
+  file is left anywhere.
 - **The same rule covers a hand edit** to any file dev-home-toolkit owns in dev-home, the per-PC
   `AGENTS.md` and `CLAUDE.md` and built-in rules' files included: the edited text goes to the bin
   before setup puts the file back

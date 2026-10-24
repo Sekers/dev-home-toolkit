@@ -123,6 +123,7 @@ and your rules joined, which setup writes again at each sync.
   Recycle Bin can't take the edit, setup leaves the file as you edited it and says so on every
   sync, until the bin takes it. Running setup in a terminal tries the bin again, and if it still
   can't take the edit, shows it to you and asks whether to delete it for good instead.
+  `/dev-home configure` shows you the edit too, and deletes it for good if you say so.
 
 **To remove it all:** delete each link with `cmd /c rmdir <link>`, `internal\.python` included,
 delete the rules file setup wrote in each agent's folder, `rules\dev-home-rules.md` in each
