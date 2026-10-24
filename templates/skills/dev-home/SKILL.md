@@ -73,10 +73,13 @@ rule written for the user's project repos.
      `{{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py --message "sync: <what changed>" "<path>"`, which
      commits only that file, then syncs. After it, `OFFLINE` or `PENDING` means the commit is
      safe on this PC, and a later sync pushes it.
-   - `UPDATE`: new dev-home-toolkit commits are available. Tell the user.
+   - `UPDATE`, `NEW`, and `LARGE`: tell the user each such line once per session, as its own
+     line, and continue.
    - `PROBLEM`: show it.
-2. Tell the user in one line where things stand: up to date, pulled, merged, pushed, or not
-   synced and why.
+2. Tell the user in one line where dev-home stands: up to date, pulled, merged, pushed, or not
+   synced and why. Then, each on its own line, name what any `UPDATE` (dev-home-toolkit), `NEW`
+   (this PC's setup), or `LARGE` (your rules' size) line says is still waiting, even if told
+   earlier this session, without asking again.
 
 Commits in dev-home are unsigned on purpose: setup turns signing off in that repo's own git
 config. That is not bypassing signing, and the project repos keep signing as usual.

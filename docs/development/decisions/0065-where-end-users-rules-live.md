@@ -19,8 +19,9 @@ Each level holds `mine/`, the end user's rule files. `_all-agents/` and each `<a
 never the per-PC levels, and `pcs/<pc>/<agent>/` also holds `unanswered/`
 ([0064: Each agent's rules file](0064-each-agents-rules-file.md)).
 Decided by the developer on 2026-10-17 and 2026-10-18, and changed on 2026-10-22 (a code block
-left open, the order inside a merged section, `# My rules`, and the size settings' details) and
-2026-10-23 (a missing `my-rules.md` git still has).
+left open, the order inside a merged section, `# My rules`, and the size settings' details),
+2026-10-23 (a missing `my-rules.md` git still has), and 2026-10-24 (how agents pass a `LARGE`
+line on).
 
 - **Names.** `<pc>` is the PC's name ([0083: The PC's name](0083-the-pcs-name.md)) in
   lowercase, any other character a hyphen.
@@ -77,7 +78,10 @@ left open, the order inside a merged section, `# My rules`, and the size setting
   it where Codex's own default of 32 KiB is less, and never lowering it. `rules.warnAboveKiB`,
   "Warn when your rules for one agent pass", 32 by default: while the end user's own rules for
   one agent on one PC are past it, every sync says so in a `LARGE` line, until they shrink or the
-  end user raises the size; 0 never warns (the developer, 2026-10-22).
+  end user raises the size; 0 never warns (the developer, 2026-10-22). The skills tell each
+  `LARGE` line once per session, with the bullet they share for `UPDATE` and `NEW`
+  ([0036: New items](0036-new-items.md)), and `/dev-home sync` names it every time (the
+  developer, 2026-10-24).
 - **Path length.** Caps of 40 characters on built-in skill and rule names, 24 on agent folder
   names, and 32 on PC folder names, with moved-file names cut to 60. A longer PC name is cut to
   32 characters; two PCs whose names agree that far would share a folder, which is accepted as
@@ -128,6 +132,8 @@ left open, the order inside a merged section, `# My rules`, and the size setting
   end user's global rules 13,832, and Codex's joined file 16,289. The warning is its own word,
   not `PROBLEM`, since rules kept large on purpose aren't a failure. Saying it on every sync, as
   `NEW` does for a folder with no answer, needs no saved state, and raising the size stops it.
+  Agents tell it once a session, as they do `NEW`: after the first time, saying it on every
+  command costs tokens and tells the end user nothing new.
   Setup only ever raises what Codex reads, so a small limit can't cut Codex below its default.
 - Path length: Windows refuses a path over 260 characters by default, counting dev-home's own
   folder; Git for Windows won't check out a longer one without `core.longpaths`; and macOS and Linux

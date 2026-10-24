@@ -81,6 +81,10 @@ PC, and says so when it can't.
 | `PROBLEM` | Needs you. The message says what to do. |
 | `RELOAD` | From `prepare.py`: the skill has changed since the session loaded it, such as after an update, so the agent stops. Type the skill's command again to load its new steps. |
 
+When a skill command starts with a sync, such as `/handoff`, the agent tells you each `UPDATE`,
+`NEW`, or `LARGE` line once a session, since such a line can come on every sync while it waits for
+you. `/dev-home sync` names what's still waiting every time.
+
 Setup's lines, such as `LINKED` or `WROTE`, say what it changed on this PC.
 
 ## Updates

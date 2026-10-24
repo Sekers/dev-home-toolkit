@@ -349,6 +349,37 @@ def test_each_skill_pre_approves_its_sync_commands_for_both_tools(skill: Path) -
         assert f"{tool}({prefix} *)" in approvals, f"{tool} sync that commits"
 
 
+def skills_that_sync() -> list[Path]:
+    return [s for s in skills() if "prepare.py" in (s / "SKILL.md").read_text(encoding="utf-8")]
+
+
+@pytest.mark.parametrize("skill", skills_that_sync(), ids=lambda p: p.name)
+def test_each_skill_that_syncs_passes_repeating_lines_on_with_one_shared_bullet(
+    skill: Path,
+) -> None:
+    # Word for word the same in every skill, and once per session, since an UPDATE, NEW, or LARGE
+    # line can repeat on every sync (decisions 0036 and 0065).
+    words = " ".join((skill / "SKILL.md").read_text(encoding="utf-8").split())
+    shared = (
+        "- `UPDATE`, `NEW`, and `LARGE`: tell the user each such line once per session, as its"
+        " own line, and continue."
+    )
+    assert shared in words
+    for word in ("UPDATE", "NEW", "LARGE"):
+        assert f"- `{word}`:" not in words
+
+
+def test_dev_home_sync_names_what_is_still_waiting_even_if_told_earlier() -> None:
+    # An end user who runs /dev-home sync asked where things stand, so it names what's still
+    # waiting even when told earlier.
+    words = " ".join((SKILLS / "dev-home" / "SKILL.md").read_text(encoding="utf-8").split())
+    assert (
+        "name what any `UPDATE` (dev-home-toolkit), `NEW` (this PC's setup), or `LARGE` (your"
+        " rules' size) line says is still waiting, even if told earlier this session, without"
+        " asking again." in words
+    )
+
+
 def test_handoff_environment_edits_follow_evidence_not_session_location() -> None:
     # The current computer names the default subsection, but doesn't own it: reliable evidence
     # about another environment must be usable without permitting guesses across environments.

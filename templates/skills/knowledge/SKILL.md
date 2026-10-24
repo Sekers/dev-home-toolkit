@@ -41,7 +41,8 @@ since nothing else changes it.
    - `LEFT`: leave the file alone. Another session may be editing it.
    - `STALE`: nobody has touched the file for 15 minutes. Ask "Commit and push it?". On a yes, run
      `{{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py --message "sync: <what changed>" "<path>"`.
-   - `UPDATE`: new dev-home-toolkit commits are available. Tell the user, and continue.
+   - `UPDATE`, `NEW`, and `LARGE`: tell the user each such line once per session, as its own
+     line, and continue.
    - `PROBLEM`: show it to the user.
 2. Tell the user in one line where things stand: up to date, pulled, pushed, or not checked and
    why.
