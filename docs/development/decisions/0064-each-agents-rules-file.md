@@ -1,6 +1,6 @@
 # 0064: Each agent's rules file
 
-**Built:** yes, except: the always-on blocks of the skills.
+**Built:** yes.
 
 **Decision:** every agent gets its always-on rules as one file that setup writes in the agent's
 own folder: each Codex home's `AGENTS.md`, and `dev-home-rules.md` in each Claude Code folder's

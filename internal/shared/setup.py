@@ -56,9 +56,10 @@ match the command text exactly, so the paths can't be variables.
 Each agent gets its always-on rules as one file setup writes in its folder: dev-home-rules.md in
 each Claude Code folder's rules/, which Claude Code loads with every other .md file there, and
 AGENTS.md in each Codex home. It holds the operating rules, from their template with this PC's
-paths filled in, then the end user's rules from dev-home's rules/, joined for that agent on this PC
-(rules.py). Setup keeps a copy of what it last wrote there, in internal/.generated/last-written/,
-by which it tells the lines it didn't write: ones someone added, or a whole file that was there
+paths filled in and only the blocks of the skills added for that agent, then the end user's rules
+from dev-home's rules/, joined for that agent on this PC (rules.py). Setup keeps a copy of what it
+last wrote there, in internal/.generated/last-written/, by which it tells the lines it didn't
+write: ones someone added, or a whole file that was there
 before setup wrote its own. Before it rewrites or removes the file, those lines move into a file of
 their own in dev-home's rules/, with the headings they were under: at a console, into the mine/
 the person picks, or to the Recycle Bin; otherwise, set aside in this PC's unanswered/ for that
@@ -69,8 +70,8 @@ account's lines never load in another's. Setup commits and pushes them before it
 and leaves the file as it is while they aren't committed, or once it changes after setup read it.
 It never changes a Codex home's AGENTS.override.md, and reports one with text,
 which Codex reads in place of AGENTS.md. The design is in docs/development/decisions/, in
-decisions 0064, "Each agent's rules file", 0065, "Where end users' rules live", and 0066, "Notes in
-rule files".
+decisions 0058, "Skills' always-on lines", 0064, "Each agent's rules file", 0065, "Where end users'
+rules live", and 0066, "Notes in rule files".
 
 In dev-home, setup creates the end user's files it keeps there wherever they're missing, and
 commits them: the knowledge index, with only its title, and a my-rules.md, empty, at each level of
@@ -190,7 +191,7 @@ import re
 import stat
 import subprocess
 import textwrap
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -1900,10 +1901,15 @@ class Setup:
         return targets + declined
 
     def join_rules(
-        self, operating: str, rules_root: Path, pc: str, targets: Sequence[RulesTarget]
+        self,
+        operating: Mapping[str, str],
+        rules_root: Path,
+        pc: str,
+        targets: Sequence[RulesTarget],
     ) -> dict[str, rules.Joined]:
         """What setup writes in each agent's rules file in a folder set up, by the file's path: the
-        operating rules, then the end user's rules for that agent on this PC, joined (see
+        operating rules for that agent, from operating, by its name in rules/ (see
+        operating_by_agent), then the end user's rules for that agent on this PC, joined (see
         rules.joined_rules), with each file in unanswered/ only in the rules file it came from.
         So each of an agent's files is joined on its own only while that agent has files in
         unanswered/; otherwise they share one join."""
@@ -1914,14 +1920,13 @@ class Setup:
             if not target.setting_up:
                 continue
             waiting = rules_root / rules.PCS / pc / target.agent / rules.UNANSWERED
+            mine = operating[target.agent]
             if rules.markdown_files(waiting):
-                result = rules.joined_rules(
-                    operating, rules_root, pc, target.agent, system, target.path
-                )
+                result = rules.joined_rules(mine, rules_root, pc, target.agent, system, target.path)
             elif target.agent in shared:
                 result = shared[target.agent]
             else:
-                result = rules.joined_rules(operating, rules_root, pc, target.agent, system)
+                result = rules.joined_rules(mine, rules_root, pc, target.agent, system)
                 shared[target.agent] = result
             joined[str(target.path)] = result
         return joined
@@ -1932,7 +1937,8 @@ class Setup:
         rules/ before setup writes or removes the file (see rules.to_move): none, when someone
         only took lines out. None for any other file; for a link, or a file that can't be read,
         which writing it reports; and in a folder answered no, for a file setup has no copy of:
-        one it never wrote isn't its to remove."""
+        one it never wrote isn't its to remove. operating is the operating rules for the file's
+        agent."""
         copy = LAST_WRITTEN / rules.copy_name(target.folder)
         try:
             if is_link(target.path) or not target.path.is_file():
@@ -1985,12 +1991,19 @@ class Setup:
         in this PC's unanswered/ folders, pc being this PC's folder under rules/pcs/."""
         system = requirements.operating_system()
         rules_root = content_root / rules.RULES
-        targets = self.rules_targets(self.agent_folders(settings))
+        agent_folders = self.agent_folders(settings)
+        targets = self.rules_targets(agent_folders)
         paths = unanswered_files(rules_root, pc)
         if not targets and not paths:
             return [], []
+        # The operating rules as the work writes them for each agent, with the blocks of the
+        # skills added for it, so none of setup's own lines reads as one someone added. The
+        # skills' problems are said by the work, not here.
+        declared = skill_declarations(settings.content_dir)
+        folders = self.skills_folders(agent_folders, declared)
+        plans = self.plan_skills(settings.data, declared, folders)
         rendered = generated.render(OPERATING_TEMPLATE, template_values(content_root))
-        operating = rendered.data.decode("utf-8")
+        operating = operating_by_agent(rendered.data.decode("utf-8"), targets, plans, folders)
         joined = self.join_rules(operating, rules_root, pc, targets)
         asked: set[str] = set()
         pending: set[str] = set()
@@ -2001,7 +2014,7 @@ class Setup:
                 continue
             asked.add(real)
             new = joined[str(target.path)].text if target.setting_up else ""
-            found = self.lines_found(target, new, operating)
+            found = self.lines_found(target, new, operating[target.agent])
             if found is None or not found.moving.text:
                 continue
             holder = rules.already_held(
@@ -2254,7 +2267,7 @@ class Setup:
         content_root: Path,
         pc: str,
         targets: Sequence[RulesTarget],
-        operating: str,
+        operating: Mapping[str, str],
         joined: dict[str, rules.Joined],
     ) -> tuple[dict[str, bytes | None], bool]:
         """Saves the lines setup didn't write in each agent's rules file, before setup writes or
@@ -2269,7 +2282,8 @@ class Setup:
         of it is committed and pushed in one commit; when that fails, setup takes it all back, so
         nothing it couldn't commit stays, and the next run tries again.
 
-        Returns each rules file that's neither what setup last wrote nor what it writes now, by
+        operating has the operating rules for each agent (see operating_by_agent). Returns each
+        rules file that's neither what setup last wrote nor what it writes now, by
         its path, with what it held when its lines were saved, which setup may overwrite or
         remove only while the file still holds that, or None when they couldn't be saved, since a
         write or the commit failed; and whether anything in rules/ may have changed, so the
@@ -2294,7 +2308,7 @@ class Setup:
                 continue
             handled[real] = key
             new = joined[key].text if target.setting_up else ""
-            found = self.lines_found(target, new, operating)
+            found = self.lines_found(target, new, operating[target.agent])
             if found is None:
                 continue
             # What the file holds now, which setup may overwrite once its lines are saved, or at
@@ -3509,15 +3523,17 @@ class Setup:
                         entry, "Remove a link to a deleted skill", "Link to a deleted skill"
                     )
 
-        # 5. Always-on rules: one file in each agent's folder, the operating rules and then the end
-        # user's rules from dev-home's rules/, joined for that agent on this PC (see the
-        # description above). First the lines setup didn't write in each agent's file go into
-        # rules/, so the files are joined from what rules/ holds then. Each line about a problem
-        # in the end user's files is said once, though a file in _all-agents/ joins for every
-        # agent.
+        # 5. Always-on rules: one file in each agent's folder, the operating rules, with the
+        # blocks of the skills added for that agent, and then the end user's rules from dev-home's
+        # rules/, joined for that agent on this PC (see the description above). First the lines
+        # setup didn't write in each agent's file go into rules/, so the files are joined from
+        # what rules/ holds then. Each line about a problem in the end user's files is said once,
+        # though a file in _all-agents/ joins for every agent.
         rules_root = content_root / rules.RULES
-        operating = operating_rendered.data.decode("utf-8")
         targets = self.rules_targets(agent_folders)
+        operating = operating_by_agent(
+            operating_rendered.data.decode("utf-8"), targets, plans, folders
+        )
         joined = self.join_rules(operating, rules_root, pc, targets)
         checked, changed = self.save_lines(content_root, pc, targets, operating, joined)
         if changed:
@@ -4270,6 +4286,37 @@ def plan_skill(
             f"{and_list(reasons)}"
         )
     return plan(added, left_out, state, not left_out or can_act)
+
+
+def skills_by_agent(
+    plans: Mapping[str, SkillPlan], folders: Sequence[tuple[Path, frozenset[str]]]
+) -> dict[str, set[str]]:
+    """The skills added for each agent on this PC, by the agent's name in rules/, such as codex:
+    each skill whose plan adds it to a skills folder in folders that the agent reads. So all of one
+    agent's rules files get the same skills' blocks (decision 0058, "Skills' always-on lines")."""
+    readers = dict(folders)
+    added: dict[str, set[str]] = {}
+    for plan in plans.values():
+        for folder in plan.added_to:
+            for agent in readers.get(folder, frozenset()):
+                added.setdefault(agent, set()).add(plan.name)
+    return added
+
+
+def operating_by_agent(
+    operating: str,
+    targets: Sequence[RulesTarget],
+    plans: Mapping[str, SkillPlan],
+    folders: Sequence[tuple[Path, frozenset[str]]],
+) -> dict[str, str]:
+    """The operating rules for each agent with a rules file in targets, by its name in rules/:
+    operating, their template with this PC's paths filled in, with the blocks of the skills added
+    for that agent (see skills_by_agent and rules.operating_for)."""
+    added = skills_by_agent(plans, folders)
+    return {
+        agent: rules.operating_for(operating, added.get(agent, set()))
+        for agent in dict.fromkeys(target.agent for target in targets)
+    }
 
 
 def recorded_state(plan: SkillPlan) -> dict[str, Any]:

@@ -1729,6 +1729,58 @@ def test_a_changed_operating_rules_template_reaches_each_agents_rules_file(box: 
     assert copy == texts["codex"]
 
 
+HANDOFF_HEADING = "## When the `handoff` skill is available"
+KNOWLEDGE_HEADING = "## When the `knowledge` skill is available"
+
+
+def rules_texts(box: Sandbox) -> dict[str, str]:
+    return {agent: read(path) for agent, path in rules_files(box).items()}
+
+
+def files_in(folder: Path) -> list[Path]:
+    return sorted(path for path in folder.rglob("*") if path.is_file())
+
+
+def test_each_agents_rules_hold_the_block_of_each_skill_added_for_it_and_no_other(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    # A skill only Claude Code gets, with a block of its own in the sandbox's template.
+    template = box.toolkit / "templates" / "operating-rules" / "operating-rules.md"
+    before = template.read_bytes()
+    append(template, "\n<!-- skill: one-agent -->\n\n- A line for one agent.")
+    claude_only = {"supportedOn": [{"type": "agent", "anyOf": ["claude-code"]}]}
+    folder = personal_skill(box, "one-agent", claude_only)
+    rules_before = files_in(box.content / "rules")
+    try:
+        added = setup(box)
+        with_all = rules_texts(box)
+        said_no = setup_configure(box, "skills.knowledge.addedToAgents=false")
+        without = rules_texts(box)
+        rules_after = files_in(box.content / "rules")
+    finally:
+        template.write_bytes(before)
+        remove_personal_skill(box, folder)
+        setup_configure(box, "skills.knowledge.addedToAgents=default")
+    for result in (added, said_no):
+        assert result.code == 0, str(result)
+    one_agent = "\n\n## When the `one-agent` skill is available\n\n- A line for one agent.\n\n"
+    assert f"{one_agent}# My rules\n" in with_all["claude-code"], with_all["claude-code"]
+    assert "one-agent" not in with_all["codex"], with_all["codex"]
+    for agent, text in with_all.items():
+        assert text.startswith("# Private repo: dev-home (rules loaded)\n"), text
+        # No marker is left, not even one setup couldn't read, such as a misspelled one.
+        assert "<!--" not in text, text
+        # Each block under its heading, in the template's order, before the end user's rules.
+        knowledge = text.index(f"\n\n{KNOWLEDGE_HEADING}\n\n- Knowledge candidate: ")
+        assert text.index(f"\n\n{HANDOFF_HEADING}\n\n- ") < knowledge, text
+        assert knowledge < text.index("\n\n# My rules\n"), text
+        # A no takes out that skill's block alone, and none of setup's own lines moves.
+        after = text.index("\n\n#", knowledge + 2)
+        assert without[agent] == text[:knowledge] + text[after:], without[agent]
+    assert rules_after == rules_before
+    assert not said_no.has_line(r"didn't write"), str(said_no)
+
+
 def test_removes_a_generated_folder_with_no_templates(box: Sandbox) -> None:
     # Such as the operating rules' own folder, from before each agent got one rules file.
     old_rules = box.generated / "operating-rules"

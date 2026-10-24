@@ -1,7 +1,6 @@
 # 0035: Skills per PC
 
-**Built:** yes, except: a no doesn't take a skill's always-on lines out of the rules, and a run of
-setup by hand doesn't ask about skills.
+**Built:** yes, except: a run of setup by hand doesn't ask about skills.
 
 **Decision:** setup decides which skills are added to the agents on each PC, meaning linked into
 each Claude Code folder's `skills/` and into `~/.agents/skills` for Codex. Claude Code's and
@@ -10,7 +9,7 @@ Codex's own menus decide whether an added skill is shown in an account or a proj
 
 - Each PC saves a yes or no for each skill in `local-settings.json`, as
   `skills.<name>.addedToAgents`. A no removes
-  setup's links for it, and its lines leave the generated always-on rules
+  setup's links for it, and its always-on lines leave each agent's rules file
   ([0058: Skills' always-on lines](0058-skills-always-on-lines.md)).
   Nothing is deleted.
 - `dev-home` is always added. `handoff` and `knowledge` are recommended because every dev-home

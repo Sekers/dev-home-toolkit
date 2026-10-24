@@ -47,6 +47,10 @@ Each agent's file holds the operating rules first, then the folders in the table
 the top: `_all-agents`, `<agent>`, the PC's `_all-agents`, then the PC's `<agent>`. Within a
 folder, files join alphabetically by their path, letter case aside.
 
+The operating rules' lines for the `handoff` and `knowledge` skills come only in the file of an
+agent the skill is added to on the PC, each under the heading "When the `<skill>` skill is
+available", so an agent where you've hidden the skill skips them.
+
 Each file is read like this:
 
 - **Encoding:** UTF-8, unless a byte-order mark says UTF-16. A byte that isn't UTF-8 is read as

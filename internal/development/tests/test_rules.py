@@ -1,7 +1,8 @@
 """Reading dev-home's rules/ and joining it into each agent's file (internal/shared/rules.py):
-which files join, in what order, how each is read, and how their headings combine. And what setup
-moves into rules/ from an agent's file: the lines it didn't write, with their headings, and the
-moved file's name, note, and duplicates."""
+which files join, in what order, how each is read, and how their headings combine. The skills'
+blocks in the operating rules, and which an agent gets. And what setup moves into rules/ from an
+agent's file: the lines it didn't write, with their headings, and the moved file's name, note,
+and duplicates."""
 
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta, timezone
@@ -460,6 +461,60 @@ def test_the_operating_rules_never_merge_and_nothing_is_deduplicated(
     assert text == (
         f"{OPERATING}\n# Private repo: dev-home (rules loaded)\n\n- An operating rule.\n\n- Mine\n"
     )
+
+
+# Each skill's block in the operating rules (decision 0058, "Skills' always-on lines")
+
+BLOCKS = (
+    f"{OPERATING}\n<!-- skill: handoff -->\n\n- A handoff rule.\n\n"
+    "<!-- skill: knowledge -->\n\n- A knowledge rule.\n\n- Another.\n\n"
+    "<!-- skill: empty -->\n\n"
+)
+HANDOFF_PART = "## When the `handoff` skill is available\n\n- A handoff rule.\n"
+KNOWLEDGE_PART = "## When the `knowledge` skill is available\n\n- A knowledge rule.\n\n- Another.\n"
+
+
+def test_each_skills_block_comes_under_its_heading_only_for_a_skill_added(
+    code: ModuleType,
+) -> None:
+    # In the template's order, whatever order the skills come in.
+    both = code.operating_for(BLOCKS, ["knowledge", "handoff", "empty"])
+    assert both == f"{OPERATING}\n{HANDOFF_PART}\n{KNOWLEDGE_PART}", both
+    # Names match in any letter case, as setup tells skills apart.
+    assert code.operating_for(BLOCKS, ["Knowledge"]) == f"{OPERATING}\n{KNOWLEDGE_PART}"
+    assert code.operating_for(BLOCKS, ["handoff", "elsewhere"]) == f"{OPERATING}\n{HANDOFF_PART}"
+    # A block with nothing in it holds no rule, so its heading is left out too.
+    assert code.operating_for(BLOCKS, ["empty"]) == OPERATING
+    assert code.operating_for(BLOCKS, []) == OPERATING
+    assert code.operating_for(OPERATING, ["handoff"]) == OPERATING
+
+
+def test_a_marker_is_a_line_of_its_own_outside_fenced_code(code: ModuleType) -> None:
+    fenced = f"{OPERATING}\n```text\n<!-- skill: handoff -->\n```\n"
+    assert code.skill_blocks(fenced)[1] == []
+    assert code.operating_for(fenced, []) == fenced
+    in_a_line = f"{OPERATING}- See <!-- skill: handoff --> here.\n"
+    assert code.skill_blocks(in_a_line)[1] == []
+    spaced = "  <!--skill:  handoff   -->\n- A rule.\n"
+    assert code.skill_blocks(spaced) == ([], [("handoff", ["- A rule.", ""])])
+
+
+def test_the_operating_rules_start_with_their_heading_and_each_marker_names_a_skill(
+    box: Sandbox, code: ModuleType
+) -> None:
+    template = box.toolkit / "templates" / "operating-rules" / "operating-rules.md"
+    text = template.read_text(encoding="utf-8")
+    # The handoff skill checks for the heading (docs/development/skills.md).
+    assert text.startswith(f"{code.OPERATING_HEADING}\n"), text
+    names = [name for name, _ in code.skill_blocks(text)[1]]
+    skills = {
+        folder.name
+        for folder in (box.toolkit / "templates" / "skills").iterdir()
+        if (folder / "SKILL.md").is_file()
+    }
+    # One block for each skill that has one, and only dev-home-toolkit's own skills have them.
+    assert names and len(set(names)) == len(names), names
+    assert set(names) <= skills, (names, skills)
 
 
 # What setup moves into rules/ from an agent's file

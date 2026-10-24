@@ -110,8 +110,8 @@ AGENTS.md points here; its rules apply too.
   it gained or lost.
 - A skill that starts a second agent, as `/handoff audit` does, tells the end user before it
   starts, since that agent's tokens come on top of the session's.
-- The handoff template has no line pointing agents to the handoff skill; the operating rules do
-  that, in every session.
+- The handoff template has no line pointing agents to the handoff skill; the operating rules'
+  `handoff` block does that, in every session where the skill is added.
 
 ## Scripts the skills share (templates/shared-skill-scripts/)
 
@@ -159,6 +159,16 @@ AGENTS.md points here; its rules apply too.
   it.
 - Only rules the skills and scripts depend on belong here. Personal preferences go in each end
   user's own rules, in `rules/` in their dev-home, which load after these.
+- A skill's always-on lines go in a block of its own, opened by a line of only
+  `<!-- skill: <name> -->` and running to the next such line or the end. Setup gives each agent
+  only the blocks of the skills added for it, each under the heading "When the `<name>` skill is
+  available" in place of its marker
+  ([0058: Skills' always-on lines](decisions/0058-skills-always-on-lines.md)). Everything before
+  the first marker is the general part, which every agent gets: keep there every rule about
+  something that must never happen, so it holds where a skill isn't added too.
+- A skill gets a block only when agents must act without being asked, such as making an offer.
+  Everything else goes in its description or its steps. Only dev-home-toolkit's own skills have
+  blocks (a test checks each marker): an end user's own lines go in their rules.
 - Setup joins the two into one file for each agent: `dev-home-rules.md` in each Claude Code
   folder's `rules/`, and `AGENTS.md` in each Codex home
   ([0064: Each agent's rules file](decisions/0064-each-agents-rules-file.md)). Keep the operating

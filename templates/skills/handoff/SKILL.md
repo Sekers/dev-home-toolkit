@@ -252,8 +252,8 @@ Follow "Changing the handoff". While updating:
     files, where the project's AGENTS.md says; until then, they're in its To do item (see To do
     in "Sections"). When a built decision's reasons aren't in the project's files, offer the
     exact text, as below for moving an item.
-  - A finding: where the project's AGENTS.md says research goes. If it's general, offer it as a
-    knowledge candidate, as the always-on rules say.
+  - A finding: where the project's AGENTS.md says research goes. If it's general and the
+    `knowledge` skill is available, offer it as a knowledge candidate, as the always-on rules say.
   - Work left unfinished: its item says what's done, what's next, and the files or branch
     involved.
   - Anything that lives only in this session, such as a plan file that only this PC keeps, the

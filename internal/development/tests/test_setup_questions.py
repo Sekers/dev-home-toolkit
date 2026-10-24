@@ -2468,6 +2468,27 @@ def test_at_a_console_lines_setup_didnt_write_move_into_the_mine_picked(
     assert b"\n\n# Mine\n\n- My own Codex rule.\n" in in_the_way.path.read_bytes()
 
 
+def test_at_a_console_setups_own_file_with_no_copy_asks_nothing_about_the_skills_blocks(
+    box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # With no copy, setup compares its own file with what it writes now, which holds the blocks of
+    # the skills added for that agent, so none of its lines is asked about.
+    home = box.profile / ".codex"
+    copy = box.generated / "last-written" / shared_module(box, "rules").copy_name(home)
+    copy_before = copy.read_bytes()
+    assert "\n## When the `handoff` skill is available\n" in copy_before.decode("utf-8")
+    copy.unlink()
+    person.answers.update({MENU: ""})
+    try:
+        returned = setup_here(box)
+    finally:
+        copy.write_bytes(copy_before)
+    out = capsys.readouterr().out
+    assert returned == 0, out
+    assert all(re.search(MENU, prompt) for prompt in person.asked), person.asked
+    assert "didn't write" not in out and waiting_files(box) == [], out
+
+
 def test_at_a_console_enter_leaves_the_lines_waiting_in_unanswered(
     box: Sandbox, person: Person, in_the_way: InTheWay, capsys: pytest.CaptureFixture[str]
 ) -> None:

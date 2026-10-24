@@ -1,27 +1,30 @@
 # 0058: Skills' always-on lines
 
-**Built:** not yet.
+**Built:** yes.
 
 **Decision:** the operating rules, `templates/operating-rules/operating-rules.md`, stay one
 complete file, in two parts.
 
 - A general part, always loaded: what dev-home is, git there only through `sync.py`, privacy in
-  project repos, where an end user's own skills go, their global rules winning, and every rule
-  about something that must never happen, such as project status in auto memory, or a project's
-  private details in its own files.
+  project repos, where an end user's own skills and rules are, and every rule about something
+  that must never happen, such as project status in auto memory, a project's private details in
+  its own files, or a change to the handoffs or the knowledge base without their skills.
 - One block per skill that has always-on lines, opened by a marker such as
   `<!-- skill: handoff -->`, holding only how to use that skill: for `handoff`, that project
   status and private details go in the handoff; for `knowledge`, the knowledge-candidate offer.
 
 Setup writes each agent's rules with the general part and the block of each skill added for that
 agent, and leaves the other blocks out. It turns each marker into the heading "When the
-`<skill>` skill is available", worded in setup alone. Each agent's folder gets its rules as one
+`<skill>` skill is available", worded in setup alone, a second-level heading under the operating
+rules' own, so a line added under it moves as one added under the operating rules
+([0064](0064-each-agents-rules-file.md)). Each agent's folder gets its rules as one
 file setup writes there, which joins the operating rules, with the blocks of the skills added for
 that agent, and the end user's rules for that agent on that PC
 ([0064: Each agent's rules file](0064-each-agents-rules-file.md)). Skills are answered per PC, and
 an agent requirement covers a whole agent
 ([0057: Requirements](0057-requirements.md)), so the blocks are the same for every folder of one
-agent. Changed on 2026-10-18.
+agent. Changed on 2026-10-18, and by the developer on 2026-10-23 (changing the handoffs and the
+knowledge base only through their skills), when the heading's level was set as it was built.
 
 - A skill hidden with an agent's own switch, at any level, keeps its block, and the agent skips it
   because it can't see the skill. Setup never reads or writes the agents' switches.
@@ -30,8 +33,8 @@ agent. Changed on 2026-10-18.
   and its "use me" lines, since every protection is in the general part.
 - A skill gets always-on lines only when agents must act without being asked, such as making an
   offer or keeping something out of auto memory. Everything else goes in its description or its
-  steps. Only dev-home-toolkit's own skills have blocks: an end user's own rules go in their global
-  rules. `docs/development/skills.md` says so.
+  steps. Only dev-home-toolkit's own skills have blocks: an end user's own lines go in their own
+  rules, in `rules/`. `docs/development/skills.md` says so.
 - Tests check that each agent's rules hold the block of each skill added for it and no other,
   that every marker names a skill that exists, and that the heading "Private repo: dev-home
   (rules loaded)" stays first, since the handoff skill checks for it.
@@ -43,12 +46,18 @@ and the agents can hide a skill per account or project, those lines can send an 
 skill it doesn't have. It may then improvise, such as writing a work project's status into
 dev-home in an account where `handoff` is hidden, which is what hiding it was meant to prevent.
 Leaving a block out where its skill isn't added saves its words, and the heading covers hiding by
-any switch for about 6 words a block. One complete file keeps the rules easy to read whole after
+any switch for about 6 words a block. The general part still says dev-home holds the handoffs and
+the knowledge base, which is true on every PC, so it also says to change them only through their
+skills: without that line, a fresh agent's read of the built text (2026-10-23) found that, where
+a skill isn't added, it would consider writing into dev-home directly. One complete file keeps the
+rules easy to read whole after
 a change, as AGENTS.md's "Clarity for agents" asks, and the marker is the kind the planned shared
 skill text uses
 ([0012: Shared skill text](0012-shared-skill-text.md)).
 Measured on 2026-10-16: the rules are 317 words, about 150 general, 50 for `handoff`, and 117 for
-`knowledge`.
+`knowledge`. As built on 2026-10-23, with the general part's lines about the two skills reworded
+to name neither: 313 words before, and 343 with both blocks, 219 with `handoff`'s alone, and 194
+with neither.
 
 **Options set aside:**
 

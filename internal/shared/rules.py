@@ -35,14 +35,18 @@ merge, and nothing is ever deduplicated.
 
 Setup tells its own lines in an agent's file from anyone else's by the copy it keeps of what it
 last wrote there. Joining puts the lines someone added back in the same section, by the headings
-they keep, and a file that was there before setup moves whole."""
+they keep, and a file that was there before setup moves whole.
+
+The operating rules an agent's file starts with hold a block for each skill that has always-on
+lines, and each agent gets only the blocks of the skills added for it, each under a heading in
+place of its marker (decision 0058, "Skills' always-on lines")."""
 
 import bisect
 import difflib
 import hashlib
 import os
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -62,6 +66,10 @@ MY_RULES_HEADING = "# My rules"
 # The first line of the operating rules, which every rules file setup writes starts with, kept
 # first (docs/development/skills.md).
 OPERATING_HEADING = "# Private repo: dev-home (rules loaded)"
+# The line that opens a skill's block in the operating rules, and the heading setup writes in its
+# place (decision 0058, "Skills' always-on lines").
+SKILL_MARKER = re.compile(r"<!--\s*skill:\s*(\S+?)\s*-->")
+SKILL_HEADING = "## When the `{}` skill is available"
 # What the name of each file setup moves into rules/ starts with (see moved_name).
 MOVED = "moved"
 # The most pairs of lines matched_lines has difflib compare at once, such as 100 lines with 100.
@@ -413,6 +421,45 @@ def join(texts: Iterable[str]) -> str:
         if text:
             merge(root, under_my_rules(parsed(text)))
     return "\n".join(rendered(root))
+
+
+def skill_blocks(operating: str) -> tuple[list[str], list[tuple[str, list[str]]]]:
+    """The operating rules' lines, from operating, split at each skill's marker: the general part,
+    then each skill's block, as the skill's name its marker gives and the lines after the marker
+    (decision 0058, "Skills' always-on lines"). A marker is a line of only
+    <!-- skill: <name> -->, outside fenced code, and its block runs to the next one or the end."""
+    general: list[str] = []
+    blocks: list[tuple[str, list[str]]] = []
+    current = general
+    fence = ""
+    for line in operating.split("\n"):
+        if fence:
+            if closes(fence, line):
+                fence = ""
+        elif opened := FENCE.match(line):
+            fence = opened.group(1)
+        elif marker := SKILL_MARKER.fullmatch(line.strip()):
+            current = []
+            blocks.append((marker.group(1), current))
+            continue
+        current.append(line)
+    return general, blocks
+
+
+def operating_for(operating: str, skills: Collection[str]) -> str:
+    """The operating rules for one agent, from operating, their template with this PC's paths
+    filled in: the general part, then the block of each skill in skills, the skills added for that
+    agent on this PC, under SKILL_HEADING in place of its marker, in the template's order (see
+    skill_blocks). Every other block is left out, and so is one with nothing in it. Names match in
+    any letter case, as setup tells skills apart."""
+    general, blocks = skill_blocks(operating)
+    wanted = {name.lower() for name in skills}
+    parts = ["\n".join(trimmed(general))]
+    for name, lines in blocks:
+        body = trimmed(lines)
+        if body and name.lower() in wanted:
+            parts.append("\n".join([SKILL_HEADING.format(name), "", *body]))
+    return "\n\n".join(parts) + "\n"
 
 
 def joined_rules(
