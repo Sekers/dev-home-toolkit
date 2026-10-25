@@ -168,6 +168,12 @@ class Agent:
     marks: tuple[str, ...] = ()
     shared: bool = False
 
+    @property
+    def group(self) -> str:
+        """The agent's group in local-settings.json, such as claudeCode, which names it in the
+        list of recommended settings too."""
+        return self.setting.split(".")[0]
+
 
 CLAUDE_CODE = Agent(
     "Claude Code", "folder", "Claude", CLAUDE_FOLDERS, ".claude", "CLAUDE_CONFIG_DIR"

@@ -65,6 +65,10 @@ and your rules joined, which setup writes again at each sync.
     Code fixes it ([anthropics/claude-code#79233](https://github.com/anthropics/claude-code/issues/79233)).
     The patterns keep them out of that folder's sessions. Your yes to the folder approves them
     too, and every sync puts them back if they go missing.
+  - If `settings.json` has a setting dev-home-toolkit recommends written more than once, such as
+    `attribution`, every sync takes out the earlier copies, with a backup. Claude Code uses only
+    the last copy, so nothing it does changes. Whenever setup changes the file, any other key
+    written more than once keeps only its last copy too, and setup says so.
   - Your own `CLAUDE.md` there is never touched.
 - **For Codex,** once you've said yes to it, in every Codex home (`~\.codex`, and any extra
   ones). Every home reads the same skills, so it's all of them or none:

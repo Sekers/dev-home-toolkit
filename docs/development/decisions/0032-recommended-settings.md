@@ -1,6 +1,8 @@
 # 0032: Recommended settings
 
-**Built:** not yet.
+**Built:** yes, except: the offers and their answers, with what the settings menu and
+`/dev-home configure` show. Built so far: the list, and keeping only the last copy of a
+recommended setting written more than once.
 
 **Decision:** setup offers settings that dev-home-toolkit recommends for the agents, from a list in
 `templates/recommended-settings/recommended-settings.json`. Each entry has an id that is never

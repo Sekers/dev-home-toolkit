@@ -91,9 +91,12 @@ agent can reach dev-home from any project, and in a Claude Code folder other tha
 sessions skip ~/.claude's instructions (see home_claude_excludes). The yes to setting up the
 folder approves it, and the question says so, so every run, quiet ones included, makes the change
 when it's missing: it saves a dated backup of the file, then writes the change, and says so. A no
-to the folder takes it back out the same way. It never edits a file it can't fully parse (a
-settings.json with comments, for example), or a read-only one; it reports it, and a run by hand
-prints what to change by hand.
+to the folder takes it back out the same way. In a Claude Code folder set up, every run also keeps
+only the last copy of a recommended setting written more than once in settings.json, the one
+Claude Code uses, so nothing it does changes (decision 0032, "Recommended settings"); and any
+rewrite of that file keeps only the last copy of a key written more than once, and says so. It
+never edits a file it can't fully parse (a settings.json with comments, for example), or a
+read-only one; it reports it, and a run by hand prints what to change by hand.
 
 Run it by hand once per PC. After that, each sync runs it with --quiet, so changes to the
 skills, and skills added on another PC, reach this one.
@@ -222,6 +225,7 @@ from .paths import (
     unsafe_reason,
 )
 from .programs import SYNC_HOLDS_LOCK, by_hand, find_program
+from .recommended_settings import keys_for
 from .settings import (
     ADDED_TO_AGENTS,
     AUTO_UPDATE,
@@ -2797,7 +2801,8 @@ class Setup:
             self.status("PROBLEM", problem)
             self.line(f"          Setup won't change this file itself: {plan.reason}.")
             self.line("          " + change.how_to)
-            self.line(change.snippet, YELLOW)
+            if change.snippet:
+                self.line(change.snippet, YELLOW)
             return
         if self.what_if:
             self.show_setting(change)
@@ -3716,14 +3721,16 @@ class Setup:
 
     def check_claude_settings(self, claude_dir: Path, wanted_dirs: list[str]) -> SettingsCheck:
         """What a Claude Code folder set up needs in its settings.json: dev-home and
-        dev-home-toolkit in permissions.additionalDirectories, and in a folder other than
-        ~/.claude, the patterns in claudeMdExcludes that keep ~/.claude's instructions out of its
-        sessions (see home_claude_excludes)."""
+        dev-home-toolkit in permissions.additionalDirectories; in a folder other than ~/.claude,
+        the patterns in claudeMdExcludes that keep ~/.claude's instructions out of its sessions
+        (see home_claude_excludes); and only the last copy of a recommended setting written more
+        than once, the one Claude Code uses, which changes nothing it does (decision 0032)."""
         claude_name = claude_dir.name
         path = claude_dir / "settings.json"
         wanted_excludes = home_claude_excludes(self.home) if self.guarded(claude_dir) else []
         present: list[str] = []
         excludes: list[str] = []
+        twice: list[str] = []
         if path.exists():
             try:
                 text = path.read_bytes().decode("utf-8-sig", errors="replace")
@@ -3740,10 +3747,12 @@ class Setup:
                 )
             present = [comparable(resolve_home(folder, self.home)) for folder in folders]
             excludes = claude_settings.listed(text, claude_settings.EXCLUDES) or []
+            repeated = claude_settings.repeated_keys(text) or []
+            twice = [key for key in keys_for(CLAUDE_CODE.group) if key in repeated]
         missing = [d for d in wanted_dirs if not any(same_path(d, p) for p in present)]
         missing_excludes = [pattern for pattern in wanted_excludes if pattern not in excludes]
         subject = f"Claude Code settings in {claude_name}"
-        if not missing and not missing_excludes:
+        if not missing and not missing_excludes and not twice:
             kept_out = ", and claudeMdExcludes keeps .claude's out" if wanted_excludes else ""
             return (
                 "OK",
@@ -3757,7 +3766,15 @@ class Setup:
         needs: list[str] = []
         dones: list[str] = []
         merges: list[str] = []
-        hows = ["Merge this into the file."]
+        hows: list[str] = []
+        if twice:
+            needs.append(f"only the last copy of {and_list(twice)}, the one Claude Code uses")
+            hows.append(
+                f"Take out the earlier copies of {and_list(twice)}, keeping the last, which "
+                "Claude Code uses."
+            )
+        if missing or missing_excludes:
+            hows.append("Merge this into the file.")
         if missing:
             entries = ", ".join(claude_settings.dump(entry) for entry in missing)
             needs.append(f"{' and '.join(missing)} in permissions.additionalDirectories")
@@ -3787,8 +3804,12 @@ class Setup:
             )
             merges.append(f'            "claudeMdExcludes": [{patterns}]')
             hows.append('If it already has "claudeMdExcludes", add these to that list.')
-        how_to = " ".join(hows)[:-1] + ":"
-        snippet = "          {\n" + ",\n".join(merges) + "\n          }"
+        how_to = " ".join(hows)
+        snippet = ""
+        if merges:
+            how_to = how_to[:-1] + ":"
+            snippet = "          {\n" + ",\n".join(merges) + "\n          }"
+        dones.extend(copies_kept(plan.repeated))
         return SettingsChange(
             subject, path, " and ".join(needs), plan, how_to, snippet, ", and ".join(dones)
         )
@@ -3908,6 +3929,7 @@ class Setup:
                 "          From claudeMdExcludes: "
                 + ", ".join(claude_settings.dump(pattern) for pattern in found_patterns)
             )
+        dones.extend(copies_kept(plan.repeated))
         return SettingsChange(
             f"Claude Code settings in {claude_dir.name}",
             path,
@@ -3943,6 +3965,17 @@ class Setup:
             f"          '{content_root}'",
             "removed dev-home from writable_roots",
         )
+
+
+def copies_kept(repeated: Sequence[str]) -> list[str]:
+    """What a SET line says rewriting Claude Code's settings.json did to the keys it had more than
+    once, which keep only their last copy (see claude_settings.read_object): nothing when there
+    were none."""
+    if not repeated:
+        return []
+    each = "" if len(repeated) == 1 else "each of "
+    names = and_list(list(repeated))
+    return [f"kept only the last copy, the one Claude Code uses, of {each}{names}"]
 
 
 def home_claude_excludes(home: Path) -> list[str]:

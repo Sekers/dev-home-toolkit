@@ -1,6 +1,8 @@
-"""Claude Code's settings.json: which folders it lets Claude Code use, and which instruction files
-its sessions skip, and planning the change that adds dev-home and dev-home-toolkit to the first
-and setup's patterns to the second, or takes them back out."""
+"""Claude Code's settings.json: which folders it lets Claude Code use, which instruction files its
+sessions skip, and which keys it has more than once, and planning the change that adds dev-home
+and dev-home-toolkit to the first and setup's patterns to the second, or takes them back out.
+Every change keeps only the last copy of a key written more than once, the one Claude Code
+uses."""
 
 import json
 from pathlib import Path
@@ -73,11 +75,40 @@ class RewrittenError(ValueError):
     100000.0."""
 
 
-def no_repeats(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    keys = [key for key, _ in pairs]
-    if len(set(keys)) != len(keys):
-        raise ValueError("a key is there twice")
-    return dict(pairs)
+class Pairs(list[tuple[str, Any]]):
+    """An object's keys and values as read, in order, a key written more than once included."""
+
+
+def objects_in(value: Any, path: tuple[str, ...], repeated: list[str]) -> Any:
+    """The value read with Pairs, with each object made a dict that keeps the last copy of a key
+    written more than once, in the place of its first, as Claude Code reads it. Adds the path of
+    each such key to repeated, once, joined with dots."""
+    if isinstance(value, Pairs):
+        found: dict[str, Any] = {}
+        for key, inner in value:
+            if key in found:
+                name = ".".join((*path, key))
+                if name not in repeated:
+                    repeated.append(name)
+            found[key] = objects_in(inner, (*path, key), repeated)
+        return found
+    if isinstance(value, list):
+        return [objects_in(item, path, repeated) for item in value]
+    return value
+
+
+def repeated_keys(text: str) -> list[str] | None:
+    """The path of each key written more than once in one object, joined with dots, or None when
+    the text isn't JSON even with comments taken out (see listed)."""
+    if not text.strip():
+        return []
+    try:
+        parsed = json.loads(without_comments(text), object_pairs_hook=Pairs)
+    except ValueError:
+        return None
+    repeated: list[str] = []
+    objects_in(parsed, (), repeated)
+    return repeated
 
 
 def exact_float(text: str) -> float:
@@ -99,15 +130,19 @@ def not_a_number(text: str) -> float:
     raise ValueError(f"{text} is not JSON")
 
 
-def read_json(text: str) -> Any:
-    """Plain JSON only, read so that writing it back changes nothing but layout."""
-    return json.loads(
+def read_json(text: str) -> tuple[Any, list[str]]:
+    """Plain JSON only, read so that writing it back changes nothing but layout, apart from a key
+    written more than once in one object, which keeps only its last copy, the one Claude Code
+    uses. Also returns the path of each such key (see objects_in)."""
+    parsed = json.loads(
         text,
-        object_pairs_hook=no_repeats,
+        object_pairs_hook=Pairs,
         parse_float=exact_float,
         parse_int=exact_int,
         parse_constant=not_a_number,
     )
+    repeated: list[str] = []
+    return objects_in(parsed, (), repeated), repeated
 
 
 def dump(data: object) -> str:
@@ -116,11 +151,12 @@ def dump(data: object) -> str:
 
 
 def read_object(result: Plan) -> dict[str, Any] | None:
-    """The file's settings, read so that writing them back changes nothing but layout, or None
-    with result.reason saying why setup won't rewrite it. An empty file has none."""
+    """The file's settings, read so that writing them back changes nothing but layout and the
+    earlier copies of a key written more than once, which result.repeated names, or None with
+    result.reason saying why setup won't rewrite it. An empty file has none."""
     file = result.file
     try:
-        data = read_json(file.text) if file.text.strip() else {}
+        data, result.repeated = read_json(file.text) if file.text.strip() else ({}, [])
     except RewrittenError as error:
         result.reason = f"rewriting it would change how its number {error} is written"
         return None
@@ -201,8 +237,10 @@ def value_at(data: dict[str, Any], keys: tuple[str, ...]) -> Any:
 
 def plan(path: Path, folders: list[str], excludes: list[str] | None = None) -> Plan:
     """Plans adding folders to permissions.additionalDirectories, and patterns to
-    claudeMdExcludes. As a check, the new text is parsed again with the additions taken back out,
-    and has to match the original exactly."""
+    claudeMdExcludes. With neither, it plans rewriting the file alone, which keeps only the last
+    copy of a key written more than once (see read_object). As a check, the new text is parsed
+    again with the additions taken back out, and has to match the original exactly, as Claude
+    Code reads it."""
     additions = [(FOLDERS, folders), (EXCLUDES, excludes or [])]
     file = read_settings_file(path)
     result = Plan(file, reason=file.reason)

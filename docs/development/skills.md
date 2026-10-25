@@ -18,11 +18,16 @@ AGENTS.md points here; its rules apply too.
   An end user's own file, such as the knowledge index or a `my-rules.md`, never goes there:
   setup's code creates it when it's missing. Until the version check of decision 0070 is built, a
   change to a committed file there reaches only new dev-homes.
+- `templates/recommended-settings/recommended-settings.json` lists the settings dev-home-toolkit
+  recommends for the agents, which setup reads where it is, with no placeholders
+  ([0032: Recommended settings](decisions/0032-recommended-settings.md)). The fields are
+  described in `internal/shared/recommended_settings.py`, which reads it, and a test checks every
+  rule the reader knows.
 
 ## Templates, generated files, and names
 
-- Every file under `templates/` is a template: setup replaces these placeholders with
-  forward-slash absolute paths.
+- Every file under `templates/`, apart from the list of recommended settings, is a template:
+  setup replaces these placeholders with forward-slash absolute paths.
   - `{{TOOLKIT_DIR}}`: this repo's folder on that PC.
   - `{{CONTENT_DIR}}`: that person's dev-home folder.
   - `{{SKILL_DIR}}`: the skill's own folder under `internal/.generated/skills/` (skills only).

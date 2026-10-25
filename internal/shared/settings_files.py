@@ -5,7 +5,7 @@ import difflib
 import os
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .links import link_info
@@ -34,12 +34,14 @@ class SettingsFile:
 @dataclass
 class Plan:
     """A planned change to a settings file: the new text, or why setup won't make it. note says
-    anything else the person should know about the change."""
+    anything else the person should know about the change, and repeated names each key the file
+    has more than once, of which the new text keeps only the last copy."""
 
     file: SettingsFile
     new_text: str | None = None
     reason: str | None = None
     note: str = ""
+    repeated: list[str] = field(default_factory=list)
 
 
 def read_settings_file(path: Path) -> SettingsFile:

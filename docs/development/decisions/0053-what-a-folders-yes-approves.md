@@ -1,7 +1,6 @@
 # 0053: What a folder's yes approves
 
-**Built:** yes, except: keeping only the last copy of a recommended setting written more than
-once, which comes with recommended settings.
+**Built:** yes.
 
 **Decision:** the yes to setting up a Claude Code folder, or Codex in every Codex home, also
 approves the one change setup makes in that folder's settings file: dev-home and dev-home-toolkit

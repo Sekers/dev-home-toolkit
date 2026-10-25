@@ -32,7 +32,9 @@ points here; its rules apply too.
   and setup's own parts: `paths.py`, `links.py`, `generated.py`, `python_link.py`, `console.py`,
   `settings_files.py`, `claude_settings.py`, `codex_config.py`, `configure.py`
   (`--configure`'s menu and assignments), `recycle_bin.py` (sending dropped text to the Recycle
-  Bin), and `rules.py` (reading dev-home's `rules/` and joining it into each agent's rules). They
+  Bin), `rules.py` (reading dev-home's `rules/` and joining it into each agent's rules), and
+  `recommended_settings.py` (reading the list of recommended settings, in
+  `templates/recommended-settings/`). They
   write UTF-8, read git's output as UTF-8, and find
   a program such as git by its full path in `PATH`, never in the current folder. Put anything
   the scripts would otherwise each copy there.

@@ -1,0 +1,35 @@
+{
+  "recommendedSettings": {
+    "attribution-off": {
+      "summary": "Leave Claude Code's name out of your commits and pull requests",
+      "why": "Your commits and pull requests then hold only what you and your project put there.",
+      "claudeCode": {
+        "key": "attribution",
+        "value": false,
+        "olderForms": [{ "commit": "", "pr": "" }],
+        "whenMissing": "Claude Code adds a co-author line to your commits and \"Generated with Claude Code\" to your pull requests, and cloud and Remote Control sessions add a link to the session.",
+        "whenOlderForm": "Claude Code leaves out the co-author line and \"Generated with Claude Code\", but cloud and Remote Control sessions still add a link to the session."
+      }
+    },
+    "feedback-survey-off": {
+      "summary": "Turn off Claude Code's session quality survey",
+      "why": "The survey interrupts your work, and can ask to upload the session's transcript.",
+      "claudeCode": {
+        "key": "feedbackSurveyRate",
+        "value": 0,
+        "whenMissing": "Claude Code now and then asks you to rate the session, and can ask to upload its transcript."
+      }
+    },
+    "remote-control-at-startup": {
+      "summary": "Connect Remote Control when each Claude Code session starts",
+      "why": "You can then pick up any session from claude.ai/code or the Claude app, with nothing to run first.",
+      "claudeCode": {
+        "key": "remoteControlAtStartup",
+        "value": true,
+        "olderPlace": ".claude.json",
+        "whenMissing": "Remote Control connects only when you run /remote-control, unless your organization or Claude Code turns it on for everyone.",
+        "needs": "It needs a claude.ai sign-in on a Pro, Max, Team, or Enterprise plan, and on Team and Enterprise, an Owner must turn Remote Control on first. Where it can't connect, each session shows a notice; switch it off in /config."
+      }
+    }
+  }
+}

@@ -922,6 +922,85 @@ def test_a_sync_reports_a_settings_change_it_cant_make_safely(box: Sandbox) -> N
     assert kept == '{\n  // mine\n  "model": "x"\n}\n'
 
 
+def with_keys(text: str, keys: str) -> str:
+    """A settings file's text with more keys at the end of its top object, written as given."""
+    return text.rstrip().removesuffix("}").rstrip() + ",\n" + keys + "\n}\n"
+
+
+def test_a_sync_keeps_only_the_last_copy_of_a_recommended_setting(box: Sandbox) -> None:
+    # Claude Code uses only the last copy, so taking out the others changes nothing it does, and
+    # every run does it, with no question (decision 0032). Any other key written twice keeps only
+    # its last copy too, and the line says so.
+    claude = box.profile / ".claude" / "settings.json"
+    before = claude.read_bytes()
+    keys = (
+        '  "attribution": {"commit": ""},\n  "model": "a",\n  "attribution": false,\n  "model": "b"'
+    )
+    edited = with_keys(read(claude), keys)
+    write_text(claude, edited)
+    try:
+        result = setup(box)
+        saved = read(claude)
+        backup = read(next(claude.parent.glob(claude.name + ".bak-*")))
+        again = setup(box)
+    finally:
+        claude.write_bytes(before)
+        remove_backups(claude)
+    pattern = (
+        r"^SET\s+Claude Code settings in \.claude: kept only the last copy, the one Claude Code "
+        r"uses, of each of attribution and model in .*settings\.json\. Backup of the old file: "
+    )
+    assert result.code == 0 and result.has_line(pattern), str(result)
+    data = json.loads(saved)
+    assert data["attribution"] is False and data["model"] == "b", saved
+    assert saved.count('"attribution"') == 1 and saved.count('"model"') == 1, saved
+    assert backup == edited
+    assert again.code == 0 and not again.has_line(r"^SET"), str(again)
+
+
+def test_a_sync_leaves_another_key_written_twice_alone(box: Sandbox) -> None:
+    # Only a recommended setting's copies are setup's to take out (decision 0032).
+    claude = box.profile / ".claude" / "settings.json"
+    before = claude.read_bytes()
+    edited = with_keys(read(claude), '  "//": "one note",\n  "//": "another"')
+    write_text(claude, edited)
+    try:
+        result = setup(box)
+        kept = read(claude)
+    finally:
+        claude.write_bytes(before)
+        remove_backups(claude)
+    assert result.code == 0 and not result.has_line(r"^SET"), str(result)
+    assert kept == edited
+
+
+def test_a_recommended_setting_written_twice_in_a_file_setup_cant_edit_is_a_problem(
+    box: Sandbox,
+) -> None:
+    claude = box.profile / ".claude" / "settings.json"
+    before = claude.read_bytes()
+    edited = with_keys(read(claude), '  // mine\n  "attribution": true,\n  "attribution": false')
+    write_text(claude, edited)
+    try:
+        result = setup(box)
+        # A run by hand says what to change, with nothing to merge.
+        by_hand = run_python(box, "setup.py")
+        kept = read(claude)
+    finally:
+        claude.write_bytes(before)
+    pattern = (
+        r"^PROBLEM\s+Claude Code settings in \.claude: .*settings\.json needs only the last copy "
+        r"of attribution, the one Claude Code uses\. Setup won't change this file itself: "
+    )
+    assert result.code == 1 and result.has_line(pattern), str(result)
+    how = (
+        r"^\s+Take out the earlier copies of attribution, keeping the last, which Claude Code "
+        r"uses\.$"
+    )
+    assert by_hand.has_line(how) and not by_hand.has_line(r"Merge this"), str(by_hand)
+    assert kept == edited
+
+
 def test_reads_a_settings_file_with_comments_that_has_the_folders(box: Sandbox) -> None:
     # Setup won't edit a file with comments, but can still see the folders in it.
     claude = box.profile / ".claude" / "settings.json"
@@ -2790,6 +2869,109 @@ def test_the_settings_definitions_declare_what_setup_needs(box: Sandbox) -> None
     assert declared["codex.instructionsMaxKiB"].default == 128
 
 
+def test_the_recommended_settings_are_the_ones_decided(box: Sandbox) -> None:
+    # Reading the list checks every rule the reader knows, such as a summary's length.
+    module = shared_module(box, "recommended_settings")
+    entries = {entry.id: entry for entry in module.load_recommended()}
+    assert list(entries) == ["attribution-off", "feedback-survey-off", "remote-control-at-startup"]
+    claude = {name: entry.agents["claudeCode"] for name, entry in entries.items()}
+    assert all(list(entry.agents) == ["claudeCode"] for entry in entries.values())
+    attribution = claude["attribution-off"]
+    assert attribution.key == "attribution" and attribution.value is False
+    assert attribution.older_forms == ({"commit": "", "pr": ""},) and attribution.when_older_form
+    assert claude["feedback-survey-off"].value == 0
+    remote = claude["remote-control-at-startup"]
+    assert remote.value is True and remote.older_place == ".claude.json" and remote.needs
+    assert module.keys_for("claudeCode") == [
+        "attribution",
+        "feedbackSurveyRate",
+        "remoteControlAtStartup",
+    ]
+
+
+def entry_in(catalog: dict[str, Any]) -> dict[str, Any]:
+    entry: dict[str, Any] = catalog["recommendedSettings"]["thing-on"]
+    return entry
+
+
+def agent_in(catalog: dict[str, Any]) -> dict[str, Any]:
+    agent: dict[str, Any] = entry_in(catalog)["claudeCode"]
+    return agent
+
+
+def renamed(catalog: dict[str, Any]) -> None:
+    entries = catalog["recommendedSettings"]
+    entries["Thing"] = entries.pop("thing-on")
+
+
+def doubled(catalog: dict[str, Any]) -> None:
+    catalog["recommendedSettings"]["other"] = json.loads(json.dumps(entry_in(catalog)))
+
+
+@pytest.mark.parametrize(
+    ("change", "fault"),
+    [
+        (lambda c: c.update(extra=1), "recommendedSettings alone"),
+        (lambda c: entry_in(c).update(extra=1), "fields setup doesn't know: extra"),
+        (lambda c: agent_in(c).update(extra=1), "fields setup doesn't know: extra"),
+        (lambda c: entry_in(c).pop("claudeCode"), "has no agent's setting"),
+        (lambda c: entry_in(c).pop("why"), "has no why"),
+        (lambda c: entry_in(c).update(summary="x" * 81), "longer than 80 characters"),
+        (lambda c: entry_in(c).update(summary="a\nb"), "summary isn't one line of text"),
+        (lambda c: agent_in(c).pop("whenMissing"), "has no whenMissing"),
+        (lambda c: agent_in(c).update(key="a.b"), "key isn't a key at the top"),
+        (lambda c: agent_in(c).update(value=None), "has no value"),
+        (lambda c: agent_in(c).update(olderForms=[False]), "has no whenOlderForm"),
+        (lambda c: agent_in(c).update(olderForms=[]), "olderForms isn't a list of one or more"),
+        (lambda c: agent_in(c).update(whenOlderForm="Less."), "whenOlderForm, but no olderForms"),
+        (
+            lambda c: agent_in(c).update(olderForms=[True], whenOlderForm="The same."),
+            "or the recommended value",
+        ),
+        (lambda c: agent_in(c).update(olderPlace="other.json"), "olderPlace isn't one of"),
+        (renamed, "the id isn't lowercase words"),
+        (doubled, "thing-on has the same claudeCode key, thing"),
+    ],
+    ids=[
+        "another top-level field",
+        "an unknown field",
+        "an unknown agent field",
+        "no agent",
+        "no why",
+        "a long summary",
+        "a summary on two lines",
+        "no whenMissing",
+        "a key inside another",
+        "a null value",
+        "an older form with no words",
+        "an empty olderForms",
+        "words for an older form there isn't",
+        "the recommended value as an older form",
+        "an unknown older place",
+        "an id with a capital",
+        "two ids for one key",
+    ],
+)
+def test_the_recommended_settings_reader_refuses_what_setup_cant_use(
+    box: Sandbox, change: Any, fault: str
+) -> None:
+    catalog = {
+        "recommendedSettings": {
+            "thing-on": {
+                "summary": "Turn the thing on",
+                "why": "It helps.",
+                "claudeCode": {"key": "thing", "value": True, "whenMissing": "It's off."},
+            }
+        }
+    }
+    change(catalog)
+    path = box.root / "plans" / "recommended.json"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps(catalog), encoding="utf-8")
+    with pytest.raises(ValueError, match=re.escape(fault)):
+        shared_module(box, "recommended_settings").load_recommended(path)
+
+
 def test_git_ignores_this_pcs_settings_and_what_saving_them_leaves_beside_them(
     box: Sandbox,
 ) -> None:
@@ -4468,9 +4650,8 @@ def test_claude_settings_adds_after_an_existing_entry_and_keeps_crlf(box: Sandbo
         ('{"x": 1e5}\n', "1e5"),
         ('{"x": -0}\n', "-0"),
         ('{"x": NaN}\n', "not plain JSON"),
-        ('{"x": 1, "x": 2}\n', "not plain JSON"),
     ],
-    ids=["a number written another way", "minus zero", "NaN", "a key twice"],
+    ids=["a number written another way", "minus zero", "NaN"],
 )
 def test_claude_settings_refuses_what_rewriting_would_change(
     box: Sandbox, text: str, reason: str
@@ -4480,6 +4661,27 @@ def test_claude_settings_refuses_what_rewriting_would_change(
     path.write_bytes(text.encode("utf-8"))
     plan = shared_module(box, "claude_settings").plan(path, ENTRIES)
     assert plan.reason and reason in plan.reason, plan.reason
+
+
+def test_claude_settings_keeps_the_last_copy_of_a_key_written_twice(box: Sandbox) -> None:
+    # As Claude Code reads it: the last copy's value, in the first copy's place, at any depth.
+    path = box.root / "plans" / "twice.json"
+    path.parent.mkdir(exist_ok=True)
+    path.write_bytes(b'{"x": 1, "a": {"y": 1, "y": 2}, "x": 2}\n')
+    claude = shared_module(box, "claude_settings")
+    plan = claude.plan(path, ENTRIES)
+    assert not plan.reason, plan.reason
+    assert plan.repeated == ["a.y", "x"], plan.repeated
+    data = json.loads(plan.new_text)
+    assert list(data)[:2] == ["x", "a"] and data["x"] == 2 and data["a"] == {"y": 2}, data
+    # Taking setup's entries back out does the same.
+    path.write_text(plan.new_text[:-2] + ', "x": 3}\n', encoding="utf-8")
+    removal = claude.plan_removal(path, ENTRIES)
+    assert not removal.reason and removal.repeated == ["x"], removal
+    assert json.loads(removal.new_text) == {"x": 3, "a": {"y": 2}}, removal.new_text
+    # The check that finds them reads past comments, and says when the text isn't JSON at all.
+    assert claude.repeated_keys('{\n  // mine\n  "x": 1,\n  "x": 2\n}\n') == ["x"]
+    assert claude.repeated_keys("") == [] and claude.repeated_keys("{") is None
 
 
 def test_claude_settings_keeps_plain_numbers(box: Sandbox) -> None:
