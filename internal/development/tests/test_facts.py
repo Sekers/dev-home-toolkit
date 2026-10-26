@@ -670,6 +670,81 @@ def test_counts_lists_and_compares_the_commits_since_the_checked_one(box: Sandbo
     assert result.lines == ["checked: none", "newer: unknown", "behind: unknown"], str(result)
 
 
+def git_commands(trace: Path) -> list[str]:
+    """The git commands a run started, from git's own trace: "rev-list --left-right" and the
+    like."""
+    found = re.findall(r"trace: built-in: git (.+)", trace.read_text(encoding="utf-8"))
+    return [" ".join(command.split()[:2]) for command in found]
+
+
+def test_counts_once_for_the_latest_of_many_commits_named(box: Sandbox) -> None:
+    repo = new_repo(
+        box, "Many Named", origin="https://github.com/you/many.git", commits=("1", "2", "3", "4")
+    )
+    named = [git("-C", str(repo), "rev-parse", "--short=7", f"HEAD~{n}")[0] for n in (2, 0, 3, 1)]
+    git("-C", str(repo), "commit", "--quiet", "--allow-empty", "-m", "test: after")
+    state = ", ".join(f"`{commit}`" for commit in named)
+    write_handoff(box, "many", f"**State as of 2026-01-02.** Checked {state}.\n")
+    trace = box.root / "many-trace.txt"
+    result = facts(box, repo, "newer-commits", env={"GIT_TRACE": str(trace)})
+    assert result.lines[:3] == [f"checked: {named[1]}", "newer: 1", "behind: 0"], str(result)
+    commands = git_commands(trace)
+    assert commands.count("merge-base --independent") == 1, commands
+    assert commands.count("rev-list --left-right") == 1, "one count, however many are named"
+
+
+def test_of_commits_on_two_branches_counts_each_and_the_first_named_wins_a_tie(
+    box: Sandbox,
+) -> None:
+    repo = new_repo(box, "Two Branches", origin="https://github.com/you/two.git", commits=("1",))
+    git("-C", str(repo), "switch", "--quiet", "-c", "left")
+    git("-C", str(repo), "commit", "--quiet", "--allow-empty", "-m", "test: left")
+    left = short_head(repo)
+    git("-C", str(repo), "switch", "--quiet", "-c", "right", "HEAD~1")
+    git("-C", str(repo), "commit", "--quiet", "--allow-empty", "-m", "test: right")
+    right = short_head(repo)
+    git("-C", str(repo), "merge", "--quiet", "--no-edit", "left")
+    # Each has the other's commit and the merge after it: a tie.
+    for first, second in ((right, left), (left, right)):
+        write_handoff(
+            box, "two", f"**State as of 2026-01-02.** Checked `{first}`, then `{second}`.\n"
+        )
+        result = facts(box, repo, "newer-commits")
+        assert result.lines[:3] == [f"checked: {first}", "newer: 2", "behind: 0"], str(result)
+
+    # A commit and one after it on a branch this checkout lacks: the later one is checked, so the
+    # checkout reads as behind it.
+    git("-C", str(repo), "switch", "--quiet", "-c", "ahead", left)
+    git("-C", str(repo), "commit", "--quiet", "--allow-empty", "-m", "test: ahead")
+    ahead = short_head(repo)
+    git("-C", str(repo), "switch", "--quiet", "right")
+    write_handoff(box, "two", f"**State as of 2026-01-02.** Checked `{left}`, then `{ahead}`.\n")
+    result = facts(box, repo, "newer-commits")
+    assert result.lines[:3] == [f"checked: {ahead}", "newer: 2", "behind: 1"], str(result)
+
+
+def test_when_git_cant_find_the_latest_counts_every_commit_named(box: Sandbox) -> None:
+    # A gap in the history stops the walk from the last commit, so merge-base fails, but the last
+    # commit can still be compared with itself.
+    repo = new_repo(
+        box, "Gap Named", origin="https://github.com/you/gap-named.git", commits=("1", "2", "3")
+    )
+    first, last = git("-C", str(repo), "rev-parse", "HEAD~2", "HEAD")
+    middle = git("-C", str(repo), "rev-parse", "HEAD~1")[0]
+    obj = repo / ".git" / "objects" / middle[:2] / middle[2:]
+    obj.chmod(0o666)
+    obj.unlink()
+    write_handoff(
+        box,
+        "gap-named",
+        f"**State as of 2026-01-02.** Checked `{first[:7]}`, then `{last[:7]}`.\n",
+    )
+    with pytest.raises(AssertionError, match="merge-base"):
+        git("-C", str(repo), "merge-base", "--independent", first, last)
+    result = facts(box, repo, "newer-commits")
+    assert result.lines == [f"checked: {last[:7]}", "newer: 0", "behind: 0"], str(result)
+
+
 def test_when_git_cant_count_says_unknown_and_the_other_topics_print(box: Sandbox) -> None:
     # History git can't walk: the checked commit is there, but one after it is missing.
     repo = new_repo(

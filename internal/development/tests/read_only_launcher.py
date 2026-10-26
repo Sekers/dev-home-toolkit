@@ -27,7 +27,7 @@ import sys
 from pathlib import PurePath
 
 # What git may be asked to do: the first word, or first two, of a git command that only reads.
-GIT_READS = {"rev-parse", "rev-list", "cat-file", "remote get-url"}
+GIT_READS = {"rev-parse", "rev-list", "cat-file", "merge-base", "remote get-url"}
 # The programs each script may start, by its file name. Only these scripts can be watched.
 PROGRAMS: dict[str, set[str]] = {"facts.py": {"git"}, "issue_status.py": {"git", "gh"}}
 # The Windows DLLs a script may load, and the functions it may call from them: none today.

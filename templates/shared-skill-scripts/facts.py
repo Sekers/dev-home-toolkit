@@ -648,6 +648,20 @@ def count_both_ways(commit: str) -> tuple[int, int] | None:
     return int(match.group(1)), int(match.group(2))
 
 
+def latest_named(commits: list[str]) -> list[str]:
+    """The commits that aren't an ancestor of another one given, in the order given. An ancestor
+    never has fewer commits after it than its descendant, so the latest is always among them. One
+    git process for them all, so the counts that follow run once, not once per commit named;
+    when git can't tell, all of them."""
+    if len(commits) < 2:
+        return commits
+    independent = run_git("merge-base", "--independent", *commits)
+    if independent.code != 0:
+        return commits
+    kept = set(independent.lines)
+    return [commit for commit in commits if commit in kept] or commits
+
+
 def newer_commit_lines(place: HandoffPlace) -> list[str]:
     """The newer-commits topic's lines. A count that can't be told is unknown, never none or 0,
     so it can't be read as "nothing changed". A git failure here never stops the script, because
@@ -669,9 +683,10 @@ def newer_commit_lines(place: HandoffPlace) -> list[str]:
         return ["checked: none", "newer: unknown", "behind: unknown"]
 
     # A State line can name more than one commit, such as an earlier one in passing. The one with
-    # the fewest commits after it is the latest the update knew of.
+    # the fewest commits after it is the latest the update knew of. Of those latest_named leaves,
+    # the first named wins a tie.
     best: tuple[str, int, int] | None = None
-    for commit in found:
+    for commit in latest_named(found):
         counts = count_both_ways(commit)
         if counts is not None and (best is None or counts[1] < best[2]):
             best = (commit, counts[0], counts[1])
