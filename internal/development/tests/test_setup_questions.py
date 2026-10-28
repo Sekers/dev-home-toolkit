@@ -1410,7 +1410,7 @@ def test_the_menu_shows_a_folders_reminder_and_enter_keeps_it(
     box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # A reminder is an answer, so Enter keeps it, as it keeps a yes or a no. A yes later takes the
-    # reminder's place, so the entry stays where it was in the file.
+    # reminder's place, in the same entry, which the save puts in order, ~/.claude first.
     later = box.profile / ".claude-later"
     later.mkdir()
     start = json.loads(backups_removed.read_text(encoding="utf-8"))
@@ -1443,7 +1443,7 @@ def test_the_menu_shows_a_folders_reminder_and_enter_keeps_it(
         "~/.claude-later": {"setUp": True},
         "~/.claude": {"setUp": True},
     }, saved
-    assert list(saved["claudeCode"]["folders"]) == ["~/.claude-later", "~/.claude"], saved
+    assert list(saved["claudeCode"]["folders"]) == ["~/.claude", "~/.claude-later"], saved
 
 
 def test_the_menu_keeps_codexs_reminder_at_enter_and_a_yes_reaches_every_home(

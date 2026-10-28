@@ -202,9 +202,10 @@ FOLDERS_FOR = {agent.setting: agent for agent in AGENTS}
 
 
 def folder_rank(agent: Agent, folder: str | Path, home: Path) -> tuple[int, str]:
-    """Where a folder of a shared agent comes, in its entries and in choosing the main one: the
-    default one, such as ~/.codex, first, then each other one in the profile named after it, by
-    name, then every other folder, by its full path. folder may start with ~."""
+    """Where one of an agent's folders comes, in its entries and wherever setup goes through
+    them, and for a shared agent, in choosing the main one: the default one, such as ~/.claude,
+    first, then each other one in the profile named after it, by name, then every other folder,
+    by its full path. folder may start with ~."""
     full = comparable(resolve_home(str(folder), home))
     name = Path(full).name.lower()
     if same_path(Path(full).parent, home):
@@ -215,18 +216,18 @@ def folder_rank(agent: Agent, folder: str | Path, home: Path) -> tuple[int, str]
     return 2, os.path.normcase(full)
 
 
-def order_folders(data: dict[str, Any], home: Path) -> bool:
-    """Puts each shared agent's entries in data in order (see folder_rank), and returns whether
-    their order changed."""
-    moved = False
+def order_folders(data: dict[str, Any], home: Path) -> list[Agent]:
+    """Puts each agent's entries in data in order (see folder_rank), and returns each agent whose
+    entries' order changed."""
+    moved: list[Agent] = []
     for agent in AGENTS:
         entries = get(data, agent.setting)
-        if not agent.shared or not isinstance(entries, dict):
+        if not isinstance(entries, dict):
             continue
         ordered = sorted(entries, key=lambda entry: folder_rank(agent, entry, home))
         if ordered != list(entries):
             put(data, agent.setting, {entry: entries[entry] for entry in ordered})
-            moved = True
+            moved.append(agent)
     return moved
 
 
@@ -1191,7 +1192,7 @@ def merge_answers(data: dict[str, Any], path: str, answers: dict[str, bool]) -> 
 
 def local_settings_data(settings: LocalSettings) -> dict[str, Any]:
     """What the file holds for the settings, with schemaVersion first, keeping every other key the
-    file had where it was, apart from a shared agent's folders, which go in order (see
+    file had where it was, apart from each agent's folders, which go in order (see
     order_folders). testHomeDir is kept when the file has it, and never added."""
     data = copy.deepcopy(settings.data)
     data.pop("schemaVersion", None)

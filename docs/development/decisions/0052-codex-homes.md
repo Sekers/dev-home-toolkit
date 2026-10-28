@@ -24,9 +24,13 @@ skills. Codex homes are saved exactly as Claude Code folders are, an entry for e
   by folder name; otherwise the first home elsewhere, by full path. Its answer is every home's.
   When it has none, the next home there, in that order, that has one gives it. With none, Codex
   is unanswered.
-- Setup keeps `codex.homes` in that order on every save. A file out of order, which only a hand
-  edit leaves, is put back in order by the next run, with no backup and no line, once setup has
-  checked that only the order changes; otherwise it saves nothing and reports a `PROBLEM`.
+- Setup keeps `codex.homes` in that order on every save, and since 2026-10-28 every agent's
+  folders, `claudeCode.folders` included, by the same rule: the default folder first, then each
+  named after it, by name, then every other by full path. A file out of order is put back in
+  order by the next run, with no backup and no line, once setup has checked that only the order
+  changes; otherwise it saves nothing and reports a `PROBLEM`. Setup goes through the folders in
+  that order everywhere too: the questions, the settings menu, the offers of recommended
+  settings, and its work.
 - Every run, quiet ones included, gives each home that's there the main home's answer when its
   own differs or it has none: a new home, or one whose answer was changed by hand, the main
   home's included. It keeps no backup, since nobody changed a setting, and prints one line in
@@ -47,7 +51,8 @@ skills. Codex homes are saved exactly as Claude Code folders are, an entry for e
 - Answers saved for each home before this decision are read as they are: nothing is deleted or
   converted, and mixed answers follow the main home.
 
-Changed on 2026-10-16 and 2026-10-20.
+Changed on 2026-10-16, 2026-10-20, and by the developer on 2026-10-28 (every agent's folders in
+order).
 
 **Why:**
 
@@ -65,6 +70,12 @@ Changed on 2026-10-16 and 2026-10-20.
   never the settings file.
 - A sync makes the homes match, rather than naming a mismatch on every sync, because the answer
   that counts is already known: the main home's.
+- Every agent's folders in the same order: Claude Code folders were kept in the order they were
+  answered, so an extra folder answered before `~/.claude` existed, or one answered again after
+  being taken out, came first. Then the settings menu listed the folders one way, sorted, and
+  the offers of recommended settings and the work's lines another. One order, in the file and
+  everywhere setup goes through the folders, is what a person reading either expects. The order
+  carries no meaning for Claude Code, so nothing about its answers changes.
 
 **Costs, accepted:**
 

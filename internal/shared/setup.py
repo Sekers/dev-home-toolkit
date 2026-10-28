@@ -112,7 +112,9 @@ due, in a NEW line, which says how to answer; until a reminder is due, setup doe
 its folder, and syncs don't name it. In a folder answered no, setup removes the links it made and
 its rules file, once the lines it didn't write there are saved in rules/, and takes dev-home and
 dev-home-toolkit, and its claudeMdExcludes patterns, back out of its settings.json, and leaves the
-rest alone. One answered yes that no longer exists is skipped.
+rest alone. One answered yes that no longer exists is skipped. Setup keeps the folders in order,
+in claudeCode.folders and wherever it goes through them: ~/.claude first, then each
+~/.claude-<name> by name, then each other folder by full path.
 
 Codex homes are saved the same way, under codex.homes, but every home reads the same skills, from
 ~/.agents/skills, so every home has the same answer: setup sets up all of them, or none, and asks
@@ -424,7 +426,7 @@ class Settled:
     line saying which of its folders got the main folder's answer; new_skills names each skill
     marked as new to this PC; answered says whether a person changed a setting in this run;
     problem is why the settings can't be saved, or "" when they can; and out_of_order says the
-    file as it is now lists a shared agent's folders out of order."""
+    file as it is now lists an agent's folders out of order."""
 
     settings: LocalSettings
     changes: Checked
@@ -949,7 +951,7 @@ class Setup:
         removed. When the only changes are what setup records by itself, the answers a shared
         agent's folders got from the main one and the skills new to this PC, it keeps no backup,
         since nobody changed a setting, and the lines saying what it records stand for its own.
-        With no change at all, it only puts a shared agent's folders back in order."""
+        With no change at all, it only puts an agent's folders back in order."""
         changes = settled.changes
         changed = settled.answered or bool(changes.moved or changes.removed)
         if not (changed or settled.matched or settled.new_skills):
@@ -983,7 +985,7 @@ class Setup:
         return True
 
     def put_in_order(self) -> None:
-        """Puts a shared agent's folders back in order in this PC's settings, after a hand edit,
+        """Puts an agent's folders back in order in this PC's settings, such as after a hand edit,
         with no backup and no line, once it's sure only their order changes."""
         try:
             text = SETTINGS_PATH.read_text(encoding="utf-8-sig")
@@ -991,13 +993,15 @@ class Setup:
         except (OSError, ValueError):
             # Changed since this run read it: the next run puts it in order.
             return
-        if not isinstance(data, dict) or not order_folders(data, self.home):
+        moved = order_folders(data, self.home) if isinstance(data, dict) else []
+        if not moved:
             return
         ordered = settings_text(data)
         if not same_apart_from_order(text, ordered):
+            kinds = and_list([f"{agent.name} {agent.folder}s" for agent in moved])
             self.status(
                 "PROBLEM",
-                f"{SETTINGS_PATH} lists Codex homes out of order, and putting them in order would "
+                f"{SETTINGS_PATH} lists {kinds} out of order, and putting them in order would "
                 "change more than their order, so setup left the file as it is. Look for a key "
                 "written twice, and fix it there.",
             )
@@ -1063,7 +1067,7 @@ class Setup:
                 new_skills,
                 answered,
                 problem,
-                read is not None and order_folders(copy.deepcopy(read), self.home),
+                read is not None and bool(order_folders(copy.deepcopy(read), self.home)),
             )
         changes = check_settings(
             newer.data, declared, remove_gone_skills=False, seen=read if read is not None else {}
@@ -1086,7 +1090,7 @@ class Setup:
             dict(self.matched),
             new_skills,
             answered,
-            out_of_order=order_folders(copy.deepcopy(newer.data), self.home),
+            out_of_order=bool(order_folders(copy.deepcopy(newer.data), self.home)),
         )
 
     # The agents' folders: Claude Code folders and Codex homes
@@ -1139,15 +1143,14 @@ class Setup:
 
     def known_folders(self, agent: Agent, settings: LocalSettings) -> list[Path]:
         """Each of an agent's folders setup knows of that's there, each once: those it finds (see
-        found_folders), then the others with an entry. A shared agent's come in order, the main one
-        first (see folder_rank)."""
+        found_folders), and the others with an entry, in order, the default one first (see
+        folder_rank), which for a shared agent is the main one."""
         folders = self.found_folders(agent)
         for entry in listed_entries(get(settings.data, agent.setting)):
             folder = Path(comparable(resolve_home(entry, self.home)))
             if folder.is_dir() and not any(same_path(folder, f) for f in folders):
                 folders.append(folder)
-        if agent.shared:
-            folders.sort(key=lambda folder: folder_rank(agent, folder, self.home))
+        folders.sort(key=lambda folder: folder_rank(agent, folder, self.home))
         return folders
 
     def entry_named(self, folder: str | Path, entries: Iterable[str]) -> str | None:
@@ -3621,7 +3624,9 @@ class Setup:
         self, agent: Agent, settings: LocalSettings, answer: bool
     ) -> list[tuple[str, str]]:
         """Each of an agent's folders with that answer that's there, each once: its entry in the
-        settings, and its full path."""
+        settings, and its full path, in order, the default one first (see folder_rank), so the
+        questions, the menu, and the work all go through them alike, however the file lists
+        them."""
         folders: list[tuple[str, str]] = []
         for entry in answered(settings.folders[agent.setting], answer):
             if not entry.strip():
@@ -3633,7 +3638,7 @@ class Setup:
                 continue
             if not any(same_path(full, d) for _, d in folders):
                 folders.append((entry, full))
-        return folders
+        return sorted(folders, key=lambda pair: folder_rank(agent, pair[1], self.home))
 
     # Skills: which are added to the agents on this PC, and where
 

@@ -189,7 +189,8 @@ one's name is its path, which `--configure` takes too:
 - `claudeCode.folders` holds each Claude Code folder with its answer, such as
   `"~/.claude": {"setUp": true}`. Taking a folder out makes setup ask about it again, and leave it
   as it is until you answer. A folder's answers to its recommended settings go in its entry too,
-  by each one's id, such as `"recommendedSettings": {"attribution-off": true}`.
+  by each one's id, such as `"recommendedSettings": {"attribution-off": true}`. Setup keeps the
+  folders in order: `~/.claude` first, then each `~/.claude-<name>` by name, then any other.
 - `codex.homes` holds each Codex home the same way, but every Codex home reads the same skills,
   so they all share one answer, the main home's: `~/.codex` when it's there. A sync gives any
   other home that answer, and says so, such as a new home, or one whose answer you changed by

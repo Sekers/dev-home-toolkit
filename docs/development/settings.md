@@ -32,6 +32,8 @@ AGENTS.md's rules apply too.
   ([0052: Codex homes](decisions/0052-codex-homes.md)). A folder of an agent with recommended
   settings holds the answers to them in its entry too, under `recommendedSettings`, by each
   one's id, each an offer ([0032: Recommended settings](decisions/0032-recommended-settings.md)).
+  Every agent's entries go in one order, the default folder first, which setup keeps in the
+  file and follows wherever it goes through them (`folder_rank` in `internal/shared/settings.py`).
 - A setting is per PC, in `local-settings.json`, unless it describes dev-home itself, which every
   copy shares in `dev-home.json`. A skill's preferences are always per PC.
 - A skill's preference reaches end users who never run setup by hand through the feature it

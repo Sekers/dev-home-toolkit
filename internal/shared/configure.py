@@ -462,8 +462,8 @@ def folder_answers(
     run: "Setup", settings: LocalSettings, agent: Agent
 ) -> list[tuple[str, bool | Reminder | None]]:
     """Each of an agent's folders setup knows of, as written in the settings, with its answer, a
-    reminder included: each one there (see known_folders), then any other folder with an
-    answer."""
+    reminder included: each one there (see known_folders), and any other folder with an answer,
+    such as one that's gone, all in order (see folder_rank)."""
     saved: dict[str, bool | Reminder] = {**settings.folders[agent.setting]}
     saved.update(run.reminders(agent, settings))
     answers: list[tuple[str, bool | Reminder | None]] = []
@@ -474,7 +474,7 @@ def folder_answers(
         full = resolve_home(entry, run.home)
         if not any(same_path(full, resolve_home(name, run.home)) for name, _ in answers):
             answers.append((entry, answer))
-    return answers
+    return sorted(answers, key=lambda pair: folder_rank(agent, pair[0], run.home))
 
 
 def answer_text(answer: bool | Reminder | None) -> str:

@@ -1430,6 +1430,50 @@ def test_codex_homes_out_of_order_are_put_back_in_order_without_a_word(
     assert kept == twice
 
 
+def test_claude_code_folders_out_of_order_are_shown_and_put_in_order(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    # As for Codex homes: ~/.claude first, then each ~/.claude-<name> by name, such as after an
+    # extra folder was answered before ~/.claude existed, a folder that's gone included. Setup
+    # goes through them in that order even before the file is put in order, which keeps what each
+    # entry holds, with no backup and no line.
+    second = box.profile / ".claude-second"
+    write_text(second / "settings.json", read(box.profile / ".claude" / "settings.json"))
+    saved = json.loads(read(settings_kept))
+    saved["claudeCode"]["folders"] = {
+        "~/.claude-second": {"setUp": True, "recommendedSettings": {"attribution-off": True}},
+        "~/.claude": {"setUp": True},
+        "~/.claude-gone": {"setUp": True},
+    }
+    write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
+    try:
+        listing = run_python(box, "setup.py", "--configure")
+        result = setup(box)
+        after = json.loads(read(settings_kept))
+    finally:
+        for folder in (second / "skills", second / "rules"):
+            for link in folder.iterdir() if folder.is_dir() else []:
+                remove_link(link)
+        shutil.rmtree(second)
+    folders = (
+        r"^  7\s+Claude Code folders to set up\s+~/\.claude: yes, ~/\.claude-gone: yes \(not "
+        r"found\), ~/\.claude-second: yes$"
+    )
+    assert listing.has_line(folders), str(listing)
+    nine = next(i for i, line in enumerate(listing.lines) if re.match(r"^  9\s", line))
+    assert listing.lines[nine].endswith("~/.claude: 3 already set;"), str(listing)
+    assert listing.lines[nine + 1].strip().startswith("~/.claude-second: "), str(listing)
+    assert result.code == 0 and not result.has_line(r"^SET\s+This PC's settings"), str(result)
+    order = ["~/.claude", "~/.claude-gone", "~/.claude-second"]
+    assert list(after["claudeCode"]["folders"]) == order, after
+    saved["claudeCode"]["folders"] = after["claudeCode"]["folders"]
+    assert after == saved, after
+    assert after["claudeCode"]["folders"]["~/.claude-second"]["recommendedSettings"] == {
+        "attribution-off": True
+    }
+    assert not list(settings_kept.parent.glob("local-settings.json.bak-*")), str(result)
+
+
 def test_a_claude_folder_with_a_no_is_left_alone_even_from_a_session_there(box: Sandbox) -> None:
     session = box.profile / ".claude-declined"
     write_text(session / "settings.json", "{}\n")
