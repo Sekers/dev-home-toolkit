@@ -2,6 +2,9 @@
 # says what the placeholders stand for, and docs/development/testing.md when this list changes.
 <setting>
 <setting>.$state
+claudeCode.folders.<folder>.recommendedSettings.<recommended>
+claudeCode.folders.<folder>.recommendedSettings.<recommended>.$state
+claudeCode.folders.<folder>.recommendedSettings.<recommended>.on
 claudeCode.folders.<folder>.setUp
 claudeCode.folders.<folder>.setUp.$state
 claudeCode.folders.<folder>.setUp.on

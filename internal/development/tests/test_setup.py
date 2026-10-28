@@ -1089,7 +1089,7 @@ def test_a_claude_folder_nobody_has_answered_for_isnt_set_up(box: Sandbox) -> No
             r"Backup of the old file: "
         )
         assert result.code == 0 and result.has_line(pattern), str(result)
-        assert not result.has_line("has no answer yet"), str(result)
+        assert not result.has_line("has no answer yet about setting up"), str(result)
         # Once made, a sync finds nothing to change.
         again = setup(box)
         assert again.code == 0 and not again.has_line(r"^SET\s"), str(again)
@@ -2633,7 +2633,14 @@ def test_configure_alone_shows_the_settings_and_how_to_change_them(
     assert result.has_line(pattern), str(result)
     pattern = r"^\s+codex\.homes\?=<folder>@<days>\s+Ask again in that many days whether to set up"
     assert result.has_line(pattern), str(result)
-    pattern = r"^\s+9\s+Copies of dev-home in active use\s+several \(multi-PC mode\)$"
+    # The recommended settings, which the sandbox's folder has already, so the list has nothing
+    # more about them.
+    pattern = r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 3 already set$"
+    assert result.has_line(pattern), str(result)
+    assert not result.has_line(r"^Recommended Claude Code settings$"), str(result)
+    pattern = r"^\s+claudeCode\.recommendedSettings\.<id>\+=<folder>@<fingerprint>$"
+    assert result.has_line(pattern), str(result)
+    pattern = r"^\s+10\s+Copies of dev-home in active use\s+several \(multi-PC mode\)$"
     assert result.has_line(pattern), str(result)
     assert result.has_line(r"^\s+multiMachine=true\|false\s"), str(result)
     # Whether each skill is added, with the name to change it by, but dev-home's, which is fixed.
@@ -2696,7 +2703,7 @@ def test_configure_alone_shows_how_often_dev_home_is_checked_in_each_mode(
     finally:
         path.write_bytes(before)
     assert result.has_line(rf"^\s+4\s+Check GitHub for dev-home's changes\s+{hours}$"), str(result)
-    assert result.has_line(rf"^\s+9\s+Copies of dev-home in active use\s+{copies}$"), str(result)
+    assert result.has_line(rf"^\s+10\s+Copies of dev-home in active use\s+{copies}$"), str(result)
 
 
 def test_configure_alone_shows_an_interval_of_your_own_without_a_note(
@@ -2906,6 +2913,14 @@ def renamed(catalog: dict[str, Any]) -> None:
 
 def doubled(catalog: dict[str, Any]) -> None:
     catalog["recommendedSettings"]["other"] = json.loads(json.dumps(entry_in(catalog)))
+    catalog["recommendedSettings"]["other"]["summary"] = "Turn the other thing on"
+
+
+def same_summary(catalog: dict[str, Any]) -> None:
+    doubled(catalog)
+    other = catalog["recommendedSettings"]["other"]
+    other["summary"] = entry_in(catalog)["summary"]
+    other["claudeCode"]["key"] = "other"
 
 
 @pytest.mark.parametrize(
@@ -2919,6 +2934,7 @@ def doubled(catalog: dict[str, Any]) -> None:
         (lambda c: entry_in(c).update(summary="x" * 81), "longer than 80 characters"),
         (lambda c: entry_in(c).update(summary="a\nb"), "summary isn't one line of text"),
         (lambda c: agent_in(c).pop("whenMissing"), "has no whenMissing"),
+        (lambda c: agent_in(c).pop("whenOther"), "has no whenOther"),
         (lambda c: agent_in(c).update(key="a.b"), "key isn't a key at the top"),
         (lambda c: agent_in(c).update(value=None), "has no value"),
         (lambda c: agent_in(c).update(olderForms=[False]), "has no whenOlderForm"),
@@ -2931,6 +2947,7 @@ def doubled(catalog: dict[str, Any]) -> None:
         (lambda c: agent_in(c).update(olderPlace="other.json"), "olderPlace isn't one of"),
         (renamed, "the id isn't lowercase words"),
         (doubled, "thing-on has the same claudeCode key, thing"),
+        (same_summary, "thing-on has the same summary"),
     ],
     ids=[
         "another top-level field",
@@ -2941,6 +2958,7 @@ def doubled(catalog: dict[str, Any]) -> None:
         "a long summary",
         "a summary on two lines",
         "no whenMissing",
+        "no whenOther",
         "a key inside another",
         "a null value",
         "an older form with no words",
@@ -2950,6 +2968,7 @@ def doubled(catalog: dict[str, Any]) -> None:
         "an unknown older place",
         "an id with a capital",
         "two ids for one key",
+        "two ids with one summary",
     ],
 )
 def test_the_recommended_settings_reader_refuses_what_setup_cant_use(
@@ -2960,7 +2979,12 @@ def test_the_recommended_settings_reader_refuses_what_setup_cant_use(
             "thing-on": {
                 "summary": "Turn the thing on",
                 "why": "It helps.",
-                "claudeCode": {"key": "thing", "value": True, "whenMissing": "It's off."},
+                "claudeCode": {
+                    "key": "thing",
+                    "value": True,
+                    "whenMissing": "It's off.",
+                    "whenOther": "It's off too.",
+                },
             }
         }
     }
@@ -3208,9 +3232,10 @@ def test_configure_alone_lists_a_file_set_aside_first_with_its_answers_and_comma
     # First, before the settings: the heading, then how to ask, as one paragraph.
     assert lines[:2] == ["Waiting for your answer", ""] and lines[start - 1] == "", str(result)
     intro = (
-        "Ask the user about each item, one at a time: show its text, say which of its lines are "
-        "already in the rules this session loaded, recommend an answer, and say what it does. The "
-        "go-ahead is the user's pick of exactly one answer the item lists, or that a PROBLEM line "
+        "Ask the user about each item, one at a time: show its text; for rules, say which of its "
+        "lines are already in the rules this session loaded; recommend an answer, and say what it "
+        "does. The go-ahead is the user's pick of exactly one answer the item lists, or that a "
+        "PROBLEM line "
         "about it offers: run that command, and pass on what setup prints. Run nothing for any "
         "other reply: ask again, or, for not now, leave the item waiting. After a PROBLEM line or "
         "a refusal, show the user what it says, run --configure again if it says the item "

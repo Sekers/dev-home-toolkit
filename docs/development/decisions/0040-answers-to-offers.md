@@ -1,8 +1,8 @@
 # 0040: Answers to offers
 
 **Built:** yes, except: knowledge candidates and update notices don't offer these answers yet, nor
-do the offers that aren't built, recommended settings and copied skills; and built-in rules, with
-answers of their own, aren't built.
+does the offer that isn't built, copied skills; and built-in rules, with answers of their own,
+aren't built.
 
 **Decision:** every question that offers something a person can take or turn down uses the same
 answers, built and planned offers alike: issue and knowledge candidates, setup's optional lists

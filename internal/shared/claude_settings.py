@@ -4,15 +4,18 @@ and dev-home-toolkit to the first and setup's patterns to the second, or takes t
 Every change keeps only the last copy of a key written more than once, the one Claude Code
 uses."""
 
+import copy
 import json
 from pathlib import Path
 from typing import Any
 
-from .settings_files import Plan, read_settings_file
+from .settings_files import Plan, SettingsFile, read_settings_file
 
 # Where each list setup changes is in the settings.
 FOLDERS = ("permissions", "additionalDirectories")
 EXCLUDES = ("claudeMdExcludes",)
+# A key the settings don't have, as plan keeps each value it replaces.
+ABSENT = object()
 
 
 def without_comments(text: str) -> str:
@@ -171,6 +174,23 @@ def read_object(result: Plan) -> dict[str, Any] | None:
     return data
 
 
+def read_file(path: Path) -> SettingsFile:
+    """A settings file as read_settings_file reads it, with why it can't be read, if so."""
+    try:
+        return read_settings_file(path)
+    except OSError as error:
+        return SettingsFile(reason=f"it can't be read ({error.strerror or error})")
+
+
+def settings_object(file: SettingsFile) -> tuple[dict[str, Any] | None, str]:
+    """The settings in a settings.json, as read (see read_file), as Claude Code reads them, with
+    the last copy of a key written more than once, or None with why setup won't rewrite the file
+    (see read_object). A file that isn't there has none."""
+    result = Plan(file, reason=file.reason)
+    data = None if result.reason else read_object(result)
+    return data, result.reason or ""
+
+
 def new_text_for(result: Plan, data: dict[str, Any]) -> str | None:
     """The settings as Claude Code writes them, with the file's line breaks, or None with
     result.reason saying why they can't be written back."""
@@ -235,14 +255,24 @@ def value_at(data: dict[str, Any], keys: tuple[str, ...]) -> Any:
     return data
 
 
-def plan(path: Path, folders: list[str], excludes: list[str] | None = None) -> Plan:
+def plan(
+    path: Path,
+    folders: list[str],
+    excludes: list[str] | None = None,
+    values: dict[str, Any] | None = None,
+    file: SettingsFile | None = None,
+) -> Plan:
     """Plans adding folders to permissions.additionalDirectories, and patterns to
-    claudeMdExcludes. With neither, it plans rewriting the file alone, which keeps only the last
-    copy of a key written more than once (see read_object). As a check, the new text is parsed
-    again with the additions taken back out, and has to match the original exactly, as Claude
-    Code reads it."""
+    claudeMdExcludes, and setting each key in values, at the top of the settings, to its value:
+    in its place when it's there, and otherwise last. With none of them, it plans rewriting the
+    file alone, which keeps only the last copy of a key written more than once (see
+    read_object). It plans on file, the file as already read, if given, so a check of what the
+    file had is of what the write replaces. As a check, the new text is parsed again with the
+    additions and values taken back out, and has to match the original exactly, as Claude Code
+    reads it."""
     additions = [(FOLDERS, folders), (EXCLUDES, excludes or [])]
-    file = read_settings_file(path)
+    values = values or {}
+    file = read_settings_file(path) if file is None else file
     result = Plan(file, reason=file.reason)
     if result.reason:
         return result
@@ -259,14 +289,26 @@ def plan(path: Path, folders: list[str], excludes: list[str] | None = None) -> P
             if target is None:
                 return result
             target.extend(entries)
+    # Each key's value before, or ABSENT for one the file doesn't have.
+    before = {name: data.get(name, ABSENT) for name in values}
+    for name, value in values.items():
+        data[name] = copy.deepcopy(value)
 
     new_text = new_text_for(result, data)
     if new_text is None:
         return result
 
-    # Check: read the new text back, confirm the new entries, take the additions out again, and
+    # Check: read the new text back, confirm the new entries and values, take them out again, and
     # compare what's left with the original.
     check = json.loads(new_text)
+    for name, value in values.items():
+        if name not in check or json.dumps(check[name]) != json.dumps(value):
+            result.reason = "a check of the planned change failed (a new value did not read back)"
+            return result
+        if before[name] is ABSENT:
+            del check[name]
+        else:
+            check[name] = before[name]
     for keys, entries in additions:
         if not entries:
             continue

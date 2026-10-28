@@ -1,6 +1,6 @@
 # 0036: New items
 
-**Built:** yes, except: recommended settings, which aren't built.
+**Built:** yes.
 
 **Decision:** an update or a sync can bring new items: a dev-home-toolkit skill or recommended
 setting, a personal skill made on another PC, or a Claude Code folder or Codex home setup hasn't
@@ -25,7 +25,13 @@ recommended setting is asked in plain words).
 - A new recommended setting gets a `NEW` line on every sync until it's answered, where one answer
   covers a batch, with the shared prompt's choices, in chat or at the next run of setup by hand,
   whichever comes first. It's asked in plain words, and nothing is written without a yes
-  ([0032: Recommended settings](0032-recommended-settings.md)).
+  ([0032: Recommended settings](0032-recommended-settings.md)). The one line covers every Claude
+  Code folder set up, with how many wait in each, and the answers, as the line for a folder
+  does: "Setup has no answer yet about 3 settings dev-home-toolkit recommends for Claude Code in
+  ~/.claude, and 1 in ~/.claude-work, so it leaves them as they are. Answer with /dev-home
+  configure: all recommended, none, each, or remind me in N days. Or run setup.py in a terminal,
+  and it asks." (the developer's choice of wording, 2026-10-28, over a line without the answers
+  and one naming each setting).
 - A `NEW` line never sets the exit code. The skills pass `NEW` and `UPDATE` lines on with one
   bullet, worded the same in every skill, which `LARGE` lines share
   ([0065: Where end users' rules live](0065-where-end-users-rules-live.md)): "`UPDATE`, `NEW`, and

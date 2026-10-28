@@ -1,8 +1,6 @@
 # 0032: Recommended settings
 
-**Built:** yes, except: the offers and their answers, with what the settings menu and
-`/dev-home configure` show. Built so far: the list, and keeping only the last copy of a
-recommended setting written more than once.
+**Built:** yes.
 
 **Decision:** setup offers settings that dev-home-toolkit recommends for the agents, from a list in
 `templates/recommended-settings/recommended-settings.json`. Each entry has an id that is never
@@ -16,13 +14,18 @@ when each interactive session starts, so the session can be picked up from claud
 Claude app.
 
 - Setup offers one for each Claude folder set up whose `settings.json` doesn't already have the
-  recommended value: the setting is missing, or set to something else.
-- Each offer asks in plain words, with no diff, saying what the value there now does and what
-  the recommended value would change, fitted to what's there. For `attribution-off`: when it's
-  missing, commits get a co-author line, pull requests get "Generated with Claude Code", and
+  recommended value: the setting is missing, or set to something else. It offers none in a
+  folder whose `settings.json` it won't rewrite, such as one with comments, since a yes couldn't
+  be written there.
+- Each offer asks in plain words, with no diff, in columns: the setting, by its key in
+  `settings.json`; its value now, with what that value means; and the recommended value, with
+  what it does and why. Each text that says what a value means starts with whether the feature is
+  on or off, and the list has one for a missing setting, one for an older form, and one for any
+  other value someone chose (`whenOther`). For `attribution-off`: when it's missing, attribution
+  is on, so commits get a co-author line, pull requests get "Generated with Claude Code", and
   cloud and Remote Control sessions add a link to the session; the older form with empty
-  `commit` and `pr` hides the first two but not the link; and text the person wrote would be
-  removed, which the offer says, so someone keeping it can answer no.
+  `commit` and `pr` is partly off, hiding the first two but not the link; and text the person
+  wrote shows as its value, which a yes replaces, so someone keeping it can answer no.
 - The `remote-control-at-startup` offer is the same in every folder, since setup can't see the
   plan or the organization's switch it depends on. Its words say what it needs: a claude.ai
   sign-in on a Pro, Max, Team, or Enterprise plan, where on Team and Enterprise an Owner must
@@ -62,13 +65,26 @@ Claude app.
   setting together with the lines the folder needs, which take no yes of their own, since the
   folder's yes approved them
   ([0053: What a folder's yes approves](0053-what-a-folders-yes-approves.md)): one write, with
-  one backup of the file, and a `SET` line naming the file and each setting.
+  one backup of the file, and a `SET` line naming the file and each setting. It judges the value
+  on the same read of the file that the write plans on. A setting it leaves out, or can't write,
+  gets a `NEW` line, and any answer the yes replaced goes too, so its offer really waits again.
+  When the work can't read this PC's settings again, it writes no yes, since its answer couldn't
+  be saved.
   `setup.py --what-if` still shows the diff, for anyone who wants the exact change.
+- A sync names the folders whose recommended settings wait for an answer in one `NEW` line, with
+  how many in each ([0036: New items](0036-new-items.md)). To find out, it reads a folder's
+  `settings.json`, and `.claude.json` where that counts, only while one there has no yes or no,
+  and no reminder before its date: about 1 ms a folder on the developer's PC (2026-10-28), and
+  nothing once every one there is answered.
+- The settings menu has one row for them, counting each folder's answers, which goes through
+  each setting in each folder set up, in the offer's columns, with the answer. A yes whose value
+  changed since is asked whether to set it again, with Enter keeping it as it is.
 
-Changed on 2026-10-15, by the developer on 2026-10-19 (Remote Control at startup), and by the
+Changed on 2026-10-15, by the developer on 2026-10-19 (Remote Control at startup), by the
 developer on 2026-10-24 (plain words in place of a diff, what Enter picks, the Remote Control
 offer's words, keeping only the last copy of a setting written more than once, and no question
-about a change made after a yes).
+about a change made after a yes), and by the developer on 2026-10-28 (each value shown, with what
+it means, in columns; the menu's one row).
 
 **Why:** these settings suit most people, but each changes the person's own file, so each needs
 their yes on each PC. Codex has neither of the first two: its commit and pull request attribution
@@ -100,6 +116,11 @@ first setup's one Enter ([0033: Prompts for optional lists](0033-prompts-for-opt
 into reading JSON, and cost tokens in chat. The backup, the `SET` line, and `--what-if` show the
 exact change to anyone who wants it. Enter changes what's missing or broken, and keeps a value
 the person chose, so a hurried Enter never undoes a choice, while each offer still comes up once.
+
+The values go in a column of their own, each with what it means, because a sentence describing
+what a setting does didn't say whether it was on or off now (the developer, 2026-10-28). The menu
+gets one row, like the row for Claude Code folders, rather than a submenu ahead of the Skills
+submenu (the developer's choice, 2026-10-28).
 
 **Options set aside:**
 
@@ -153,6 +174,13 @@ the person chose, so a hurried Enter never undoes a choice, while each offer sti
     made, and a hurried Enter could undo `/config`'s "default" for Remote Control.
   - Asking again only when the setting went missing: `/config`'s "default" deletes the key on
     purpose, so that choice would come back as a question.
+- For how an offer reads (2026-10-28): a sentence of what the agent does now, with the
+  recommended value in a sentence of its own ("A yes sets attribution to false"), which never
+  said whether the setting was on or off; and two paragraphs starting "Now:" and "Recommended:",
+  each a sentence with the value in it, which the developer passed over for values in a column.
+- For the settings menu (2026-10-28): a submenu with a numbered row for each folder and setting,
+  which would build a submenu ahead of the design of the menu's Skills section
+  ([0026: setup.py --configure](0026-setup-py-configure.md)).
 
 **Look again if:** Codex gains a local setting for attribution or a survey, Claude Code's
 settings start syncing between machines, or Claude Code lets a program see whether Remote Control

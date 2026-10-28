@@ -5,7 +5,8 @@ in dev-home"). docs/development/testing.md says when a list changes.
 Each list is a file in layout-lists/, one for each file and layout version, such as
 local-settings-json-1.txt for local-settings.json with schemaVersion 1. It holds one key path to a
 line, from the file's top, joined with dots, with each made-up name as a placeholder: <folder> for
-an agent's folder, <skill> and <preference> for a skill and its preferences, and <setting> for a
+an agent's folder, <recommended> for the id of a recommended setting answered for one, <skill> and
+<preference> for a skill and its preferences, and <setting> for a
 setting declared in internal/shared/setting-definitions.json, whose whole path it stands for. A
 declared setting is left out by name because its declaration, and formerNames, already handle one
 being added, renamed, or removed. A saved state, such as {"$state": "remind", "on": "2030-01-15"},
@@ -52,6 +53,7 @@ PARTS = (
         "local-settings-json",
         {
             ("claudeCode", "folders"): "<folder>",
+            ("claudeCode", "folders", "<folder>", "recommendedSettings"): "<recommended>",
             ("codex", "homes"): "<folder>",
             ("skills",): "<skill>",
             ("skills", "<skill>", "preferences"): "<preference>",

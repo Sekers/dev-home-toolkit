@@ -1,7 +1,7 @@
 # 0033: Prompts for optional lists
 
-**Built:** yes, except: the lists of recommended settings and of skills, which aren't built.
-Claude Code folders are asked through it.
+**Built:** yes, except: the list of skills, which isn't built. Claude Code folders and recommended
+settings are asked through it.
 
 **Decision:** every list of optional items setup offers, recommended settings and skills now and
 later lists such as built-in rules, is asked with one prompt: **All**, **All recommended** (the
@@ -18,9 +18,14 @@ of days. A list of one asks those for its item. Setup says back the date a numbe
 each list's own; for a folder, see [0049: Answers in the settings](0049-answers-in-the-settings.md). In the settings
 menu, the question about an item that has a reminder offers no skip: Enter keeps the reminder
 there, which is what saying nothing does. The prompt covers only the items not answered yet, and
-chat offers the same answers. Changed on 2026-10-20, with skip and the reminders that
-[0040: Answers to offers](0040-answers-to-offers.md) set out, and by the developer on 2026-10-24
-(a recommended setting's default depends on the file).
+chat offers the same answers. A list may show rows about each item under its name, such as a
+recommended setting's value now, in a column of their own, and may name its own marks for an
+item that's recommended or not: the recommended settings' list marks one with a value someone
+chose as "your own value, which Enter keeps", since every item in it is a recommended setting.
+Changed on 2026-10-20, with skip and the reminders that
+[0040: Answers to offers](0040-answers-to-offers.md) set out, by the developer on 2026-10-24 (a
+recommended setting's default depends on the file), and on 2026-10-28 (rows and marks of a list's
+own).
 
 **Why:** one prompt to learn, however long the lists grow, and each new list costs only its
 catalog. Someone in a hurry presses Enter, and someone careful goes through each. With every

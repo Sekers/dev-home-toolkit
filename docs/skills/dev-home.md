@@ -22,11 +22,17 @@ skill itself: [`SKILL.md`](../../templates/skills/dev-home/SKILL.md).
   `local-settings.json`.
 - **What setup is waiting on your answer for comes first:** rules it set aside from an agent's
   rules file (see [Your rules](../guide/your-rules.md#lines-in-those-files-that-setup-didnt-write)),
-  and an edit to your dev-home's `AGENTS.md` or `CLAUDE.md` that the Recycle Bin couldn't take.
-  The agent asks about each one at a time: it shows it to you, says which of its lines your rules
-  already have, and recommends an answer. Your answer is the go-ahead, so the agent runs it with
-  no second question, and setup commits and pushes an answer about rules. Setup acts on it only
-  while the file is still what you were shown.
+  an edit to your dev-home's `AGENTS.md` or `CLAUDE.md` that the Recycle Bin couldn't take, and
+  the settings dev-home-toolkit recommends for a Claude Code folder that you haven't answered yet
+  (see [What setup changes](../reference/setup-changes.md)). The agent asks about each one at a
+  time: it shows it to you, says which of its lines your rules already have, for rules, and
+  recommends an answer. For recommended settings, that's all recommended, none, each, or remind
+  me in N days. Your answer is the go-ahead, so the agent runs it with no second question, and
+  setup commits and pushes an answer about rules. Setup acts on it only while the file, or the
+  setting, is still what you were shown.
+- **A recommended setting you've answered** isn't asked about again. If you change one later in
+  Claude Code's `/config`, setup leaves it as you set it, and `/dev-home configure` shows the
+  value now beside your answer: ask it to set the setting again, or change your answer to no.
 - **A Claude Code folder or Codex home setup has no answer for** is left as it is, and a `NEW`
   line names it on every sync until you answer: set it up, no, or remind me in N days, such as
   `/dev-home configure remind me about ~/.claude-second in a week`. Setup works out the date, and

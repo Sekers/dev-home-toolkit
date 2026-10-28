@@ -194,7 +194,7 @@ import re
 import stat
 import subprocess
 import textwrap
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -225,7 +225,18 @@ from .paths import (
     unsafe_reason,
 )
 from .programs import SYNC_HOLDS_LOCK, by_hand, find_program
-from .recommended_settings import keys_for
+from .recommended_settings import (
+    DONE,
+    OLDER,
+    Current,
+    RecommendedSetting,
+    for_agent,
+    keys_for,
+    offer_text,
+    state_of,
+)
+from .recommended_settings import MISSING as MISSING_VALUE
+from .recommended_settings import shown as json_text
 from .settings import (
     ADDED_TO_AGENTS,
     AUTO_UPDATE,
@@ -263,8 +274,10 @@ from .settings import (
     order_folders,
     put,
     put_folder_state,
+    put_recommended,
     read_dev_home_settings,
     read_value,
+    recommended_answers,
     same_apart_from_order,
     saved_answer,
     saved_skill_path,
@@ -354,7 +367,9 @@ class CannotGoOnError(Exception):
 class SettingsChange:
     """A change one of the agents' settings files needs: what it's for, the file, what the file
     needs, the plan, what to change by hand where setup can't make it, and what the change does,
-    as the line saying it's made puts it, such as "added dev-home to writable_roots"."""
+    as the line saying it's made puts it, such as "added dev-home to writable_roots". recommended
+    is the id of each recommended setting it writes, a person's yes, which is saved once the
+    change is."""
 
     subject: str
     path: Path
@@ -363,6 +378,7 @@ class SettingsChange:
     how_to: str
     snippet: str
     done: str
+    recommended: tuple[str, ...] = ()
 
 
 # What a check of one settings file found: a line to report as it is, or a change it needs.
@@ -539,6 +555,71 @@ class Waiting:
     guidance: list[Guidance]
 
 
+@dataclass(frozen=True)
+class RecommendedOffer:
+    """A recommended setting in a Claude Code folder set up (decision 0032): the folder, by its
+    full path; its entry in this PC's settings, as written; the setting; what the folder has now;
+    and its answer, if any: yes, no, or a reminder, as saved, or a yes this run has given, which
+    pending marks, since the work writes and saves it later."""
+
+    folder: Path
+    entry: str
+    setting: RecommendedSetting
+    current: Current
+    answer: bool | Reminder | None = None
+    pending: bool = False
+
+    @property
+    def state(self) -> str:
+        """What the folder's value is: the recommended one, missing, an older form, or another
+        (see recommended_settings.state_of)."""
+        return state_of(self.setting.agents[CLAUDE_CODE.group], self.current)
+
+    @property
+    def recommended(self) -> bool:
+        """Whether a yes is what dev-home-toolkit recommends for this folder, which Enter gives:
+        where the setting is missing or in an older form, and not where someone chose another
+        value, which Enter keeps."""
+        return self.state in (MISSING_VALUE, OLDER)
+
+    def waiting(self, today: date) -> bool:
+        """Whether it waits for an answer: it has no yes or no, and no reminder before its date,
+        and the folder's value isn't the recommended one already."""
+        return self.state != DONE and not answered_for_now(self.answer, today)
+
+    @property
+    def about(self) -> tuple[console.Row, ...]:
+        """What the offer says about it, fitted to what the folder has now."""
+        rows = offer_text(self.setting, CLAUDE_CODE.group, self.current, "settings.json")
+        return tuple(console.Row(*row) for row in rows)
+
+    @property
+    def question(self) -> str:
+        return f"{self.setting.summary}?"
+
+    @property
+    def answer_text(self) -> str:
+        """Its answer as the settings menu and the list for an agent show it."""
+        if self.pending:
+            return "yes, which setup writes once its questions are done"
+        if self.answer is True:
+            return "yes" if self.state == DONE else "yes, but the value changed since"
+        if self.answer is False:
+            return "no"
+        if isinstance(self.answer, Reminder):
+            on = self.answer.on
+            return f"remind me on {on.isoformat()}" if on else "remind me"
+        if self.state == DONE:
+            return "none needed: it has the recommended value"
+        return "not answered yet"
+
+    @property
+    def fingerprint(self) -> str:
+        """What a yes to it through --configure carries, so setup writes it only while the folder
+        has what the person saw (decision 0038)."""
+        return configure.fingerprint(self.current.described.encode("utf-8"))
+
+
 def cleanup(checked: Checked) -> list[str]:
     """What check_settings removed and moved, a sentence for each, for the line that says so."""
     sentences = []
@@ -618,6 +699,19 @@ class Setup:
         # Where a person chose at this run's questions that lines setup didn't write go, by the
         # path of the agent's rules file or of the file in unanswered/ (see ask_about_rules).
         self.rules_choices: dict[str, RulesChoice] = {}
+        # Each yes to a recommended setting in this run, by the Claude Code folder's full path and
+        # the setting's id, with what the folder had when the person answered. The work writes it
+        # only while the folder still has that, then saves the yes (see save_recommended).
+        self.recommended_yes: dict[tuple[str, str], Current] = {}
+        # Each such yes whose folder has the recommended value by the work, so it's saved with no
+        # write; and each the work leaves out, whose answer goes, so its offer comes back; by the
+        # folder's full path and the setting's id.
+        self.recommended_already: list[tuple[Path, str]] = []
+        self.recommended_left_out: list[tuple[Path, str]] = []
+        # Set once this run's save backs up this PC's settings, so a later save in the run
+        # doesn't back them up again; and when the save couldn't be made, so no later one is.
+        self.settings_backed_up = False
+        self.save_failed = False
 
     # Talking to the person
 
@@ -650,12 +744,17 @@ class Setup:
         return console.choose(question, default) if self.can_ask else None
 
     def choose_from_list(
-        self, intro: str, question: str, items: Sequence[console.ListItem], details: str = ""
+        self,
+        intro: str,
+        question: str,
+        items: Sequence[console.ListItem],
+        details: str = "",
+        marks: tuple[str, str] = console.MARKS,
     ) -> console.ListAnswer | None:
         """The shared prompt for every list of optional items, or None without a console."""
         if not self.can_ask:
             return None
-        return console.choose_from_list(intro, question, items, details)
+        return console.choose_from_list(intro, question, items, details, marks)
 
     def choose_offer(
         self, question: str, recommended: bool, reminder: Reminder | None = None
@@ -865,6 +964,7 @@ class Setup:
             return False
         if settled.problem:
             self.status("PROBLEM", settled.problem)
+            self.save_failed = True
             return False
         backup = changed and (self.changed_by_hand or self.assigned or bool(changes.removed))
         text = local_settings_text(settled.settings)
@@ -872,7 +972,9 @@ class Setup:
             kept = write_settings_file(SETTINGS_PATH, text, bom=False, backup=backup)
         except OSError as error:
             self.status("PROBLEM", f"Could not save this PC's settings in {SETTINGS_PATH}. {error}")
+            self.save_failed = True
             return False
+        self.settings_backed_up = bool(kept)
         if changed:
             notes = "".join(f". {sentence}" for sentence in cleanup(changes))
             if backup:
@@ -1190,6 +1292,280 @@ class Setup:
         return any(
             same_path(resolve_home(entry, self.home), folder) for entry in entries if entry.strip()
         )
+
+    # Recommended settings, in each Claude Code folder set up (decision 0032)
+
+    def older_place_file(self, claude_dir: Path, place: str) -> Path:
+        """The file older versions of Claude Code kept a setting in, for a Claude Code folder, by
+        its name, such as .claude.json: in the profile folder for ~/.claude, and inside the
+        folder for any other."""
+        if same_path(claude_dir, self.home / CLAUDE_CODE.default):
+            return self.home / place
+        return claude_dir / place
+
+    def current_values(
+        self,
+        claude_dir: Path,
+        ids: Collection[str] | None = None,
+        file: SettingsFile | None = None,
+    ) -> tuple[dict[str, Current], str]:
+        """Each recommended setting as a Claude Code folder has it now, by its id, or only those
+        in ids: from its settings.json, as file has it when the caller read it already, or where
+        that has none and the setting has an older place, from there, which Claude Code uses
+        only then. None, with why, when setup won't rewrite the settings.json, so a yes couldn't
+        be written."""
+        if file is None:
+            file = claude_settings.read_file(claude_dir / "settings.json")
+        data, reason = claude_settings.settings_object(file)
+        if data is None:
+            return {}, reason
+        found: dict[str, Current] = {}
+        older: dict[str, dict[str, Any] | None] = {}
+        for entry in for_agent(CLAUDE_CODE.group):
+            if ids is not None and entry.id not in ids:
+                continue
+            form = entry.agents[CLAUDE_CODE.group]
+            if form.key in data:
+                found[entry.id] = Current("settings.json", data[form.key])
+                continue
+            if form.older_place:
+                if form.older_place not in older:
+                    place = self.older_place_file(claude_dir, form.older_place)
+                    older[form.older_place] = read_json_object(place)
+                kept = older[form.older_place]
+                if kept is not None and form.key in kept:
+                    found[entry.id] = Current(form.older_place, kept[form.key])
+                    continue
+            found[entry.id] = Current()
+        return found, ""
+
+    def recommended_in(
+        self, settings: LocalSettings, entry: str, folder: Path
+    ) -> tuple[list[RecommendedOffer], str]:
+        """Every recommended setting in one Claude Code folder, by its entry and full path, with
+        what the folder has now and its answer: the one saved, or a yes this run has given, which
+        the work writes. None, with why, when setup won't rewrite the folder's settings.json."""
+        current, reason = self.current_values(folder)
+        if reason:
+            return [], reason
+        return self.offers_of(settings, entry, folder, current), ""
+
+    def offers_of(
+        self, settings: LocalSettings, entry: str, folder: Path, current: Mapping[str, Current]
+    ) -> list[RecommendedOffer]:
+        """Each recommended setting in current, what one Claude Code folder has now, by id, with
+        its answer: the one saved in the folder's entry, or a yes this run has given."""
+        answers = recommended_answers(get(settings.data, CLAUDE_CODE.setting), entry)
+        offers = []
+        for setting in for_agent(CLAUDE_CODE.group):
+            if setting.id not in current:
+                continue
+            pending = (yes_key(folder), setting.id) in self.recommended_yes
+            answer = True if pending else answers.get(setting.id)
+            offers.append(
+                RecommendedOffer(folder, entry, setting, current[setting.id], answer, pending)
+            )
+        return offers
+
+    def recommended_offers(
+        self, settings: LocalSettings
+    ) -> list[tuple[str, Path, list[RecommendedOffer]]]:
+        """For each Claude Code folder set up that's there, by its entry and full path, the
+        recommended settings that wait for an answer there (see RecommendedOffer.waiting). None
+        where setup won't rewrite the folder's settings.json, since a yes couldn't be written."""
+        today = date.today()
+        found: list[tuple[str, Path, list[RecommendedOffer]]] = []
+        for entry, full in self.folders_answered(CLAUDE_CODE, settings, True):
+            # Only one with no yes or no, and no reminder before its date, can wait, so once
+            # none can, every sync after that reads none of the folder's files, and none but
+            # those is read for.
+            answers = recommended_answers(get(settings.data, CLAUDE_CODE.setting), entry)
+            open_ids = [
+                setting.id
+                for setting in for_agent(CLAUDE_CODE.group)
+                if not answered_for_now(answers.get(setting.id), today)
+                and (yes_key(full), setting.id) not in self.recommended_yes
+            ]
+            if not open_ids:
+                continue
+            current, _ = self.current_values(Path(full), open_ids)
+            offers = self.offers_of(settings, entry, Path(full), current)
+            waiting = [offer for offer in offers if offer.waiting(today)]
+            if waiting:
+                found.append((entry, Path(full), waiting))
+        return found
+
+    def ask_about_recommended(self, settings: LocalSettings) -> None:
+        """Offers the recommended settings with no answer yet, or a reminder that's due, in each
+        Claude Code folder set up: at a console, in the shared prompt for optional lists, one list
+        for each folder, each setting described in plain words, fitted to what the folder has
+        now. A quiet run, or one where no answer came, names the folders in a NEW line instead."""
+        offers = self.recommended_offers(settings)
+        if not offers:
+            return
+        unanswered: list[tuple[str, int]] = []
+        for entry, folder, items in offers:
+            answer = self.choose_recommended(folder, items) if self.can_ask else None
+            if answer is None:
+                unanswered.append((entry, len(items)))
+            else:
+                self.answer_recommended(settings, items, answer.answers)
+        if unanswered:
+            self.status("NEW", recommended_new_text(unanswered))
+
+    def choose_recommended(
+        self, folder: Path, offers: Sequence[RecommendedOffer]
+    ) -> console.ListAnswer | None:
+        """The answer to one folder's list of recommended settings, by each setting's summary,
+        after the list, each with what a yes changes there. A list of one asks its question alone,
+        so its folder and what a yes changes come first."""
+        items = [
+            console.ListItem(offer.setting.summary, offer.recommended, offer.question, offer.about)
+            for offer in offers
+        ]
+        intro = f"Settings dev-home-toolkit recommends for Claude Code in {folder}:"
+        self.line()
+        if len(items) == 1:
+            self.line(intro)
+            self.line()
+            console.show_items(items, RECOMMENDED_MARKS)
+            self.line()
+            return self.choose_from_list("", "", items)
+        return self.choose_from_list(
+            intro, "Make these changes in its settings.json?", items, marks=RECOMMENDED_MARKS
+        )
+
+    def answer_recommended(
+        self,
+        settings: LocalSettings,
+        offers: Sequence[RecommendedOffer],
+        answers: Mapping[str, console.OfferAnswer],
+    ) -> None:
+        """Keeps a person's answers to a folder's recommended settings, by each one's summary: a
+        no or a reminder in the folder's entry, and skip ending a reminder that's due, so it's
+        unanswered again. A yes waits for the work, which saves it once its change is written
+        (see recommended_yes). KEEP changes nothing."""
+        for offer in offers:
+            answer = answers.get(offer.setting.summary, console.KEEP)
+            if answer is True:
+                self.recommended_yes[(yes_key(offer.folder), offer.setting.id)] = offer.current
+            elif answer is False:
+                put_recommended(
+                    settings.data, CLAUDE_CODE.setting, offer.entry, offer.setting.id, False
+                )
+            elif isinstance(answer, console.RemindIn):
+                put_recommended(
+                    settings.data,
+                    CLAUDE_CODE.setting,
+                    offer.entry,
+                    offer.setting.id,
+                    Reminder(answer.on),
+                )
+            elif answer == console.SKIP and isinstance(offer.answer, Reminder):
+                put_recommended(
+                    settings.data, CLAUDE_CODE.setting, offer.entry, offer.setting.id, None
+                )
+
+    def recommended_to_write(
+        self, claude_dir: Path, file: SettingsFile | None
+    ) -> tuple[dict[str, Any], list[str], list[str], list[str], str]:
+        """What the work does with this run's yeses to recommended settings in one Claude Code
+        folder (see recommended_yes), from what the folder has now, with its settings.json as
+        file has it, the read the write plans on: the values to write, by key, with each one's
+        id; the ids whose folder has the recommended value already, so the yes is saved with no
+        write; the id of each the work leaves out, since the folder's value changed after the
+        person answered, or setup won't rewrite its settings.json any more; and then why not, or
+        "" for none."""
+        wanted = self.yeses_in(claude_dir)
+        if not wanted:
+            return {}, [], [], [], ""
+        current, reason = self.current_values(claude_dir, list(wanted), file)
+        values: dict[str, Any] = {}
+        ids: list[str] = []
+        already: list[str] = []
+        left: list[str] = []
+        for setting in for_agent(CLAUDE_CODE.group):
+            if setting.id not in wanted:
+                continue
+            form = setting.agents[CLAUDE_CODE.group]
+            now = current.get(setting.id)
+            if now is None or now.described != wanted[setting.id].described:
+                left.append(setting.id)
+            elif state_of(form, now) == DONE:
+                already.append(setting.id)
+            else:
+                values[form.key] = form.value
+                ids.append(setting.id)
+        return values, ids, already, left, reason
+
+    def yeses_in(self, claude_dir: Path) -> dict[str, Current]:
+        """This run's yeses to recommended settings in one Claude Code folder, by each setting's
+        id, with what the folder had when the person answered."""
+        key = yes_key(claude_dir)
+        return {
+            setting_id: offered
+            for (folder, setting_id), offered in self.recommended_yes.items()
+            if folder == key
+        }
+
+    def leave_out(self, claude_dir: Path, ids: Sequence[str], why: str) -> None:
+        """Leaves out of the work each of this run's yeses to recommended settings in a Claude
+        Code folder that it can't write, saying why, so its offer comes back: any answer the
+        folder had for it goes too (see save_recommended), since the yes replaced it."""
+        if not ids:
+            return
+        self.recommended_left_out += [(claude_dir, setting_id) for setting_id in ids]
+        keys = [
+            setting.agents[CLAUDE_CODE.group].key
+            for setting in for_agent(CLAUDE_CODE.group)
+            if setting.id in ids
+        ]
+        one = len(keys) == 1
+        self.status(
+            "NEW",
+            f"Claude Code settings in {claude_dir.name}: left {and_list(keys)} as "
+            f"{'it is' if one else 'they are'} in {claude_dir / 'settings.json'}, since {why}. "
+            "Setup asks again.",
+        )
+
+    def save_recommended(self, settled: Settled, written: Sequence[tuple[Path, str]]) -> None:
+        """Saves each yes to a recommended setting whose change the work wrote, by its Claude Code
+        folder's full path and the setting's id, and takes out any answer for one the work left
+        out, so its offer comes back, in this PC's settings as the work saved them, while it still
+        holds the sync's lock. It backs the file up as the save does, unless this run backed it up
+        already. Nothing when the save couldn't be made, or the file couldn't be read again."""
+        if self.save_failed or settled.problem:
+            return
+        data = settled.settings.data
+        before = local_settings_text(settled.settings)
+        yeses: list[tuple[str, str]] = []
+        for folder, setting_id in written:
+            entry = self.entry_for(CLAUDE_CODE, settled.settings, folder)
+            put_recommended(data, CLAUDE_CODE.setting, entry, setting_id, True)
+            if (entry, setting_id) not in yeses:
+                yeses.append((entry, setting_id))
+        for folder, setting_id in self.recommended_left_out:
+            entry = self.entry_for(CLAUDE_CODE, settled.settings, folder)
+            put_recommended(data, CLAUDE_CODE.setting, entry, setting_id, None)
+        text = local_settings_text(settled.settings)
+        if text == before:
+            return
+        names = yes_names(yeses)
+        if not self.should(SETTINGS_PATH, f"Save the yes to {names}" if yeses else "Save it"):
+            return
+        backup = (self.changed_by_hand or self.assigned) and not self.settings_backed_up
+        try:
+            kept = write_settings_file(SETTINGS_PATH, text, bom=False, backup=backup)
+        except OSError as error:
+            about = f"your yes to {names}" if yeses else "this PC's settings"
+            self.status(
+                "PROBLEM",
+                f"Could not save {about} in {SETTINGS_PATH}, so setup asks again. {error}",
+            )
+            return
+        saved = f". Backup of the old file: {kept}" if kept else ""
+        with_yes = f", with your yes to {names}" if yeses else ""
+        self.status("SET", f"This PC's settings: {SETTINGS_PATH}{with_yes}{saved}")
 
     # Generated files
 
@@ -2784,10 +3160,11 @@ class Setup:
             self.line("          " + change.plan.note)
         self.print_diff(change.plan.file.text, change.plan.new_text or "")
 
-    def repair_setting(self, change: SettingsChange) -> None:
+    def repair_setting(self, change: SettingsChange) -> bool:
         """Makes a settings change a folder needs, or one answered no needs, and writes the file
         with a backup, saying so. When the change can't be made safely, it reports a problem and
-        leaves the file alone, and, except with --quiet, says what to change by hand."""
+        leaves the file alone, and, except with --quiet, says what to change by hand. Returns
+        whether it wrote the change."""
         plan = change.plan
         problem = f"{change.subject}: {change.path} needs {change.need}."
         if plan.reason:
@@ -2797,17 +3174,17 @@ class Setup:
                     f"{problem} Setup won't change this file itself: {plan.reason}. Run "
                     f"{by_hand('setup.py')} in a terminal to see what to change by hand.",
                 )
-                return
+                return False
             self.status("PROBLEM", problem)
             self.line(f"          Setup won't change this file itself: {plan.reason}.")
             self.line("          " + change.how_to)
             if change.snippet:
                 self.line(change.snippet, YELLOW)
-            return
+            return False
         if self.what_if:
             self.show_setting(change)
             self.should(change.path, "Change the lines shown, and keep a backup")
-            return
+            return False
         try:
             now = read_settings_file(change.path)
             if now.reason or now.text != plan.file.text:
@@ -2822,6 +3199,8 @@ class Setup:
             self.status("SET", f"{change.subject}: {change.done} in {change.path}{saved}")
         except (OSError, ValueError) as error:
             self.status("PROBLEM", f"{change.subject}: could not write {change.path}. {error}")
+            return False
+        return True
 
     # The run, in order: where things are; dev-home; the questions not answered yet; at a
     # console, the settings menu; the change to dev-home.json to confirm; then the work, which
@@ -2887,6 +3266,12 @@ class Setup:
                 raise CannotGoOnError
             settled = self.settle(settings, read, declared)
             saved = self.save(settled)
+            if settled.problem and self.recommended_yes:
+                # A yes to a recommended setting couldn't be saved, so it isn't written either,
+                # and its offer comes back.
+                if not self.save_failed:
+                    self.status("PROBLEM", settled.problem)
+                self.recommended_yes.clear()
             self.codex_doc_bytes = codex_doc_bytes(settled.settings.data)
             for matched in settled.matched.values():
                 if self.what_if:
@@ -2903,13 +3288,25 @@ class Setup:
                 self.status("NEW", told)
             self.set_up(settled.settings, content_root, agent_folders, folders, plans)
             # The agents' settings files: the change each folder set up needs, which its yes
-            # approved, and the access taken back out of each one answered no, which the no
-            # approved, each made with a backup. See repair_setting.
-            for check in self.settings_checks(content_root, agent_folders):
+            # approved, with each recommended setting a person said yes to in this run, and the
+            # access taken back out of each one answered no, which the no approved, each made with
+            # a backup. See repair_setting. Then each such yes whose change is written is saved.
+            checks = self.settings_checks(content_root, agent_folders)
+            # A yes whose folder has the recommended value already needs no write.
+            written: list[tuple[Path, str]] = list(self.recommended_already)
+            for check in checks:
                 if isinstance(check, SettingsChange):
-                    self.repair_setting(check)
+                    # A preview says what it would save too.
+                    shown = self.what_if and not check.plan.reason
+                    if self.repair_setting(check) or shown:
+                        written += [(check.path.parent, done) for done in check.recommended]
+                    elif not self.what_if:
+                        self.leave_out(
+                            check.path.parent, check.recommended, "setup couldn't write the file"
+                        )
                 else:
                     self.status(*check)
+            self.save_recommended(settled, written)
 
     def read_settings(self) -> tuple[LocalSettings, dict[str, Any] | None]:
         """Where things are: dev-home-toolkit's folder, the profile to set up, and this PC's
@@ -3101,6 +3498,7 @@ class Setup:
         for agent in (CLAUDE_CODE, CODEX):
             self.ask_about_folders(agent, settings)
         self.ask_about_copies(settings, content_root, first_setup=first_setup)
+        self.ask_about_recommended(settings)
 
     def ask_about_folders(self, agent: Agent, settings: LocalSettings) -> None:
         """Asks about each of an agent's folders that setup knows of with no answer yet, or a
@@ -3723,11 +4121,25 @@ class Setup:
         """What a Claude Code folder set up needs in its settings.json: dev-home and
         dev-home-toolkit in permissions.additionalDirectories; in a folder other than ~/.claude,
         the patterns in claudeMdExcludes that keep ~/.claude's instructions out of its sessions
-        (see home_claude_excludes); and only the last copy of a recommended setting written more
-        than once, the one Claude Code uses, which changes nothing it does (decision 0032)."""
+        (see home_claude_excludes); only the last copy of a recommended setting written more
+        than once, the one Claude Code uses, which changes nothing it does; and each recommended
+        setting a person said yes to in this run, while the folder still has what they saw
+        (decision 0032), judged on the one read of the file the write plans on. One whose value
+        changed since is left out, with a NEW line saying so, and its offer comes back."""
         claude_name = claude_dir.name
         path = claude_dir / "settings.json"
         wanted_excludes = home_claude_excludes(self.home) if self.guarded(claude_dir) else []
+        file = claude_settings.read_file(path) if self.yeses_in(claude_dir) else None
+        values, ids, already, left, reason = self.recommended_to_write(claude_dir, file)
+        self.recommended_already += [(claude_dir, setting_id) for setting_id in already]
+        one = len(left) == 1
+        self.leave_out(
+            claude_dir,
+            left,
+            f"setup won't change the file now: {reason}"
+            if reason
+            else f"{'it' if one else 'they'} changed after you answered",
+        )
         present: list[str] = []
         excludes: list[str] = []
         twice: list[str] = []
@@ -3748,11 +4160,14 @@ class Setup:
             present = [comparable(resolve_home(folder, self.home)) for folder in folders]
             excludes = claude_settings.listed(text, claude_settings.EXCLUDES) or []
             repeated = claude_settings.repeated_keys(text) or []
-            twice = [key for key in keys_for(CLAUDE_CODE.group) if key in repeated]
+            # One this run sets has one copy afterwards anyway, which its value says.
+            twice = [
+                key for key in keys_for(CLAUDE_CODE.group) if key in repeated and key not in values
+            ]
         missing = [d for d in wanted_dirs if not any(same_path(d, p) for p in present)]
         missing_excludes = [pattern for pattern in wanted_excludes if pattern not in excludes]
         subject = f"Claude Code settings in {claude_name}"
-        if not missing and not missing_excludes and not twice:
+        if not missing and not missing_excludes and not twice and not values:
             kept_out = ", and claudeMdExcludes keeps .claude's out" if wanted_excludes else ""
             return (
                 "OK",
@@ -3760,13 +4175,19 @@ class Setup:
                 f"dev-home-toolkit{kept_out}",
             )
         try:
-            plan = claude_settings.plan(path, missing, missing_excludes)
+            plan = claude_settings.plan(path, missing, missing_excludes, values, file)
         except Exception as error:
             plan = Plan(SettingsFile(), reason=f"planning the change failed ({describe(error)})")
         needs: list[str] = []
         dones: list[str] = []
         merges: list[str] = []
         hows: list[str] = []
+        if values:
+            each = [(key, json_text(value)) for key, value in values.items()]
+            needs.append(and_list([f"{key} set to {value}" for key, value in each]))
+            set_to = and_list([f"{key} to {value}" for key, value in each])
+            dones.append(f"set {set_to}")
+            hows.append(f"Set {set_to}, at the top of the file.")
         if twice:
             needs.append(f"only the last copy of {and_list(twice)}, the one Claude Code uses")
             hows.append(
@@ -3809,9 +4230,16 @@ class Setup:
         if merges:
             how_to = how_to[:-1] + ":"
             snippet = "          {\n" + ",\n".join(merges) + "\n          }"
-        dones.extend(copies_kept(plan.repeated))
+        dones.extend(copies_kept([key for key in plan.repeated if key not in values]))
         return SettingsChange(
-            subject, path, " and ".join(needs), plan, how_to, snippet, ", and ".join(dones)
+            subject,
+            path,
+            " and ".join(needs),
+            plan,
+            how_to,
+            snippet,
+            ", and ".join(dones),
+            tuple(ids),
         )
 
     def check_codex_config(self, home: Path, content_root: str) -> SettingsCheck:
@@ -3965,6 +4393,66 @@ class Setup:
             f"          '{content_root}'",
             "removed dev-home from writable_roots",
         )
+
+
+# How the list of a folder's recommended settings marks each, where only some are recommended
+# there: one where a yes is recommended, and one with a value someone chose, which Enter keeps.
+RECOMMENDED_MARKS = ("recommended", "your own value, which Enter keeps")
+
+
+def recommended_new_text(waiting: Sequence[tuple[str, int]]) -> str:
+    """The NEW line naming each Claude Code folder, by its entry, with how many recommended
+    settings wait for an answer there, and how to answer."""
+    counts = [f"{count} in {entry}" for entry, count in waiting]
+    first = waiting[0][1]
+    counts[0] = f"{first} setting{'' if first == 1 else 's'} dev-home-toolkit recommends for " + (
+        f"Claude Code in {waiting[0][0]}"
+    )
+    total = sum(count for _, count in waiting)
+    them = "it as it is" if total == 1 else "them as they are"
+    # A comma before the last even with two, since the first part is long.
+    listed = counts[0] if len(counts) == 1 else ", ".join(counts[:-1]) + ", and " + counts[-1]
+    return (
+        f"Setup has no answer yet about {listed}, so it leaves {them}. Answer with "
+        "/dev-home configure: all recommended, none, each, or remind me in N days. Or run "
+        f"{by_hand('setup.py')} in a terminal, and it asks."
+    )
+
+
+def yes_key(folder: str | Path) -> str:
+    """A Claude Code folder as Setup.recommended_yes keys it: its full path, in one case where
+    the file system ignores case, so it's the same however a person typed it."""
+    return os.path.normcase(comparable(folder))
+
+
+def yes_names(yeses: Sequence[tuple[str, str]]) -> str:
+    """The recommended settings a person said yes to, by each folder's entry and the setting's
+    id, as a line saying they're saved names them: by id alone, for one folder, and otherwise
+    each with its folder."""
+    entries = list(dict.fromkeys(entry for entry, _ in yeses))
+    if len(entries) == 1:
+        return and_list([setting_id for _, setting_id in yeses])
+    return and_list(
+        [
+            f"{and_list([setting_id for each, setting_id in yeses if each == entry])} in {entry}"
+            for entry in entries
+        ]
+    )
+
+
+def answered_for_now(answer: bool | Reminder | None, today: date) -> bool:
+    """Whether an answer to an offer leaves nothing to ask now: a yes, a no, or a reminder before
+    its date."""
+    return isinstance(answer, bool) or (isinstance(answer, Reminder) and not answer.due(today))
+
+
+def read_json_object(path: Path) -> dict[str, Any] | None:
+    """A file's JSON object, or None when it's missing, can't be read, or isn't one."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
 
 
 def copies_kept(repeated: Sequence[str]) -> list[str]:

@@ -41,7 +41,8 @@ and your rules joined, which setup writes again at each sync.
   - `local-settings.json`: this PC's answers to setup's questions: where your dev-home is,
     whether to install updates automatically, which Claude Code folders to set up, and which not
     to, whether to set up Codex, the date to ask again about a folder you're to be reminded of,
-    which skills to add to your agents, and the skills' preferences.
+    your answers to the settings dev-home-toolkit recommends for each Claude Code folder, which
+    skills to add to your agents, and the skills' preferences.
     The scripts read it to find your dev-home.
     Setup removes a setting nothing declares any more, such as one misspelled in a hand edit,
     and says so, after a backup of the file. It never overwrites a file it can't read as JSON,
@@ -65,6 +66,14 @@ and your rules joined, which setup writes again at each sync.
     Code fixes it ([anthropics/claude-code#79233](https://github.com/anthropics/claude-code/issues/79233)).
     The patterns keep them out of that folder's sessions. Your yes to the folder approves them
     too, and every sync puts them back if they go missing.
+  - Each setting dev-home-toolkit recommends that you say yes to for that folder, such as
+    `"attribution": false`, which leaves Claude Code's name out of your commits and pull
+    requests. Setup asks about each one once per folder, in a terminal or through
+    `/dev-home configure`, showing its value now and what that means, and writes your yes in
+    `settings.json`, with a backup, in the same write as the lines above. Once you've answered,
+    it never changes the setting back or asks again, even after you change it in Claude Code's
+    `/config`; `/dev-home configure` shows the value and sets it again on a yes. It doesn't offer
+    them where it won't rewrite `settings.json`, such as one with comments.
   - If `settings.json` has a setting dev-home-toolkit recommends written more than once, such as
     `attribution`, every sync takes out the earlier copies, with a backup. Claude Code uses only
     the last copy, so nothing it does changes. Whenever setup changes the file, any other key
@@ -92,7 +101,7 @@ and your rules joined, which setup writes again at each sync.
   - In a Claude Code folder: its links in `skills\`, its `rules\dev-home-rules.md`, your
     dev-home and dev-home-toolkit folders in `settings.json`'s
     `permissions.additionalDirectories`, and its two patterns in `claudeMdExcludes`, with a
-    backup.
+    backup. Recommended settings you said yes to stay, since they're yours.
   - For Codex: the `AGENTS.md` it wrote in each home, its links in `~\.agents\skills\`, and your
     dev-home in each `config.toml`'s `writable_roots`, with a backup.
     `project_doc_max_bytes` stays, since it gives Codex no access.

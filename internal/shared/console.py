@@ -207,6 +207,29 @@ def choose_offer(question: str, recommended: bool, keep: str = "") -> OfferAnswe
         print(f"Type {letters}, or a number of days, 1 or more.", flush=True)
 
 
+def choose_again(question: str) -> OfferAnswer | None:
+    """The answer about a yes given before, whose change someone has since undone, such as a
+    setting changed back in the agent's own settings: True to make the change again, False for
+    no, or KEEP, which Enter gives, to keep the yes and leave things as they are. None when input
+    ends without an answer."""
+    while True:
+        try:
+            typed = input(
+                f"{question} {key('y')} to set it again, {key('n')}, or Enter to keep it as it "
+                "is [y/n/Enter]: "
+            )
+        except EOFError:
+            return None
+        text = typed.strip().lower()
+        if text in ("y", "yes"):
+            return True
+        if text in ("n", "no"):
+            return False
+        if not text:
+            return KEEP
+        print(f"Type {key('y')} or {key('n')}, or press Enter.", flush=True)
+
+
 # The answers to a list of optional items, as choose_from_list returns them: ALL, RECOMMENDED,
 # NONE, and EACH, then SKIP, and REMIND for a number of days.
 ALL = "all"
@@ -217,13 +240,68 @@ REMIND = "remind"
 
 
 @dataclass(frozen=True)
+class Row:
+    """One labeled row about a list item, such as its current value: the label, such as "Now:",
+    the value beside it, and any paragraphs under the value, such as what it means."""
+
+    label: str
+    value: str
+    paragraphs: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class ListItem:
-    """One optional item: its name in the list, whether dev-home-toolkit recommends it, and its own
-    question, such as "Set up ~/.claude-<name>?", for when the items are asked one at a time."""
+    """One optional item: its name in the list, whether dev-home-toolkit recommends it, its own
+    question, such as "Set up ~/.claude-<name>?", for when the items are asked one at a time, and
+    any rows about it, which the list shows under its name."""
 
     name: str
     recommended: bool
     question: str
+    about: tuple[Row, ...] = ()
+
+
+# How a list where only some items are recommended marks each: recommended, or not.
+MARKS = ("recommended", "not recommended")
+
+
+def show_items(
+    items: Sequence[ListItem],
+    marks: tuple[str, str] = MARKS,
+    among: Sequence[ListItem] | None = None,
+    mark_each: bool = False,
+) -> None:
+    """Each item of a list, set in, by its name: marked, in a list where only some are
+    recommended, or always with mark_each, with marks; and with the rows about it, if any, set
+    in further under it, and a blank line after each item then. A row's label is in a column of
+    its own, with the value beside it and the paragraphs under the value, so values line up down
+    the list. With among, the whole list, items is part of it, shown with its marks and
+    columns."""
+    whole = items if among is None else among
+    every = all(item.recommended for item in whole)
+    some = any(item.recommended for item in whole)
+    width = max(len(item.name) for item in whole)
+    labels = max((len(row.label) for item in whole for row in item.about), default=0) + 2
+    under = " " * (6 + labels)
+    for item in items:
+        if mark_each or (some and not every):
+            note = marks[0] if item.recommended else marks[1]
+            print(f"  {item.name.ljust(width)}    {note}", flush=True)
+        else:
+            print(f"  {item.name}", flush=True)
+        for row in item.about:
+            label = " " * 6 + row.label.ljust(labels)
+            lines = textwrap.wrap(
+                row.value, LINE_WIDTH, initial_indent=label, subsequent_indent=under
+            )
+            for paragraph in row.paragraphs:
+                lines += textwrap.wrap(
+                    paragraph, LINE_WIDTH, initial_indent=under, subsequent_indent=under
+                )
+            for line in lines:
+                print(line, flush=True)
+        if any(other.about for other in items) and item is not items[-1]:
+            print(flush=True)
 
 
 @dataclass(frozen=True)
@@ -238,10 +316,15 @@ class ListAnswer:
 
 
 def choose_from_list(
-    intro: str, question: str, items: Sequence[ListItem], details: str = ""
+    intro: str,
+    question: str,
+    items: Sequence[ListItem],
+    details: str = "",
+    marks: tuple[str, str] = MARKS,
 ) -> ListAnswer | None:
-    """One prompt for a list of optional items, with details, if any, between the list and the
-    question, such as what a yes does: 'a' for all, 'r' for the recommended ones (what
+    """One prompt for a list of optional items, shown as show_items shows them, with marks, then
+    details, if any, between the list and the question, such as what a yes does: 'a' for all,
+    'r' for the recommended ones (what
     Enter gives), 'n' for none, 'e' to ask for each, whose question defaults to that item's
     recommendation, 's' to skip them all for now, or a number of days for a reminder about them
     all. An answer that would do the same as All recommended is left out, and its letter means
@@ -267,13 +350,11 @@ def choose_from_list(
     every = all(item.recommended for item in items)
     some = any(item.recommended for item in items)
     print(intro, flush=True)
-    width = max(len(item.name) for item in items)
-    for item in items:
-        if some and not every:
-            note = "recommended" if item.recommended else "not recommended"
-            print(f"  {item.name.ljust(width)}    {note}", flush=True)
-        else:
-            print(f"  {item.name}", flush=True)
+    if any(item.about for item in items):
+        print(flush=True)
+    show_items(items, marks)
+    if any(item.about for item in items) and not details:
+        print(flush=True)
     if details:
         print(flush=True)
         for line in textwrap.wrap(details, LINE_WIDTH):

@@ -49,7 +49,8 @@ def test_each_list_holds_exactly_what_the_code_writes(
 ) -> None:
     # Each form a key can take, written by the code: a setting and a preference as a plain value
     # and as their default, a skill's answer, a reminder for a Claude Code folder and for Codex,
-    # whose homes share one answer, so its answer goes first, and dev-home.json's own setting.
+    # whose homes share one answer, so its answer goes first, an answer to a recommended setting
+    # and a reminder for one, and dev-home.json's own setting.
     found: dict[tuple[str, object], set[str]] = {}
     seen(box, found)
     second = box.profile / ".claude-second"
@@ -62,6 +63,8 @@ def test_each_list_holds_exactly_what_the_code_writes(
         "skills.handoff.preferences.includeSecurityBugsInIssueOffers=default",
         "skills.knowledge.addedToAgents=true",
         f"claudeCode.folders?={second.as_posix()}@3",
+        "claudeCode.recommendedSettings.feedback-survey-off-=~/.claude",
+        "claudeCode.recommendedSettings.attribution-off?=~/.claude@3",
         "multiMachine=false",
     ]
     for assignment in assignments:

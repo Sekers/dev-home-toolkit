@@ -1,6 +1,6 @@
 # 0034: Runs of setup by hand
 
-**Built:** yes, except: the questions about skills and recommended settings, in steps 2 and 3.
+**Built:** yes, except: the questions about skills, in steps 2 and 3.
 
 **Decision:** every run of `setup.py` at a console goes in this order:
 

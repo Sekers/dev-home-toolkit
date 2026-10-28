@@ -4,10 +4,13 @@
 
 **Decision:** `setup.py --configure` is how people and agents change a setting after the first
 run: `devHome.folder`, `updates.installAutomatically`, `updates.checkEveryHours`,
-`devHome.checkEveryHours`, the answer for each Claude Code folder and for Codex's homes, each
-skill's answer and preferences, and the shared `multiMachine`. It's also where an agent answers
-setup's questions about files. Changed on 2026-10-17, 2026-10-20, and 2026-10-23 (setup's
-questions).
+`devHome.checkEveryHours`, the answer for each Claude Code folder and for Codex's homes, the
+answers to each Claude Code folder's recommended settings, each skill's answer and preferences,
+and the shared `multiMachine`. It's also where an agent answers setup's questions about files,
+and the recommended settings waiting for an answer, which its "Waiting for your answer" section
+lists too ([0038: Recommended settings from chat](0038-recommended-settings-from-chat.md)).
+Changed on 2026-10-17, 2026-10-20, 2026-10-23 (setup's questions), and 2026-10-28 (recommended
+settings).
 
 - At a console, it shows a menu: every setting with its current value, under "This PC" and
   "Shared by every copy of dev-home", in aligned columns, with headings and setup's colors, in

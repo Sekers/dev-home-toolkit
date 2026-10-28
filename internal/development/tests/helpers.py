@@ -34,6 +34,7 @@ from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 
@@ -232,6 +233,18 @@ def write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8", newline="\n")
 
 
+def recommended_values() -> dict[str, Any]:
+    """Each setting dev-home-toolkit recommends for Claude Code, by its key, with the recommended
+    value, as the list in this repo has them."""
+    path = REPO_ROOT / "templates" / "recommended-settings" / "recommended-settings.json"
+    entries = json.loads(path.read_text(encoding="utf-8"))["recommendedSettings"].values()
+    return {
+        entry["claudeCode"]["key"]: entry["claudeCode"]["value"]
+        for entry in entries
+        if "claudeCode" in entry
+    }
+
+
 def new_sandbox(name: str, *, toolkit_repo: bool = False) -> Sandbox:
     """Builds a sandbox. The copy's local-settings.json, with testHomeDir, is written before
     anything in the copy can run. With toolkit_repo, the copy is also a git repo with a remote,
@@ -263,8 +276,11 @@ def new_sandbox(name: str, *, toolkit_repo: bool = False) -> Sandbox:
     write_text(box.toolkit / "local-settings.json", json.dumps(settings, indent=2) + "\n")
 
     # A scratch profile whose settings already have what setup checks for, so a clean run
-    # exits 0.
-    claude = {"permissions": {"additionalDirectories": [str(box.content), str(box.toolkit)]}}
+    # exits 0, and the recommended values, so setup offers nothing there.
+    claude = {
+        "permissions": {"additionalDirectories": [str(box.content), str(box.toolkit)]},
+        **recommended_values(),
+    }
     write_text(box.profile / ".claude" / "settings.json", json.dumps(claude, indent=2) + "\n")
     write_text(
         box.profile / ".codex" / "config.toml",

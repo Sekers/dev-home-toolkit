@@ -31,6 +31,7 @@ from helpers import (
     moved_rules_removed,
     on_this_pc,
     profile_kept,
+    recommended_values,
     remove_link,
     run_python,
     sandbox_for,
@@ -1286,12 +1287,12 @@ def backups_removed(settings: Path) -> Iterator[Path]:
 def test_the_menu_changes_the_setting_picked_and_keeps_a_backup(
     box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    person.answers.update({MENU: ["10", "2", ""], UPDATES: "y"})
+    person.answers.update({MENU: ["11", "2", ""], UPDATES: "y"})
     returned = setup_here(box, "--configure")
     out = capsys.readouterr().out
     assert returned == 0, out
     assert "dev-home-toolkit settings" in out and "Shared by every copy of dev-home" in out, out
-    assert "Type a number from 1 to 9, or 'a', or press Enter to go on." in out, out
+    assert "Type a number from 1 to 10, or 'a', or press Enter to go on." in out, out
     saved = json.loads(backups_removed.read_text(encoding="utf-8"))
     assert saved["updates"]["installAutomatically"] is True, saved
     assert re.search(r"^SET\s+This PC's settings: .* Backup of the old file: ", out, re.M), out
@@ -1568,7 +1569,7 @@ def test_the_menu_keeps_several_copies_unless_the_others_are_retired(
 ) -> None:
     person.answers.update(
         {
-            MENU: ["9", ""],
+            MENU: ["10", ""],
             ELSEWHERE_YES: "n",
             RETIRED: "n",
         }
@@ -1587,7 +1588,7 @@ def test_the_menu_says_when_dev_homes_check_interval_is_used(
     # Picked in multi-PC mode, then again after switching to single-PC mode, which isn't saved.
     person.answers.update(
         {
-            MENU: ["4", "9", "4", ""],
+            MENU: ["4", "10", "4", ""],
             CONTENT_HOURS: ["", ""],
             ELSEWHERE_YES: "n",
             RETIRED: "y",
@@ -2848,3 +2849,295 @@ def test_at_a_console_a_waiting_file_that_cant_be_removed_takes_its_copy_back(
     assert returned == 1 and "Could not remove " in out, out
     assert twins.first.is_file() and twins.second.is_file(), out
     assert not list((box.content / "rules" / "codex" / "mine").glob("moved-*")), out
+
+
+# The settings dev-home-toolkit recommends for Claude Code (decision 0032): one list for each
+# folder set up, each setting's question when asked for each, and the menu's question about a yes
+# whose value changed since.
+RECOMMENDED = r"^Make these changes in its settings\.json\? "
+ATTRIBUTION = r"^Leave Claude Code's name out of your commits and pull requests\? "
+SURVEY = r"^Turn off Claude Code's session quality survey\? "
+REMOTE = r"^Connect Remote Control when each Claude Code session starts\? "
+SET_AGAIN = rf"{ATTRIBUTION}'y' to set it again, 'n', or Enter to keep it as it is \[y/n/Enter\]: $"
+
+
+@pytest.fixture
+def waiting(box: Sandbox, settings: Path) -> Iterator[Path]:
+    """~/.claude's settings.json without the recommended settings, so they wait for an answer.
+    It's put back afterwards, and its backups and local-settings.json's removed."""
+    path = box.profile / ".claude" / "settings.json"
+    before = path.read_bytes()
+    data = json.loads(before)
+    for key in recommended_values():
+        data.pop(key)
+    write_text(path, json.dumps(data, indent=2) + "\n")
+    yield path
+    path.write_bytes(before)
+    for file in (path, settings):
+        for backup in file.parent.glob(file.name + ".bak-*"):
+            backup.unlink()
+
+
+def with_keys(path: Path, **keys: Any) -> None:
+    """Sets keys at the top of a settings file, as JSON."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data.update(keys)
+    write_text(path, json.dumps(data, indent=2) + "\n")
+
+
+def recommended_answers(settings: Path) -> Any:
+    saved = json.loads(settings.read_text(encoding="utf-8"))
+    return saved["claudeCode"]["folders"]["~/.claude"].get("recommendedSettings")
+
+
+def test_a_run_by_hand_offers_the_recommended_settings_and_enter_takes_the_recommended_ones(
+    box: Sandbox,
+    settings: Path,
+    waiting: Path,
+    person: Person,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Each setting shows its value now and what that means, in columns. Enter takes the
+    # recommended ones and keeps a value someone chose, and the work writes them with the lines
+    # the folder needs, in one write, then saves the answers.
+    with_keys(
+        waiting,
+        permissions={"additionalDirectories": [str(box.content)]},
+        attribution={"commit": "", "pr": ""},
+        remoteControlAtStartup=False,
+    )
+    person.answers[RECOMMENDED] = ""
+    backups = set(waiting.parent.glob("settings.json.bak-*"))
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    written = json.loads(waiting.read_text(encoding="utf-8"))
+    assert returned == 0, out
+    hint = r"'a' for all, 'r' for the recommended ones, .*\[a/R/n/e/s/<days>\]: $"
+    assert any(re.search(RECOMMENDED + hint, asked) for asked in person.asked), person.asked
+    intro = f"Settings dev-home-toolkit recommends for Claude Code in {box.profile / '.claude'}:"
+    assert f"\n{intro}\n\n  Leave Claude Code's name" in out, out
+    assert '      Now:          {"commit": "", "pr": ""}, an older form\n' in out, out
+    remote = r"^  Connect Remote Control when each Claude Code session starts\s+your own value"
+    assert re.search(remote + r", which Enter keeps$", out, re.M), out
+    pattern = (
+        r"^SET\s+Claude Code settings in \.claude: set attribution to false and "
+        r"feedbackSurveyRate to 0, and added dev-home-toolkit to permissions\."
+        r"additionalDirectories in .*settings\.json\. Backup of the old file: "
+    )
+    assert re.search(pattern, out, re.M), out
+    assert len(set(waiting.parent.glob("settings.json.bak-*")) - backups) == 1, out
+    assert written["attribution"] is False and written["feedbackSurveyRate"] == 0, written
+    assert written["remoteControlAtStartup"] is False, written
+    assert len(written["permissions"]["additionalDirectories"]) == 2, written
+    assert recommended_answers(settings) == {
+        "attribution-off": True,
+        "feedback-survey-off": True,
+        "remote-control-at-startup": False,
+    }
+    # The menu, after the questions, counts the yeses the work then writes.
+    row = r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 2 yes, 1 no$"
+    assert re.search(row, out, re.M), out
+
+
+def test_each_recommended_setting_can_be_answered_skipped_or_given_a_reminder(
+    box: Sandbox,
+    settings: Path,
+    waiting: Path,
+    person: Person,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    person.answers.update({RECOMMENDED: "e", ATTRIBUTION: "y", SURVEY: "7", REMOTE: "s"})
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert returned == 0, out
+    assert f"Setup asks again from {in_days(7)}." in out, out
+    reminder = {"$state": "remind", "on": in_days(7)}
+    expected = {"attribution-off": True, "feedback-survey-off": reminder}
+    assert recommended_answers(settings) == expected
+    written = json.loads(waiting.read_text(encoding="utf-8"))
+    assert written["attribution"] is False, written
+    assert "feedbackSurveyRate" not in written and "remoteControlAtStartup" not in written, written
+    # Skip saved nothing, so the next run asks about that one alone: its folder and what it is
+    # first, then its own question.
+    person.asked.clear()
+    person.answers = {REMOTE: "n"}
+    setup_here(box)
+    out = capsys.readouterr().out
+    assert [asked for asked in person.asked if re.search(REMOTE, asked)] == [
+        "Connect Remote Control when each Claude Code session starts? 'y', 'n', 's' to skip for "
+        "now, or a number of days until setup asks again [Y/n/s/<days>]: "
+    ], person.asked
+    intro = f"Settings dev-home-toolkit recommends for Claude Code in {box.profile / '.claude'}:"
+    shown = f"{intro}\n\n  Connect Remote Control when each Claude Code session starts\n"
+    assert shown + "      Setting:      remoteControlAtStartup, in settings.json\n" in out, out
+    assert recommended_answers(settings)["remote-control-at-startup"] is False
+
+
+def test_no_answer_to_the_recommended_settings_gives_the_new_line_a_sync_gives(
+    box: Sandbox,
+    settings: Path,
+    waiting: Path,
+    person: Person,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    before = settings.read_bytes(), waiting.read_bytes()
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert returned == 0, out
+    assert any(re.search(RECOMMENDED, asked) for asked in person.asked), person.asked
+    pattern = (
+        r"^NEW\s+Setup has no answer yet about 3 settings dev-home-toolkit recommends for Claude "
+        r"Code in ~/\.claude, so it leaves them as they are\. "
+    )
+    assert re.search(pattern, out, re.M), out
+    assert (settings.read_bytes(), waiting.read_bytes()) == before
+
+
+def test_the_work_leaves_out_a_yes_whose_value_changed_after_the_answer(
+    box: Sandbox,
+    settings: Path,
+    waiting: Path,
+    person: Person,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Such as one switched in Claude Code's /config while setup asked: the work writes only what
+    # the person saw, saves no answer for the rest, and says so, so it's asked again.
+    def yes_while_it_changes(prompt: str) -> str:
+        with_keys(waiting, attribution={"commit": "Changed meanwhile"})
+        return ""
+
+    person.answers[RECOMMENDED] = yes_while_it_changes
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    written = json.loads(waiting.read_text(encoding="utf-8"))
+    assert returned == 0, out
+    pattern = (
+        r"^NEW\s+Claude Code settings in \.claude: left attribution as it is in .*settings\.json, "
+        r"since it changed after you answered\. Setup asks again\.$"
+    )
+    assert re.search(pattern, out, re.M), out
+    assert written["attribution"] == {"commit": "Changed meanwhile"}, written
+    assert written["feedbackSurveyRate"] == 0 and written["remoteControlAtStartup"] is True
+    assert recommended_answers(settings) == {
+        "feedback-survey-off": True,
+        "remote-control-at-startup": True,
+    }
+
+
+def test_the_work_leaves_out_each_yes_in_a_settings_file_it_wont_rewrite_any_more(
+    box: Sandbox,
+    settings: Path,
+    waiting: Path,
+    person: Person,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Such as a comment added by hand while setup asked: setup won't rewrite that file, so it
+    # writes nothing there, saves no answer, and says why.
+    def yes_while_a_comment_goes_in(prompt: str) -> str:
+        text = waiting.read_text(encoding="utf-8")
+        write_text(waiting, text.replace("{", "{\n  // mine", 1))
+        return ""
+
+    person.answers[RECOMMENDED] = yes_while_a_comment_goes_in
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert returned == 0, out
+    pattern = (
+        r"^NEW\s+Claude Code settings in \.claude: left attribution, feedbackSurveyRate, and "
+        r"remoteControlAtStartup as they are in .*settings\.json, since setup won't change the "
+        r"file now: it is not plain JSON .*\. Setup asks again\.$"
+    )
+    assert re.search(pattern, out, re.M), out
+    assert "// mine" in waiting.read_text(encoding="utf-8")
+    assert recommended_answers(settings) is None
+
+
+def test_the_menu_keeps_a_yes_whose_value_changed_at_enter_and_sets_it_again_at_y(
+    box: Sandbox,
+    settings: Path,
+    waiting: Path,
+    person: Person,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Setup never changes it back by itself: the menu shows the value, Enter keeps it as it is,
+    # and only a y writes it again. The two the folder has already aren't asked about.
+    with_keys(
+        waiting,
+        attribution={"commit": "Mine"},
+        feedbackSurveyRate=0,
+        remoteControlAtStartup=True,
+    )
+    saved = json.loads(settings.read_text(encoding="utf-8"))
+    saved["claudeCode"]["folders"]["~/.claude"]["recommendedSettings"] = {"attribution-off": True}
+    write_text(settings, json.dumps(saved, indent=2) + "\n")
+    person.answers.update({MENU: ["9", "", "9", ""], SET_AGAIN: ["", "y"]})
+    kept = setup_here(box)
+    out = capsys.readouterr().out
+    attribution = json.loads(waiting.read_text(encoding="utf-8"))["attribution"]
+    assert kept == 0 and attribution == {"commit": "Mine"}, out
+    row = (
+        r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 1 yes \(1 changed since\), "
+        r"2 already set$"
+    )
+    assert re.search(row, out, re.M), out
+    assert "      Your answer:  yes, but the value changed since\n" in out, out
+    assert "      Now:          true, as recommended\n" in out, out
+    asked = [prompt for prompt in person.asked if not re.search(MENU, prompt)]
+    assert len(asked) == 1 and re.search(SET_AGAIN, asked[0]), person.asked
+    again = setup_here(box)
+    out = capsys.readouterr().out
+    assert again == 0 and json.loads(waiting.read_text(encoding="utf-8"))["attribution"] is False
+    pattern = r"^SET\s+Claude Code settings in \.claude: set attribution to false"
+    assert re.search(pattern, out, re.M), out
+    assert recommended_answers(settings) == {"attribution-off": True}
+
+
+def test_a_yes_that_replaced_a_no_and_is_left_out_takes_the_no_back_so_it_asks_again(
+    box: Sandbox,
+    settings: Path,
+    waiting: Path,
+    person: Person,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # The person's last answer was a yes, which couldn't be written, so the no it replaced goes
+    # too, and the offer comes back, as the NEW line says.
+    with_keys(waiting, feedbackSurveyRate=0, remoteControlAtStartup=True)
+    saved = json.loads(settings.read_text(encoding="utf-8"))
+    saved["claudeCode"]["folders"]["~/.claude"]["recommendedSettings"] = {"attribution-off": False}
+    write_text(settings, json.dumps(saved, indent=2) + "\n")
+
+    def yes_while_it_changes(prompt: str) -> str:
+        with_keys(waiting, attribution={"commit": "Changed meanwhile"})
+        return "y"
+
+    person.answers.update({MENU: ["9", ""], rf"{ATTRIBUTION}\[y/N\]: $": yes_while_it_changes})
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert returned == 0, out
+    assert re.search(r"^NEW\s+Claude Code settings in \.claude: left attribution", out, re.M), out
+    assert recommended_answers(settings) is None, out
+    assert any(re.search(ATTRIBUTION, asked) for asked in person.asked), person.asked
+
+
+def test_a_yes_isnt_written_when_this_pcs_settings_cant_be_read_again(
+    box: Sandbox,
+    settings: Path,
+    waiting: Path,
+    person: Person,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Such as a hand edit that breaks the file while setup asks: its answer couldn't be saved,
+    # so setup writes neither, says why, and leaves the file as it is.
+    before = waiting.read_bytes()
+
+    def yes_while_the_settings_break(prompt: str) -> str:
+        write_text(settings, "{ not json\n")
+        return ""
+
+    person.answers[RECOMMENDED] = yes_while_the_settings_break
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    assert re.search(r"^PROBLEM\s+This PC's settings weren't saved: .* can't be read", out, re.M)
+    assert settings.read_text(encoding="utf-8") == "{ not json\n"
+    assert waiting.read_bytes() == before

@@ -142,9 +142,12 @@ AUTO_UPDATE = "updates.installAutomatically"
 RULES_WARN_ABOVE = "rules.warnAboveKiB"
 CODEX_INSTRUCTIONS_MAX = "codex.instructionsMaxKiB"
 # Each agent's folders setup knows of, an entry for each with its answer, setUp, in the same shape
-# for both agents, such as {"~/.claude": {"setUp": true}}.
+# for both agents, such as {"~/.claude": {"setUp": true}}. A folder of an agent with recommended
+# settings also holds the answers to them, by each one's id, in RECOMMENDED_ANSWERS, such as
+# {"~/.claude": {"setUp": true, "recommendedSettings": {"attribution-off": true}}} (decision 0032).
 CLAUDE_FOLDERS = "claudeCode.folders"
 CODEX_HOMES = "codex.homes"
+RECOMMENDED_ANSWERS = "recommendedSettings"
 
 
 @dataclass(frozen=True)
@@ -434,6 +437,66 @@ def put_folder_state(
     else:
         folders.pop(entry, None)
     put(data, path, folders)
+
+
+def recommended_answers(value: object, entry: str) -> dict[str, bool | Reminder]:
+    """Each recommended setting answered for one of an agent's folders, given the agent's folders
+    and the folder's entry as written, by the setting's id: yes, no, or a reminder. A value setup
+    can't use counts as no answer, as check_settings says."""
+    folder = value.get(entry) if isinstance(value, dict) else None
+    saved = folder.get(RECOMMENDED_ANSWERS) if isinstance(folder, dict) else None
+    if not isinstance(saved, dict):
+        return {}
+    found: dict[str, bool | Reminder] = {}
+    for setting_id, answer in saved.items():
+        reminder = read_reminder(answer)
+        if isinstance(answer, bool):
+            found[setting_id] = answer
+        elif reminder is not None:
+            found[setting_id] = reminder
+    return found
+
+
+def put_recommended(
+    data: dict[str, Any],
+    path: str,
+    entry: str,
+    setting_id: str,
+    answer: bool | Reminder | None,
+) -> None:
+    """Saves the answer to a recommended setting for one of an agent's folders, by its entry as
+    written: yes, no, or a reminder; or with None, takes it back out, then the group of answers
+    once it's empty, and the entry once nothing is left in it."""
+    current = get(data, path)
+    folders = dict(current) if isinstance(current, dict) else {}
+    found = folders.get(entry)
+    kept = dict(found) if isinstance(found, dict) else {}
+    group = kept.get(RECOMMENDED_ANSWERS)
+    answers = dict(group) if isinstance(group, dict) else {}
+    if answer is None:
+        if setting_id not in answers:
+            return
+        del answers[setting_id]
+    else:
+        answers[setting_id] = answer.saved if isinstance(answer, Reminder) else answer
+    if answers:
+        kept[RECOMMENDED_ANSWERS] = answers
+    else:
+        kept.pop(RECOMMENDED_ANSWERS, None)
+    if kept:
+        folders[entry] = kept
+    else:
+        folders.pop(entry, None)
+    put(data, path, folders)
+
+
+def remove_folder_entry(data: dict[str, Any], path: str, entry: str) -> None:
+    """Takes one of an agent's folders out of the settings, by its entry as written, with
+    everything in it: its answer and its recommended settings'. Its yes or no in
+    LocalSettings.folders goes separately."""
+    current = get(data, path)
+    if isinstance(current, dict) and entry in current:
+        put(data, path, {key: value for key, value in current.items() if key != entry})
 
 
 @dataclass(frozen=True)
@@ -858,6 +921,10 @@ def check_settings(
     what that held is removed: another run saved the rest since, and it may know a declaration
     that this run, which read its own earlier, doesn't, such as one an update brought. The
     settings passed in aren't changed."""
+    # Loaded only here, which only setup runs, so a sync that never runs setup, such as one that
+    # commits, doesn't load the list of recommended settings.
+    from .recommended_settings import ids_for
+
     preferences = declared.preferences
     checked = Checked(copy.deepcopy(data))
     data = checked.data
@@ -903,10 +970,14 @@ def check_settings(
             else:
                 remove(value, name, path, (key, name))
 
+    answer_forms = 'true, false, or a reminder, {"$state": "remind", "on": "YYYY-MM-DD"}'
+
     def check_folders(path: str, value: object, agent: Agent) -> None:
         """An agent's folders, each with an entry, which holds its answer, setUp: yes, no, or a
-        reminder."""
+        reminder; and for an agent with recommended settings, the answers to them, each in the
+        same forms."""
         unset = "not answered yet"
+        recommended = ids_for(agent.group)
         if not isinstance(value, dict):
             wrong(path, value, f"a JSON object of {agent.folder}s", "none")
             return
@@ -916,12 +987,28 @@ def check_settings(
                 wrong(where, entry, "a JSON object", unset)
                 continue
             for entry_key, answer in list(entry.items()):
-                if entry_key != "setUp":
-                    keys = (*path.split("."), folder, entry_key)
+                keys = (*path.split("."), folder, entry_key)
+                if entry_key == RECOMMENDED_ANSWERS and recommended:
+                    check_recommended(f"{where}: {entry_key}", answer, keys, recommended)
+                    # Left empty, it goes too, or the save would write it back.
+                    if answer == {}:
+                        del entry[entry_key]
+                elif entry_key != "setUp":
                     remove(entry, entry_key, f"{where}: {entry_key}", keys)
                 elif not isinstance(answer, bool) and read_reminder(answer) is None:
-                    wanted = 'true, false, or a reminder, {"$state": "remind", "on": "YYYY-MM-DD"}'
-                    wrong(f"{where}: setUp", answer, wanted, unset)
+                    wrong(f"{where}: setUp", answer, answer_forms, unset)
+
+    def check_recommended(where: str, value: object, keys: KeyPath, known: list[str]) -> None:
+        """A folder's answers to the recommended settings, by each one's id. An id the list
+        doesn't have any more is removed, like any setting nothing declares."""
+        if not isinstance(value, dict):
+            wrong(where, value, "a JSON object of recommended settings", "none answered yet")
+            return
+        for setting_id, answer in list(value.items()):
+            if setting_id not in known:
+                remove(value, setting_id, f"{where}.{setting_id}", (*keys, setting_id))
+            elif not isinstance(answer, bool) and read_reminder(answer) is None:
+                wrong(f"{where}.{setting_id}", answer, answer_forms, "not answered yet")
 
     def move_renamed_skills(value: dict[str, Any]) -> None:
         """Moves a skill's answers to its name as its folder spells it now: from the same name in

@@ -28,13 +28,15 @@ import hashlib
 import json
 import re
 import textwrap
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from . import console, rules
 from .output import CYAN, GREEN, color, status_line
 from .paths import comparable, forward, is_inside, resolve_home, same_path, unsafe_reason
+from .recommended_settings import DONE, ids_for
 from .settings import (
     ADDED_TO_AGENTS,
     AGENTS,
@@ -46,6 +48,7 @@ from .settings import (
     DEV_HOME_SETTINGS,
     FOLDER_SETTINGS,
     MISSING,
+    RECOMMENDED_ANSWERS,
     RULES_WARN_ABOVE,
     SETTINGS,
     SETTINGS_PATH,
@@ -62,18 +65,25 @@ from .settings import (
     get,
     local_settings_text,
     put,
-    put_folder_state,
+    put_recommended,
     read_dev_home_settings,
     read_value,
+    remove_folder_entry,
     setting_value,
     skill_declarations,
     value_text,
 )
 
 if TYPE_CHECKING:
-    from .setup import Guidance, Setup, Waiting, WaitingFile
+    from .setup import Guidance, RecommendedOffer, Setup, Waiting, WaitingFile
 
 NAMES = (*(setting.path for setting in SETTINGS), *FOLDER_SETTINGS, "multiMachine")
+# The name of the answers to the recommended settings in a Claude Code folder, as --configure
+# takes them, followed by a setting's id for one alone (decision 0032).
+RECOMMENDED_NAME = f"{CLAUDE_CODE.group}.{RECOMMENDED_ANSWERS}"
+# How the list for an agent marks each recommended setting, where only some are recommended in a
+# folder: one where a yes is recommended, and one with a value someone chose, which a no keeps.
+CHAT_MARKS = ("recommended", "your own value, which all recommended keeps")
 # Each agent by the name of its folders' setting.
 AGENT_FOR = {agent.setting: agent for agent in AGENTS}
 # A name is a setting's path, which may hold dots and, in a skill's name, hyphens, or the path in
@@ -141,6 +151,28 @@ def usage() -> str:
         ]
     entries += [
         (
+            f"{RECOMMENDED_NAME}.<id>+=<folder>@<fingerprint>",
+            "Yes to a setting dev-home-toolkit recommends, in a Claude Code folder set up: setup "
+            "writes it in the folder's settings.json. The listing gives the fingerprint, which "
+            "makes setup write it only while the value is still what the user saw.",
+        ),
+        (
+            f"{RECOMMENDED_NAME}.<id>-=<folder>",
+            "No to it. Setup leaves the setting as it is in settings.json, and doesn't ask again. "
+            "To change the setting itself, the user changes it in Claude Code's /config.",
+        ),
+        (
+            f"{RECOMMENDED_NAME}.<id>?=<folder>@<days>",
+            "Ask again in that many days, while it has no answer yet. Until then, syncs don't "
+            "mention it.",
+        ),
+        (
+            f"{RECOMMENDED_NAME}+=<folder>@<fingerprint>",
+            "Every recommended setting waiting for an answer in that folder: yes to each one the "
+            "listing marks recommended, and no to the others. -=<folder> says no to each, and "
+            "?=<folder>@<days> asks again about each in that many days.",
+        ),
+        (
             f"skills.<skill>.{ADDED_TO_AGENTS}=true|false",
             "Whether to add a skill to your agents on this PC.",
         ),
@@ -196,7 +228,8 @@ def change_settings(run: "Setup", settings: LocalSettings) -> None:
         assign(run, settings, run.configure or "")
     elif not run.can_ask:
         show_waiting(run, settings)
-        for line in overview(run, settings) + skills_overview(settings):
+        shown = overview(run, settings) + recommended_overview(run, settings)
+        for line in shown + skills_overview(settings):
             run.line(line)
         run.line()
         run.line(USAGE)
@@ -207,8 +240,9 @@ def change_settings(run: "Setup", settings: LocalSettings) -> None:
 
 # How an agent asks about what waits, which the listing says before the first item.
 WAITING_INTRO = (
-    "Ask the user about each item, one at a time: show its text, say which of its lines are "
-    "already in the rules this session loaded, recommend an answer, and say what it does. The "
+    "Ask the user about each item, one at a time: show its text; for rules, say which of its "
+    "lines are already in the rules this session loaded; recommend an answer, and say what it "
+    "does. The "
     "go-ahead is the user's pick of exactly one answer the item lists, or that a PROBLEM line "
     "about it offers: run that command, and pass on what setup prints. Run nothing for any other "
     "reply: ask again, or, for not now, leave the item waiting. After a PROBLEM line or a "
@@ -246,20 +280,85 @@ def answer_rows(run: "Setup", rows: list[tuple[str, str]]) -> None:
 
 
 def show_waiting(run: "Setup", settings: LocalSettings) -> None:
-    """For an agent, before the settings: what waits for a person's answer (see Setup.waiting),
-    each item with what it is, its answers, and the command that gives one, after a paragraph on
-    how to ask. Nothing while nothing waits."""
+    """For an agent, before the settings: what waits for a person's answer (see Setup.waiting,
+    and Setup.recommended_offers), each item with what it is, its answers, and the command that
+    gives one, after a paragraph on how to ask. Nothing while nothing waits."""
     waiting = run.waiting(settings)
-    if waiting is None or not (waiting.files or waiting.guidance):
+    recommended = run.recommended_offers(settings)
+    if not (recommended or (waiting is not None and (waiting.files or waiting.guidance))):
         return
     run.line(color("Waiting for your answer", CYAN))
     run.line()
     wrapped(run, WAITING_INTRO)
-    for file in waiting.files:
-        show_waiting_file(run, waiting, file)
-    for found in waiting.guidance:
-        show_waiting_guidance(run, waiting, found)
+    if waiting is not None:
+        for file in waiting.files:
+            show_waiting_file(run, waiting, file)
+        for found in waiting.guidance:
+            show_waiting_guidance(run, waiting, found)
+    for entry, folder, offers in recommended:
+        show_waiting_recommended(run, entry, folder, offers)
     run.line()
+
+
+def recommended_command(offer: "RecommendedOffer") -> str:
+    """The command that gives a yes to one recommended setting in its folder, through
+    --configure."""
+    return f"--configure '{RECOMMENDED_NAME}.{offer.setting.id}+={offer.entry}@{offer.fingerprint}'"
+
+
+def batch_fingerprint(offers: Sequence["RecommendedOffer"]) -> str:
+    """What an answer to every recommended setting waiting in a folder carries, as one setting's
+    fingerprint does, so setup takes it only while they're the same ones, with what the person
+    saw."""
+    seen = "\n".join(f"{offer.setting.id}={offer.current.described}" for offer in offers)
+    return fingerprint(seen.encode("utf-8"))
+
+
+def show_waiting_recommended(
+    run: "Setup", entry: str, folder: Path, offers: Sequence["RecommendedOffer"]
+) -> None:
+    """The recommended settings waiting for an answer in one Claude Code folder, as the listing
+    shows them: each as setup's question shows it, with its command for a yes, then the commands
+    for all of them at once, and how to answer one by its id."""
+    run.line()
+    run.line(f"Recommended settings for Claude Code in {entry}")
+    wrapped(
+        run,
+        "Settings dev-home-toolkit recommends there, with no answer yet. Until the user answers, "
+        f"setup leaves them as they are. A yes is written in {folder / 'settings.json'}.",
+        "  ",
+    )
+    run.line()
+    items = [
+        console.ListItem(offer.setting.summary, offer.recommended, offer.question, offer.about)
+        for offer in offers
+    ]
+    for offer, item in zip(offers, items, strict=True):
+        # Each marked, since the answers say what they do by the marks.
+        console.show_items([item], CHAT_MARKS, among=items, mark_each=True)
+        run.line(f"      {'Yes:':<14}{recommended_command(offer)}")
+        run.line()
+    run.line("  Answers, for all of them at once:")
+    rows = [
+        (
+            "all recommended",
+            f"--configure '{RECOMMENDED_NAME}+={entry}@{batch_fingerprint(offers)}' (yes to "
+            "each marked recommended, and no to the others)",
+        ),
+        ("none", f"--configure '{RECOMMENDED_NAME}-={entry}'"),
+        ("remind me in N days", f"--configure '{RECOMMENDED_NAME}?={entry}@<days>'"),
+    ]
+    # All is the same as all recommended when every one is recommended.
+    if not all(offer.recommended for offer in offers):
+        rows.insert(0, ("all", "each Yes command above, one after another"))
+    answer_rows(run, rows)
+    wrapped(
+        run,
+        "Or each one, by the id in its Yes command: no is "
+        f"--configure '{RECOMMENDED_NAME}.<id>-={entry}', and remind me in N days is "
+        f"--configure '{RECOMMENDED_NAME}.<id>?={entry}@<days>'.",
+        "  ",
+    )
 
 
 def show_waiting_file(run: "Setup", waiting: "Waiting", file: "WaitingFile") -> None:
@@ -441,17 +540,102 @@ def overview(run: "Setup", settings: LocalSettings) -> list[str]:
         (f"{agent.name} {agent.folder}s to set up", folders_text(run, settings, agent))
         for agent in AGENTS
     ]
+    this_pc.append((RECOMMENDED_LABEL, recommended_summary(run, settings)))
     shared = [("Copies of dev-home in active use", copies)]
     width = max(len(label) for label, _ in this_pc + shared) + 2
+    # The numbers' column, wide enough for the last, with at least two spaces after one digit.
+    numbers = max(len(str(len(this_pc) + len(shared))), 2) + 1
 
     def row(number: int, label: str, value: str) -> str:
-        return f"  {color(str(number), GREEN)}  {label:<{width}}{value}"
+        # A value in parts, one for each folder, puts each after the first on a line of its own,
+        # under the first, each but the last ending with a semicolon.
+        gap = " " * (numbers - len(str(number)))
+        under = ";\n" + " " * (2 + numbers + width)
+        return f"  {color(str(number), GREEN)}{gap}{label:<{width}}{under.join(value.split(NEXT))}"
 
     lines = [color("dev-home-toolkit settings", CYAN), "", color("This PC", CYAN)]
     lines += [row(number, label, value) for number, (label, value) in enumerate(this_pc, 1)]
     lines += ["", color("Shared by every copy of dev-home", CYAN)]
     lines += [row(len(this_pc) + 1, label, value) for label, value in shared]
     return lines
+
+
+# The menu's row for the recommended settings, and what separates its value's parts, one for each
+# Claude Code folder set up, which the menu puts each on a line of its own.
+RECOMMENDED_LABEL = f"Recommended {CLAUDE_CODE.name} settings"
+NEXT = "\n"
+
+
+def recommended_counts(offers: Sequence["RecommendedOffer"]) -> str:
+    """One folder's answers to its recommended settings, counted, as the menu's row shows them,
+    such as "3 yes (1 changed since), 1 no"."""
+    yes = sum(1 for offer in offers if offer.answer is True)
+    changed = sum(
+        1 for offer in offers if offer.answer is True and not offer.pending and offer.state != DONE
+    )
+    counts = [
+        f"{yes} yes" + (f" ({changed} changed since)" if changed else "") if yes else "",
+        f"{sum(1 for offer in offers if offer.answer is False)} no",
+        f"{sum(1 for offer in offers if isinstance(offer.answer, Reminder))} remind me",
+        f"{sum(1 for o in offers if o.answer is None and o.state != DONE)} not answered yet",
+        f"{sum(1 for o in offers if o.answer is None and o.state == DONE)} already set",
+    ]
+    return ", ".join(count for count in counts if count and not count.startswith("0 "))
+
+
+def recommended_summary(run: "Setup", settings: LocalSettings) -> str:
+    """The recommended settings' row in the menu: each Claude Code folder set up, with its answers
+    counted, the parts separated by NEXT."""
+    parts = []
+    for entry, full in run.folders_answered(CLAUDE_CODE, settings, True):
+        offers, reason = run.recommended_in(settings, entry, Path(full))
+        parts.append(
+            f"{entry}: setup can't change its settings.json"
+            if reason
+            else f"{entry}: {recommended_counts(offers)}"
+        )
+    return NEXT.join(parts) or f"no {CLAUDE_CODE.name} {CLAUDE_CODE.folder} set up"
+
+
+def value_now(offer: "RecommendedOffer") -> str:
+    """Where a recommended setting's value is now, and what it is, in words."""
+    current = offer.current
+    if not current.place:
+        return "settings.json doesn't set it now"
+    value = json.dumps(current.value, ensure_ascii=False)
+    if current.place == "settings.json":
+        return f"settings.json has {value} now"
+    return f"settings.json doesn't set it, and {current.place} has {value} now"
+
+
+def recommended_overview(run: "Setup", settings: LocalSettings) -> list[str]:
+    """For an agent: each recommended setting in each Claude Code folder set up that has an
+    answer or waits for one, by the folder and the setting's id, with its answer, and where its
+    value isn't what the answer gave, the value, with the commands that change it."""
+    lines: list[str] = []
+    for entry, full in run.folders_answered(CLAUDE_CODE, settings, True):
+        offers, reason = run.recommended_in(settings, entry, Path(full))
+        if reason:
+            lines.append(f"  {entry}: setup won't change its settings.json: {reason}.")
+            continue
+        today = date.today()
+        for offer in offers:
+            line = f"  {entry}, {offer.setting.id}: {offer.answer_text}"
+            if offer.waiting(today):
+                lines.append(line + " (see Waiting for your answer).")
+                continue
+            # One with the recommended value and no answer needs nothing.
+            if offer.answer is None:
+                continue
+            done = offer.state == DONE
+            if offer.answer is True and not done:
+                line += f": {value_now(offer)}, which setup leaves as it is"
+            if offer.answer is not True or not done:
+                line += f". For yes: {recommended_command(offer)}"
+            if offer.answer is not False:
+                line += f". For no: --configure '{RECOMMENDED_NAME}.{offer.setting.id}-={entry}'"
+            lines.append(line + ".")
+    return ["", color(RECOMMENDED_LABEL, CYAN), *lines] if lines else []
 
 
 def recorded_states() -> dict[str, str] | None:
@@ -528,9 +712,10 @@ def menu(run: "Setup", settings: LocalSettings) -> bool:
         CODEX_INSTRUCTIONS_MAX: change_codex_limit,
     }
     # Numbered as overview numbers the rows: dev-home-toolkit's own settings in the order
-    # setting-definitions.json has them, then each agent's folders, then the shared setting.
+    # setting-definitions.json has them, then each agent's folders, then the recommended
+    # settings, then the shared setting.
     order = [changers[setting.path] for setting in SETTINGS]
-    order += [change_claude_folders, change_codex_homes, change_copies]
+    order += [change_claude_folders, change_codex_homes, change_recommended, change_copies]
     steps = {str(number): step for number, step in enumerate(order, 1)}
     changed = False
     while True:
@@ -757,10 +942,11 @@ def change_folders(run: "Setup", settings: LocalSettings, agent: Agent) -> bool:
     for entry, current in answers:
         folder = Path(resolve_home(entry, run.home))
         if not folder.is_dir():
-            # A folder that's gone keeps its answer, in case it comes back, until it's removed.
+            # A folder that's gone keeps its answer, in case it comes back, until it's removed,
+            # with the answers to its recommended settings.
             if run.choose(f"{folder} no longer exists. Remove it from the settings?", False):
                 settings.folders[agent.setting].pop(entry, None)
-                put_folder_state(settings.data, agent.setting, entry, None)
+                remove_folder_entry(settings.data, agent.setting, entry)
                 changed = True
             continue
         if agent.shared:
@@ -797,6 +983,96 @@ def change_claude_folders(run: "Setup", settings: LocalSettings) -> bool:
 
 def change_codex_homes(run: "Setup", settings: LocalSettings) -> bool:
     return change_folders(run, settings, CODEX)
+
+
+def change_recommended(run: "Setup", settings: LocalSettings) -> bool:
+    """Goes through each recommended setting in each Claude Code folder set up, shown as setup's
+    offer shows it, with its answer (see ask_recommended). Returns whether an answer changed."""
+    # Loaded here, since setup loads this module.
+    from .setup import RECOMMENDED_MARKS
+
+    folders = run.folders_answered(CLAUDE_CODE, settings, True)
+    if not folders:
+        run.line(
+            f"No {CLAUDE_CODE.name} {CLAUDE_CODE.folder} is set up, so there are no recommended "
+            "settings to answer."
+        )
+        return False
+    changed = False
+    for entry, full in folders:
+        folder = Path(full)
+        offers, reason = run.recommended_in(settings, entry, folder)
+        run.line()
+        if reason:
+            run.line(f"Setup won't change {folder / 'settings.json'}: {reason}.")
+            continue
+        run.line(f"Settings dev-home-toolkit recommends for Claude Code in {folder}:")
+        items = [
+            console.ListItem(
+                offer.setting.summary,
+                offer.recommended,
+                offer.question,
+                (*offer.about, console.Row("Your answer:", offer.answer_text)),
+            )
+            for offer in offers
+        ]
+        for offer, item in zip(offers, items, strict=True):
+            run.line()
+            console.show_items([item], RECOMMENDED_MARKS, among=items)
+            changed = (
+                record_recommended(run, settings, offer, ask_recommended(run, offer)) or changed
+            )
+    return changed
+
+
+def ask_recommended(run: "Setup", offer: "RecommendedOffer") -> console.OfferAnswer | None:
+    """The menu's question about one recommended setting in one folder: an offer for one with no
+    yes or no, where Enter keeps a reminder; yes or no for one answered, with Enter keeping the
+    answer; and for a yes whose value changed since, whether to set it again, with Enter keeping
+    it as it is. None when it isn't asked, since it has the recommended value and no answer, or no
+    answer came."""
+    if not run.can_ask or (offer.answer is None and offer.state == DONE):
+        return None
+    if offer.answer is True and offer.state != DONE and not offer.pending:
+        return console.choose_again(offer.question)
+    if isinstance(offer.answer, bool):
+        return run.choose(offer.question, offer.answer)
+    return run.choose_offer(offer.question, offer.recommended, offer.answer)
+
+
+def record_recommended(
+    run: "Setup",
+    settings: LocalSettings,
+    offer: "RecommendedOffer",
+    answer: console.OfferAnswer | None,
+) -> bool:
+    """Keeps an answer from the menu about one recommended setting, and returns whether it
+    changed one: a yes waits for the work, which writes and saves it, unless it only keeps a yes
+    whose folder has the value already; a no or a reminder goes in the folder's entry, a no
+    taking back a yes this run gave; and skip ends a reminder. KEEP changes nothing."""
+    # Loaded here, since setup loads this module.
+    from .setup import yes_key
+
+    key = (yes_key(offer.folder), offer.setting.id)
+    keeps = offer.answer is True and offer.state == DONE and not offer.pending
+    if answer is None or answer == console.KEEP or (answer is True and (keeps or offer.pending)):
+        return False
+    if answer is True:
+        run.recommended_yes[key] = offer.current
+        return True
+    if answer is False and offer.answer is False:
+        return False
+    run.recommended_yes.pop(key, None)
+    if answer is False:
+        saved: bool | Reminder | None = False
+    elif isinstance(answer, console.RemindIn):
+        saved = Reminder(answer.on)
+    elif answer == console.SKIP and isinstance(offer.answer, Reminder):
+        saved = None
+    else:
+        return False
+    put_recommended(settings.data, CLAUDE_CODE.setting, offer.entry, offer.setting.id, saved)
+    return True
 
 
 def change_copies(run: "Setup", settings: LocalSettings) -> bool:
@@ -837,6 +1113,9 @@ def assign(run: "Setup", settings: LocalSettings, text: str) -> None:
         raise SettingError(f"--configure takes one setting as <name>=<value>, not {text}.")
     name, operator, value = match.group(1), match.group(2), match.group(3).strip()
     if run.answer_question(settings, name, operator, value):
+        return
+    if name == RECOMMENDED_NAME or name.startswith(RECOMMENDED_NAME + "."):
+        assign_recommended(run, settings, name, operator, value)
         return
     if name not in NAMES and not name.startswith("skills."):
         raise SettingError(f"There is no setting named {name}.")
@@ -904,6 +1183,96 @@ def assign(run: "Setup", settings: LocalSettings, text: str) -> None:
         return
     run.status("CHANGE", f"This PC's settings: {SETTINGS_PATH}")
     run.print_diff(old_text, new_text)
+
+
+def assign_recommended(
+    run: "Setup", settings: LocalSettings, name: str, operator: str, value: str
+) -> None:
+    """Takes an agent's answer to recommended settings in a Claude Code folder set up: with an id
+    after RECOMMENDED_NAME, to that setting alone, answered or not; without, to every one waiting
+    for an answer there, as the listing shows them. += is yes, with the fingerprint the listing
+    gave, which has to match what the folder has now; for all of them, it's yes to each one
+    recommended there and no to the others. -= is no, and ?= a reminder, only for a setting with
+    no yes or no. A yes waits for the work, which writes and saves it; a no or a reminder is shown
+    as the change to this PC's settings. Raises SettingError for one it can't take."""
+    setting_id = name[len(RECOMMENDED_NAME) + 1 :]
+    known = ids_for(CLAUDE_CODE.group)
+    if setting_id and setting_id not in known:
+        raise SettingError(
+            f"There is no recommended setting named {setting_id}. There are: {', '.join(known)}."
+        )
+    if operator == "=":
+        raise SettingError(
+            f"{name} takes +=<folder>@<fingerprint> for yes, -=<folder> for no, or "
+            "?=<folder>@<days> for a reminder."
+        )
+    days = None
+    seen = ""
+    folder_text = value
+    if operator == "?=":
+        folder_text, days = reminder_value(name, CLAUDE_CODE, value)
+    elif operator == "+=":
+        folder_text, at, seen = value.rpartition("@")
+        if not at or not folder_text.strip() or not seen.strip():
+            raise SettingError(
+                f"{name}+= takes a folder and the fingerprint the listing gives, as in "
+                f"{name}+=~/.claude@<fingerprint>."
+            )
+    full = Path(comparable(resolve_home(folder_text.strip(), run.home)))
+    entry = next(
+        (
+            entry
+            for entry, folder in run.folders_answered(CLAUDE_CODE, settings, True)
+            if same_path(folder, full)
+        ),
+        None,
+    )
+    if entry is None:
+        raise SettingError(
+            f"{full} isn't a {CLAUDE_CODE.name} {CLAUDE_CODE.folder} set up, so setup has no "
+            "recommended settings for it."
+        )
+    offers, reason = run.recommended_in(settings, entry, full)
+    if reason:
+        raise AnswerError(f"Setup won't change {full / 'settings.json'}: {reason}.")
+    if setting_id:
+        targets = [offer for offer in offers if offer.setting.id == setting_id]
+        shown_print = targets[0].fingerprint
+    else:
+        targets = [offer for offer in offers if offer.waiting(date.today())]
+        shown_print = batch_fingerprint(targets)
+    if not targets:
+        status_line("OK", f"No recommended setting waits for an answer in {entry}.")
+        return
+    if operator == "+=" and seen.strip() != shown_print:
+        raise AnswerError(
+            f"{'That setting' if setting_id else 'What waits'} in {entry} changed since the "
+            "listing showed it, so nothing was changed. Run --configure again to see it as it is "
+            "now."
+        )
+    if days is not None and any(isinstance(offer.answer, bool) for offer in targets):
+        answered = targets[0]
+        raise SettingError(
+            f"{answered.setting.id} in {entry} already has an answer, "
+            f"{'yes' if answered.answer else 'no'}, and a reminder is only for one with no "
+            f"answer yet. To change the answer, use {name}+= or {name}-=."
+        )
+    before = copy.deepcopy(settings)
+    changed = False
+    for offer in targets:
+        if operator == "+=":
+            answer: console.OfferAnswer = offer.recommended or bool(setting_id)
+        elif operator == "-=":
+            answer = False
+        else:
+            answer = console.RemindIn.after(days or 1)
+        changed = record_recommended(run, settings, offer, answer) or changed
+    old_text, new_text = local_settings_text(before), local_settings_text(settings)
+    if old_text != new_text:
+        run.status("CHANGE", f"This PC's settings: {SETTINGS_PATH}")
+        run.print_diff(old_text, new_text)
+    elif not changed:
+        status_line("OK", f"{name} is already set that way in {entry}, so nothing changed.")
 
 
 def declared_setting(settings: LocalSettings, name: str) -> Setting:
