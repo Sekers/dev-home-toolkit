@@ -78,6 +78,10 @@ doesn't settle it, ask which.
   conversion step, fallback, or reading of an old form, even where a decision describes one
   (`formerNames` excepted), and tell the developer what PCs already set up need done by hand
   ([why](docs/development/decisions/0080-compatibility-before-1-0-0.md)).
+- dev-home works only on GitHub for now, but dev-home-toolkit will need to support at least some
+  of GitLab, Bitbucket, and Azure DevOps later. Design so a host can be added later without
+  reworking what's built, but don't decide now how each will work, and add no support for one
+  until the developer asks ([why](docs/development/decisions/0086-dev-homes-host.md)).
 
 ## Privacy
 

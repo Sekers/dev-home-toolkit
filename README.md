@@ -13,8 +13,8 @@ from PC to PC.
   loads your rules and skills.
 - **Sync.** It keeps dev-home in sync with its online copy, so your work is backed up with its
   full history, and, if you use more than one PC, a change made on one reaches the others.
-  - Setup puts dev-home on GitHub for now (just dev-home: your project repos can be hosted
-    anywhere). Automated setup for GitLab, Bitbucket, and Azure DevOps is coming.
+  - dev-home works only on GitHub for now (just dev-home: your project repos can be hosted
+    anywhere). Support for GitLab, Bitbucket, and Azure DevOps is coming.
 - **Privacy.** It tells every session never to copy dev-home into your project repos, or even
   mention it there, so your projects can stay public.
 - **Skills.** It comes with ready-made skills, listed below, and adds any you put in your own
@@ -127,10 +127,8 @@ it goes missing, and says so. It never edits a file it can't fully read, such as
 `settings.json` that isn't valid JSON (Claude Code can't use one either), or a read-only one; it
 prints what to add by hand instead.
 
-Setup can create or clone dev-home only on GitHub for now; automated setup for GitLab,
-Bitbucket, and Azure DevOps is coming. If your dev-home is already on one of those, or on your
-own git server, clone it into your dev-home folder yourself before running setup. Setup then
-uses it as it is, and syncing works the same as with GitHub.
+dev-home works only on GitHub for now; support for GitLab, Bitbucket, and Azure DevOps is
+coming.
 
 This limit applies only to where dev-home itself is hosted. Your project repos can be anywhere,
 or not hosted at all, and the skills work with them the same way. The one exception is filing a
