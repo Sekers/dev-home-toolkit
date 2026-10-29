@@ -3200,6 +3200,50 @@ def test_both_gitignores_ignore_what_each_operating_system_leaves(box: Sandbox) 
     assert git("-C", str(repo), "check-ignore", "--no-index", *names) == names
 
 
+def test_dev_homes_gitignore_ignores_what_programs_make_on_each_pc(box: Sandbox) -> None:
+    # dev-home's sync offers to commit any file git doesn't ignore. These can't work on another
+    # PC, while the files beside them, and a skill that brings its packages back, still sync
+    # (decision 0085).
+    ignored = [
+        "__pycache__/top.cpython-315.pyc",
+        "skills/tidy/scripts/__pycache__/tool.cpython-315.pyc",
+        "skills/tidy/.venv/pyvenv.cfg",
+        "skills/tidy/node_modules/pkg/index.js",
+        ".idea/workspace.xml",
+        ".idea/usage.statistics.xml",
+        ".idea/shelf/change.patch",
+        "skills/tidy/.idea/workspace.xml",
+    ]
+    kept = [
+        ".claude/settings.json",
+        ".idea/dictionaries/you.xml",
+        ".idea/misc.xml",
+        "skills/ships/node_modules/pkg/index.js",
+        "skills/tidy/package.json",
+        "skills/tidy/scripts/tool.py",
+    ]
+    repo = box.root / "tools-ignore-check"
+    git("init", "--quiet", str(repo))
+    shutil.copyfile(box.toolkit / "templates" / "dev-home" / ".gitignore", repo / ".gitignore")
+    for path in ignored + kept:
+        write_text(repo / path, "")
+    write_text(repo / "skills" / "ships" / ".gitignore", "!node_modules/\n")
+    # A PC's own global ignore file could hide a file this test expects to see.
+    no_global = box.root / "no-global-ignores"
+    write_text(no_global, "")
+    listed = git(
+        "-C",
+        str(repo),
+        "-c",
+        f"core.excludesFile={no_global.as_posix()}",
+        "status",
+        "--porcelain",
+        "--untracked-files=all",
+    )
+    expected = [".gitignore", "skills/ships/.gitignore", *kept]
+    assert sorted(line[3:] for line in listed) == sorted(expected)
+
+
 def setup_configure(box: Sandbox, *args: str) -> Run:
     return run_python(box, "setup.py", "--configure", *args)
 

@@ -5,6 +5,13 @@
 /AGENTS.md
 /CLAUDE.md
 
+# What a skill's scripts make on each PC: Python's caches of the scripts it imports, Python
+# environments, and JavaScript packages. A skill that ships its packages can bring them back
+# with "!node_modules/" in a .gitignore in its own folder.
+__pycache__/
+.venv/
+node_modules/
+
 # Files Windows creates: thumbnail caches, folder settings, and shortcuts
 Thumbs.db
 Thumbs.db:encryptable
@@ -27,3 +34,9 @@ ehthumbs_vista.db
 !.vscode/settings.json
 !.vscode/extensions.json
 !*.code-workspace
+
+# JetBrains IDEs: the items JetBrains says store user-specific settings, the only ones in .idea
+# not to share
+**/.idea/workspace.xml
+**/.idea/usage.statistics.xml
+**/.idea/shelf/
