@@ -2917,8 +2917,17 @@ def test_a_run_by_hand_offers_the_recommended_settings_and_enter_takes_the_recom
     intro = f"Settings dev-home-toolkit recommends for Claude Code in {box.profile / '.claude'}:"
     assert f"\n{intro}\n\n  Leave Claude Code's name" in out, out
     assert '      Now:          {"commit": "", "pr": ""}, an older form\n' in out, out
-    remote = r"^  Connect Remote Control when each Claude Code session starts\s+your own value"
-    assert re.search(remote + r", which Enter keeps$", out, re.M), out
+    # The recommended value says what it means for the person, as the value now does.
+    off = "      Recommended:  false\n                    Attribution is off: Claude Code adds no"
+    assert off in out, out
+    now = "      Now:          false\n                    Remote Control is off at startup:"
+    assert now in out, out
+    # Lines break only at spaces, so a command stays whole.
+    assert " /remote-control.\n" in out and "/remote-\n" not in out, out
+    remote = (
+        r"^  Connect Remote Control when each Claude Code session starts\s+Enter keeps its value$"
+    )
+    assert re.search(remote, out, re.M), out
     pattern = (
         r"^SET\s+Claude Code settings in \.claude: set attribution to false and "
         r"feedbackSurveyRate to 0, and added dev-home-toolkit to permissions\."

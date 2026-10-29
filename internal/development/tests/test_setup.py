@@ -2743,6 +2743,8 @@ def test_configure_alone_shows_the_settings_and_how_to_change_them(
     )
     pattern = r"^\s+answer: a change to the main one, ~/\.codex when it's there,$"
     assert result.has_line(pattern), str(result)
+    # Lines break only at spaces, so a folder such as ~/.claude-second stays whole.
+    assert result.has_line(r"\s~/\.claude-second\.$"), str(result)
     # A reminder, for a folder with no answer yet, and for Codex in every home.
     assert result.has_line(r"^\s+claudeCode\.folders\?=<folder>@<days>$"), str(result)
     pattern = r"^\s+Ask again in that many days whether to set up a folder with no$"
@@ -3046,11 +3048,11 @@ def same_summary(catalog: dict[str, Any]) -> None:
         (lambda c: entry_in(c).update(extra=1), "fields setup doesn't know: extra"),
         (lambda c: agent_in(c).update(extra=1), "fields setup doesn't know: extra"),
         (lambda c: entry_in(c).pop("claudeCode"), "has no agent's setting"),
-        (lambda c: entry_in(c).pop("why"), "has no why"),
+        (lambda c: agent_in(c).pop("whenRecommended"), "has no whenRecommended"),
         (lambda c: entry_in(c).update(summary="x" * 81), "longer than 80 characters"),
         (lambda c: entry_in(c).update(summary="a\nb"), "summary isn't one line of text"),
         (lambda c: agent_in(c).pop("whenMissing"), "has no whenMissing"),
-        (lambda c: agent_in(c).pop("whenOther"), "has no whenOther"),
+        (lambda c: agent_in(c).update(whenOther="Yours."), "fields setup doesn't know: whenOther"),
         (lambda c: agent_in(c).update(key="a.b"), "key isn't a key at the top"),
         (lambda c: agent_in(c).update(value=None), "has no value"),
         (lambda c: agent_in(c).update(olderForms=[False]), "has no whenOlderForm"),
@@ -3061,6 +3063,29 @@ def same_summary(catalog: dict[str, Any]) -> None:
             "or the recommended value",
         ),
         (lambda c: agent_in(c).update(olderPlace="other.json"), "olderPlace isn't one of"),
+        (
+            lambda c: agent_in(c).update(customValues={"kind": "number", "min": float("nan")}),
+            "holds NaN, which isn't JSON",
+        ),
+        (lambda c: agent_in(c).update(otherValues=[]), "otherValues isn't a list of one or more"),
+        (lambda c: agent_in(c).update(otherValues=[{"value": False}]), "a value and a when"),
+        (
+            lambda c: agent_in(c).update(otherValues=[{"value": True, "when": "On."}]),
+            "otherValues holds the recommended value",
+        ),
+        (lambda c: agent_in(c).update(customValues={"kind": "boolean"}), "kind isn't one of"),
+        (
+            lambda c: agent_in(c).update(customValues={"kind": "object", "min": 0}),
+            "its kind isn't number",
+        ),
+        (
+            lambda c: agent_in(c).update(customValues={"kind": "number", "min": 1, "max": 0}),
+            "min is more than its max",
+        ),
+        (
+            lambda c: agent_in(c).update(customValues={"kind": "number", "step": 1}),
+            "isn't a JSON object of kind, min, max, and when",
+        ),
         (renamed, "the id isn't lowercase words"),
         (doubled, "thing-on has the same claudeCode key, thing"),
         (same_summary, "thing-on has the same summary"),
@@ -3070,11 +3095,11 @@ def same_summary(catalog: dict[str, Any]) -> None:
         "an unknown field",
         "an unknown agent field",
         "no agent",
-        "no why",
+        "no whenRecommended",
         "a long summary",
         "a summary on two lines",
         "no whenMissing",
-        "no whenOther",
+        "words for any other value",
         "a key inside another",
         "a null value",
         "an older form with no words",
@@ -3082,6 +3107,14 @@ def same_summary(catalog: dict[str, Any]) -> None:
         "words for an older form there isn't",
         "the recommended value as an older form",
         "an unknown older place",
+        "a NaN, which JSON doesn't have",
+        "an empty otherValues",
+        "another value with no words",
+        "the recommended value as another value",
+        "a custom kind setup doesn't know",
+        "a range for a kind that isn't a number",
+        "a range upside down",
+        "an unknown customValues field",
         "an id with a capital",
         "two ids for one key",
         "two ids with one summary",
@@ -3094,12 +3127,11 @@ def test_the_recommended_settings_reader_refuses_what_setup_cant_use(
         "recommendedSettings": {
             "thing-on": {
                 "summary": "Turn the thing on",
-                "why": "It helps.",
                 "claudeCode": {
                     "key": "thing",
                     "value": True,
+                    "whenRecommended": "It's on.",
                     "whenMissing": "It's off.",
-                    "whenOther": "It's off too.",
                 },
             }
         }
@@ -3110,6 +3142,18 @@ def test_the_recommended_settings_reader_refuses_what_setup_cant_use(
     path.write_text(json.dumps(catalog), encoding="utf-8")
     with pytest.raises(ValueError, match=re.escape(fault)):
         shared_module(box, "recommended_settings").load_recommended(path)
+
+
+def test_the_recommended_settings_reader_compares_values_as_json_does(box: Sandbox) -> None:
+    # 1 isn't true in JSON, though Python counts them as equal, so 1 can be an older form of true.
+    setting = {"key": "thing", "value": True, "whenRecommended": "On.", "whenMissing": "Off."}
+    setting.update(olderForms=[1], whenOlderForm="Partly.")
+    catalog = {"recommendedSettings": {"thing-on": {"summary": "On", "claudeCode": setting}}}
+    path = box.root / "plans" / "recommended-json.json"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps(catalog), encoding="utf-8")
+    (entry,) = shared_module(box, "recommended_settings").load_recommended(path)
+    assert entry.agents["claudeCode"].older_forms == (1,)
 
 
 def test_git_ignores_this_pcs_settings_and_what_saving_them_leaves_beside_them(

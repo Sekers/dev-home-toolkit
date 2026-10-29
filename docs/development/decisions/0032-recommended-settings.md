@@ -4,8 +4,8 @@
 
 **Decision:** setup offers settings that dev-home-toolkit recommends for the agents, from a list in
 `templates/recommended-settings/recommended-settings.json`. Each entry has an id that is never
-reused, what it does, why it's recommended, and the setting for each agent that has one, with any
-older form of it that the recommended value replaces. The first three are for Claude Code:
+reused, what it does, and the setting for each agent that has one, with any older form of it that
+the recommended value replaces. The first three are for Claude Code:
 `"attribution": false` (id `attribution-off`), which leaves commits and pull requests without a
 line naming the agent; `"feedbackSurveyRate": 0` (id `feedback-survey-off`), which stops the
 session quality survey and its request to upload the session's transcript; and
@@ -18,14 +18,20 @@ Claude app.
   folder whose `settings.json` it won't rewrite, such as one with comments, since a yes couldn't
   be written there.
 - Each offer asks in plain words, with no diff, in columns: the setting, by its key in
-  `settings.json`; its value now, with what that value means; and the recommended value, with
-  what it does and why. Each text that says what a value means starts with whether the feature is
-  on or off, and the list has one for a missing setting, one for an older form, and one for any
-  other value someone chose (`whenOther`). For `attribution-off`: when it's missing, attribution
-  is on, so commits get a co-author line, pull requests get "Generated with Claude Code", and
-  cloud and Remote Control sessions add a link to the session; the older form with empty
-  `commit` and `pr` is partly off, hiding the first two but not the link; and text the person
-  wrote shows as its value, which a yes replaces, so someone keeping it can answer no.
+  `settings.json`; its value now; and the recommended value. Each value says what it means for
+  the person, not why it's recommended, starting with whether the feature is on or off, from the
+  list's text for each agent, where the agent's docs say what it means: the recommended value, a
+  missing setting, an older form, and any other value the list knows, such as Remote Control's
+  `false`. A value of the kind a person writes for themselves (`customValues`) shows as "a custom
+  value", with a text where the docs say what any such value means: a survey rate from 0 to 1
+  does, and an object of attribution lines doesn't, since the docs don't say what a partly filled
+  one does. Any other value, such as `null` or `"attribution": true`, shows as "an unknown
+  value", with no text: setup can't know what it means, or whether Claude Code accepts it. For
+  `attribution-off`: when it's missing, attribution is on, so commits get a co-author line, pull
+  requests get "Generated with Claude Code", and cloud and Remote Control sessions add a link to
+  the session; the older form with empty `commit` and `pr` is partly off, hiding the first two
+  but not the link; and text the person wrote shows as a custom value, which a yes replaces, so
+  someone keeping it can answer no.
 - The `remote-control-at-startup` offer is the same in every folder, since setup can't see the
   plan or the organization's switch it depends on. Its words say what it needs: a claude.ai
   sign-in on a Pro, Max, Team, or Enterprise plan, where on Team and Enterprise an Owner must
@@ -38,9 +44,10 @@ Claude app.
 - What Enter picks depends on what the folder's settings have now. Where the setting is missing,
   or in an older form, the offer is recommended for that folder, and Enter changes it to the
   recommended value, whatever its type, and whatever Claude Code does without it. Where it has
-  any other value, which the person chose, such as `"remoteControlAtStartup": false` from
-  `/config` or attribution text they wrote, the offer isn't recommended for that folder: Enter
-  answers no, which is saved like any no, and the value stays as it is. The answers are the same
+  any other value, known, custom, or unknown, such as `"remoteControlAtStartup": false` from
+  `/config`, attribution text the person wrote, or a `null` another program left, the offer isn't
+  recommended for that folder: Enter answers no, which is saved like any no, and the value stays
+  as it is. The answers are the same
   either way ([0040: Answers to offers](0040-answers-to-offers.md)), and in the list of
   recommended settings, "All recommended" follows each item's default.
 - A recommended setting written more than once in a folder set up: Claude Code silently uses
@@ -118,7 +125,11 @@ exact change to anyone who wants it. Enter changes what's missing or broken, and
 the person chose, so a hurried Enter never undoes a choice, while each offer still comes up once.
 
 The values go in a column of their own, each with what it means, because a sentence describing
-what a setting does didn't say whether it was on or off now (the developer, 2026-10-28). The menu
+what a setting does didn't say whether it was on or off now (the developer, 2026-10-28). Each
+value says what it means for the person, the recommended one included, rather than why it's
+recommended, so the person can compare the two values directly (the developer, 2026-10-28). A
+value gets a text only where Claude Code's docs say what it means, since a guessed meaning can be
+wrong, and the developer chose to say "an unknown value" rather than guess. The menu
 gets one row, like the row for Claude Code folders, rather than a submenu ahead of the Skills
 submenu (the developer's choice, 2026-10-28).
 
@@ -150,6 +161,14 @@ submenu (the developer's choice, 2026-10-28).
   wrote.
 - No offer where the person chose another value: they'd never learn it's recommended, and each
   setting would need an exception of its own.
+- One text for any other value (`whenOther`, until 2026-10-28): it guessed what the value means,
+  and was wrong for values such as `"attribution": true`, which Claude Code accepts, or `null`,
+  which Claude Code 2.1.312 rejects for `attribution` and `feedbackSurveyRate` and accepts for
+  `remoteControlAtStartup`. Calling every such value "your own value", with no text: it hid
+  meanings the docs give, such as Remote Control's `false` and a survey rate. Judging which
+  values Claude Code accepts, so Enter replaces the others: a copy of its rules that can fall out
+  of step, and one out of step could have Enter replace a value Claude Code accepts; so Enter
+  keeps every value setup doesn't recommend, unknown ones included.
 - Leaving Remote Control off where setup sees it can't work, such as with an API key, a cloud
   provider, or a variable that turns off feature flags: it misses the most likely case, a work
   account whose organization hasn't turned it on, which setup can't see; it can be wrong when

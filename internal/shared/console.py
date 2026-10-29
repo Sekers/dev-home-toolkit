@@ -14,6 +14,22 @@ from .output import GREEN, color
 # How wide lines of text get at the console, wrapped at spaces.
 LINE_WIDTH = 100
 
+
+def wrap(
+    text: str, initial_indent: str = "", subsequent_indent: str = "", width: int = LINE_WIDTH
+) -> list[str]:
+    """Text as lines of width, broken only at spaces, so a path or a command such as
+    /remote-control stays whole however long it is."""
+    return textwrap.wrap(
+        text,
+        width,
+        initial_indent=initial_indent,
+        subsequent_indent=subsequent_indent,
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
+
+
 if sys.platform == "win32":
     import ctypes
     import msvcrt
@@ -291,13 +307,9 @@ def show_items(
             print(f"  {item.name}", flush=True)
         for row in item.about:
             label = " " * 6 + row.label.ljust(labels)
-            lines = textwrap.wrap(
-                row.value, LINE_WIDTH, initial_indent=label, subsequent_indent=under
-            )
+            lines = wrap(row.value, initial_indent=label, subsequent_indent=under)
             for paragraph in row.paragraphs:
-                lines += textwrap.wrap(
-                    paragraph, LINE_WIDTH, initial_indent=under, subsequent_indent=under
-                )
+                lines += wrap(paragraph, initial_indent=under, subsequent_indent=under)
             for line in lines:
                 print(line, flush=True)
         if any(other.about for other in items) and item is not items[-1]:
@@ -357,7 +369,7 @@ def choose_from_list(
         print(flush=True)
     if details:
         print(flush=True)
-        for line in textwrap.wrap(details, LINE_WIDTH):
+        for line in wrap(details):
             print(line, flush=True)
         print(flush=True)
     if every:

@@ -195,7 +195,6 @@ import os
 import re
 import stat
 import subprocess
-import textwrap
 from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -582,8 +581,8 @@ class RecommendedOffer:
     @property
     def recommended(self) -> bool:
         """Whether a yes is what dev-home-toolkit recommends for this folder, which Enter gives:
-        where the setting is missing or in an older form, and not where someone chose another
-        value, which Enter keeps."""
+        where the setting is missing or in an older form, and not where the folder has any other
+        value, known, custom, or unknown, which Enter keeps."""
         return self.state in (MISSING_VALUE, OLDER)
 
     def waiting(self, today: date) -> bool:
@@ -812,7 +811,7 @@ class Setup:
             guarded=self.any_guarded(agent, folders),
             doc_bytes=self.codex_doc_bytes,
         )
-        for text in textwrap.wrap(does, console.LINE_WIDTH):
+        for text in console.wrap(does):
             self.line(text)
         self.line()
 
@@ -4433,8 +4432,9 @@ class Setup:
 
 
 # How the list of a folder's recommended settings marks each, where only some are recommended
-# there: one where a yes is recommended, and one with a value someone chose, which Enter keeps.
-RECOMMENDED_MARKS = ("recommended", "your own value, which Enter keeps")
+# there: one where a yes is recommended, and one with any other value, which Enter keeps. It
+# doesn't call that value the person's own, which setup can't know.
+RECOMMENDED_MARKS = ("recommended", "Enter keeps its value")
 
 
 def recommended_new_text(waiting: Sequence[tuple[str, int]]) -> str:

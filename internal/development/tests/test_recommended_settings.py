@@ -149,12 +149,14 @@ def test_configure_alone_lists_the_recommended_settings_waiting_with_their_comma
     name = "Leave Claude Code's name out of your commits and pull requests"
     assert re.search(rf"^  {re.escape(name)}\s+recommended$", shown, re.M), shown
     remote = "Connect Remote Control when each Claude Code session starts"
-    mark = "your own value, which all recommended keeps"
+    mark = "all recommended keeps its value"
     assert re.search(rf"^  {re.escape(remote)}\s+{mark}$", shown, re.M), shown
     assert '      Now:          {"commit": "", "pr": ""}, an older form\n' in shown, shown
     assert "      Setting:      feedbackSurveyRate, in settings.json\n" in shown, shown
     assert "      Now:          not set\n" in shown and "      Recommended:  0\n" in shown, shown
-    assert "      Now:          false\n" in shown, shown
+    # Remote Control's false is a value the list knows, so it says what it means.
+    off = "      Now:          false\n                    Remote Control is off at startup:"
+    assert off in shown, shown
     for setting_id in ("attribution-off", "feedback-survey-off", "remote-control-at-startup"):
         pattern = (
             rf"^      Yes:\s+--configure 'claudeCode\.recommendedSettings\.{setting_id}\+="
@@ -386,10 +388,10 @@ def test_a_value_in_claude_json_counts_where_settings_json_has_none(
     assert sync(box).has_line(waiting(2))
     write_text(older, json.dumps({"remoteControlAtStartup": False}) + "\n")
     listing = configure(box)
-    pattern = (
-        r"^      Now:\s+false, in \.claude\.json, which counts while settings\.json sets none$"
-    )
-    assert listing.has_line(pattern), str(listing)
+    now = "      Now:          false\n"
+    where = "                    In .claude.json, which counts while settings.json sets none.\n"
+    off = "                    Remote Control is off at startup:"
+    assert now + where + off in str(listing), str(listing)
     # All recommended keeps it, as a no; a yes writes settings.json alone, which then wins.
     every = configure(box, command(listing, "claudeCode.recommendedSettings"))
     assert every.code == 0 and answers(box)["remote-control-at-startup"] is False, str(every)
@@ -601,9 +603,41 @@ def test_a_recommended_settings_plan_sets_each_value_in_its_place_or_last(box: S
     assert plan.repeated == ["attribution"]
 
 
+@pytest.mark.parametrize(
+    ("setting_id", "value", "note", "means"),
+    [
+        ("remote-control-at-startup", False, "", "Remote Control is off at startup:"),
+        ("remote-control-at-startup", None, ", an unknown value", ""),
+        ("remote-control-at-startup", "yes", ", an unknown value", ""),
+        ("feedback-survey-off", 0.5, ", a custom value", "The survey is on at that rate,"),
+        ("feedback-survey-off", 1, ", a custom value", "The survey is on at that rate,"),
+        ("feedback-survey-off", 5, ", an unknown value", ""),
+        ("feedback-survey-off", -0.5, ", an unknown value", ""),
+        ("feedback-survey-off", "0.5", ", an unknown value", ""),
+        ("feedback-survey-off", True, ", an unknown value", ""),
+        ("attribution-off", {"commit": "Mine"}, ", a custom value", ""),
+        ("attribution-off", True, ", an unknown value", ""),
+        ("attribution-off", None, ", an unknown value", ""),
+    ],
+)
+def test_a_value_setup_doesnt_recommend_says_what_it_means_only_where_known(
+    box: Sandbox, setting_id: str, value: Any, note: str, means: str
+) -> None:
+    # A value the agent's docs explain has its text; one of the kind a person writes for
+    # themselves is a custom value, with a text only where the docs say what it does; any other
+    # is unknown, with nothing more, since setup can't know what it means.
+    module = shared_module(box, "recommended_settings")
+    entry = next(entry for entry in module.RECOMMENDED if entry.id == setting_id)
+    current = module.Current("settings.json", value)
+    rows = module.offer_text(entry, "claudeCode", current, "settings.json")
+    now = next(row for row in rows if row[0] == "Now:")
+    assert now[1] == module.shown(value) + note, now
+    assert now[2][0].startswith(means) if means else now[2] == (), now
+
+
 def test_a_recommended_value_is_judged_as_claude_code_reads_it(box: Sandbox) -> None:
     module = shared_module(box, "recommended_settings")
-    survey = module.AgentSetting("feedbackSurveyRate", 0, when_missing="On.", when_other="On.")
+    survey = module.AgentSetting("feedbackSurveyRate", 0, when_missing="On.")
     assert module.state_of(survey, module.Current()) == module.MISSING
     assert module.state_of(survey, module.Current("settings.json", 0.0)) == module.DONE
     assert module.state_of(survey, module.Current("settings.json", False)) == module.OTHER
@@ -615,7 +649,6 @@ def test_a_recommended_value_is_judged_as_claude_code_reads_it(box: Sandbox) -> 
         older_forms=({"commit": "", "pr": ""},),
         when_missing="On.",
         when_older_form="Partly.",
-        when_other="Yours.",
     )
     older = module.Current("settings.json", {"pr": "", "commit": ""})
     assert module.state_of(attribution, older) == module.OLDER

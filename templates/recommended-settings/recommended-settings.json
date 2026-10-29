@@ -2,35 +2,45 @@
   "recommendedSettings": {
     "attribution-off": {
       "summary": "Leave Claude Code's name out of your commits and pull requests",
-      "why": "It turns attribution off, so your commits and pull requests hold only what you and your project put there.",
       "claudeCode": {
         "key": "attribution",
         "value": false,
         "olderForms": [{ "commit": "", "pr": "" }],
+        "whenRecommended": "Attribution is off: Claude Code adds no co-author line to your commits, no \"Generated with Claude Code\" to your pull requests, and no link to the session.",
         "whenMissing": "Attribution is on: Claude Code adds a co-author line to your commits and \"Generated with Claude Code\" to your pull requests, and cloud and Remote Control sessions add a link to the session.",
         "whenOlderForm": "Attribution is partly off: Claude Code leaves out the co-author line and \"Generated with Claude Code\", but cloud and Remote Control sessions still add a link to the session.",
-        "whenOther": "Attribution is set your own way: Claude Code adds what that value says, in place of its own lines."
+        "customValues": { "kind": "object" }
       }
     },
     "feedback-survey-off": {
       "summary": "Turn off Claude Code's session quality survey",
-      "why": "It turns the survey off, so it never interrupts your work or asks to upload a transcript.",
       "claudeCode": {
         "key": "feedbackSurveyRate",
         "value": 0,
+        "whenRecommended": "The survey is off: Claude Code never asks you to rate a session or to upload its transcript.",
         "whenMissing": "The survey is on: Claude Code now and then asks you to rate the session, and can ask to upload its transcript.",
-        "whenOther": "The survey is on at that rate, from 0 for never to 1 for every time it can: Claude Code asks you to rate the session, and can ask to upload its transcript."
+        "customValues": {
+          "kind": "number",
+          "min": 0,
+          "max": 1,
+          "when": "The survey is on at that rate, from 0 for never to 1 for every time it can: Claude Code asks you to rate the session, and can ask to upload its transcript."
+        }
       }
     },
     "remote-control-at-startup": {
       "summary": "Connect Remote Control when each Claude Code session starts",
-      "why": "It turns Remote Control on at startup, so you can pick up any session from claude.ai/code or the Claude app, with nothing to run first.",
       "claudeCode": {
         "key": "remoteControlAtStartup",
         "value": true,
         "olderPlace": ".claude.json",
+        "whenRecommended": "Remote Control is on at startup: each session connects as it starts, so you can pick it up from claude.ai/code or the Claude app without running /remote-control.",
         "whenMissing": "Remote Control is off at startup: it connects only when you run /remote-control, unless your organization or Claude Code turns it on for everyone.",
-        "whenOther": "Remote Control is off at startup: it connects only when you run /remote-control, unless your organization turns it on for everyone.",
+        "otherValues": [
+          {
+            "value": false,
+            "when": "Remote Control is off at startup: it connects only when you run /remote-control, unless your organization turns it on for everyone."
+          }
+        ],
         "needs": "It needs a claude.ai sign-in on a Pro, Max, Team, or Enterprise plan, and on Team and Enterprise, an Owner must turn Remote Control on first. Where it can't connect, each session shows a notice; switch it off in /config."
       }
     }

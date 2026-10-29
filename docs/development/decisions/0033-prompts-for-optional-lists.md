@@ -20,8 +20,9 @@ menu, the question about an item that has a reminder offers no skip: Enter keeps
 there, which is what saying nothing does. The prompt covers only the items not answered yet, and
 chat offers the same answers. A list may show rows about each item under its name, such as a
 recommended setting's value now, in a column of their own, and may name its own marks for an
-item that's recommended or not: the recommended settings' list marks one with a value someone
-chose as "your own value, which Enter keeps", since every item in it is a recommended setting.
+item that's recommended or not: the recommended settings' list marks one whose folder has another
+value as "Enter keeps its value", since every item in it is a recommended setting, and setup can't
+know whether that value is the person's own choice.
 Changed on 2026-10-20, with skip and the reminders that
 [0040: Answers to offers](0040-answers-to-offers.md) set out, by the developer on 2026-10-24 (a
 recommended setting's default depends on the file), and on 2026-10-28 (rows and marks of a list's

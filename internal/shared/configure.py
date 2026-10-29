@@ -27,7 +27,6 @@ import copy
 import hashlib
 import json
 import re
-import textwrap
 from collections.abc import Callable, Sequence
 from datetime import date
 from pathlib import Path
@@ -82,8 +81,8 @@ NAMES = (*(setting.path for setting in SETTINGS), *FOLDER_SETTINGS, "multiMachin
 # takes them, followed by a setting's id for one alone (decision 0032).
 RECOMMENDED_NAME = f"{CLAUDE_CODE.group}.{RECOMMENDED_ANSWERS}"
 # How the list for an agent marks each recommended setting, where only some are recommended in a
-# folder: one where a yes is recommended, and one with a value someone chose, which a no keeps.
-CHAT_MARKS = ("recommended", "your own value, which all recommended keeps")
+# folder: one where a yes is recommended, and one with any other value, which a no keeps.
+CHAT_MARKS = ("recommended", "all recommended keeps its value")
 # Each agent by the name of its folders' setting.
 AGENT_FOR = {agent.setting: agent for agent in AGENTS}
 # A name is a setting's path, which may hold dots and, in a skill's name, hyphens, or the path in
@@ -99,7 +98,7 @@ USAGE_WIDTH = 100
 def usage_entry(name: str, text: str) -> list[str]:
     """One entry of USAGE: the assignment, then what it does beside it, or below it when the
     assignment is too long."""
-    wrapped = textwrap.wrap(text, USAGE_WIDTH - USAGE_COLUMN)
+    wrapped = console.wrap(text, width=USAGE_WIDTH - USAGE_COLUMN)
     first = f"  {name}"
     if len(first) <= USAGE_COLUMN - 2:
         lines = [first.ljust(USAGE_COLUMN) + wrapped[0]]
@@ -259,16 +258,9 @@ def fingerprint(data: bytes) -> str:
 
 
 def wrapped(run: "Setup", text: str, indent: str = "") -> None:
-    """Text as lines of USAGE's width, each set in by indent, broken only at spaces, so a path
-    stays whole however long it is."""
-    for line in textwrap.wrap(
-        text,
-        USAGE_WIDTH,
-        initial_indent=indent,
-        subsequent_indent=indent,
-        break_long_words=False,
-        break_on_hyphens=False,
-    ):
+    """Text as lines of USAGE's width, each set in by indent, broken only at spaces (see
+    console.wrap)."""
+    for line in console.wrap(text, indent, indent, width=USAGE_WIDTH):
         run.line(line)
 
 
