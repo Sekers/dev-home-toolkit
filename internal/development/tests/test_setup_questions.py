@@ -90,7 +90,9 @@ def person(box: Sandbox, monkeypatch: pytest.MonkeyPatch) -> Iterator[Person]:
 
 class FakeGh:
     """gh, signed in, recording each call. A clone copies the sandbox's own dev-home remote, as
-    if from GitHub, or clone_from when a test sets it. A create with --source, --remote origin,
+    if from GitHub, or clone_from when a test sets it, passing git the options after --, as gh
+    does, and keeps the clone's own git config as it is right then in clone_config, before setup
+    changes it. A create with --source, --remote origin,
     and --push makes a bare repo in the sandbox, as if on GitHub, and pushes to it, setting the
     upstream branch, as gh does. failing names a command, such as ("repo", "create"), that fails
     instead."""
@@ -100,13 +102,16 @@ class FakeGh:
         self.calls: list[tuple[str, ...]] = []
         self.failing: tuple[str, ...] = ()
         self.clone_from = box.remote
+        self.clone_config: list[str] = []
 
     def __call__(self, program: str, *args: str) -> tuple[int, list[str]]:
         self.calls.append(args)
         if self.failing and args[: len(self.failing)] == self.failing:
             return 1, [f"gh: {' '.join(self.failing)} failed on purpose"]
         if args[:2] == ("repo", "clone"):
-            git("clone", "--quiet", str(self.clone_from), args[3])
+            options = args[args.index("--") + 1 :] if "--" in args else ()
+            git("clone", "--quiet", *options, str(self.clone_from), args[3])
+            self.clone_config = git("-C", args[3], "config", "--local", "--list")
         if args[:2] == ("repo", "create") and "--push" in args:
             source = args[args.index("--source") + 1]
             remote = self.box.root / f"{args[2]}-on-github.git"
@@ -2095,7 +2100,7 @@ def test_says_what_stopped_a_clone(
     assert settings.read_bytes() == before
 
 
-def test_a_clone_that_isnt_a_dev_home_gets_no_git_config(
+def test_a_clone_that_isnt_a_dev_home_gets_only_the_clones_git_config(
     box: Sandbox,
     settings: Path,
     person: Person,
@@ -2118,7 +2123,10 @@ def test_a_clone_that_isnt_a_dev_home_gets_no_git_config(
     out = capsys.readouterr().out
     assert returned == 1, out
     assert re.search(r"^PROBLEM\s+.*wrong-clone doesn't look like a dev-home", out, re.M), out
-    assert "gpgsign" not in (cloned / ".git" / "config").read_text(encoding="utf-8")
+    # The clone's long-path option, but none of the settings setup makes in a dev-home.
+    config = git("-C", str(cloned), "config", "--local", "--list")
+    assert "core.longpaths=true" in config, config
+    assert not any(line.startswith(("commit.gpgsign=", "pull.rebase=")) for line in config), config
 
 
 def test_a_git_step_that_fails_while_creating_says_which(
@@ -2171,7 +2179,10 @@ def test_clones_an_existing_dev_home(
     cloned = box.root / "cloned-dev-home"
     setup_here(box, "--content-dir", str(cloned))
     out = capsys.readouterr().out
-    assert ("repo", "clone", "dev-home", str(cloned)) in fake_gh.calls, fake_gh.calls
+    clone = ("repo", "clone", "dev-home", str(cloned), "--", "-c", "core.longpaths=true")
+    assert clone in fake_gh.calls, fake_gh.calls
+    # On from the clone's start, so a path past Windows' limit can't stop the checkout.
+    assert "core.longpaths=true" in fake_gh.clone_config, fake_gh.clone_config
     assert re.search(r"^CREATED\s+Cloned dev-home into ", out, re.M), out
     assert (cloned / "skills" / "mine" / "SKILL.md").is_file()
 

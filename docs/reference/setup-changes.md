@@ -124,7 +124,8 @@ and your rules joined, which setup writes again at each sync.
   and `core.longpaths` on, since `rules\` can need paths longer than Windows' default limit. With
   signing off, a commit never stops in the middle of a sync to ask for your signing passphrase.
   Your project repos keep signing as usual. Setup does this only in a folder that is a dev-home,
-  with `dev-home.json`.
+  with `dev-home.json`. The one exception is `core.longpaths` in a repo setup clones as your
+  dev-home: git turns it on as the clone starts, so a long path can't stop the clone partway.
 - **In your dev-home itself:** an empty `my-rules.md` wherever one is missing in `rules\`, for
   every agent and for each agent set up on this PC (see [Your rules](../guide/your-rules.md)),
   committed and pushed. And after your yes, `dev-home.json`, which says whether dev-home is in

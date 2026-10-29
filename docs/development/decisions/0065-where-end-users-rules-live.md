@@ -20,8 +20,8 @@ never the per-PC levels, and `pcs/<pc>/<agent>/` also holds `unanswered/`
 ([0064: Each agent's rules file](0064-each-agents-rules-file.md)).
 Decided by the developer on 2026-10-17 and 2026-10-18, and changed on 2026-10-22 (a code block
 left open, the order inside a merged section, `# My rules`, and the size settings' details),
-2026-10-23 (a missing `my-rules.md` git still has), and 2026-10-24 (how agents pass a `LARGE`
-line on).
+2026-10-23 (a missing `my-rules.md` git still has), 2026-10-24 (how agents pass a `LARGE`
+line on), and 2026-10-29 (git's long-path option from a clone's start).
 
 - **Names.** `<pc>` is the PC's name ([0083: The PC's name](0083-the-pcs-name.md)) in
   lowercase, any other character a hyphen.
@@ -90,7 +90,9 @@ line on).
   260 characters, and otherwise prints a `PROBLEM` line suggesting a shorter place for dev-home.
   The handoff skill checks the same way when it creates a handoff. Setup turns on `core.longpaths`
   in dev-home's git config with its other git settings there; if checking it adds a git call to
-  each run, it's measured and the developer is asked first, as AGENTS.md's Speed rule says.
+  each run, it's measured and the developer is asked first, as AGENTS.md's Speed rule says. A
+  dev-home that setup clones has it on from the start: its `gh repo clone` passes
+  `-c core.longpaths=true` on to git (the developer, 2026-10-29).
 - **Docs.** `docs/guide/your-rules.md` explains the levels with an example of each, `mine/` and
   `my-rules.md`, `os:`, a takeover of an agent's file, and getting dropped text back;
   `docs/reference/rule-files.md` holds the facts to look up; the README's "Your own rules and
@@ -140,7 +142,11 @@ line on).
   cap each name at 255. Windows' own long-path switch needs admin rights, so setup leaves it alone.
   With these caps the longest rules path is about 140 characters, so dev-home's folder can be about
   90 characters long. A handoff's path, `handoffs/github/<owner>/<repo>/HANDOFF.md`, can reach about
-  170, since GitHub allows 39-character owners and 100-character repository names.
+  170, since GitHub allows 39-character owners and 100-character repository names. Turning
+  `core.longpaths` on after a clone comes too late for its checkout: tested on 2026-10-28, a
+  clone whose checkout passed the limit failed without it, even with Windows' long-path setting
+  on, and `gh` passes the option on to git
+  ([Long paths on Windows](../research/long-paths-on-windows.md)).
 - `os:` in a note: agents are limited by folder, operating systems by declaration, as built-in
   rules declare theirs, and one file covers every Windows PC. A misspelled name loads the rule,
   since dropping a needed rule costs more than loading an extra one.

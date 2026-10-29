@@ -1719,7 +1719,12 @@ class Setup:
                 return
             if not self.should(path, f"Clone {name} from GitHub"):
                 return
-            code, lines = run_tool(gh, "repo", "clone", name, str(path))
+            # git's long-path option, which gh passes on to git, is on before the checkout: set
+            # afterward with the other git settings, it would come too late for a path in
+            # dev-home past Windows' limit (decision 0065).
+            code, lines = run_tool(
+                gh, "repo", "clone", name, str(path), "--", "-c", "core.longpaths=true"
+            )
             if code != 0:
                 self.status("PROBLEM", f"Could not clone {name}. gh: {first_line(lines)}")
                 return
