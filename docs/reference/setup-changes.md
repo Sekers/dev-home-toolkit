@@ -45,7 +45,9 @@ and your rules joined, which setup writes again at each sync.
     skills to add to your agents, and the skills' preferences.
     The scripts read it to find your dev-home.
     Setup removes a setting nothing declares any more, such as one misspelled in a hand edit,
-    and says so, after a backup of the file. It never overwrites a file it can't read as JSON,
+    and says so, after a backup of the file. A folder listed twice, such as by `~` and in full,
+    it merges into one entry the same way, keeping a yes over a no, and either over a reminder.
+    It never overwrites a file it can't read as JSON,
     or one with a `schemaVersion` it doesn't know. One in an older layout, from before its
     settings were grouped, it offers to set aside, as a dated backup beside it, and then asks its
     questions again.

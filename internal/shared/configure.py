@@ -1219,14 +1219,7 @@ def assign_recommended(
                 f"{name}+=~/.claude@<fingerprint>."
             )
     full = Path(comparable(resolve_home(folder_text.strip(), run.home)))
-    entry = next(
-        (
-            entry
-            for entry, folder in run.folders_answered(CLAUDE_CODE, settings, True)
-            if same_path(folder, full)
-        ),
-        None,
-    )
+    entry = run.set_up_entry(CLAUDE_CODE, settings, full)
     if entry is None:
         raise SettingError(
             f"{full} isn't a {CLAUDE_CODE.name} {CLAUDE_CODE.folder} set up, so setup has no "

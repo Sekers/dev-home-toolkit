@@ -19,7 +19,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from .paths import comparable, resolve_home, same_path
+from .paths import comparable, forward, resolve_home, same_path
 from .requirements import LISTS, Requirement, parse_list, unknown_field
 
 # dev-home-toolkit's folder: this file is in internal/shared/, two folders below it.
@@ -402,6 +402,28 @@ def read_reminder(value: object) -> Reminder | None:
         return Reminder(date.fromisoformat(on))
     except ValueError:
         return None
+
+
+def written_entry(folder: str | Path, home: Path) -> str:
+    """How setup writes a folder in an agent's entries in local-settings.json: from ~ when it's in
+    the profile folder, and in full otherwise."""
+    full = Path(comparable(folder))
+    return "~/" + full.name if same_path(full.parent, home) else forward(full)
+
+
+def entry_answer(entry: object) -> bool | Reminder | None:
+    """The answer one of an agent's entries holds: yes, no, a reminder, or None for none setup
+    can use."""
+    answer = entry.get("setUp") if isinstance(entry, dict) else None
+    return answer if isinstance(answer, bool) else read_reminder(answer)
+
+
+def answer_rank(answer: bool | Reminder | None) -> int:
+    """Which answer setup goes by when several entries name one folder, lowest first: a yes sets
+    it up, a no turns it off, and a reminder counts only where neither is."""
+    if isinstance(answer, bool):
+        return 0 if answer else 1
+    return 2 if answer is not None else 3
 
 
 def folder_reminders(value: object) -> dict[str, Reminder]:
@@ -894,34 +916,50 @@ def remove_path(data: dict[str, Any], path: str) -> None:
         del container[group]
 
 
+@dataclass(frozen=True)
+class Merged:
+    """Entries of an agent's folders that name the same folder, merged into one by
+    check_settings: the setting, such as claudeCode.folders, the entries as written, the entry
+    they became, and the answer it kept."""
+
+    path: str
+    entries: tuple[str, ...]
+    kept: str
+    answer: bool | Reminder | None
+
+
 @dataclass
 class Checked:
     """What check_settings found: the settings with each answer under a former name moved to the
-    setting's name, and each setting nothing declares removed; a problem for each value of the
-    wrong kind; and what was moved and removed, for the line that says so."""
+    setting's name, each setting nothing declares removed, and each agent's entries that name the
+    same folder merged; a problem for each value of the wrong kind; and what was moved, removed,
+    and merged, for the line that says so."""
 
     data: dict[str, Any]
     problems: list[str] = field(default_factory=list)
     moved: list[str] = field(default_factory=list)
     removed: list[str] = field(default_factory=list)
+    merged: list[Merged] = field(default_factory=list)
 
 
 def check_settings(
     data: dict[str, Any],
     declared: SkillDeclarations,
     *,
+    home: Path,
     remove_gone_skills: bool,
     seen: dict[str, Any] | None = None,
 ) -> Checked:
     """Checks this PC's settings against the declarations: an answer saved under a setting's
-    former name moves to its name, a setting nothing declares is removed, and a value of the wrong
-    kind is a problem, saying what it counts as instead. A skill whose file can't be read keeps
-    its answers. So does a skill that's gone, unless remove_gone_skills: only a run that holds the
-    sync's lock passes it, since a sync or an update may be replacing a skill's files at that
-    moment, and the skill would only look gone. With seen, the file as a run first read it, only
-    what that held is removed: another run saved the rest since, and it may know a declaration
-    that this run, which read its own earlier, doesn't, such as one an update brought. The
-    settings passed in aren't changed."""
+    former name moves to its name, a setting nothing declares is removed, an agent's entries that
+    name the same folder in home are merged into one, and a value of the wrong kind is a problem,
+    saying what it counts as instead. A skill whose file can't be read keeps its answers. So does
+    a skill that's gone, unless remove_gone_skills: only a run that holds the sync's lock passes
+    it, since a sync or an update may be replacing a skill's files at that moment, and the skill
+    would only look gone. With seen, the file as a run first read it, only what that held is
+    removed: another run saved the rest since, and it may know a declaration that this run, which
+    read its own earlier, doesn't, such as one an update brought. The settings passed in aren't
+    changed."""
     # Loaded only here, which only setup runs, so a sync that never runs setup, such as one that
     # commits, doesn't load the list of recommended settings.
     from .recommended_settings import ids_for
@@ -982,11 +1020,12 @@ def check_settings(
         if not isinstance(value, dict):
             wrong(path, value, f"a JSON object of {agent.folder}s", "none")
             return
-        for folder, entry in value.items():
+
+        def check_entry(folder: str, entry: object) -> None:
             where = f"{path} {folder}"
             if not isinstance(entry, dict):
                 wrong(where, entry, "a JSON object", unset)
-                continue
+                return
             for entry_key, answer in list(entry.items()):
                 keys = (*path.split("."), folder, entry_key)
                 if entry_key == RECOMMENDED_ANSWERS and recommended:
@@ -998,6 +1037,51 @@ def check_settings(
                     remove(entry, entry_key, f"{where}: {entry_key}", keys)
                 elif not isinstance(answer, bool) and read_reminder(answer) is None:
                     wrong(f"{where}: setUp", answer, answer_forms, unset)
+
+        # Each entry's problems, by where they are in the list, so those of an entry the merge
+        # deletes go with it: there's nothing left to fix.
+        found: dict[str, range] = {}
+        for folder, entry in value.items():
+            first = len(problems)
+            check_entry(folder, entry)
+            found[folder] = range(first, len(problems))
+        deleted = merge_same_folders(path, value)
+        gone = {index for folder in deleted for index in found[folder]}
+        problems[:] = [problem for index, problem in enumerate(problems) if index not in gone]
+
+    def merge_same_folders(path: str, value: dict[str, Any]) -> list[str]:
+        """Entries that name the same folder, such as ~/.claude and its full path, which only a
+        hand edit makes, merged into one, so everything that reads them finds one answer. The
+        entry kept is the first answered yes, else no, else with a reminder, else the first, as
+        setup goes by them for a Claude Code folder; Codex homes then share the main one's answer
+        anyway (see Setup.match_shared_answer). It's kept whole, written as setup writes a folder
+        (see written_entry), and what the others held is deleted. Returns the entries deleted."""
+
+        def folder_of(entry: str) -> str:
+            return os.path.normcase(comparable(resolve_home(entry, home)))
+
+        same: dict[str, list[str]] = {}
+        for entry in value:
+            if entry.strip():
+                same.setdefault(folder_of(entry), []).append(entry)
+        if all(len(entries) == 1 for entries in same.values()):
+            return []
+        merged: dict[str, Any] = {}
+        deleted: list[str] = []
+        for entry, inner in value.items():
+            entries = same.get(folder_of(entry), [entry]) if entry.strip() else [entry]
+            if len(entries) == 1:
+                merged[entry] = inner
+            elif entry == entries[0]:
+                # min keeps the first of those that rank alike.
+                kept = min(entries, key=lambda e: answer_rank(entry_answer(value[e])))
+                name = written_entry(resolve_home(kept, home), home)
+                merged[name] = value[kept]
+                deleted += [other for other in entries if other != kept]
+                checked.merged.append(Merged(path, tuple(entries), name, entry_answer(value[kept])))
+        value.clear()
+        value.update(merged)
+        return deleted
 
     def check_recommended(where: str, value: object, keys: KeyPath, known: list[str]) -> None:
         """A folder's answers to the recommended settings, by each one's id. An id the list

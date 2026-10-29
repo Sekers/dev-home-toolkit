@@ -54,6 +54,14 @@ setting counts as missing.
   and a backup, and nobody is asked. A whole skill that's gone has its answers deleted by the
   first run that holds the sync's lock from its start, a sync's setup, so a skill that a sync or
   an update is replacing at that moment never looks gone.
+- Entries of an agent's folders that name the same folder, such as `~/.claude` and its full path,
+  which only a hand edit makes, are merged into one on the first setup run that sees them, quiet
+  runs included, with one line and a backup. The entry kept is the first answered yes, else no,
+  else with a reminder, the answer setup already goes by for a Claude Code folder; Codex homes
+  then share the main home's answer, as always. It's kept whole, its answers to recommended
+  settings included, and written as setup writes a folder; the others' answers are deleted, and
+  so is any problem found in them. A folder reached through a link under another name isn't
+  merged.
 - When an update changes a default, the PCs that follow it get the new value, and the update says
   so once. It reads the definitions, and each skill's `dev-home-skill.json`, before and after it
   pulls.
@@ -69,10 +77,11 @@ setting counts as missing.
 - The answers a run changed are the end user's, given in that run: at a question, in the menu, or
   through `--configure`. What setup works out by itself isn't an answer: the mark for a skill new
   to the PC, an answer moved for a rename or a name's case, a setting nothing declares removed,
-  and the answer every Codex home shares. Setup works each of those out again at the save, from
-  the file as it reads it then, after making the end user's changes there, and sets up from what
-  it saved. It removes only what the file held when the run first read it: anything newer came
-  from another run, which may know a declaration this run doesn't, such as one an update brought.
+  entries for one folder merged, and the answer every Codex home shares. Setup works each of
+  those out again at the save, from the file as it reads it then, after making the end user's
+  changes there, and sets up from what it saved. It removes a setting nothing declares only when
+  the file held it when the run first read it: anything newer came from another run, which may
+  know a declaration this run doesn't, such as one an update brought.
   A sync's setup reads nothing again: it has held the lock since before it read the file.
 - A backup is made only when a person changes a setting, or answers are deleted, never for a
   write that only records something, such as `unanswered`.
@@ -120,6 +129,12 @@ setting counts as missing.
   carried over, and gives each later change setup makes by itself one place to go.
 - A write that only records something can come on any sync, so a backup of each would pile up
   beside the file.
+- Two entries for one folder, with different answers, left setup's parts disagreeing (found
+  2026-10-28): setup set up a folder that the menu said was answered no, a no in the menu or
+  through `--configure` changed nothing, and a yes to a recommended setting was saved where its
+  offer didn't read it. Merging them where the file is read gives every part one answer, as a
+  rename's move does. For a Claude Code folder, keeping the answer setup already goes by changes
+  nothing setup does, and the backup keeps what was deleted.
 
 **Options set aside:**
 
@@ -159,6 +174,10 @@ setting counts as missing.
   hand; a test against reusing a removed name.
 - For a folder: `setUp` as a setting with no default, as until 2026-10-16 (it can't hold a
   reminder); and a reminder replacing a yes or a no (see above).
+- For a folder listed twice: fixing each part that reads the entries to prefer the yes (several
+  places, and the next part to read them can bring the problem back); a `PROBLEM` on every sync
+  until it's fixed by hand (until then the menu shows the wrong answer, and a no does nothing);
+  fixing only where a yes to a recommended setting is saved (the menu and the no stay wrong).
 - Carrying the changes setup works out over from the run's first read, as until 2026-10-17: a
   newer run may have written the file since, with a declaration this run doesn't know.
 

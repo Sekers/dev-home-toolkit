@@ -1474,6 +1474,78 @@ def test_claude_code_folders_out_of_order_are_shown_and_put_in_order(
     assert not list(settings_kept.parent.glob("local-settings.json.bak-*")), str(result)
 
 
+def test_a_folder_listed_twice_is_merged_into_the_entry_setup_goes_by(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    # Only a hand edit lists one folder twice, such as by ~ and in full. Setup sets it up when
+    # either says yes, so the yes entry is kept whole, as setup writes a folder, with a line and a
+    # backup, since the no is deleted. Every reader then finds that answer, the menu included,
+    # and a no takes effect again.
+    full = forward(box.profile / ".claude")
+    saved = json.loads(read(settings_kept))
+    answers = {"attribution-off": True}
+    saved["claudeCode"]["folders"] = {
+        "~/.claude": {"setUp": False},
+        full: {"setUp": True, "recommendedSettings": answers},
+    }
+    write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
+    edited = read(settings_kept)
+    listing = run_python(box, "setup.py", "--configure")
+    no = setup_configure(box, "claudeCode.folders-=~/.claude", "--what-if")
+    assert read(settings_kept) == edited
+    result = setup(box)
+    after = json.loads(read(settings_kept))
+    row = r"^  7\s+Claude Code folders to set up\s+~/\.claude: yes$"
+    assert listing.has_line(row), str(listing)
+    assert no.has_line(r'^\s+\+\s+"setUp": false'), str(no)
+    pattern = (
+        rf"^SET\s+This PC's settings: .*\. Merged claudeCode\.folders ~/\.claude and "
+        rf"{re.escape(full)}, which name the same folder, into ~/\.claude, keeping the answer: "
+        r"yes\. Backup of the old file: "
+    )
+    assert result.code == 0 and result.has_line(pattern), str(result)
+    assert after["claudeCode"]["folders"] == {
+        "~/.claude": {"setUp": True, "recommendedSettings": answers}
+    }, after
+    backups = list(settings_kept.parent.glob("local-settings.json.bak-*"))
+    assert len(backups) == 1 and read(backups[0]) == edited
+    assert not setup(box).has_line(r"^SET\s"), "a merged file needs nothing more"
+
+
+def test_a_no_wins_over_a_reminder_for_a_folder_listed_twice(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    # A reminder counts only where there's no yes or no. The entry is written as setup writes a
+    # folder, even when neither spelling was that, and a folder that isn't there merges too. An
+    # entry setup can't use, deleted by the merge, is no problem left to fix.
+    folder = box.profile / ".claude-merge"
+    odd = box.profile / ".claude-odd"
+    saved = json.loads(read(settings_kept))
+    saved["claudeCode"]["folders"][forward(folder)] = {
+        "setUp": {"$state": "remind", "on": "2099-01-01"}
+    }
+    saved["claudeCode"]["folders"][str(folder)] = {"setUp": False}
+    saved["claudeCode"]["folders"]["~/.claude-odd"] = "yes"
+    saved["claudeCode"]["folders"][forward(odd)] = {"setUp": False}
+    write_text(settings_kept, json.dumps(saved, indent=2) + "\n")
+    result = setup(box)
+    after = json.loads(read(settings_kept))["claudeCode"]["folders"]
+    pattern = (
+        r"Merged claudeCode\.folders .*\.claude-merge and .*\.claude-merge, which name the same "
+        r"folder, into ~/\.claude-merge, keeping the answer: no\. Merged claudeCode\.folders "
+        r"~/\.claude-odd and .*\.claude-odd, .* into ~/\.claude-odd, keeping the answer: no\. "
+        r"Backup"
+    )
+    assert result.code == 0 and result.has_line(pattern), str(result)
+    assert not result.has_line(r"^PROBLEM\s"), str(result)
+    expected = {
+        "~/.claude": {"setUp": True},
+        "~/.claude-merge": {"setUp": False},
+        "~/.claude-odd": {"setUp": False},
+    }
+    assert after == expected, after
+
+
 def test_a_claude_folder_with_a_no_is_left_alone_even_from_a_session_there(box: Sandbox) -> None:
     session = box.profile / ".claude-declined"
     write_text(session / "settings.json", "{}\n")

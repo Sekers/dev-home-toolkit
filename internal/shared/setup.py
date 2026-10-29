@@ -288,6 +288,7 @@ from .settings import (
     settings_text,
     skill_declarations,
     written_alike,
+    written_entry,
 )
 from .settings_files import (
     Plan,
@@ -422,9 +423,10 @@ class AgentFolders:
 @dataclass(frozen=True)
 class Settled:
     """This PC's settings as the work saves them and acts on them (see Setup.settle). changes is
-    what the check of the file moved and removed; matched has, by each shared agent's setting, the
-    line saying which of its folders got the main folder's answer; new_skills names each skill
-    marked as new to this PC; answered says whether a person changed a setting in this run;
+    what the check of the file moved, removed, and merged; matched has, by each shared agent's
+    setting, the line saying which of its folders got the main folder's answer; new_skills names
+    each skill marked as new to this PC; answered says whether a person changed a setting in this
+    run;
     problem is why the settings can't be saved, or "" when they can; and out_of_order says the
     file as it is now lists an agent's folders out of order."""
 
@@ -623,7 +625,8 @@ class RecommendedOffer:
 
 
 def cleanup(checked: Checked) -> list[str]:
-    """What check_settings removed and moved, a sentence for each, for the line that says so."""
+    """What check_settings removed, moved, and merged, a sentence for each, for the line that says
+    so."""
     sentences = []
     if checked.removed:
         them = "it" if len(checked.removed) == 1 else "them"
@@ -631,6 +634,11 @@ def cleanup(checked: Checked) -> list[str]:
     if checked.moved:
         names = "its new name" if len(checked.moved) == 1 else "their new names"
         sentences.append(f"Moved {', '.join(checked.moved)}, {names}")
+    sentences += [
+        f"Merged {merge.path} {and_list(merge.entries)}, which name the same folder, into "
+        f"{merge.kept}, keeping the answer: {configure.answer_text(merge.answer)}"
+        for merge in checked.merged
+    ]
     return sentences
 
 
@@ -680,7 +688,7 @@ class Setup:
         # after each step that takes their answers, apart from setup's own changes in between,
         # which the work makes in the file as it is by then (see answering and settle).
         self.answers: list[tuple[dict[str, Any], dict[str, Any]]] = []
-        # What the check of this PC's settings at the start of the run moved and removed.
+        # What the check of this PC's settings at the start of the run moved, removed, and merged.
         self.checked = Checked({})
         # What the profile folder holds, listed once a run (see profile_folders).
         self.profile_entries: list[Path] | None = None
@@ -945,15 +953,16 @@ class Setup:
 
     def save(self, settled: Settled) -> bool:
         """Saves this PC's settings as the work settled them, when anything changed, and returns
-        whether it saved. When a person changed a setting, or the check moved or removed one, the
-        save says so in one line, which names what was moved or removed, and backs the file up
-        first when a person changed a setting, through the menu or --configure, or a setting was
-        removed. When the only changes are what setup records by itself, the answers a shared
+        whether it saved. When a person changed a setting, or the check moved, removed, or merged
+        one, the save says so in one line, which names what was moved, removed, or merged, and
+        backs the file up first when a person changed a setting, through the menu or --configure,
+        or a setting was removed, or entries were merged. When the only changes are what
+        setup records by itself, the answers a shared
         agent's folders got from the main one and the skills new to this PC, it keeps no backup,
         since nobody changed a setting, and the lines saying what it records stand for its own.
         With no change at all, it only puts an agent's folders back in order."""
         changes = settled.changes
-        changed = settled.answered or bool(changes.moved or changes.removed)
+        changed = settled.answered or bool(changes.moved or changes.removed or changes.merged)
         if not (changed or settled.matched or settled.new_skills):
             if settled.out_of_order and not self.what_if:
                 self.put_in_order()
@@ -968,7 +977,9 @@ class Setup:
             self.status("PROBLEM", settled.problem)
             self.save_failed = True
             return False
-        backup = changed and (self.changed_by_hand or self.assigned or bool(changes.removed))
+        backup = changed and (
+            self.changed_by_hand or self.assigned or bool(changes.removed or changes.merged)
+        )
         text = local_settings_text(settled.settings)
         try:
             kept = write_settings_file(SETTINGS_PATH, text, bom=False, backup=backup)
@@ -1030,9 +1041,10 @@ class Setup:
         sync, or --configure in another session. It makes there only the changes a person made in
         this run (see answering), which win over the other run's where both changed a setting.
         Then it works out again from that each change setup makes by itself, so none comes from an
-        earlier read: the check's moves and removals (see check_settings, which removes only what
-        read held), the answer a shared agent's folders share (see match_shared_answer), and the
-        marks for skills new to this PC (see note_new_skills).
+        earlier read: the check's moves, removals, and merges (see check_settings, which removes
+        a setting nothing declares only when read held it), the answer a shared agent's folders
+        share (see match_shared_answer), and the marks for skills new to this PC (see
+        note_new_skills).
 
         A sync's setup reads nothing again: it has held the lock since before it read the file,
         so nothing else has saved it, and its own settings, checked and matched at its start, are
@@ -1070,7 +1082,11 @@ class Setup:
                 read is not None and bool(order_folders(copy.deepcopy(read), self.home)),
             )
         changes = check_settings(
-            newer.data, declared, remove_gone_skills=False, seen=read if read is not None else {}
+            newer.data,
+            declared,
+            home=self.home,
+            remove_gone_skills=False,
+            seen=read if read is not None else {},
         )
         for found in changes.problems:
             if found not in self.problems:
@@ -1286,9 +1302,8 @@ class Setup:
         )
 
     def folder_entry(self, folder: Path) -> str:
-        """How a folder is written in local-settings.json: from ~ when it's in the profile folder,
-        and in full otherwise."""
-        return "~/" + folder.name if same_path(folder.parent, self.home) else forward(folder)
+        """How a folder is written in local-settings.json (see written_entry)."""
+        return written_entry(folder, self.home)
 
     def listed(self, folder: str | Path, entries: list[str]) -> bool:
         """Whether a folder is one of the entries, which may start with ~."""
@@ -1534,7 +1549,8 @@ class Setup:
     def save_recommended(self, settled: Settled, written: Sequence[tuple[Path, str]]) -> None:
         """Saves each yes to a recommended setting whose change the work wrote, by its Claude Code
         folder's full path and the setting's id, and takes out any answer for one the work left
-        out, so its offer comes back, in this PC's settings as the work saved them, while it still
+        out, so its offer comes back, each in the folder's entry the offers read (see
+        set_up_entry), in this PC's settings as the work saved them, while it still
         holds the sync's lock. It backs the file up as the save does, unless this run backed it up
         already. Nothing when the save couldn't be made, or the file couldn't be read again."""
         if self.save_failed or settled.problem:
@@ -1543,13 +1559,16 @@ class Setup:
         before = local_settings_text(settled.settings)
         yeses: list[tuple[str, str]] = []
         for folder, setting_id in written:
-            entry = self.entry_for(CLAUDE_CODE, settled.settings, folder)
+            entry = self.set_up_entry(CLAUDE_CODE, settled.settings, folder)
+            if entry is None:
+                continue
             put_recommended(data, CLAUDE_CODE.setting, entry, setting_id, True)
             if (entry, setting_id) not in yeses:
                 yeses.append((entry, setting_id))
         for folder, setting_id in self.recommended_left_out:
-            entry = self.entry_for(CLAUDE_CODE, settled.settings, folder)
-            put_recommended(data, CLAUDE_CODE.setting, entry, setting_id, None)
+            entry = self.set_up_entry(CLAUDE_CODE, settled.settings, folder)
+            if entry is not None:
+                put_recommended(data, CLAUDE_CODE.setting, entry, setting_id, None)
         text = local_settings_text(settled.settings)
         if text == before:
             return
@@ -3367,11 +3386,11 @@ class Setup:
         # Only a run that holds the sync's lock from its start, a sync's setup, removes the answers
         # of a skill that's gone.
         self.checked = check_settings(
-            settings.data, declared, remove_gone_skills=self.sync_holds_lock
+            settings.data, declared, home=self.home, remove_gone_skills=self.sync_holds_lock
         )
         for problem in declared.problems + self.checked.problems:
             self.status("PROBLEM", problem)
-        if self.checked.moved or self.checked.removed:
+        if self.checked.moved or self.checked.removed or self.checked.merged:
             settings = settings_in(self.checked.data)
         return settings, read
 
@@ -3639,6 +3658,19 @@ class Setup:
             if not any(same_path(full, d) for _, d in folders):
                 folders.append((entry, full))
         return sorted(folders, key=lambda pair: folder_rank(agent, pair[1], self.home))
+
+    def set_up_entry(self, agent: Agent, settings: LocalSettings, folder: str | Path) -> str | None:
+        """The entry of one of an agent's folders answered yes that's there, as folders_answered
+        gives it, which the offers of recommended settings and the menu read. None when there's no
+        such entry."""
+        return next(
+            (
+                entry
+                for entry, full in self.folders_answered(agent, settings, True)
+                if same_path(full, folder)
+            ),
+            None,
+        )
 
     # Skills: which are added to the agents on this PC, and where
 
