@@ -57,11 +57,37 @@ scratch folder:
   that file, so VS Code opened it too.
 - **cmd.exe:** `type` failed on the path, but the command passed through two shells, so the result
   is inconclusive.
+
+**Measured with the setting off** (2026-10-30, Windows 11 26H2, build 26300, `LongPathsEnabled`
+0; Git for Windows 2.54.0, `gh` 2.101.0, Python 3.14.8, PowerShell 7.6.9 and 5.1, Claude Code
+2.1.314 in VS Code, the Codex CLI 0.166.0), in a scratch folder, with the test file made by Python
+through the `\\?\` form:
+
+- **git clone**, the same test, of a repo holding one file at a 193-character path, into a folder
+  that made the file's full path 360 characters: the same results as with the setting on. With no
+  `core.longpaths` anywhere, "Filename too long" and exit code 128; with
+  `git clone -c core.longpaths=true`, the checkout succeeded. `gh` passed the option on to git, as
+  before.
+- **Python 3.14.8**, the toolkit's: `open()` on the plain 345-character path failed with
+  `FileNotFoundError` (errno 2), and the `\\?\` form worked. So with the setting off, a path over
+  the limit is one the toolkit's own scripts can't read through a plain path, though both agents
+  can.
+- **PowerShell 7.6.9:** `Get-Content` read the plain path. **Windows PowerShell 5.1:** it failed,
+  "Cannot find path ... because it does not exist".
+- **cmd.exe:** `type` failed, "The system cannot find the path specified", with the path passed in
+  an environment variable, so no shell changed it.
+- **Claude Code 2.1.314:** its Read tool read the 345-character path, and its Write and Edit tools
+  created a new folder and file at a 409-character path, then changed the file.
+- **Codex CLI 0.166.0**, through `codex exec`, told to use the plain paths with no workaround: it
+  read the 345-character file with PowerShell 7's `Get-Content`, and its `apply_patch` created a
+  new folder and file at a 383-character path, then changed the file. Python read both agents'
+  files back afterwards.
+
 - A pitfall for anyone repeating these: Git Bash's `cygpath -w` gives a path over 260 characters
   in its `\\?\` form already, so a test that builds its path with it tests the long-path form, not
   a plain path.
-- **Not tested:** anything with Windows' setting off, the default, which a PC with it on can't
-  show; Codex's file tools; Windows Explorer. See "Testing with the setting off".
+- **Not tested:** Windows Explorer; Codex on a PC without PowerShell 7, where its commands may run
+  in Windows PowerShell 5.1, which failed above.
 
 ## Where dev-home-toolkit's paths come from
 
@@ -124,20 +150,3 @@ None of these is decided.
 
 - Which of the options to build, and whether before 1.0.0, when other people start using
   dev-home-toolkit.
-- The tests with Windows' setting off, below. If the agents' file tools fail there, a path over the
-  limit is a file the agent can't use at all, which weighs against warning (A) and for capping (B).
-
-## Testing with the setting off
-
-On a PC whose setting is off (`reg query HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v
-LongPathsEnabled` shows 0, or nothing):
-
-1. In a scratch folder, make a file at a path over 260 characters. Python can only do it through
-   the `\\?\` form there, for its folders too: `os.makedirs("\\\\?\\" + r"C:\<scratch>\<long
-   path>")`, then `open("\\\\?\\" + r"C:\<scratch>\<long path>\file.txt", "w")`.
-2. Ask Claude Code to read it, then to write and edit a new file at a path over 260 characters.
-   Do the same in Codex.
-3. Open the plain path with Python's `open()`.
-4. Repeat the git clone tests above.
-
-Record the results here, with the versions.
