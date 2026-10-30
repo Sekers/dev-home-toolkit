@@ -62,6 +62,12 @@ points here; its rules apply too.
   - the `internal/.python/` junction, once the `python.exe` it leads to is gone, or once a
     Python that setup ranks ahead of it passes setup's check
     ([0077: Which Python setup uses](decisions/0077-which-python-setup-uses.md))
+  - what a clone of dev-home that didn't finish left in the folder beside dev-home's that's named
+    for it with `.cloning` added, only when that's an empty folder or a git repo, with each link
+    inside removed by itself first: before cloning there again, and when a clone fails
+    ([0087: Cloning dev-home](decisions/0087-cloning-dev-home.md))
+  - an empty folder at dev-home's path, which a complete clone takes the place of, but never a
+    link there: the clone goes where the link leads (0087)
   - settings files the person said yes to changing
   - the settings file of a Claude Code folder or Codex home the person said no to setting up,
     to take out what a yes there adds

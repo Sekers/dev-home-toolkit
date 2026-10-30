@@ -109,3 +109,4 @@ file and link to the new one.
 - [0084: dev-home's commit history](0084-dev-homes-commit-history.md)
 - [0085: Files dev-home ignores](0085-files-dev-home-ignores.md)
 - [0086: dev-home's host](0086-dev-homes-host.md)
+- [0087: Cloning dev-home](0087-cloning-dev-home.md)

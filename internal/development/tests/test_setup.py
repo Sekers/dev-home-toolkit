@@ -4835,6 +4835,30 @@ def test_reads_a_link_to_a_network_path_as_one(box: Sandbox) -> None:
     assert paths.without_long_prefix("\\\\?\\C:\\x") == "C:\\x"
 
 
+def test_writes_a_path_in_windows_long_form(box: Sandbox) -> None:
+    paths = shared_module(box, "paths")
+    assert paths.long_form("C:\\x\\y") == "\\\\?\\C:\\x\\y"
+    assert paths.long_form("C:/x/y/") == "\\\\?\\C:\\x\\y"
+    assert paths.long_form("\\\\server\\share\\x") == "\\\\?\\UNC\\server\\share\\x"
+    # A path already in its long form keeps one prefix.
+    assert paths.long_form("\\\\?\\C:\\x") == "\\\\?\\C:\\x"
+    assert paths.long_form("\\\\?\\UNC\\server\\share\\x") == "\\\\?\\UNC\\server\\share\\x"
+
+
+def test_a_failed_clone_is_quoted_by_gits_first_error_or_else_the_last_line(box: Sandbox) -> None:
+    clone_error = shared_module(box, "setup").clone_error
+    git_says = [
+        "Cloning into 'dev-home.cloning'...",
+        "remote: Repository not found.",
+        "fatal: repository 'https://example.com/you/dev-home.git/' not found",
+    ]
+    assert clone_error(git_says) == git_says[-1]
+    # gh can stop before git runs, with a line of its own.
+    gh_says = ["GraphQL: Could not resolve to a Repository with the name 'you/nope'.", ""]
+    assert clone_error(gh_says) == gh_says[0]
+    assert clone_error([]) == "(no message)"
+
+
 def test_an_empty_local_settings_file_holds_no_answers(
     box: Sandbox, monkeypatch: pytest.MonkeyPatch
 ) -> None:

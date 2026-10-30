@@ -9,7 +9,10 @@ same lock for its pull, so a sync in another session can't run setup while git r
 skills' files. It never holds it while its question waits, or while the setup after the pull
 runs, since that setup may ask questions too. Setup holds it for its own work, which comes after
 all its questions
-([0034: Runs of setup by hand](0034-runs-of-setup-by-hand.md)).
+([0034: Runs of setup by hand](0034-runs-of-setup-by-hand.md)). Cloning or creating dev-home,
+which comes before there's a `.git` folder to lock in, holds a lock of the same kind on
+`internal/.generated/new-dev-home.lock` in dev-home-toolkit's folder
+([0087: Cloning dev-home](0087-cloning-dev-home.md)).
 
 **Why:** the operating system lets go of the lock when the process ends, even one that stops
 partway, so no lock is ever left behind for someone to delete. It's in Python's standard

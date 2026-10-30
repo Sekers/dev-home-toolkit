@@ -8,10 +8,12 @@ with no console, to check that it then never waits for an answer.
 
 import contextlib
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
+import threading
 import tomllib
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -95,7 +97,8 @@ class FakeGh:
     changes it. A create with --source, --remote origin,
     and --push makes a bare repo in the sandbox, as if on GitHub, and pushes to it, setting the
     upstream branch, as gh does. failing names a command, such as ("repo", "create"), that fails
-    instead."""
+    instead. fail_after_clone, when a test sets it, is the output of a clone that fails once git
+    has made its folder, as at a checkout that stops partway."""
 
     def __init__(self, box: Sandbox) -> None:
         self.box = box
@@ -103,6 +106,7 @@ class FakeGh:
         self.failing: tuple[str, ...] = ()
         self.clone_from = box.remote
         self.clone_config: list[str] = []
+        self.fail_after_clone: list[str] = []
 
     def __call__(self, program: str, *args: str) -> tuple[int, list[str]]:
         self.calls.append(args)
@@ -112,6 +116,8 @@ class FakeGh:
             options = args[args.index("--") + 1 :] if "--" in args else ()
             git("clone", "--quiet", *options, str(self.clone_from), args[3])
             self.clone_config = git("-C", args[3], "config", "--local", "--list")
+            if self.fail_after_clone:
+                return 128, list(self.fail_after_clone)
         if args[:2] == ("repo", "create") and "--push" in args:
             source = args[args.index("--source") + 1]
             remote = self.box.root / f"{args[2]}-on-github.git"
@@ -2100,6 +2106,281 @@ def test_says_what_stopped_a_clone(
     assert settings.read_bytes() == before
 
 
+def test_a_clone_that_fails_partway_leaves_no_dev_home_and_says_why(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    fake_gh: FakeGh,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # As when a file name Windows refuses stops the checkout. git says "Cloning into" first.
+    fake_gh.fail_after_clone = [
+        "Cloning into 'partway-dev-home.cloning'...",
+        "error: invalid path 'knowledge/a:b.md'",
+        "fatal: unable to checkout working tree",
+        "warning: Clone succeeded, but checkout failed.",
+    ]
+    person.answers.update({CHOICE: "c", REPO_NAME: ""})
+    missing = box.root / "partway-dev-home"
+    cloning = box.root / "partway-dev-home.cloning"
+    before = settings.read_bytes()
+    returned = setup_here(box, "--content-dir", str(missing))
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    problem = r"^PROBLEM\s+Could not clone dev-home\. gh: error: invalid path 'knowledge/a:b\.md'$"
+    assert re.search(problem, out, re.M), out
+    assert re.search(r"^REMOVED\s+.*partway-dev-home\.cloning, left by a clone ", out, re.M), out
+    # Nothing is left that a later run could take for a dev-home.
+    assert not missing.exists()
+    assert not cloning.exists()
+    assert settings.read_bytes() == before
+
+
+def test_leaves_a_folder_in_the_clones_way_that_setup_didnt_leave(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    fake_gh: FakeGh,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    missing = box.root / "blocked-dev-home"
+    cloning = box.root / "blocked-dev-home.cloning"
+    write_text(cloning / "notes.md", "# Someone's notes\n")
+    person.answers.update({CHOICE: "c", REPO_NAME: ""})
+    returned = setup_here(box, "--content-dir", str(missing))
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    problem = r"^PROBLEM\s+.*blocked-dev-home\.cloning is in the way of cloning dev-home"
+    assert re.search(problem, out, re.M), out
+    assert (cloning / "notes.md").is_file()
+    assert not any(call[:2] == ("repo", "clone") for call in fake_gh.calls), fake_gh.calls
+    assert not missing.exists()
+
+
+def test_leaves_a_link_in_the_cloning_folders_place_and_what_it_leads_to(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    fake_gh: FakeGh,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    missing = box.root / "linked-away-dev-home"
+    cloning = box.root / "linked-away-dev-home.cloning"
+    elsewhere = box.root / "someones-repo"
+    git("init", "--quiet", str(elsewhere))
+    write_text(elsewhere / "notes.md", "# Notes\n")
+    make_junction(cloning, elsewhere)
+    person.answers.update({CHOICE: "c", REPO_NAME: ""})
+    returned = setup_here(box, "--content-dir", str(missing))
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    problem = r"^PROBLEM\s+.*linked-away-dev-home\.cloning is in the way of cloning dev-home"
+    assert re.search(problem, out, re.M), out
+    assert os.path.isjunction(cloning)
+    assert (elsewhere / "notes.md").is_file()
+    assert not any(call[:2] == ("repo", "clone") for call in fake_gh.calls), fake_gh.calls
+
+
+def test_a_dev_home_folder_linked_to_nothing_stops_setup_before_it_asks_and_keeps_the_link(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    fake_gh: FakeGh,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # As when the drive the link leads to isn't plugged in: what's there may be the real dev-home.
+    link = box.root / "unplugged-dev-home"
+    gone = box.root / "unplugged-drive" / "dev-home"
+    gone.mkdir(parents=True)
+    make_junction(link, gone)
+    gone.rmdir()
+    returned = setup_here(box, "--content-dir", str(link))
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    problem = (
+        r"^PROBLEM\s+dev-home's folder .*unplugged-dev-home is a link to .*, which isn't there"
+    )
+    assert re.search(problem, out, re.M), out
+    assert os.path.isjunction(link)
+    # Neither cloned nor created: setup didn't ask which.
+    assert not any(re.search(CHOICE, question) for question in person.asked), person.asked
+
+
+def test_puts_the_empty_dev_home_folder_back_when_the_clone_cant_be_moved(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    fake_gh: FakeGh,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # A link to it, such as from another drive, has to keep leading somewhere.
+    empty = box.root / "kept-empty-dev-home"
+    empty.mkdir()
+    refuse_moving(box, box.root / "kept-empty-dev-home.cloning", monkeypatch, [-1])
+    person.answers.update({CHOICE: "c", REPO_NAME: ""})
+    returned = setup_here(box, "--content-dir", str(empty))
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    assert re.search(r"^PROBLEM\s+Cloned dev-home into .*, but could not move it", out, re.M), out
+    assert empty.is_dir()
+    assert not any(empty.iterdir())
+
+
+def test_says_so_when_another_run_left_dev_homes_folder_half_made(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    fake_gh: FakeGh,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    sync = shared_module(box, "sync")
+    lock = shared_module(box, "setup").NEW_DEV_HOME_LOCK
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    half_made = box.root / "half-made-by-another-run"
+    holds, waits = threading.Event(), threading.Event()
+    try_lock = sync.try_lock
+
+    def watching(handle: Any) -> bool:
+        got: bool = try_lock(handle)
+        if not got:
+            waits.set()
+        return got
+
+    monkeypatch.setattr(sync, "try_lock", watching)
+
+    def other_run() -> None:
+        # As when the other run's create stops after writing the files, before git init: a
+        # dev-home.json, but no .git.
+        with sync.holding(lock):
+            holds.set()
+            waits.wait(30)
+            with writing_meanwhile(box):
+                text = shared_module(box, "settings").dev_home_text({}, False)
+                write_text(half_made / "dev-home.json", text)
+
+    other = threading.Thread(target=other_run)
+    other.start()
+    assert holds.wait(30)
+    person.answers.update({CHOICE: "n", NEW_NAME: ""})
+    returned = setup_here(box, "--content-dir", str(half_made))
+    other.join(30)
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    problem = r"^PROBLEM\s+Setup changed nothing: .*half-made-by-another-run has files in it now"
+    assert re.search(problem, out, re.M), out
+    assert not any(call[:2] == ("repo", "create") for call in fake_gh.calls), fake_gh.calls
+
+
+def test_a_run_that_ends_without_dev_home_always_says_why(
+    box: Sandbox,
+    settings: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Whatever stopped it without a line of its own, the run doesn't pass for a good one.
+    code = shared_module(box, "setup")
+    monkeypatch.setattr(code.Setup, "initialize_content_repo", lambda self, path, values: None)
+    missing = box.root / "never-made-dev-home"
+    returned = setup_here(box, "--content-dir", str(missing))
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    assert re.search(r"^PROBLEM\s+There is still no dev-home at .*never-made-dev-home", out, re.M)
+
+
+def test_says_which_folders_to_close_when_the_empty_dev_home_folder_is_held_open(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    fake_gh: FakeGh,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Windows refuses to remove a folder that's a program's current folder, such as a terminal's.
+    held = box.root / "terminal-in-dev-home"
+    held.mkdir()
+    rmdir = Path.rmdir
+
+    def refusing(self: Path) -> None:
+        if os.path.normcase(self) == os.path.normcase(held):
+            raise PermissionError(13, "The process cannot access the file", str(self))
+        rmdir(self)
+
+    monkeypatch.setattr(Path, "rmdir", refusing)
+    monkeypatch.setattr(shared_module(box, "setup"), "MOVE_WAIT_SECONDS", 0)
+    person.answers.update({CHOICE: "c", REPO_NAME: ""})
+    returned = setup_here(box, "--content-dir", str(held))
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    problem = (
+        r"^PROBLEM\s+Cloned dev-home into .*terminal-in-dev-home\.cloning, but could not move it "
+        r"to .*terminal-in-dev-home\. Close any program using either folder, such as a terminal "
+        r"open in .*terminal-in-dev-home, then run setup again\. PermissionError: "
+    )
+    assert re.search(problem, out, re.M), out
+    assert held.is_dir()
+
+
+@pytest.mark.parametrize(
+    ("answers", "command"),
+    [({CHOICE: "c", REPO_NAME: ""}, "clone"), ({CHOICE: "n", NEW_NAME: ""}, "create")],
+    ids=["clone", "create"],
+)
+def test_changes_nothing_while_another_run_of_setup_holds_the_new_dev_homes_lock(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    fake_gh: FakeGh,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    answers: dict[str, str],
+    command: str,
+) -> None:
+    sync = shared_module(box, "sync")
+    monkeypatch.setattr(sync, "LOCK_WAIT_SECONDS", 0)
+    lock = shared_module(box, "setup").NEW_DEV_HOME_LOCK
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    missing = box.root / f"contended-{command}-dev-home"
+    person.answers.update(answers)
+    with sync.holding(lock) as owned:
+        assert owned
+        returned = setup_here(box, "--content-dir", str(missing))
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    problem = (
+        r"^PROBLEM\s+Setup changed nothing: another run of setup has been cloning or creating "
+        r"dev-home"
+    )
+    assert re.search(problem, out, re.M), out
+    assert not any(call[:2] == ("repo", command) for call in fake_gh.calls), fake_gh.calls
+    assert not missing.exists()
+
+
+def test_a_preview_says_it_would_delete_an_unfinished_clone_then_clone(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    fake_gh: FakeGh,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    missing = box.root / "previewed-dev-home"
+    cloning = box.root / "previewed-dev-home.cloning"
+    git("init", "--quiet", str(cloning))
+    person.answers.update({CHOICE: "c", REPO_NAME: ""})
+    setup_here(box, "--what-if", "--content-dir", str(missing))
+    out = capsys.readouterr().out
+    delete = (
+        r"^What if: Delete what's left by a clone of dev-home that didn't finish: "
+        r".*previewed-dev-home\.cloning$"
+    )
+    assert re.search(delete, out, re.M), out
+    assert re.search(r"^What if: Clone dev-home from GitHub: .*previewed-dev-home$", out, re.M), out
+    assert (cloning / ".git").is_dir()
+    assert not any(call[:2] == ("repo", "clone") for call in fake_gh.calls), fake_gh.calls
+    assert not missing.exists()
+
+
 def test_a_clone_that_isnt_a_dev_home_gets_only_the_clones_git_config(
     box: Sandbox,
     settings: Path,
@@ -2177,13 +2458,250 @@ def test_clones_an_existing_dev_home(
 ) -> None:
     person.answers.update({CHOICE: "c", REPO_NAME: ""})
     cloned = box.root / "cloned-dev-home"
+    cloning = box.root / "cloned-dev-home.cloning"
     setup_here(box, "--content-dir", str(cloned))
     out = capsys.readouterr().out
-    clone = ("repo", "clone", "dev-home", str(cloned), "--", "-c", "core.longpaths=true")
+    # Into a folder beside dev-home's, moved into place once the clone is complete.
+    clone = ("repo", "clone", "dev-home", str(cloning), "--", "-c", "core.longpaths=true")
     assert clone in fake_gh.calls, fake_gh.calls
     # On from the clone's start, so a path past Windows' limit can't stop the checkout.
     assert "core.longpaths=true" in fake_gh.clone_config, fake_gh.clone_config
     assert re.search(r"^CREATED\s+Cloned dev-home into ", out, re.M), out
+    assert (cloned / "skills" / "mine" / "SKILL.md").is_file()
+    assert not cloning.exists()
+
+
+def test_clones_through_a_dev_home_folder_that_links_to_an_empty_one(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    fake_gh: FakeGh,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Such as dev-home's folder linked to an empty one on another drive.
+    link = box.root / "linked-dev-home"
+    target = box.root / "other-drive" / "dev-home"
+    target.mkdir(parents=True)
+    make_junction(link, target)
+    person.answers.update({CHOICE: "c", REPO_NAME: ""})
+    setup_here(box, "--content-dir", str(link))
+    out = capsys.readouterr().out
+    assert re.search(r"^CREATED\s+Cloned dev-home into .*linked-dev-home$", out, re.M), out
+    # The clone went beside where the link leads, then into it, and the link stayed.
+    beside = os.path.normcase(box.root / "other-drive" / "dev-home.cloning")
+    clones = [call for call in fake_gh.calls if call[:2] == ("repo", "clone")]
+    assert [os.path.normcase(call[3]) for call in clones][-1:] == [beside], clones
+    assert os.path.isjunction(link)
+    assert (target / "skills" / "mine" / "SKILL.md").is_file()
+    assert not os.path.lexists(beside)
+
+
+@pytest.mark.parametrize(
+    ("answers", "command"),
+    [({CHOICE: "c", REPO_NAME: ""}, "clone"), ({CHOICE: "n", NEW_NAME: ""}, "create")],
+    ids=["clone", "create"],
+)
+def test_uses_the_dev_home_another_run_cloned_while_this_one_waited(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    fake_gh: FakeGh,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    answers: dict[str, str],
+    command: str,
+) -> None:
+    sync = shared_module(box, "sync")
+    lock = shared_module(box, "setup").NEW_DEV_HOME_LOCK
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    cloned = box.root / f"raced-{command}-dev-home"
+    # The other run clones only once this one is waiting for the lock.
+    holds, waits = threading.Event(), threading.Event()
+    try_lock = sync.try_lock
+
+    def watching(handle: Any) -> bool:
+        got: bool = try_lock(handle)
+        if not got:
+            waits.set()
+        return got
+
+    monkeypatch.setattr(sync, "try_lock", watching)
+
+    def other_run() -> None:
+        with sync.holding(lock):
+            holds.set()
+            waits.wait(30)
+            git("clone", "--quiet", str(box.remote), str(cloned))
+
+    other = threading.Thread(target=other_run)
+    other.start()
+    assert holds.wait(30)
+    # Whether this run was to clone or to create, it uses the dev-home the other run put there.
+    person.answers.update(answers)
+    setup_here(box, "--content-dir", str(cloned))
+    other.join(30)
+    out = capsys.readouterr().out
+    assert waits.is_set()
+    assert re.search(r"^OK\s+Another run of setup put dev-home in place at ", out, re.M), out
+    assert not any(call[:2] == ("repo", command) for call in fake_gh.calls), fake_gh.calls
+    assert (cloned / "skills" / "mine" / "SKILL.md").is_file()
+
+
+def test_clones_through_a_chain_of_links_and_keeps_every_link(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    fake_gh: FakeGh,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # dev-home's folder links to a link of the end user's, which leads to an empty folder.
+    first = box.root / "chained-dev-home"
+    middle = box.root / "chain-middle" / "dev-home"
+    end = box.root / "chain-end" / "dev-home"
+    end.mkdir(parents=True)
+    middle.parent.mkdir()
+    make_junction(middle, end)
+    make_junction(first, middle)
+    person.answers.update({CHOICE: "c", REPO_NAME: ""})
+    setup_here(box, "--content-dir", str(first))
+    out = capsys.readouterr().out
+    assert re.search(r"^CREATED\s+Cloned dev-home into .*chained-dev-home$", out, re.M), out
+    assert os.path.isjunction(first)
+    assert os.path.isjunction(middle)
+    assert (end / "skills" / "mine" / "SKILL.md").is_file()
+
+
+def test_deletes_what_a_stopped_clone_left_without_following_its_links(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    fake_gh: FakeGh,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # What a clone killed partway through its checkout leaves: a repo with no index, and git's
+    # read-only object files.
+    cloned = box.root / "restarted-dev-home"
+    cloning = box.root / "restarted-dev-home.cloning"
+    git("clone", "--quiet", str(box.remote), str(cloning))
+    (cloning / ".git" / "index").unlink()
+    # A link inside, as git makes for a tracked symbolic link when core.symlinks is on, whose
+    # target the delete leaves alone. Python's own delete has stopped at a junction since 3.8,
+    # so this checks the outcome, which taking the links out first keeps on any version.
+    outside = box.root / "outside-the-clone"
+    write_text(outside / "keep.md", "kept\n")
+    make_junction(cloning / "skills" / "linked", outside)
+    # A path past Windows' limit, which a clone with core.longpaths can make.
+    deep = Path("\\\\?\\" + str(cloning / ("d" * 60) / ("e" * 60) / ("f" * 60) / ("g" * 60)))
+    write_text(deep / "long.md", "long\n")
+    assert len(str(deep / "long.md")) > 260
+    person.answers.update({CHOICE: "c", REPO_NAME: ""})
+    setup_here(box, "--content-dir", str(cloned))
+    out = capsys.readouterr().out
+    assert re.search(r"^REMOVED\s+.*restarted-dev-home\.cloning, left by a clone ", out, re.M), out
+    assert re.search(r"^CREATED\s+Cloned dev-home into ", out, re.M), out
+    assert (outside / "keep.md").read_text(encoding="utf-8") == "kept\n"
+    assert not os.path.lexists(cloning)
+    assert (cloned / "skills" / "mine" / "SKILL.md").is_file()
+
+
+def refuse_moving(
+    box: Sandbox, cloning: Path, monkeypatch: pytest.MonkeyPatch, times: list[int]
+) -> None:
+    """Makes Windows refuse to move the cloning folder, as while a program holds a file in it open,
+    while times[0] isn't 0, counting it down at each try, so a negative count refuses every time.
+    Setup waits no time between tries."""
+    rename = Path.rename
+
+    def refusing(self: Path, target: Any) -> Path:
+        if os.path.normcase(self) == os.path.normcase(cloning) and times[0]:
+            times[0] -= 1
+            raise PermissionError(13, "Access is denied", str(self))
+        return rename(self, target)
+
+    monkeypatch.setattr(Path, "rename", refusing)
+    monkeypatch.setattr(shared_module(box, "setup"), "MOVE_WAIT_SECONDS", 0)
+
+
+def test_moves_the_clone_into_place_once_windows_lets_it(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    fake_gh: FakeGh,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cloned = box.root / "busy-dev-home"
+    cloning = box.root / "busy-dev-home.cloning"
+    # An empty folder, which setup's folder check lets through, and the move takes its place.
+    cloned.mkdir()
+    times = [2]
+    refuse_moving(box, cloning, monkeypatch, times)
+    person.answers.update({CHOICE: "c", REPO_NAME: ""})
+    setup_here(box, "--content-dir", str(cloned))
+    out = capsys.readouterr().out
+    assert times == [0]
+    assert re.search(r"^CREATED\s+Cloned dev-home into ", out, re.M), out
+    assert not cloning.exists()
+    assert (cloned / "skills" / "mine" / "SKILL.md").is_file()
+
+
+def test_says_when_the_clone_cant_be_moved_and_starts_over_next_time(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    fake_gh: FakeGh,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cloned = box.root / "stuck-dev-home"
+    cloning = box.root / "stuck-dev-home.cloning"
+    times = [-1]
+    refuse_moving(box, cloning, monkeypatch, times)
+    person.answers.update({CHOICE: "c", REPO_NAME: ""})
+    returned = setup_here(box, "--content-dir", str(cloned))
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    problem = (
+        r"^PROBLEM\s+Cloned dev-home into .*stuck-dev-home\.cloning, but could not move it to "
+        r".*stuck-dev-home\. Close any program using either folder, such as a terminal open in "
+        r".*stuck-dev-home, then run setup again\. PermissionError: "
+    )
+    assert re.search(problem, out, re.M), out
+    assert not cloned.exists()
+    # Once Windows lets go, the next run deletes that clone and clones again.
+    times[0] = 0
+    setup_here(box, "--content-dir", str(cloned))
+    out = capsys.readouterr().out
+    assert re.search(r"^REMOVED\s+.*stuck-dev-home\.cloning, left by a clone ", out, re.M), out
+    assert re.search(r"^CREATED\s+Cloned dev-home into ", out, re.M), out
+    assert (cloned / "skills" / "mine" / "SKILL.md").is_file()
+
+
+def test_a_delete_that_stops_partway_leaves_a_clone_the_next_run_deletes(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    fake_gh: FakeGh,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cloned = box.root / "held-dev-home"
+    cloning = box.root / "held-dev-home.cloning"
+    git("clone", "--quiet", str(box.remote), str(cloning))
+    # Windows refuses to delete a file a program holds open.
+    held = cloning / "knowledge" / "held.md"
+    write_text(held, "Open in another program.\n")
+    person.answers.update({CHOICE: "c", REPO_NAME: ""})
+    with held.open(encoding="utf-8"):
+        returned = setup_here(box, "--content-dir", str(cloned))
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    problem = r"^PROBLEM\s+Could not delete .*held-dev-home\.cloning, left by a clone "
+    assert re.search(problem, out, re.M), out
+    # .git goes last, so what's left is still a clone, which the next run deletes.
+    assert (cloning / ".git").is_dir()
+    setup_here(box, "--content-dir", str(cloned))
+    out = capsys.readouterr().out
+    assert re.search(r"^REMOVED\s+.*held-dev-home\.cloning, left by a clone ", out, re.M), out
     assert (cloned / "skills" / "mine" / "SKILL.md").is_file()
 
 

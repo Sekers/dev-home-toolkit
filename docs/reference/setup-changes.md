@@ -23,7 +23,9 @@ and your rules joined, which setup writes again at each sync.
     last wrote in each agent's folder, and of your dev-home's `AGENTS.md` and `CLAUDE.md`, by
     which it knows each file is still its own. And when a Python doesn't run as setup checks it,
     setup notes it in `failed-pythons.json` there, so syncs don't wait for it again until that
-    Python changes.
+    Python changes. `new-dev-home.lock` there is the file setup locks while it clones or creates
+    your dev-home, so two runs of setup can't do either at once; the lock goes when the run ends,
+    and the empty file stays.
   - `internal\.python\`: a directory junction to the folder of the Python the skills' scripts
     run with, so every skill command can name `internal\.python\python.exe` here: a short path,
     the same on every PC, with no spaces to quote. Setup only uses a Python you've installed,
@@ -120,6 +122,12 @@ and your rules joined, which setup writes again at each sync.
   downloads from claude.ai, setup removes its links from those skills folders, naming each as it
   goes, and puts them back once that changes. A program or a Python version the skill needs
   never takes its links out. The skill's copy in `internal\.generated\` stays where it is.
+- **Beside your dev-home's folder, while setup clones it:** a folder named for it with `.cloning`
+  added, such as `C:\Programming\dev-home.cloning`. Setup clones into it, and moves it into place
+  only once the clone is complete, so a clone that stops partway, even when you close its window,
+  never leaves a half-made dev-home that setup would take for yours. Setup deletes what such a
+  clone left there right after a clone fails, and before it clones again. Anything else in that
+  folder's place, it leaves alone and reports.
 - **In your dev-home's own git config:** commit signing off, pulls that merge rather than rebase,
   and `core.longpaths` on, since `rules\` can need paths longer than Windows' default limit. With
   signing off, a commit never stops in the middle of a sync to ask for your signing passphrase.

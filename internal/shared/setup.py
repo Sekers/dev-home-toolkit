@@ -6,13 +6,15 @@ Safe to run any number of times. It rewrites only its own generated files and ru
 dev-home's AGENTS.md and CLAUDE.md, sending a hand edit to either to the Recycle Bin first, and
 moving the lines it didn't write in a rules file into dev-home first. It creates missing links,
 replaces links whose target is gone, removes links it made to skills that no longer exist, removes
-what it set up in a folder answered no, and reports anything else without changing it.
+what it set up in a folder answered no, deletes what a clone of dev-home that didn't finish left
+beside dev-home's folder, and reports anything else without changing it.
 
 A run goes in this order, so the questions come first and the work after:
 
 1. dev-home first. On the first run it asks where your dev-home is (the private repo that holds
    your handoffs and knowledge base). If that folder doesn't exist yet, it offers to clone your
-   dev-home from GitHub, or to create a new private one from the files in templates/dev-home/.
+   dev-home from GitHub, into a folder beside it that it moves into place once the clone is
+   complete, or to create a new private one from the files in templates/dev-home/.
    A folder that exists must look like a dev-home: it has dev-home.json, which only
    dev-home-toolkit writes. Setup sets that repo's own git config, so it never works on a folder
    without it, such as a project's repo named by mistake. When dev-home can't be put in place,
@@ -195,6 +197,7 @@ import os
 import re
 import stat
 import subprocess
+import time
 from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -214,7 +217,14 @@ from . import (
 )
 from .computer import computer_name
 from .git import run_git, with_pc_name
-from .links import LinkInfo, is_link, link_info, make_folder_link, remove_folder_link
+from .links import (
+    LinkInfo,
+    is_link,
+    link_info,
+    make_folder_link,
+    remove_folder,
+    remove_folder_link,
+)
 from .output import GREEN, RED, YELLOW, color, describe, first_line, status_line
 from .paths import (
     comparable,
@@ -320,10 +330,11 @@ FOLDER_NOTE = (
     "Setup writes everything in this folder: the files from templates/skills/ and\n"
     "templates/shared-skill-scripts/, with this PC's paths filled in; last-written/, a copy of\n"
     "the rules file it last wrote in each agent's folder, and of dev-home's AGENTS.md and\n"
-    "CLAUDE.md; skill-states.json, what it decided for each skill on this PC; and, while there\n"
-    "are any, failed-pythons.json, the Pythons that didn't run when setup checked them. Don't\n"
-    "edit it: the next setup run rewrites it. Python writes the __pycache__ folders when the\n"
-    "scripts run, to start them faster, and setup leaves those alone.\n"
+    "CLAUDE.md; skill-states.json, what it decided for each skill on this PC; while there are\n"
+    "any, failed-pythons.json, the Pythons that didn't run when setup checked them; and\n"
+    "new-dev-home.lock, the file it locks while it clones or creates dev-home. Don't edit it:\n"
+    "the next setup run rewrites it. Python writes the __pycache__ folders when the scripts run,\n"
+    "to start them faster, and setup leaves those alone.\n"
 )
 OPERATING_TEMPLATE = TOOLKIT_ROOT / "templates" / "operating-rules" / "operating-rules.md"
 # The rules file setup writes in each Claude Code folder's rules/, which Claude Code loads with
@@ -350,6 +361,19 @@ DEV_HOME_GUIDANCE = ("AGENTS.md", "CLAUDE.md")
 TEST_BIN = "Recycle Bin"
 # What setup creates the knowledge index with when it's missing: only its title.
 KNOWLEDGE_INDEX_TEXT = "# Knowledge base\n"
+# Setup clones dev-home into a cloning folder beside its own, named for it with this added, and
+# moves that into place once the clone is complete, so a clone that stops partway, even in a
+# process that's killed, never leaves a half-made dev-home (decision 0087, "Cloning dev-home").
+# Not git's "partial clone", which is a clone that leaves some of the history out.
+CLONING_SUFFIX = ".cloning"
+# The file setup locks, as the sync locks one in dev-home's .git, while it clones or creates
+# dev-home, since that .git isn't there yet: so a second run of setup can't delete the first one's
+# clone while it's being written, or write into the dev-home the first one is creating.
+NEW_DEV_HOME_LOCK = GENERATED_ROOT / "new-dev-home.lock"
+# Windows refuses to move a folder while a program holds a file in it open, as antivirus can right
+# after a clone writes it, so setup tries this many times, this many seconds apart.
+MOVE_TRIES = 10
+MOVE_WAIT_SECONDS = 0.2
 # The skills folder every Codex home reads, in the profile folder. Of the agents setup sets up, only
 # Codex reads it, so setup links the skills here for a yes to Codex, and removes its links here
 # for a no.
@@ -1677,6 +1701,12 @@ class Setup:
         """Offers to clone the person's dev-home from GitHub, or to create a new private one: the
         files in templates/dev-home/, filled in, with dev-home.json, set to one active copy, and
         the knowledge index. The caller checks the folder afterward."""
+        # A link that leads nowhere, as to a drive that isn't plugged in, may lead to the real
+        # dev-home, so setup neither clones nor creates one in its place.
+        broken = broken_link(path)
+        if broken:
+            self.status("PROBLEM", broken)
+            return
         if not self.can_ask:
             self.status(
                 "PROBLEM",
@@ -1717,19 +1747,7 @@ class Setup:
             if name is None:
                 self.status("PROBLEM", stopped)
                 return
-            if not self.should(path, f"Clone {name} from GitHub"):
-                return
-            # git's long-path option, which gh passes on to git, is on before the checkout: set
-            # afterward with the other git settings, it would come too late for a path in
-            # dev-home past Windows' limit (decision 0065).
-            code, lines = run_tool(
-                gh, "repo", "clone", name, str(path), "--", "-c", "core.longpaths=true"
-            )
-            if code != 0:
-                self.status("PROBLEM", f"Could not clone {name}. gh: {first_line(lines)}")
-                return
-            self.cloned = True
-            self.status("CREATED", f"Cloned {name} into {path}")
+            self.clone(gh, name, path)
             return
         if choice is None or not re.fullmatch(r"\s*(n|new)\s*", choice, re.IGNORECASE):
             self.status("PROBLEM", stopped)
@@ -1742,6 +1760,13 @@ class Setup:
         action = f"Create a private repo named {name} on GitHub, from templates/dev-home/"
         if not self.should(path, action):
             return
+        with self.new_dev_home_lock(path, path) as go_on:
+            if go_on:
+                self.create(gh, name, path, values)
+
+    def create(self, gh: str, name: str, path: Path, values: dict[str, str]) -> None:
+        """Creates a new dev-home at path from templates/dev-home/, filled in with values, and a
+        private repo named name on GitHub for it, while new_dev_home_lock is held."""
         path.mkdir(parents=True, exist_ok=True)
         contents: dict[str, bytes] = {}
         # AGENTS.md and CLAUDE.md are never committed: the work writes them for this PC.
@@ -1799,6 +1824,128 @@ class Setup:
             )
             return
         self.status("CREATED", f"New private repo {name} on GitHub, with this PC's copy in {path}")
+
+    def clone(self, gh: str, name: str, path: Path) -> None:
+        """Clones dev-home into a cloning folder beside path, then moves that folder to path once
+        the clone is complete. A clone that stops partway would otherwise leave a folder at path
+        that holds dev-home.json but not all of the files, with no index, so git counts every
+        file as deleted, and setup would take it for a dev-home. So however the clone stops, even
+        when this process is killed, path is either missing or the whole clone. What a clone
+        that didn't finish left in the cloning folder is deleted before cloning again, and when a
+        clone fails."""
+        shown = path
+        if is_link(path):
+            # dev-home's folder is a link to an empty folder, such as on another drive, which
+            # find_dev_home lets through (initialize_content_repo stops at one that leads
+            # nowhere). The clone goes to the folder at the end of the link, and of any link it
+            # leads to, beside that folder, and every link stays, as with a clone into the link
+            # itself: setup never removes a link it didn't make.
+            path = Path(os.path.realpath(path))
+        with self.new_dev_home_lock(path, shown) as go_on:
+            if go_on:
+                self.clone_and_move(gh, name, path, shown)
+
+    def clone_and_move(self, gh: str, name: str, path: Path, shown: Path) -> None:
+        """The clone itself, while new_dev_home_lock is held: clears the cloning folder, clones
+        into it, and moves the clone to path, which shown names to the end user."""
+        cloning = path.with_name(path.name + CLONING_SUFFIX)
+        if not self.clear_cloning_folder(cloning):
+            return
+        if not self.should(shown, f"Clone {name} from GitHub"):
+            return
+        # git's long-path option, which gh passes on to git, is on before the checkout: set
+        # afterward with the other git settings, it would come too late for a path in
+        # dev-home past Windows' limit (decision 0065).
+        code, lines = run_tool(
+            gh, "repo", "clone", name, str(cloning), "--", "-c", "core.longpaths=true"
+        )
+        if code != 0:
+            self.status("PROBLEM", f"Could not clone {name}. gh: {clone_error(lines)}")
+            self.clear_cloning_folder(cloning)
+            return
+        failure = move_clone(cloning, path)
+        if failure:
+            self.status(
+                "PROBLEM",
+                f"Cloned {name} into {cloning}, but could not move it to {path}. Close any program "
+                f"using either folder, such as a terminal open in {path}, then run setup again. "
+                f"{failure}",
+            )
+            return
+        self.cloned = True
+        self.status("CREATED", f"Cloned {name} into {shown}")
+
+    @contextlib.contextmanager
+    def new_dev_home_lock(self, path: Path, shown: Path) -> Iterator[bool]:
+        """The lock on NEW_DEV_HOME_LOCK, held while setup clones or creates dev-home at path, which
+        shown names to the end user, so two runs of setup can't do either at once (decision 0087).
+        A second run waits for the first, as a sync does, then goes on only if dev-home still
+        isn't there. Yields whether to go on, after saying why not: True also for a preview, which
+        changes nothing, and when there's no lock to take, as for a lock file that can't be made
+        or opened, which no other run can hold either."""
+        if self.what_if:
+            yield True
+            return
+        # Loaded only now, as for setup's work.
+        sync = importlib.import_module(f"{__package__}.sync")
+        with contextlib.ExitStack() as held:
+            owned = True
+            with contextlib.suppress(OSError, sync.LockError):
+                NEW_DEV_HOME_LOCK.parent.mkdir(parents=True, exist_ok=True)
+                owned = held.enter_context(sync.holding(NEW_DEV_HOME_LOCK))
+            if not owned:
+                self.status(
+                    "PROBLEM",
+                    "Setup changed nothing: another run of setup has been cloning or creating "
+                    f"dev-home for {sync.LOCK_WAIT_SECONDS // 60} minutes. Run "
+                    f"{by_hand('setup.py')} again once it's done.",
+                )
+                yield False
+            elif is_in_use(path):
+                if is_dev_home(path) and (path / ".git").exists():
+                    self.status(
+                        "OK", f"Another run of setup put dev-home in place at {shown} meanwhile"
+                    )
+                else:
+                    self.status(
+                        "PROBLEM",
+                        f"Setup changed nothing: {shown} has files in it now, but not a whole "
+                        "dev-home, so another run of setup may have stopped partway there. If it "
+                        "holds nothing you need, delete it, then run setup again.",
+                    )
+                yield False
+            else:
+                yield True
+
+    def clear_cloning_folder(self, cloning: Path) -> bool:
+        """Deletes what a clone that didn't finish left in the cloning folder: only an empty
+        folder or a git repo, which a clone would have made there. Says whether the clone can go
+        on, and why not when it can't."""
+        if not os.path.lexists(cloning):
+            return True
+        if is_link(cloning) or not cloning.is_dir() or not left_by_a_clone(cloning):
+            self.status(
+                "PROBLEM",
+                f"{cloning} is in the way of cloning dev-home, and it isn't a clone that setup "
+                "left there. Move it somewhere else, then run setup again.",
+            )
+            return False
+        left = "left by a clone of dev-home that didn't finish"
+        if not self.should(cloning, f"Delete what's {left}"):
+            # --what-if: it has said what it would do, and the clone's own line comes next.
+            return True
+        try:
+            # .git goes last, so a delete that stops partway leaves a folder this still deletes.
+            remove_folder(cloning, last=".git")
+        except OSError as error:
+            self.status(
+                "PROBLEM",
+                f"Could not delete {cloning}, {left}. Delete it, then run setup again. "
+                f"{describe(error)}",
+            )
+            return False
+        self.status("REMOVED", f"{cloning}, {left}")
+        return True
 
     def ask_about_copies(
         self, settings: LocalSettings, content_root: Path, *, first_setup: bool
@@ -3475,6 +3622,13 @@ class Setup:
                         "What if: the rest of setup works with dev-home, so it can't be previewed "
                         "until dev-home exists."
                     )
+                elif not self.problems:
+                    # Each way initialize_content_repo stops says why; this covers any that
+                    # doesn't, so a run without dev-home never ends with "All checks passed".
+                    self.status(
+                        "PROBLEM",
+                        f"There is still no dev-home at {content_root}, so setup stopped.",
+                    )
                 raise CannotGoOnError
         if not (content_root / ".git").exists():
             self.status(
@@ -4983,6 +5137,62 @@ def run_tool(program: str, *args: str) -> tuple[int, list[str]]:
         check=False,
     )
     return done.returncode, done.stdout.splitlines()
+
+
+def clone_error(lines: Sequence[str]) -> str:
+    """Why a clone failed, in one line, from gh's output, which holds git's too: git's first
+    error line, since git says "Cloning into ..." before it, or else the last line."""
+    texts = [line.strip() for line in lines if line.strip()]
+    errors = [text for text in texts if text.startswith(("fatal:", "error:"))]
+    return (errors or texts[-1:] or ["(no message)"])[0]
+
+
+def broken_link(path: Path) -> str:
+    """A line when dev-home's folder is a link that leads to no folder, or else ""."""
+    if not is_link(path):
+        return ""
+    info = link_info(path)
+    target = info.target if info else None
+    if target and Path(target).is_dir():
+        return ""
+    return (
+        f"dev-home's folder {path} is a link to {target}, which isn't there. Reconnect what it "
+        "leads to, or remove the link, then run setup again."
+    )
+
+
+def left_by_a_clone(folder: Path) -> bool:
+    """Whether a folder could be what a clone left: empty, or a git repo."""
+    return not is_in_use(folder) or (folder / ".git").is_dir()
+
+
+def move_clone(cloning: Path, path: Path) -> str:
+    """Moves a complete clone from the cloning folder to path, in place of the empty folder that
+    may be there, trying again while Windows refuses because a program holds either one open,
+    such as a terminal open in it. Returns "" once it's moved, or else why not."""
+    refused: OSError | None = None
+    removed = False
+    for attempt in range(MOVE_TRIES):
+        if attempt:
+            time.sleep(MOVE_WAIT_SECONDS)
+        try:
+            # find_dev_home lets an empty folder at path through, and a folder can't be moved onto
+            # one. path is never a link here: clone moves the clone to the folder links lead to.
+            if path.is_dir():
+                path.rmdir()
+                removed = True
+            cloning.rename(path)
+            return ""
+        except PermissionError as error:
+            refused = error
+        except OSError as error:
+            refused = error
+            break
+    # The empty folder goes back, so path is as it was, and a link to it still leads somewhere.
+    if removed:
+        with contextlib.suppress(OSError):
+            path.mkdir()
+    return describe(refused) if refused else ""
 
 
 def parse_arguments(argv: Sequence[str]) -> tuple[bool, bool, str, str | None] | str:

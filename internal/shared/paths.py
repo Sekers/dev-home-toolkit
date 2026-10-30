@@ -27,6 +27,17 @@ def comparable(path: str | Path) -> str:
     return os.path.abspath(without_long_prefix(str(path))).rstrip("\\/")
 
 
+def long_form(path: str | Path) -> str:
+    """A full path in Windows' long form, with \\\\?\\ before it, which Windows' file functions take
+    past its limit of 260 characters, whatever its long-path setting. Elsewhere, the full path."""
+    full = comparable(path)
+    if os.name != "nt":
+        return full
+    if full.startswith("\\\\"):
+        return LONG_UNC_PREFIXES[0] + full[2:]
+    return LONG_PREFIXES[0] + full
+
+
 def forward(path: str | Path) -> str:
     """The full path with forward slashes, as the skills' commands use it."""
     return comparable(path).replace("\\", "/")

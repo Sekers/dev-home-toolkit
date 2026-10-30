@@ -209,7 +209,15 @@ def unlock(handle: IO[bytes]) -> None:
 @contextlib.contextmanager
 def one_run_at_a_time(git_dir: Path) -> Iterator[bool]:
     """Holds the lock for one run on this dev-home, and says whether it got it in time."""
-    path = git_dir / LOCK_FILE
+    with holding(git_dir / LOCK_FILE) as owned:
+        yield owned
+
+
+@contextlib.contextmanager
+def holding(path: Path) -> Iterator[bool]:
+    """Holds the operating system's lock on the file at path, which it makes when it's missing,
+    waiting up to LOCK_WAIT_SECONDS for another run to let go, and says whether it got it in time.
+    The operating system lets go when the process ends, even one that stops partway."""
     try:
         opened = path.open("a+b")
     except OSError as error:
