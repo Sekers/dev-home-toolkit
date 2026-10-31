@@ -47,6 +47,13 @@ pytestmark = pytest.mark.xdist_group("sync")
 DEMO = "handoffs/demo/HANDOFF.md"
 INDEX = "knowledge/README.md"
 FRESH_SETUP_LINE = "Setup ran with the new code."
+# Files whose paths inside dev-home are 140 characters, one past the path budget, the last the
+# first with its name in capitals, and a short one in the same folder.
+LONG_FOLDER = "archive/" + "a" * 60
+LONG_FILE = f"{LONG_FOLDER}/{'b' * 68}.md"
+LONG_FILE_TOO = f"{LONG_FOLDER}/{'c' * 68}.md"
+LONG_FILE_UPPER = f"{LONG_FOLDER}/{'B' * 68}.md"
+SHORT_FILE = "archive/short.md"
 
 
 @pytest.fixture(scope="module")
@@ -930,6 +937,202 @@ def test_lists_a_staged_rename_with_its_old_name(box: Sandbox) -> None:
         r"^(LEFT|STALE)\s+handoffs/demo/OLD\.md \(renamed from handoffs/demo/HANDOFF\.md, staged, "
     )
     assert result.has_line(pattern), str(result)
+
+
+def long_line(file: str) -> str:
+    return (
+        rf"^LONG\s+{re.escape(file)} is 140 characters long inside dev-home, past the 139 every "
+        r"path in dev-home should fit in\. On a PC whose dev-home is in a deeper folder, or whose "
+        r"Windows long-path setting is off, programs may fail to open it\. Shorten its name or "
+        r"the name of a folder above it\.$"
+    )
+
+
+def remove_files(repo: Path, *files: str) -> None:
+    """Commits and pushes the removal of those of files that repo has. Forced, since git here runs
+    with core.autocrlf off, so a file the sync checked out looks changed."""
+    git("-C", str(repo), "rm", "--quiet", "--force", "--ignore-unmatch", "--", *files)
+    if git("-C", str(repo), "diff", "--cached", "--name-only"):
+        git("-C", str(repo), "commit", "--quiet", "-m", "archive: remove the test's files")
+        git("-C", str(repo), "push", "--quiet")
+
+
+def commit_by_hand(box: Sandbox, file: str, text: str) -> None:
+    """A commit made here another way than through the sync, writing text to file."""
+    write_text(box.content / file, text)
+    git("-C", str(box.content), "add", "--", file)
+    git("-C", str(box.content), "commit", "--quiet", "-m", "archive: a commit made by hand")
+
+
+def test_a_sync_that_commits_a_file_with_no_change_says_so(box: Sandbox) -> None:
+    result = sync(box, "--message", "handoff: demo", DEMO)
+    assert result.code == 0, str(result)
+    pattern = r"^OK\s+Nothing to commit: handoffs/demo/HANDOFF\.md already match the last commit\."
+    assert result.has_line(pattern), str(result)
+    assert not result.has_line(r"^COMMITTED\s"), str(result)
+
+
+def test_a_file_past_the_path_budget_gets_a_long_line_while_left_and_when_committed(
+    box: Sandbox,
+) -> None:
+    write_text(box.content / LONG_FILE, "a long name\n")
+    left = sync(box)
+    committed = sync(box, "--message", "archive: a long name", LONG_FILE)
+    assert left.code == 0, str(left)
+    assert left.has_line(rf"^LEFT\s+{re.escape(LONG_FILE)} \(new file, "), str(left)
+    assert left.has_line(long_line(LONG_FILE)), str(left)
+    assert count(left, r"^LONG\s") == 1, str(left)
+    # The commit goes through, and the file that fits beside it gets no line.
+    assert committed.code == 0, str(committed)
+    assert committed.has_line(r"^COMMITTED\s"), str(committed)
+    assert committed.has_line(r"^PUSHED\s+1 commit to GitHub\."), str(committed)
+    assert committed.has_line(long_line(LONG_FILE)), str(committed)
+    assert count(committed, r"^LONG\s") == 1, str(committed)
+
+
+def test_a_file_past_the_path_budget_gets_no_long_line_once_deleted(box: Sandbox) -> None:
+    (box.content / LONG_FILE).unlink()
+    (box.content / LONG_FOLDER).rmdir()
+    (box.content / "archive").rmdir()
+    left = sync(box)
+    committed = sync(box, "--message", "archive: no long name", LONG_FILE)
+    assert left.has_line(rf"^LEFT\s+{re.escape(LONG_FILE)} \(deleted, "), str(left)
+    assert not left.has_line(r"^LONG\s"), str(left)
+    assert committed.code == 0, str(committed)
+    assert committed.has_line(r"^COMMITTED\s"), str(committed)
+    assert not committed.has_line(r"^LONG\s"), str(committed)
+
+
+@pytest.mark.parametrize("made", ["on GitHub", "here", "on both"])
+def test_commits_synced_with_a_file_past_the_path_budget_get_a_long_line(
+    box: Sandbox, made: str
+) -> None:
+    # A commit made another way than through the sync, here or on another PC.
+    other = other_pc(box)
+    files = []
+    if made in ("on GitHub", "on both"):
+        write_text(other / LONG_FILE, "from another PC\n")
+        push_from(other, LONG_FILE, "archive: a long name on another PC")
+        files.append(LONG_FILE)
+    if made in ("here", "on both"):
+        commit_by_hand(box, LONG_FILE_TOO, "committed by hand\n")
+        files.append(LONG_FILE_TOO)
+    try:
+        result = sync(box)
+    finally:
+        remove_files(box.content, LONG_FILE, LONG_FILE_TOO)
+    assert result.code == 0, str(result)
+    for file in files:
+        assert result.has_line(long_line(file)), str(result)
+    assert count(result, r"^LONG\s") == len(files), str(result)
+
+
+def test_a_sync_that_commits_checks_the_commits_it_pushes_only_when_some_come_in(
+    box: Sandbox,
+) -> None:
+    # Pushed with the sync's own commit, which goes straight through, so it reads no diff.
+    commit_by_hand(box, LONG_FILE_TOO, "committed by hand\n")
+    append(box.content / DEMO, "Pushed with a commit made by hand.")
+    straight = sync(box, "--message", "handoff: demo", DEMO)
+    # Once commits come in, the one diff covers the commits going out too.
+    commit_by_hand(box, LONG_FILE_TOO, "changed by hand\n")
+    other = other_pc(box)
+    write_text(other / LONG_FILE, "from another PC\n")
+    push_from(other, LONG_FILE, "archive: a long name on another PC")
+    append(box.content / DEMO, "While another PC added a long name.")
+    try:
+        came_in = sync(box, "--message", "handoff: demo", DEMO)
+    finally:
+        remove_files(box.content, LONG_FILE, LONG_FILE_TOO)
+    assert straight.code == 0, str(straight)
+    assert straight.has_line(r"^PUSHED\s+2 commits to GitHub\."), str(straight)
+    assert not straight.has_line(r"^LONG\s"), str(straight)
+    assert came_in.code == 0, str(came_in)
+    assert came_in.has_line(r"^MERGED\s+1 commit from GitHub"), str(came_in)
+    assert came_in.has_line(long_line(LONG_FILE)), str(came_in)
+    assert came_in.has_line(long_line(LONG_FILE_TOO)), str(came_in)
+    assert count(came_in, r"^LONG\s") == 2, str(came_in)
+
+
+def test_a_rename_to_a_path_past_the_path_budget_gets_a_long_line(box: Sandbox) -> None:
+    # With renames found, the diff would name only the short name, which is gone.
+    commit_by_hand(box, SHORT_FILE, "renamed later\n")
+    pushed = sync(box)
+    content = str(box.content)
+    (box.content / LONG_FOLDER).mkdir(exist_ok=True)
+    git("-C", content, "mv", SHORT_FILE, LONG_FILE_TOO)
+    git("-C", content, "commit", "--quiet", "-m", "archive: a long name by renaming")
+    try:
+        result = sync(box)
+    finally:
+        remove_files(box.content, SHORT_FILE, LONG_FILE_TOO)
+    assert pushed.has_line(r"^PUSHED\s+1 commit to GitHub\."), str(pushed)
+    assert not pushed.has_line(r"^LONG\s"), str(pushed)
+    assert result.code == 0, str(result)
+    assert result.has_line(long_line(LONG_FILE_TOO)), str(result)
+    assert count(result, r"^LONG\s") == 1, str(result)
+
+
+def test_a_rename_of_letter_case_alone_gets_a_long_line_by_the_new_spelling(box: Sandbox) -> None:
+    other = other_pc(box)
+    write_text(other / LONG_FILE_UPPER, "from another PC\n")
+    push_from(other, LONG_FILE_UPPER, "archive: a long name in capitals")
+    capitals = sync(box)
+    git("-C", str(other), "mv", LONG_FILE_UPPER, LONG_FILE)
+    git("-C", str(other), "commit", "--quiet", "-m", "archive: the long name in lowercase")
+    git("-C", str(other), "push", "--quiet")
+    try:
+        result = sync(box)
+    finally:
+        remove_files(box.content, LONG_FILE, LONG_FILE_UPPER)
+    assert capitals.has_line(long_line(LONG_FILE_UPPER)), str(capitals)
+    assert result.code == 0, str(result)
+    assert result.has_line(long_line(LONG_FILE)), str(result)
+    assert count(result, r"^LONG\s") == 1, str(result)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="only Windows file names ignore case")
+def test_a_file_spelled_in_other_capitals_on_this_pc_still_gets_a_long_line(box: Sandbox) -> None:
+    # As a program that's given the path in capitals saves it: git still names it in lowercase.
+    commit_by_hand(box, LONG_FILE, "committed in lowercase\n")
+    sync(box)
+    (box.content / LONG_FILE).unlink()
+    write_text(box.content / LONG_FILE_UPPER, "saved in capitals\n")
+    try:
+        result = sync(box)
+    finally:
+        remove_files(box.content, LONG_FILE)
+    assert result.has_line(rf"^LEFT\s+{re.escape(LONG_FILE)} \(changed, "), str(result)
+    assert result.has_line(long_line(LONG_FILE)), str(result)
+    assert count(result, r"^LONG\s") == 1, str(result)
+
+
+def test_commits_that_neither_came_in_nor_went_out_get_no_long_line(box: Sandbox) -> None:
+    # A push GitHub declines, then one it takes.
+    commit_by_hand(box, LONG_FILE_TOO, "committed by hand\n")
+    with hook(box.remote, "pre-receive", "echo 'declined on purpose' >&2\nexit 1\n"):
+        declined = sync(box)
+    pushed = sync(box)
+    # A merge git refuses: another PC changes the long file and the handoff, which has a change
+    # here that isn't committed yet.
+    other = other_pc(box)
+    append(other / LONG_FILE_TOO, "Changed on another PC.")
+    append(other / DEMO, "Changed on another PC.")
+    git("-C", str(other), "commit", "--quiet", "-am", "archive: changes on another PC")
+    git("-C", str(other), "push", "--quiet")
+    append(box.content / DEMO, "Not committed yet.")
+    try:
+        refused = sync(box)
+    finally:
+        git("-C", str(box.content), "checkout", "--", DEMO)
+        sync(box)
+        remove_files(box.content, LONG_FILE_TOO)
+    assert declined.has_line(r"^PENDING\s"), str(declined)
+    assert not declined.has_line(r"^LONG\s"), str(declined)
+    assert pushed.has_line(r"^PUSHED\s+1 commit to GitHub\."), str(pushed)
+    assert pushed.has_line(long_line(LONG_FILE_TOO)), str(pushed)
+    assert refused.has_line(r"^PROBLEM\s+Git won't bring in the commits from GitHub"), str(refused)
+    assert not refused.has_line(r"^LONG\s"), str(refused)
 
 
 def test_stops_while_a_merge_is_in_progress(box: Sandbox) -> None:

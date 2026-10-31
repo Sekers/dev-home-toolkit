@@ -204,8 +204,8 @@ about this project doesn't belong here either.
    - `LEFT`: leave the file alone. Another session may be editing it.
    - `STALE`: nobody has touched the file for 15 minutes. Ask "Commit and push it?". On a yes, run
      `{{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py --message "sync: <what changed>" "<path>"`.
-   - `UPDATE`, `NEW`, and `LARGE`: tell the user each such line once per session, as its own
-     line, and continue.
+   - `UPDATE`, `NEW`, `LARGE`, and `LONG`: tell the user each such line once per session, as its
+     own line, and continue.
    - `PROBLEM`: show it. When it's about syncing dev-home, say the handoff may be behind. Then
      continue, unless it says `facts.py` stopped (see "Find this project's handoff").
 3. Find this project's handoff (see above), read it, and summarize where things stand. Start

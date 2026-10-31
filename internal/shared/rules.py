@@ -52,7 +52,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .links import is_link
-from .paths import real_path
+from .paths import PATH_LIMIT, PATH_ROOM, real_path, windows_length
 from .requirements import OS_NAMES, advice, closest, quoted
 
 RULES = "rules"
@@ -80,10 +80,6 @@ PC_NAME_LIMIT = 32
 AGENT_NAME_LIMIT = 24
 BUILT_IN_NAME_LIMIT = 40
 MOVED_NAME_LIMIT = 60
-# Windows refuses a longer path by default, and git needs room beyond a file's own path for the
-# files it writes beside it.
-PATH_LIMIT = 260
-PATH_ROOM = 30
 
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 HEADING = re.compile(r"^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$")
@@ -868,10 +864,11 @@ def path_problem(dev_home: Path) -> str:
     """A line when dev-home's folder is too long for the longest path in rules/, with room for git,
     to stay under Windows' limit, or "" when it fits."""
     allowed = PATH_LIMIT - PATH_ROOM - longest_rules_path() - 2
-    if len(str(dev_home)) <= allowed:
+    length = windows_length(str(dev_home))
+    if length <= allowed:
         return ""
     return (
-        f"dev-home's folder, {dev_home}, is {len(str(dev_home))} characters long, and the longest "
+        f"dev-home's folder, {dev_home}, is {length} characters long, and the longest "
         f"path setup may make in it would pass Windows' limit of {PATH_LIMIT} characters. Move "
         f"dev-home to a folder of {allowed} characters or fewer, such as C:\\Programming\\dev-home."
     )

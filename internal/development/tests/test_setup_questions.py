@@ -3230,7 +3230,7 @@ def test_lines_committed_before_a_problem_syncing_them_count_as_saved(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     # Such as a merge the sync can't make: the lines are in a commit on this PC all the same.
-    def refuse(run: Any, fetch_first: bool) -> None:
+    def refuse(run: Any, fetch_first: bool, check_pushed: bool) -> None:
         run.status("PROBLEM", "A made-up problem after the commit.")
 
     monkeypatch.setattr(shared_module(box, "sync").Sync, "sync_remote", refuse)

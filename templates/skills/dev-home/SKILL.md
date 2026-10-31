@@ -73,8 +73,8 @@ rule written for the user's project repos.
      `{{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py --message "sync: <what changed>" "<path>"`, which
      commits only that file, then syncs. After it, `OFFLINE` or `PENDING` means the commit is
      safe on this PC, and a later sync pushes it.
-   - `UPDATE`, `NEW`, and `LARGE`: tell the user each such line once per session, as its own
-     line, and continue.
+   - `UPDATE`, `NEW`, `LARGE`, and `LONG`: tell the user each such line once per session, as its
+     own line, and continue.
    - `PROBLEM`: show it.
 2. Tell the user in one line where dev-home stands: up to date, pulled, merged, pushed, or not
    synced and why. Then, each on its own line, name what any `UPDATE` (dev-home-toolkit), `NEW`

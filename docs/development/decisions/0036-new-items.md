@@ -4,8 +4,8 @@
 
 **Decision:** an update or a sync can bring new items: a dev-home-toolkit skill or recommended
 setting, a personal skill made on another PC, or a Claude Code folder or Codex home setup hasn't
-asked about. Changed on 2026-10-16 and 2026-10-24 (`LARGE` lines share the skills' bullet, and a
-recommended setting is asked in plain words).
+asked about. Changed on 2026-10-16, 2026-10-24 (`LARGE` lines share the skills' bullet, and a
+recommended setting is asked in plain words), and 2026-10-29 (`LONG` lines share it too).
 
 - When `update.py` runs at a console, the setup it runs afterward does too, and asks about the new
   items right then.
@@ -34,10 +34,11 @@ recommended setting is asked in plain words).
   and one naming each setting).
 - A `NEW` line never sets the exit code. The skills pass `NEW` and `UPDATE` lines on with one
   bullet, worded the same in every skill, which `LARGE` lines share
-  ([0065: Where end users' rules live](0065-where-end-users-rules-live.md)): "`UPDATE`, `NEW`, and
-  `LARGE`: tell the user each such line once per session, as its own line, and continue." "Each
-  such line" keeps a different line from being dropped because another came earlier in the
-  session. `/dev-home sync`'s summary still names what each `UPDATE`, `NEW`, or `LARGE` line says
+  ([0065: Where end users' rules live](0065-where-end-users-rules-live.md)), and `LONG` lines too
+  ([0088: Path lengths](0088-path-lengths.md)): "`UPDATE`, `NEW`, `LARGE`, and `LONG`: tell the
+  user each such line once per session, as its own line, and continue." "Each such line" keeps a
+  different line from being dropped because another came earlier in the session.
+  `/dev-home sync`'s summary still names what each `UPDATE`, `NEW`, or `LARGE` line says
   is waiting, under the name of what it's about, without asking again.
 
 **Why:** a line printed once is easy to lose in an agent's reply, and the agent decides what to
@@ -51,7 +52,8 @@ The skills share one bullet for these lines: `UPDATE` already repeated on every 
 waited, and the skills told the end user each time; once per session follows "nothing asked
 twice in one session"; one text in every skill fits
 [0012: Shared skill text](0012-shared-skill-text.md), and a later line joins by adding its name,
-as `LARGE` did; and `/dev-home sync` still reports what's waiting, each part under its own name.
+as `LARGE` and `LONG` did; and `/dev-home sync` still reports what's waiting, each part under its
+own name.
 
 **Options set aside:**
 

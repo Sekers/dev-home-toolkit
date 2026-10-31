@@ -1,4 +1,5 @@
-"""Path forms the scripts compare and write: full, comparable, and with forward slashes."""
+"""Path forms the scripts compare and write: full, comparable, and with forward slashes. And how
+long a path may be (decision 0088)."""
 
 import os
 import re
@@ -8,6 +9,19 @@ from pathlib import Path
 LONG_PREFIXES = ("\\\\?\\", "\\??\\")
 # The same before a network path, \\server\share, which keeps its two leading backslashes.
 LONG_UNC_PREFIXES = ("\\\\?\\UNC\\", "\\??\\UNC\\")
+# Windows refuses a longer path by default, and git needs room beyond a file's own path for the
+# files it writes beside it.
+PATH_LIMIT = 260
+PATH_ROOM = 30
+# The longest any path inside dev-home's folder may be: the longest path in rules/ that its caps
+# allow (rules.longest_rules_path, which a test keeps equal to this).
+PATH_BUDGET = 139
+
+
+def windows_length(path: str) -> int:
+    """A path's length as Windows counts it, in UTF-16 units, so a character such as an emoji
+    counts 2."""
+    return len(path.encode("utf-16-le", "surrogatepass")) // 2
 
 
 def without_long_prefix(text: str) -> str:

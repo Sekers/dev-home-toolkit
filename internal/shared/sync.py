@@ -31,6 +31,11 @@ the commit a merge makes, so dev-home's history shows which PC made each commit.
 GitHub rejects the push, because it has commits this copy lacks, does it fetch, merge,
 and push again. A push that fails for any other reason, such as offline, waits for the next sync.
 
+A file whose path inside dev-home is past the 139 characters every path in dev-home should fit
+in gets a LONG line, since a PC with dev-home in a deeper folder may fail to open it: a file it
+lists as uncommitted, one it commits, and one in the commits a plain sync pushes or any sync
+brings in. The line never stops anything.
+
 When the paths include knowledge/README.md, the knowledge base's index, it commits nothing while
 the index lists a note that's neither committed nor among the paths, such as one another session
 is still adding, or lists a note twice. After it brings in commits from GitHub, it reports a note
@@ -89,13 +94,14 @@ import posixpath
 import re
 import sys
 import time
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import IO
 
 from .git import GIT_MISSING, GitResult, last_fetch_age, run_git, with_pc_name
 from .output import commit_count, describe, first_line, listed_files, status_line
+from .paths import PATH_BUDGET, long_form, windows_length
 from .programs import by_hand, find_program, run_setup
 from .settings import (
     DEFAULT_HOURS,
@@ -133,7 +139,7 @@ IN_PROGRESS = {
     "REVERT_HEAD": "A revert",
 }
 # Anything else reported about the commit or the sync means "up to date" isn't printed.
-QUIET_STATES = {"OK", "LEFT", "STALE", "UPDATE"}
+QUIET_STATES = {"OK", "LEFT", "STALE", "LONG", "UPDATE"}
 # The values --fetch takes, the first being what a sync does without it.
 FETCH_WHEN = ("always", "auto")
 # A row of the knowledge index (see KNOWLEDGE_INDEX) that links to a note.
@@ -268,9 +274,16 @@ class Sync:
         # Set once commits from GitHub are merged in, since they may bring skills that setup must
         # link.
         self.brought_in = False
+        # Set once this PC's commits are on GitHub.
+        self.pushed = False
         # Set once the update check installs new dev-home-toolkit commits, whose code setup must
         # load fresh.
         self.updated = False
+        # The files that differ between this PC's commits and GitHub's, read before a merge, which
+        # this sync brings in or pushes; and each file given a LONG line, so it gets one per run,
+        # by its name with letter case evened out, as Windows compares names.
+        self.synced_files: list[str] = []
+        self.told_long: set[str] = set()
 
     def status(self, state: str, message: str) -> None:
         if state == "PROBLEM":
@@ -289,6 +302,51 @@ class Sync:
             "was skipped. If no git is running, one that stopped partway left a lock file behind; "
             f"ask the user before deleting it. git: {first_line(result.err)}",
         )
+
+    def spelled_on_disk(self, file: str) -> bool:
+        """Whether every name in file, named inside dev-home as git names it, has the same letter
+        case on this PC, by its folder's list, read through Windows' long form, which this PC may
+        need for the path."""
+        folder = self.root
+        for name in file.split("/"):
+            try:
+                if not any(entry.name == name for entry in Path(long_form(folder)).iterdir()):
+                    return False
+            except OSError:
+                return False
+            folder = folder / name
+        return True
+
+    def report_long(self, files: Iterable[str]) -> None:
+        """A LONG line for each of files, named inside dev-home as git names them, whose path is
+        past the path budget and that is still on this PC, so a file deleted or renamed away gets
+        none (decision 0088). Each file gets one per run. Reads nothing for a path that fits.
+        Windows ignores letter case, so a file is there whatever the case of its name on this PC.
+        Names in files that differ only in case, as after a rename that changed only that, are
+        one file, which the line names as it's spelled here."""
+        spellings: dict[str, list[str]] = {}
+        for file in files:
+            key = os.path.normcase(file)
+            if windows_length(file) > PATH_BUDGET and key not in self.told_long:
+                names = spellings.setdefault(key, [])
+                if file not in names:
+                    names.append(file)
+        for key, names in spellings.items():
+            # The long form, since this PC's Windows may not open the path itself.
+            if not os.path.lexists(long_form(self.root / names[0])):
+                continue
+            file = names[0]
+            if len(names) > 1:
+                file = next((name for name in names if self.spelled_on_disk(name)), file)
+            length = windows_length(file)
+            self.told_long.add(key)
+            self.status(
+                "LONG",
+                f"{file} is {length} characters long inside dev-home, past the {PATH_BUDGET} "
+                "every path in dev-home should fit in. On a PC whose dev-home is in a deeper "
+                "folder, or whose Windows long-path setting is off, programs may fail to open it. "
+                "Shorten its name or the name of a folder above it.",
+            )
 
     def ahead_behind(self) -> tuple[int, int] | None:
         counts = self.git("rev-list", "--left-right", "--count", "HEAD...@{upstream}")
@@ -397,8 +455,18 @@ class Sync:
                 f"Could not stage {listed}, so nothing was committed. git: {first_line(add.err)}",
             )
             return
-        staged = self.git("--literal-pathspecs", "diff", "--cached", "--quiet", "--", *paths)
-        if staged.code == 0:
+        staged = self.git(
+            "--literal-pathspecs",
+            "diff",
+            "--cached",
+            "--name-only",
+            "-z",
+            "--no-renames",
+            "--",
+            *paths,
+        )
+        staged_files = [name for name in staged.text.split("\0") if name]
+        if staged.code == 0 and not staged_files:
             self.committed = True
             self.status("OK", f"Nothing to commit: {listed} already match the last commit.")
             return
@@ -425,6 +493,7 @@ class Sync:
             return
         self.committed = True
         self.status("COMMITTED", f'"{message}" ({listed})')
+        self.report_long(staged_files)
 
     def merge_upstream(self, ahead: int, behind: int) -> None:
         if ahead == 0:
@@ -528,10 +597,22 @@ class Sync:
             self.pending(counts[0])
         return False
 
-    def sync_remote(self, fetch_first: bool) -> None:
+    def read_synced_files(self) -> None:
+        """The files that differ between this PC's commits and GitHub's, read before a merge, so
+        both the commits coming in and those going out count. One git call. When it fails, the
+        files go unchecked, since the check only advises. --no-renames, since a diff that finds
+        a rename names only one side of it, which may be the side that's gone."""
+        diff = self.git("diff", "--name-only", "-z", "--no-renames", "HEAD", "@{upstream}")
+        if diff.code == 0:
+            self.synced_files += [name for name in diff.text.split("\0") if name]
+
+    def sync_remote(self, fetch_first: bool, check_pushed: bool) -> None:
         """Fetches when fetch_first, brings in what GitHub has, and pushes what's waiting here. A
         push GitHub rejects because it has commits this copy lacks gets one more round of fetch,
-        merge, and push; any other failure leaves the commits waiting, with no second try."""
+        merge, and push; any other failure leaves the commits waiting, with no second try. Before
+        any merge, it reads the files that differ from GitHub's when commits are coming in, and
+        with check_pushed, when commits are going out too. Without it, the commits going out are
+        only the one this run made, whose files the commit checked."""
         fetch = fetch_first
         for round_number in (1, 2):
             if fetch and not self.fetch():
@@ -544,6 +625,8 @@ class Sync:
                 )
                 return
             ahead, behind = counts
+            if behind > 0 or (ahead > 0 and check_pushed):
+                self.read_synced_files()
             if behind > 0:
                 self.merge_upstream(ahead, behind)
                 if self.stopped:
@@ -567,6 +650,7 @@ class Sync:
                 return
             push = self.git("push", "--quiet")
             if push.code == 0:
+                self.pushed = True
                 self.status("PUSHED", f"{commit_count(ahead)} to GitHub.")
                 return
             rejected = re.search(r"rejected|fetch first|non-fast-forward", "\n".join(push.err))
@@ -629,6 +713,7 @@ class Sync:
                 self.status("STALE", f"{file} ({kind}, {format_age(age)})")
             else:
                 self.status("LEFT", f"{file} ({kind}, {format_age(age)})")
+            self.report_long([file])
 
     def update_toolkit(self) -> None:
         """Runs update's check, which decides what to do about new dev-home-toolkit commits, so what
@@ -675,7 +760,14 @@ class Sync:
             self.step("The commit", lambda: self.commit(paths, message))
             if self.stopped:
                 return
-        self.step("Syncing with GitHub", lambda: self.sync_remote(fetch_first))
+        self.step("Syncing with GitHub", lambda: self.sync_remote(fetch_first, not paths))
+        # Only once commits came in or went out: a merge that's undone, or a push that fails, moved
+        # nothing. Commits that came in while the push failed leave the files of those waiting here
+        # in the list too, since the one diff can't tell the two apart.
+        if self.brought_in or self.pushed:
+            self.step(
+                "Checking the synced files' paths", lambda: self.report_long(self.synced_files)
+            )
         # A commit with nothing to commit has said so, and reached no GitHub to compare with.
         if not self.reported and not paths:
             if fetch_first or age is None:

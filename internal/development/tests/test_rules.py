@@ -746,6 +746,21 @@ def test_the_longest_rules_path_leaves_dev_home_about_90_characters(code: Module
     )
 
 
+def test_the_path_budget_is_the_longest_rules_path(box: Sandbox, code: ModuleType) -> None:
+    assert code.longest_rules_path() == shared_module(box, "paths").PATH_BUDGET
+
+
+def test_a_path_is_as_long_as_windows_counts_it(box: Sandbox, code: ModuleType) -> None:
+    windows_length = shared_module(box, "paths").windows_length
+    assert windows_length("knowledge/\u00e9t\u00e9.md") == 16
+    # A character beyond UTF-16's first 65,536, such as an emoji, is two units.
+    assert windows_length("\U0001f600.md") == 5
+    # A lone half of such a pair, which Windows allows in a file name, is one.
+    assert windows_length("\ud83d.md") == 4
+    # Setup's check of dev-home's folder counts the same way: 89 characters, but 90 units.
+    assert "is 90 characters long" in code.path_problem(Path("C:/" + "d" * 85 + "\U0001f600"))
+
+
 def test_the_knowledge_filing_rules_keep_a_note_inside_the_longest_rules_path(
     box: Sandbox, code: ModuleType
 ) -> None:

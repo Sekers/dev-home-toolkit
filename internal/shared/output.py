@@ -19,6 +19,7 @@ STATES = (
     "NEW",
     "SETTING",
     "LARGE",
+    "LONG",
     "TEST",
     "LINKED",
     "REMOVED",
@@ -36,6 +37,7 @@ WARNING_STATES = {
     "NEW",
     "SETTING",
     "LARGE",
+    "LONG",
     "CHANGE",
     "TEST",
 }

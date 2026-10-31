@@ -1,9 +1,8 @@
 # 0088: Path lengths
 
-**Built:** yes, except: the `LONG` line; shortening a handoff's folder; a line for a folder in
-`rules/` that setup can't list; and counting a path's length in UTF-16 units, where setup's check
-of dev-home's folder counts Python's characters. Setup skips that check in a test profile, whose
-dev-home sits deep in the repo's folder, so the tests check it directly.
+**Built:** yes, except: shortening a handoff's folder, and a line for a folder in `rules/` that
+setup can't list. Setup skips its check of dev-home's folder in a test profile, whose dev-home
+sits deep in the repo's folder, so the tests check it directly.
 
 **Decision:** every path in dev-home stays within the path budget: 139 characters inside
 dev-home's folder, the longest path in `rules/` that its caps on names allow
@@ -14,7 +13,8 @@ reports any other path past the budget from the first point its code sees it, ne
 Decided by
 the developer on 2026-10-17 and 2026-10-18, as part of 0065 (the budget and setup's check), and
 changed on 2026-10-29 (git's long-path option from a clone's start, handoffs, knowledge notes, and
-the `LONG` line), 2026-10-30 (the room beside a handoff), and 2026-10-31 (a decision of its own).
+the `LONG` line), 2026-10-30 (the room beside a handoff), and 2026-10-31 (a decision of its own,
+a second read after a push GitHub rejects, and `LONG` out of `/dev-home sync`'s summary).
 
 - **dev-home's folder.** Each run, setup checks that dev-home's folder path, plus the path budget,
   plus 30 characters, fits under 260 characters, so a folder of at most 89, and otherwise prints
@@ -35,8 +35,9 @@ the `LONG` line), 2026-10-30 (the room beside a handoff), and 2026-10-31 (a deci
   for files beside a handoff, planned but not designed: any path inside a handoff's folder,
   subfolders and `.md` included, at most 60 characters. Their design confirms or changes that
   number before 1.0.0, while a change needs no conversion. `facts.py` imports only Python's
-  standard library, as a skill's script, so it can't import `rules.py`: it has its own copies of
-  the path budget and of the length count, and a test checks that they match `rules.py`.
+  standard library, as a skill's script, so it can't import `internal/shared/`: it has its own
+  copies of the path budget and of the length count, and a test checks that they match
+  `paths.py`'s.
 - **`rules/`.** The end user's files in `mine/` get the `LONG` line below, like any other path,
   but setup itself checks no rules file's length. A file in `rules/` that setup can't read gets a
   line, and so does a folder there that setup can't list.
@@ -44,18 +45,32 @@ the `LONG` line), 2026-10-30 (the room beside a handoff), and 2026-10-31 (a deci
   names, gets a `LONG` line naming the file, its length, and the budget, saying what may fail (a
   PC whose dev-home is in a deeper folder, or whose Windows long-path setting is off) and how to
   fix it (shorten its name or a folder above it). Nothing is refused, and the line leaves the
-  sync's exit code at 0. The sync checks:
+  sync's exit code at 0. A file gets the line at most once per run, and only while it's on this
+  PC, so a file deleted or renamed away gets none. Windows ignores letter case, so a file is there
+  whatever the case of its name on this PC, and two names that differ only in case, as after a
+  rename that changed only that, are one file, named in the line as it's spelled on this PC. The
+  sync checks:
   - its list of uncommitted files, from the `git status` call it already makes, beside its `LEFT`
     or `STALE` line, on every sync while the file stays uncommitted;
   - in `sync.py --message`, the staged files' names, from the `git diff --cached` call it already
-    makes (`--name-only -z` in place of `--quiet`, reading "nothing staged" from empty output),
-    and the commit goes through;
+    makes (`--name-only -z --no-renames` in place of `--quiet`, reading "nothing staged" from
+    empty output), and the commit goes through;
   - the commits a plain sync pushes, and the commits any sync brings in, with one
-    `git diff --name-only -z`, only on those syncs. A file brought in that's too long for this PC
-    fails git's checkout first, and git's own error shows: no check can come before it.
+    `git diff --name-only -z --no-renames` between this PC's last commit and GitHub's, made before
+    any merge, so one call covers the commits both ways; only on those syncs. A push GitHub
+    rejects gets a second round, which reads it again for the commits that came in meanwhile (the
+    developer, 2026-10-31). A sync that commits
+    reads it only when commits come in, and then it covers that sync's other commits going out
+    too, such as one made by hand. The files get the line only once commits came in or went out,
+    so a merge that's undone, or a push that fails, gives none; commits that came in while the
+    push failed give the files of those waiting here the line too, since the one diff can't tell
+    the two apart. A file brought in that's too long for this PC fails git's checkout first, and
+    git's own error shows: no check can come before it.
 
   The skills tell each `LONG` line once per session, in the bullet they share, which becomes
   "`UPDATE`, `NEW`, `LARGE`, and `LONG`" ([0036: New items](0036-new-items.md)).
+  `/dev-home sync`'s summary, which names what each `UPDATE`, `NEW`, or `LARGE` line says is
+  still waiting, leaves `LONG` out (the developer, 2026-10-31).
 
 **Why:**
 
@@ -94,7 +109,15 @@ the `LONG` line), 2026-10-30 (the room beside a handoff), and 2026-10-31 (a deci
 - Checking what changes, where git already reports it: two of the checks read git calls the sync
   already makes, and the third adds one git call, 18 ms for one commit and 21 ms for ten (medians
   on a fast PC, 2026-10-29), only on syncs that push or bring in commits, a cost the developer
-  approved. Without `-z`, git escapes names with non-ASCII letters, so the lengths would be wrong.
+  approved. Without `-z`, git escapes names with non-ASCII letters, so the lengths would be wrong;
+  with renames found, a diff names only one side of a rename, so a file renamed on the other side
+  would go unchecked. The second round's read costs the same again, only when two PCs push
+  within moments of each other; without it, the files in the commits that came in on that round
+  would never get the line on this PC.
+- `LONG` out of `/dev-home sync`'s summary: a committed long file gets the line only on the sync
+  that commits, pushes, or brings it in, and is quiet after that, so it's rarely still waiting;
+  only an uncommitted one repeats, and the shared bullet already passes each line on once a
+  session. Naming it would add about 4 words to the dev-home skill, read on every `/dev-home sync`.
 - No length check of rules files in setup: it would come on every sync for a file kept on
   purpose, and a PC that can't read one already says so.
 

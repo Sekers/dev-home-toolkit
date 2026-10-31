@@ -28,8 +28,9 @@ points here; its rules apply too.
   and running setup); `settings.py` (this PC's `local-settings.json`, dev-home's
   `dev-home.json`, the settings `setting-definitions.json` beside it declares, what skills declare
   in their `dev-home-skill.json`, the checks of both, and the rule for skills' names);
-  `requirements.py` (what a skill needs to run, and whether this PC meets it);
-  and setup's own parts: `paths.py`, `links.py`, `generated.py`, `python_link.py`, `console.py`,
+  `requirements.py` (what a skill needs to run, and whether this PC meets it); `paths.py` (path
+  forms, and how long a path in dev-home may be, by Windows' count);
+  and setup's own parts: `links.py`, `generated.py`, `python_link.py`, `console.py`,
   `settings_files.py`, `claude_settings.py`, `codex_config.py`, `configure.py`
   (`--configure`'s menu and assignments), `recycle_bin.py` (sending dropped text to the Recycle
   Bin), `rules.py` (reading dev-home's `rules/` and joining it into each agent's rules), and

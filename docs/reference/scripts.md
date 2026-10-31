@@ -78,12 +78,14 @@ PC, and says so when it can't.
 | `UPDATE` | New dev-home-toolkit commits are waiting. |
 | `NEW` | From setup, about one of four things. Skills new to this PC, each with whether it was added to your agents, and any program or Python version it needs that this PC seems to lack: that line comes once, and to change what it chose, use `/dev-home configure`. Or a Claude Code folder or Codex home setup has no answer for, which it leaves as it is: that line comes on every sync until you answer, with `/dev-home configure` or in setup in a terminal: set it up, no, or remind me in N days. Or settings dev-home-toolkit recommends for a Claude Code folder set up, such as leaving Claude Code's name out of your commits, which it leaves as they are: that line comes on every sync until you answer, the same two ways: all recommended, none, each, or remind me in N days. Or rules setup found in an agent's rules file but didn't write, which it set aside in your dev-home: that line comes on every sync until you say where they go, with `/dev-home configure` or in setup in a terminal (see [Rule files](rule-files.md#where-they-go)). A `NEW` line also says when setup left out a recommended setting you said yes to, because its value changed after you answered; setup then asks again. |
 | `LARGE` | From setup: your rules for one agent on this PC are past the size `rules.warnAboveKiB` sets, 32 KiB unless set. Every session loads them, so they cost tokens in every session. The line comes on every sync until you shorten them or raise the size with `/dev-home configure`, where 0 turns it off. |
+| `LONG` | A file's path inside your dev-home is past 139 characters, which every path in dev-home should fit in, so on a PC whose dev-home is in a deeper folder, or whose Windows long-path setting is off, programs may fail to open it. The sync says so for a file it lists as uncommitted, one it commits, and one in the commits it sends to GitHub or brings in from there, and never stops anything because of it. Shorten the file's name or a folder's name above it. |
 | `PROBLEM` | Needs you. The message says what to do. |
 | `RELOAD` | From `prepare.py`: the skill has changed since the session loaded it, such as after an update, so the agent stops. Type the skill's command again to load its new steps. |
 
 When a skill command starts with a sync, such as `/handoff`, the agent tells you each `UPDATE`,
-`NEW`, or `LARGE` line once a session, since such a line can come on every sync while it waits for
-you. `/dev-home sync` names what's still waiting every time.
+`NEW`, `LARGE`, or `LONG` line once a session, since such a line can come on every sync while it
+waits for you. `/dev-home sync` names what any `UPDATE`, `NEW`, or `LARGE` line says is still
+waiting every time.
 
 Setup's lines, such as `LINKED` or `WROTE`, say what it changed on this PC.
 

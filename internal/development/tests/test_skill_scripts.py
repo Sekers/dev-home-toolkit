@@ -357,15 +357,15 @@ def skills_that_sync() -> list[Path]:
 def test_each_skill_that_syncs_passes_repeating_lines_on_with_one_shared_bullet(
     skill: Path,
 ) -> None:
-    # Word for word the same in every skill, and once per session, since an UPDATE, NEW, or LARGE
-    # line can repeat on every sync (decisions 0036 and 0065).
+    # Word for word the same in every skill, and once per session, since an UPDATE, NEW, LARGE,
+    # or LONG line can repeat on every sync (decisions 0036, 0065, and 0088).
     words = " ".join((skill / "SKILL.md").read_text(encoding="utf-8").split())
     shared = (
-        "- `UPDATE`, `NEW`, and `LARGE`: tell the user each such line once per session, as its"
-        " own line, and continue."
+        "- `UPDATE`, `NEW`, `LARGE`, and `LONG`: tell the user each such line once per session,"
+        " as its own line, and continue."
     )
     assert shared in words
-    for word in ("UPDATE", "NEW", "LARGE"):
+    for word in ("UPDATE", "NEW", "LARGE", "LONG"):
         assert f"- `{word}`:" not in words
 
 
