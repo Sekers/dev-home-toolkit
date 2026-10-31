@@ -12,6 +12,7 @@ these rules live with the skill, so they update with dev-home-toolkit.
 ## Names
 
 - Lowercase letters, digits, and hyphens.
+- At most 60 characters per name, `.md` included, so paths fit Windows' limit.
 - The folder is the subject and the file is the topic, so don't repeat the subject in the file
   name.
 - Nouns for reference (`pipeline-binding.md`). Verb first for how-tos (`sign-commits-with-gpg.md`).

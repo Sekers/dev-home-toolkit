@@ -1,10 +1,11 @@
 # Long paths on Windows
 
 On 2026-10-28, these checks looked at Windows' 260-character path limit across every path
-dev-home-toolkit creates or relies on, to decide what to do about the part of
-[0065: Where end users' rules live](../decisions/0065-where-end-users-rules-live.md) that isn't
-built: the handoff skill's own check of a path's length. Nothing is decided yet: the options, and
-the questions waiting for the developer, are at the end.
+dev-home-toolkit creates or relies on, to decide what to do about the handoff skill's own check of
+a path's length, which
+[0065: Where end users' rules live](../decisions/0065-where-end-users-rules-live.md) planned then
+and which was never built. The design decided from them is
+[0088: Path lengths](../decisions/0088-path-lengths.md).
 
 ## The limit
 
@@ -95,7 +96,8 @@ From the code at `bc46971`:
 
 | Path | Named by | How long it can get | Guarded? |
 | --- | --- | --- | --- |
-| `rules/` in dev-home | dev-home-toolkit | 139 characters inside dev-home, by the caps in decision 0065 | Yes: setup allows dev-home's folder up to 89 characters (260, less 30 of room for git, less 139, less 2; `path_problem` in `internal/shared/rules.py`) |
+| `rules/` in dev-home, apart from the end user's files in `mine/` | dev-home-toolkit | 139 characters inside dev-home, by the caps in decision 0065 | Yes: setup allows dev-home's folder up to 89 characters (260, less 30 of room for git, less 139, less 2; `path_problem` in `internal/shared/rules.py`) |
+| `rules/<level>/mine/...`, the end user's own rules files | The end user | Any `.md` name, subfolders included | Only by setup's depth check |
 | `handoffs/<service>/<parts>/HANDOFF.md`, and the issue draft at `.drafts/<service>/<parts>/issue.md` | `facts.py`, from the project's address | GitHub: 167 inside dev-home (39-character owners and 100-character repositories, from decision 0065). Azure DevOps: 212 (organization names under 50 characters, projects and repositories up to 64 each, by [Azure DevOps' naming rules](https://learn.microsoft.com/azure/devops/organizations/settings/naming-restrictions)). GitLab: nested groups, which copies of GitLab's docs say go up to 20 levels (not checked on gitlab.com). Other hosts and none: the project folder's name | No: decision 0065's check isn't built |
 | `knowledge/<subject>/<topic>.md` | The agent, by the knowledge skill's filing rules | The filing rules set no length | Only by setup's depth check |
 | `skills/<name>/...`, the end user's own skills | The end user | Names up to 64 characters (setup's check of the Agent Skills standard); the files inside, any length. Agents also reach them through each Claude Code folder's `skills/` link, so the path an agent uses is that folder's path plus the skill's | Only by setup's depth check, for dev-home's copy |
@@ -120,9 +122,24 @@ Put together:
 - The `name` fact, such as `you/tool`, is also the repository `gh` files issues in. So any change
   to a long handoff's folder may change only the folder, never `name`.
 
+## Checking paths at a sync
+
+**Measured** (2026-10-29, on a fast PC, medians), for where a sync could check the paths in
+dev-home:
+
+- One `git diff --name-only -z` over the commits a sync pushes or brings in: 18 ms for one commit,
+  21 ms for ten.
+- The length of every file's path in a dev-home of 161 files: about 8 ms, growing with dev-home.
+- The end user's skills, 10 files: 0.23 ms.
+
+Without `-z`, git escapes names with non-ASCII letters, so lengths counted from its output would be
+wrong.
+
 ## Options
 
-None of these is decided.
+Weighed on 2026-10-28. [0088: Path lengths](../decisions/0088-path-lengths.md) took option 1; for
+option 2, B, with room for files beside a handoff; and for option 3, a length rule in the
+knowledge skill's filing rules, with a `LONG` line from the sync for any path past the budget.
 
 1. **Clone with long paths on** (fits any of the options below): setup's `gh repo clone` adds
    `-- -c core.longpaths=true`, tested above. Setup turns `core.longpaths` on in dev-home only after
@@ -145,8 +162,3 @@ None of these is decided.
    a length rule in the knowledge skill's filing rules (words read on every add); or a check in
    setup (a scan of dev-home on every sync, which AGENTS.md's Speed rule says to measure and ask
    about first).
-
-## Still open
-
-- Which of the options to build, and whether before 1.0.0, when other people start using
-  dev-home-toolkit.

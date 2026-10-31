@@ -4,6 +4,7 @@ blocks in the operating rules, and which an agent gets. And what setup moves int
 agent's file: the lines it didn't write, with their headings, and the moved file's name, note,
 and duplicates."""
 
+import re
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
@@ -743,3 +744,18 @@ def test_the_longest_rules_path_leaves_dev_home_about_90_characters(code: Module
         "make in it would pass Windows' limit of 260 characters. Move dev-home to a folder of 89 "
         "characters or fewer, such as C:\\Programming\\dev-home."
     )
+
+
+def test_the_knowledge_filing_rules_keep_a_note_inside_the_longest_rules_path(
+    box: Sandbox, code: ModuleType
+) -> None:
+    # A note is knowledge/<subject>/<topic>.md, and the filing rules cap both names.
+    rules = box.toolkit / "templates" / "skills" / "knowledge" / "filing-rules.md"
+    found = re.search(
+        r"^- At most (\d+) characters per name, `\.md` included,",
+        rules.read_text(encoding="utf-8"),
+        re.MULTILINE,
+    )
+    assert found, "The filing rules no longer cap a name's length."
+    longest_note = len("knowledge") + 2 * (1 + int(found.group(1)))
+    assert longest_note <= code.longest_rules_path()

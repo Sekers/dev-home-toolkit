@@ -16,7 +16,7 @@ on 2026-10-29.
 - Supporting a host takes more than syncing with it: setup creating and cloning dev-home there,
   signing in, filing issues, and docs, each checked on that host. A route that's only partly
   there misses what setup does for GitHub, such as turning on git's long-path option before a
-  clone's checkout ([0065: Where end users' rules live](0065-where-end-users-rules-live.md)).
+  clone's checkout ([0088: Path lengths](0088-path-lengths.md)).
 - The hosts differ in ways that would change a design made now. By their docs, read on
   2026-10-29: GitLab's `glab repo clone` works like `gh repo clone`, taking short names and
   passing options to git; the Azure DevOps CLI, `az repos`, has no clone command; and Atlassian's

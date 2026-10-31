@@ -1,8 +1,6 @@
 # 0065: Where end users' rules live
 
-**Built:** yes, except: the handoff skill's own check of a path's length, and `built-in/`, which
-comes with built-in rules. Setup skips its check of dev-home's path in a
-test profile, whose dev-home sits deep in the repo's folder, so the tests check it directly.
+**Built:** yes, except: `built-in/`, which comes with built-in rules.
 
 **Decision:** dev-home's `global-rules/` becomes `rules/`, with four levels:
 
@@ -21,7 +19,8 @@ never the per-PC levels, and `pcs/<pc>/<agent>/` also holds `unanswered/`
 Decided by the developer on 2026-10-17 and 2026-10-18, and changed on 2026-10-22 (a code block
 left open, the order inside a merged section, `# My rules`, and the size settings' details),
 2026-10-23 (a missing `my-rules.md` git still has), 2026-10-24 (how agents pass a `LARGE`
-line on), and 2026-10-29 (git's long-path option from a clone's start).
+line on), and 2026-10-31 (what isn't about `rules/` in the path length moved to
+[0088: Path lengths](0088-path-lengths.md)).
 
 - **Names.** `<pc>` is the PC's name ([0083: The PC's name](0083-the-pcs-name.md)) in
   lowercase, any other character a hyphen.
@@ -85,14 +84,9 @@ line on), and 2026-10-29 (git's long-path option from a clone's start).
 - **Path length.** Caps of 40 characters on built-in skill and rule names, 24 on agent folder
   names, and 32 on PC folder names, with moved-file names cut to 60. A longer PC name is cut to
   32 characters; two PCs whose names agree that far would share a folder, which is accepted as
-  rare, since Windows' own generated names have at most 15 characters. Each run, setup checks that
-  dev-home's folder path, plus the longest rules path it creates, plus 30 characters, fits under
-  260 characters, and otherwise prints a `PROBLEM` line suggesting a shorter place for dev-home.
-  The handoff skill checks the same way when it creates a handoff. Setup turns on `core.longpaths`
-  in dev-home's git config with its other git settings there; if checking it adds a git call to
-  each run, it's measured and the developer is asked first, as AGENTS.md's Speed rule says. A
-  dev-home that setup clones has it on from the start: its `gh repo clone` passes
-  `-c core.longpaths=true` on to git (the developer, 2026-10-29).
+  rare, since Windows' own generated names have at most 15 characters. The longest path these caps
+  allow, 139 characters, is the path budget for all of dev-home
+  ([0088: Path lengths](0088-path-lengths.md)).
 - **Docs.** `docs/guide/your-rules.md` explains the levels with an example of each, `mine/` and
   `my-rules.md`, `os:`, a takeover of an agent's file, and getting dropped text back;
   `docs/reference/rule-files.md` holds the facts to look up; the README's "Your own rules and
@@ -137,16 +131,9 @@ line on), and 2026-10-29 (git's long-path option from a clone's start).
   Agents tell it once a session, as they do `NEW`: after the first time, saying it on every
   command costs tokens and tells the end user nothing new.
   Setup only ever raises what Codex reads, so a small limit can't cut Codex below its default.
-- Path length: Windows refuses a path over 260 characters by default, counting dev-home's own
-  folder; Git for Windows won't check out a longer one without `core.longpaths`; and macOS and Linux
-  cap each name at 255. Windows' own long-path switch needs admin rights, so setup leaves it alone.
-  With these caps the longest rules path is about 140 characters, so dev-home's folder can be about
-  90 characters long. A handoff's path, `handoffs/github/<owner>/<repo>/HANDOFF.md`, can reach about
-  170, since GitHub allows 39-character owners and 100-character repository names. Turning
-  `core.longpaths` on after a clone comes too late for its checkout: tested on 2026-10-28, a
-  clone whose checkout passed the limit failed without it, even with Windows' long-path setting
-  on, and `gh` passes the option on to git
-  ([Long paths on Windows](../research/long-paths-on-windows.md)).
+- Path length: every path in `rules/` has to fit Windows' limit of 260 characters on every PC
+  ([0088: Path lengths](0088-path-lengths.md)). With these caps, the longest is 139 characters,
+  which leaves dev-home's folder up to 89.
 - `os:` in a note: agents are limited by folder, operating systems by declaration, as built-in
   rules declare theirs, and one file covers every Windows PC. A misspelled name loads the rule,
   since dropping a needed rule costs more than loading an extra one.
@@ -179,7 +166,7 @@ line on), and 2026-10-29 (git's long-path option from a clone's start).
   The names `rules.largeAboveKiB` and `codex.projectDocMaxKiB` (Codex's jargon, which suggests
   only the project's file).
 - Limits worked out per PC (rule files sync between PCs, so names would be renamed back and
-  forth); relying on long-path support alone; no caps and no check.
+  forth); no caps and no check.
 - No OS limit for the end user's rules (a Windows rule loads on every Mac, or is copied into each
   Windows PC's folder); per-OS folders such as `rules/os/windows/` (more levels and folders, and
   built-in rules declare their systems instead).
