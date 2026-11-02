@@ -2474,7 +2474,7 @@ class Setup:
                 continue
             waiting = rules_root / rules.PCS / pc / target.agent / rules.UNANSWERED
             mine = operating[target.agent]
-            if rules.markdown_files(waiting):
+            if rules.markdown_files(waiting)[0]:
                 result = rules.joined_rules(mine, rules_root, pc, target.agent, system, target.path)
             elif target.agent in shared:
                 result = shared[target.agent]
@@ -4790,7 +4790,7 @@ def unanswered_files(rules_root: Path, pc: str) -> list[Path]:
     return [
         path
         for agent in requirements.AGENT_NAMES
-        for path in rules.markdown_files(rules_root / rules.PCS / pc / agent / rules.UNANSWERED)
+        for path in rules.markdown_files(rules_root / rules.PCS / pc / agent / rules.UNANSWERED)[0]
     ]
 
 

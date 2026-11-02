@@ -73,6 +73,11 @@ through the `\\?\` form:
   `FileNotFoundError` (errno 2), and the `\\?\` form worked. So with the setting off, a path over
   the limit is one the toolkit's own scripts can't read through a plain path, though both agents
   can.
+- **Python 3.14.8, at the limit** (2026-11-02, the same PC): through plain paths, `os.scandir`
+  listed a folder of 255 characters and failed from 256, with `FileNotFoundError` (WinError 3, "The
+  system cannot find the path specified"), since Python adds `\*.*` to a folder's path to list it.
+  Reading a file worked at 259 characters and failed from 260, with `FileNotFoundError` (errno 2).
+  The parent folder's listing still showed the folder as a folder, not a link.
 - **PowerShell 7.6.9:** `Get-Content` read the plain path. **Windows PowerShell 5.1:** it failed,
   "Cannot find path ... because it does not exist".
 - **cmd.exe:** `type` failed, "The system cannot find the path specified", with the path passed in

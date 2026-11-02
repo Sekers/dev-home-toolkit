@@ -52,7 +52,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .links import is_link
-from .paths import PATH_LIMIT, PATH_ROOM, real_path, windows_length
+from .paths import PATH_LIMIT, PATH_ROOM, comparable, real_path, windows_length
 from .requirements import OS_NAMES, advice, closest, quoted
 
 RULES = "rules"
@@ -80,6 +80,10 @@ PC_NAME_LIMIT = 32
 AGENT_NAME_LIMIT = 24
 BUILT_IN_NAME_LIMIT = 40
 MOVED_NAME_LIMIT = 60
+# What Python adds to a folder's path to list it on Windows, \*.*, which counts toward Windows'
+# limit: with its long-path setting off, a folder of 256 characters can't be listed, though a file
+# of 259 can be read.
+LISTING_EXTRA = 4
 
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 HEADING = re.compile(r"^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$")
@@ -151,15 +155,23 @@ def joined_folders(pc: str, agent: str) -> list[Path]:
     return [*(level / MINE for level in levels(pc, agent)), Path(PCS, pc, agent, UNANSWERED)]
 
 
-def markdown_files(folder: Path) -> list[Path]:
+def markdown_files(folder: Path) -> tuple[list[Path], list[str]]:
     """Every .md file in folder and its subfolders, alphabetically by its path there, in any
-    letter case first. A linked folder isn't followed, so a link can't loop."""
+    letter case first, and a line for each folder there that couldn't be listed, whose files are
+    left out. folder missing needs no line, since a level may have no files. A linked folder isn't
+    followed, so a link can't loop."""
     found: list[Path] = []
+    problems: list[str] = []
 
     def walk(current: Path) -> None:
         try:
             entries = list(os.scandir(current))
-        except OSError:
+        except OSError as error:
+            if current != folder or not isinstance(error, FileNotFoundError):
+                problems.append(
+                    f"{current} couldn't be listed, so the rules in it are left out: "
+                    f"{unopened_reason(current, error, LISTING_EXTRA)}"
+                )
             return
         for entry in entries:
             path = Path(entry.path)
@@ -175,7 +187,21 @@ def markdown_files(folder: Path) -> list[Path]:
         relative = path.relative_to(folder).as_posix()
         return relative.casefold(), relative
 
-    return sorted(found, key=by_path)
+    return sorted(found, key=by_path), problems
+
+
+def unopened_reason(path: Path, error: OSError, extra: int = 0) -> str:
+    """Why path couldn't be opened, to end a line about it: error's own words, or, when Windows
+    says it isn't there and its full path, with extra, the characters the call adds to it, reaches
+    Windows' limit, that it's too long. With Windows' long-path setting off, Windows says such a
+    path isn't there, though it is ("Long paths on Windows" in docs/development/research/)."""
+    length = windows_length(comparable(path))
+    if os.name == "nt" and isinstance(error, FileNotFoundError) and length + extra >= PATH_LIMIT:
+        return (
+            f"its path is {length} characters long, too long for Windows while its long-path "
+            "setting is off. Shorten its name or the name of a folder above it."
+        )
+    return str(error)
 
 
 def decode(path: Path, data: bytes) -> tuple[str, list[str]]:
@@ -310,7 +336,8 @@ def read_rule(path: Path) -> RuleFile:
     try:
         data = path.read_bytes()
     except OSError as error:
-        return RuleFile(path, "", (), (f"{path} couldn't be read, so it's left out: {error}",))
+        said = f"{path} couldn't be read, so it's left out: {unopened_reason(path, error)}"
+        return RuleFile(path, "", (), (said,))
     text, problems = decode(path, data)
     lines = text.split("\n")
     systems: tuple[str, ...] = ()
@@ -470,7 +497,9 @@ def joined_rules(
     problems: list[str] = []
     waiting = Path(PCS, pc, agent, UNANSWERED)
     for folder in joined_folders(pc, agent):
-        for path in markdown_files(rules_root / folder):
+        paths, unlisted = markdown_files(rules_root / folder)
+        problems += unlisted
+        for path in paths:
             rule = read_rule(path)
             problems += rule.problems
             if folder == waiting and not came_from(rule, source):
@@ -500,7 +529,7 @@ def already_held(
     wanted = evened(text)
     waiting = Path(PCS, pc, agent, UNANSWERED)
     for folder in joined_folders(pc, agent):
-        for path in markdown_files(rules_root / folder):
+        for path in markdown_files(rules_root / folder)[0]:
             if path == skip or not holds(path, wanted):
                 continue
             rule = read_rule(path)
@@ -823,7 +852,7 @@ def duplicate_of(text: str, folder: Path, skip: Path | None = None) -> Path | No
     other than skip, the file the text comes from."""
     wanted = evened(text)
     return next(
-        (path for path in markdown_files(folder) if path != skip and holds(path, wanted)), None
+        (path for path in markdown_files(folder)[0] if path != skip and holds(path, wanted)), None
     )
 
 

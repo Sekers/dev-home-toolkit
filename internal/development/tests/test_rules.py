@@ -4,6 +4,7 @@ blocks in the operating rules, and which an agent gets. And what setup moves int
 agent's file: the lines it didn't write, with their headings, and the moved file's name, note,
 and duplicates."""
 
+import os
 import re
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta, timezone
@@ -168,6 +169,99 @@ def test_a_linked_folder_isnt_followed(code: ModuleType, rules: Path) -> None:
         assert own(code, rules) == "# My rules\n\n- Mine"
     finally:
         remove_link(loop)
+
+
+def test_a_folder_that_cant_be_listed_is_reported_in_the_errors_words_and_the_rest_joins(
+    code: ModuleType, rules: Path
+) -> None:
+    write(rules / "_all-agents" / "mine" / "my-rules.md", "- Mine\n")
+    # A file where a level's mine/ folder should be.
+    mine = rules / "codex" / "mine"
+    write(mine, "- Not a folder\n")
+    with pytest.raises(OSError) as raised:
+        os.scandir(mine)
+    assert own(code, rules) == "# My rules\n\n- Mine"
+    assert joined(code, rules).problems == [  # type: ignore[attr-defined]
+        f"{mine} couldn't be listed, so the rules in it are left out: {raised.value}"
+    ]
+
+
+@pytest.fixture
+def long_paths_off(code: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Windows with its long-path setting off, as the research page "Long paths on Windows"
+    measured it: through a plain path, listing a folder of 256 characters or more, or reading a
+    file of 260 or more, fails as if it weren't there. Faked, since the setting is the PC's, and
+    changing it needs an administrator."""
+    scandir, read_bytes = os.scandir, Path.read_bytes
+
+    def listing(path: Path) -> object:
+        if code.windows_length(str(path)) >= 256:
+            raise FileNotFoundError(2, "The system cannot find the path specified", str(path))
+        return scandir(path)
+
+    def reading(path: Path) -> bytes:
+        if code.windows_length(str(path)) >= 260:
+            raise FileNotFoundError(2, "No such file or directory", str(path))
+        return read_bytes(path)
+
+    monkeypatch.setattr(os, "scandir", listing)
+    monkeypatch.setattr(Path, "read_bytes", reading)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows' path limit")
+def test_a_folder_or_file_too_long_for_windows_is_reported_with_its_length(
+    box: Sandbox, code: ModuleType, rules: Path, long_paths_off: None
+) -> None:
+    long_form = shared_module(box, "paths").long_form
+    mine = rules / "_all-agents" / "mine"
+    write(mine / "my-rules.md", "- Mine\n")
+    room = 256 - code.windows_length(str(mine)) - 1
+    # A folder of 255 characters lists, though any file in it is 260 or more; one of 256 doesn't.
+    lists, too_long = mine / ("f" * (room - 1)), mine / ("d" * room)
+    made = [Path(long_form(path)) for path in (lists, lists / "a.md", too_long, too_long / "a.md")]
+    try:
+        for path in made:
+            if path.suffix:
+                path.write_text("- Too far down\n", encoding="utf-8")
+            else:
+                path.mkdir()
+        advice = (
+            "too long for Windows while its long-path setting is off. Shorten its name or the "
+            "name of a folder above it."
+        )
+        assert own(code, rules) == "# My rules\n\n- Mine"
+        assert joined(code, rules).problems == [  # type: ignore[attr-defined]
+            f"{too_long} couldn't be listed, so the rules in it are left out: its path is 256 "
+            f"characters long, {advice}",
+            f"{lists / 'a.md'} couldn't be read, so it's left out: its path is 260 characters "
+            f"long, {advice}",
+        ]
+    finally:
+        # Through the long form, which pytest's own cleanup can't use.
+        for path in reversed(made):
+            if path.suffix:
+                path.unlink(missing_ok=True)
+            elif path.exists():
+                path.rmdir()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows' path limit")
+@pytest.mark.parametrize(
+    ("length", "extra", "too_long"),
+    [(259, 0, False), (260, 0, True), (255, 4, False), (256, 4, True)],
+)
+def test_only_a_path_windows_says_isnt_there_at_its_limit_is_called_too_long(
+    code: ModuleType, length: int, extra: int, too_long: bool
+) -> None:
+    path = Path("C:/" + "x" * (length - 3))
+    missing = FileNotFoundError(2, "No such file or directory", str(path))
+    reason = code.unopened_reason(path, missing, extra)
+    assert reason.startswith(f"its path is {length} characters long") is too_long
+    if not too_long:
+        assert reason == str(missing)
+    # Any other error keeps its own words, whatever the path's length.
+    denied = PermissionError(13, "Permission denied", str(path))
+    assert code.unopened_reason(path, denied, extra) == str(denied)
 
 
 def test_no_rules_of_the_end_users_leaves_the_operating_rules_alone(

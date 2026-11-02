@@ -1,8 +1,6 @@
 # 0088: Path lengths
 
-**Built:** yes, except: a line for a folder in `rules/` that setup can't list. Setup skips its
-check of dev-home's folder in a test profile, whose dev-home sits deep in the repo's folder, so
-the tests check it directly.
+**Built:** yes.
 
 **Decision:** every path in dev-home stays within the path budget: 139 characters inside
 dev-home's folder, the longest path in `rules/` that its caps on names allow
@@ -15,12 +13,14 @@ the developer on 2026-10-17 and 2026-10-18, as part of 0065 (the budget and setu
 changed on 2026-10-29 (git's long-path option from a clone's start, handoffs, knowledge notes, and
 the `LONG` line), 2026-10-30 (the room beside a handoff), 2026-10-31 (a decision of its own,
 a second read after a push GitHub rejects, and `LONG` out of `/dev-home sync`'s summary), and
-2026-11-02 (cutting only a handoff's last folder, and dropping what's left at the cut's end).
+2026-11-02 (cutting only a handoff's last folder, dropping what's left at the cut's end, and the
+length in the line for a path in `rules/` too long for Windows).
 
 - **dev-home's folder.** Each run, setup checks that dev-home's folder path, plus the path budget,
   plus 30 characters, fits under 260 characters, so a folder of at most 89, and otherwise prints
   a `PROBLEM` line suggesting a shorter place for dev-home. A path's length counts as Windows
-  counts it, in UTF-16 units, so a character such as an emoji counts 2.
+  counts it, in UTF-16 units, so a character such as an emoji counts 2. Setup skips the check in
+  a test profile, whose dev-home sits deep in the repo's folder, so the tests check it directly.
 - **git's long-path option.** Setup turns on `core.longpaths` in dev-home's git config with its
   other git settings there. A dev-home that setup clones has it on from the start: its
   `gh repo clone` passes `-c core.longpaths=true` on to git.
@@ -46,7 +46,10 @@ a second read after a push GitHub rejects, and `LONG` out of `/dev-home sync`'s 
   and of the length count, and a test checks that they match `paths.py`'s.
 - **`rules/`.** The end user's files in `mine/` get the `LONG` line below, like any other path,
   but setup itself checks no rules file's length. A file in `rules/` that setup can't read gets a
-  line, and so does a folder there that setup can't list.
+  `PROBLEM` line, and so does a folder there that setup can't list, though a missing `mine/` or
+  `unanswered/` needs none. With Windows' long-path setting off, Windows says a path that long
+  isn't there, so for a file of 260 characters or more, or a folder of 256 or more (Python adds 4
+  to a folder's path to list it), the line gives the path's length and says to shorten it.
 - **Every other path: the `LONG` line.** A path past the path budget, such as a file the end user
   names, gets a `LONG` line naming the file, its length, and the budget, saying what may fail (a
   PC whose dev-home is in a deeper folder, or whose Windows long-path setting is off) and how to
@@ -134,6 +137,10 @@ a second read after a push GitHub rejects, and `LONG` out of `/dev-home sync`'s 
   session. Naming it would add about 4 words to the dev-home skill, read on every `/dev-home sync`.
 - No length check of rules files in setup: it would come on every sync for a file kept on
   purpose, and a PC that can't read one already says so.
+- The length in the line for a path in `rules/` too long for Windows: Windows' own answer, that
+  the path isn't there, sends the end user looking for a file or folder that is. The line gives
+  the length only for a path that reaches Windows' limit, so one shorter that really is gone
+  keeps Windows' words.
 
 **Options set aside:**
 

@@ -64,6 +64,9 @@ Each file is read like this:
   turn the files after it into code, and reported on every sync.
 - **Blank lines:** a file's blank lines at its start and end are dropped, and one blank line
   separates two files. An empty file, or one with only a note, adds nothing.
+- **Files and folders setup can't open:** each is left out, and reported on every sync. With
+  Windows' long-path setting off, that includes a file whose full path is 260 characters or
+  longer, and a folder whose full path is 256 or longer, and the line says to shorten it.
 
 ## Headings
 
