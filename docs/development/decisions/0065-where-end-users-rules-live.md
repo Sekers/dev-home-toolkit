@@ -84,7 +84,9 @@ line on), and 2026-10-31 (what isn't about `rules/` in the path length moved to
 - **Path length.** Caps of 40 characters on built-in skill and rule names, 24 on agent folder
   names, and 32 on PC folder names, with moved-file names cut to 60. A longer PC name is cut to
   32 characters; two PCs whose names agree that far would share a folder, which is accepted as
-  rare, since Windows' own generated names have at most 15 characters. The longest path these caps
+  rare: Windows doesn't permit computer names over 15 characters, though a longer host name can
+  still be set (Microsoft's "Naming conventions in Active Directory for computers, domains,
+  sites, and OUs" and "Computer Names" pages, read 2026-11-02). The longest path these caps
   allow, 139 characters, is the path budget for all of dev-home
   ([0088: Path lengths](0088-path-lengths.md)).
 - **Docs.** `docs/guide/your-rules.md` explains the levels with an example of each, `mine/` and
@@ -172,4 +174,5 @@ line on), and 2026-10-31 (what isn't about `rules/` in the path length moved to
   built-in rules declare their systems instead).
 
 **Look again if:** an agent gains a way to load several global rules files, end users ask for a
-level per account, or Windows turns on long paths by default.
+level per account, Windows turns on long paths by default, or macOS or Linux support comes: host
+names there aren't held to 15 characters, so two PCs whose names agree for 32 may not be rare.
