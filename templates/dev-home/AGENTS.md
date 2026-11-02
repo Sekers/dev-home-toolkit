@@ -16,9 +16,10 @@ setup.py, and sync.py) lives in my clone of dev-home-toolkit, at `{{TOOLKIT_DIR}
 ## What's here
 
 - `handoffs/<service>/<project path>/HANDOFF.md`: one per project, filed by where it's hosted,
-  such as `handoffs/github/you/tool/`. Projects hosted elsewhere go under `handoffs/other/`,
-  and projects with no remote under `handoffs/local/`, by folder name and first commit. The
-  handoff skill finds, reads, and updates them.
+  such as `handoffs/github/you/tool/`. Projects on other servers go under
+  `handoffs/other/<server>/<path>/`, and anything else, such as a folder outside git or a repo
+  with no remote, under `handoffs/pcs/<pc>/`, used only on that PC. The handoff skill finds,
+  reads, and updates them.
 - `knowledge/`: my general knowledge base. `knowledge/README.md` is its index; the rules for
   files come with the knowledge skill.
 - `rules/`: my rules, my own always-on preferences, which every session loads after the

@@ -70,27 +70,35 @@ of the address after it: <owner>/<repo> for GitHub and Bitbucket, <group>/<proje
 (plus any subgroups), and <org>/<project>/<repo> for Azure DevOps. HTTPS and SSH addresses give
 the same folder.
 
-Any other project is filed by its folder name plus the first 7 characters of its first commit,
-such as tools-3f9c2ab. The first commit is the same in every clone, and differs between
-unrelated repos, so two projects with the same folder name get separate handoffs. It goes under:
-- other: its origin is on a host not in SERVICES, or has a shape the script can't use.
-- local: it has no origin, or its origin is a folder rather than a network address.
-With no commits yet, in a shallow clone, or outside git, there's no first commit to use, so the
-folder name stands alone.
+A project whose origin names any other computer, or a known host in a shape the script can't use,
+is filed under other, by that computer's name and the path after it, such as
+other/git.example.com/team/app. A network share's path, such as //nas/git/tool.git, with slashes
+either way, names a computer too. So every PC with the repo finds the same handoff, whatever its
+own folder is called.
+
+Anything else gets a handoff on this PC alone, under pcs, in this PC's folder, named as rules/pcs/
+names it, then the folder's name, a hyphen, and a hash of its full path, such as
+pcs/office/notes-1a2b3c4d: a folder outside git, and a repo with no origin, or whose origin is a
+folder on this PC, such as C:/repos/tool or one on a mapped drive. Nothing about such a folder is
+the same on another PC, and the hash keeps apart two folders with the same name. The path is
+resolved first, following links and short names, and its letter case is ignored where the file
+system ignores it, so a folder gets the same hash however a session reaches it.
 
 A handoff's folder too long for the path budget of decision 0088, 139 characters inside dev-home,
 once 60 characters of room for the files beside a handoff are added, keeps the folders above its
 last one whole, and only the last is cut from its end to fit, with any hyphens, spaces, and dots
-left at the cut dropped, then given a hyphen and the first 8 hexadecimal characters of the
-SHA-256 of name (those alone, when nothing is left), which keep apart two long names that start
-the same. When the folders above leave the last no room for even its first character, as a long
-Azure DevOps organization and project can, it joins with the one just above it, with a hyphen,
-and so on up, only as far as it must. name stays whole, since commit messages and gh's
-repository use it, and draft uses the same folders. On GitHub, cutting takes more than 61
-characters of owner and repository together, and the owner's folder always stays.
+left at the cut dropped, then given a hyphen and the CRC-32 of name, as 8 hexadecimal characters
+(those alone, when nothing is left), which keep apart two long names that start the same. When
+the folders above leave the last no room for even its first character, as a long Azure DevOps
+organization and project can, it joins with the one just above it, with a hyphen, and so on up,
+only as far as it must. name stays whole, since commit messages and gh's repository use it, and
+draft uses the same folders. On GitHub, cutting takes more than 61 characters of owner and
+repository together, and the owner's folder always stays. A folder under pcs already ends with
+its hash, so only the folder's name before it is cut, and name is the folder as cut.
 
-A worktree uses its main checkout's origin and folder name, so it shares that checkout's
-handoff.
+A worktree uses its main checkout's origin and folder, so it shares that checkout's handoff. A
+repo whose git folder isn't a .git in its checkout, such as a bare repo, a submodule, or one made
+with --separate-git-dir, goes by that git folder instead.
 
 THE ENVIRONMENT TOPIC
 
@@ -228,8 +236,10 @@ PATH_BUDGET = 139
 # included (decision 0088).
 HANDOFF_ROOM = 60
 
-# How many hexadecimal characters of a hash end a handoff's folder that has been shortened.
-HASH_LENGTH = 8
+# The longest a PC's folder under handoffs/pcs/ may be: a copy of PC_NAME_LIMIT in
+# dev-home-toolkit's internal/shared/rules.py, since a handoff's PC folder is named as rules/pcs/
+# names one, and a test checks that the two name a PC the same.
+PC_NAME_LIMIT = 32
 
 # dev-home's folder, filled in by setup.
 CONTENT_DIR = "{{CONTENT_DIR}}"
@@ -379,7 +389,9 @@ def run_git(*args: str, stdin: str = "") -> GitResult:
     return GitResult(done.returncode, lines, errors[0] if errors else "")
 
 
-DRIVE_PATH = re.compile(r"^[A-Za-z]:[\\/]")
+# A drive letter and a colon, as in C:\repos\tool, or C:repos, which git for Windows takes as a
+# path on this PC too.
+DRIVE_PATH = re.compile(r"^[A-Za-z]:")
 # https://host/path, ssh://user@host:port/path, and the like.
 URL_ADDRESS = re.compile(
     r"^[A-Za-z][A-Za-z0-9+.-]*://(?:[^@/]*@)?(?P<host>[^/:@]+)(?::\d+)?/(?P<path>.+)$"
@@ -387,18 +399,21 @@ URL_ADDRESS = re.compile(
 # user@host:path, the short form SSH addresses use. A path after the colon never starts with a
 # slash, which keeps out drive paths such as C:/repos/tool.
 SCP_ADDRESS = re.compile(r"^(?:[^@/:]+@)?(?P<host>[^/:@]+):(?P<path>[^/].*)$")
+# \\server\share\path, a network share, which Windows takes with forward slashes too.
+SHARE_ADDRESS = re.compile(r"^(?:\\\\|//)(?P<host>[^\\/]+)[\\/](?P<path>.+)$")
 
 
 def split_address(address: str) -> Address | None:
-    """Splits a remote address into its host and the path after it, dropping any scheme, user
-    name, port, and trailing .git. Returns None for anything else, such as a local path."""
-    # A drive path, such as C:\repos\tool, would otherwise look like host:path below.
+    """Splits a remote address that names another computer into that computer's name and the
+    path after it, dropping any scheme, user name, port, and trailing .git, with forward slashes
+    in the path. Returns None for anything else, such as a path on this PC."""
+    # A drive path, such as C:\repos\tool or C:repos, would otherwise look like host:path below.
     if DRIVE_PATH.match(address):
         return None
-    match = URL_ADDRESS.match(address) or SCP_ADDRESS.match(address)
+    match = URL_ADDRESS.match(address) or SHARE_ADDRESS.match(address) or SCP_ADDRESS.match(address)
     if not match:
         return None
-    path = match.group("path").rstrip("/")
+    path = match.group("path").replace("\\", "/").rstrip("/")
     if path.lower().endswith(".git"):
         path = path[:-4]
     return Address(match.group("host").lower(), path)
@@ -443,25 +458,42 @@ def is_folder_name(name: str) -> bool:
     return not re.fullmatch(r"(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?", name, re.IGNORECASE)
 
 
-def first_commit_id() -> str | None:
-    """The first 7 characters of the first commit on the main line. Following first parents
-    gives one answer even when unrelated histories were merged in. Returns None with no commits
-    yet, and in a shallow clone, whose oldest commit is only where the download stopped."""
-    shallow = run_git("rev-parse", "--is-shallow-repository")
-    if shallow.code != 0:
-        raise FactsError(f"git could not read this repo. git: {shallow.error}")
-    if shallow.line == "true":
+def other_parts(address: Address) -> list[str] | None:
+    """The folder names for a repo whose address names a computer no service in SERVICES fits:
+    the computer's name, then each folder of the path after it, lowercase. Returns None when one
+    isn't safe as a folder."""
+    # Decoded before splitting, as in service_parts. An empty folder, as in team//app, is one
+    # that git's address leaves out too.
+    path = [part for part in unquote(address.path).lower().split("/") if part]
+    parts = [address.host, *path]
+    if len(parts) < 2 or not all(is_folder_name(part) for part in parts):
         return None
-    # Exit code 1, with --quiet, means there are no commits yet.
-    head = run_git("rev-parse", "--verify", "--quiet", "HEAD")
-    if head.code == 1:
-        return None
-    if head.code != 0:
-        raise FactsError(f"git could not read this repo's commits. git: {head.error}")
-    first = run_git("rev-list", "--first-parent", "--max-parents=0", "HEAD")
-    if first.code != 0 or not re.fullmatch(r"[0-9a-f]{40,64}", first.line):
-        raise FactsError(f"git could not find this repo's first commit. git: {first.error}")
-    return first.line[:7]
+    return parts
+
+
+def pc_folder(computer: str) -> str:
+    """This PC's folder under handoffs/pcs/, from its name (computer_name): the name in lowercase,
+    with any other character than a letter or a digit as a hyphen, cut to PC_NAME_LIMIT, or pc for
+    an empty one: a copy of pc_folder in dev-home-toolkit's internal/shared/rules.py, which a test
+    checks gives the same folder."""
+    return re.sub(r"[^a-z0-9]", "-", computer.lower())[:PC_NAME_LIMIT] or "pc"
+
+
+def pc_name(folder: Path) -> str:
+    """The name, under handoffs/pcs/, of the handoff for a folder nothing names on another PC:
+    this PC's folder, then the folder's own name, cut to fit the path budget, a hyphen, and the
+    hash of its full path. The path is resolved first, following junctions, links, and short
+    names, then compared in any letter case where the file system ignores case, so a folder gets
+    the same hash however a session reaches it, such as through C: or c:."""
+    resolved = os.path.realpath(folder)
+    folder_name = Path(resolved).name.lower()
+    if not is_folder_name(folder_name):
+        raise FactsError(
+            f'No handoff can be named after the folder "{resolved}". Run this in a project folder.'
+        )
+    pc = pc_folder(computer_name())
+    digest = short_hash(os.path.normcase(resolved))
+    return f"{pc}/{fitted_folder(f'handoffs/pcs/{pc}/', folder_name, digest)}"
 
 
 def link_target(path: str) -> str:
@@ -511,13 +543,14 @@ def fits_budget(folder: str) -> bool:
 
 
 def short_hash(text: str) -> str:
-    """The start of the SHA-256 of a text, which ends a handoff's folder that has been cut, to
-    keep apart two folders that start the same."""
-    # Loaded here, so only a handoff whose folder is cut pays for it: about 6 ms, most of it
-    # loading OpenSSL.
-    import hashlib
+    """The CRC-32 of a text, as 8 hexadecimal characters, which ends a handoff's folder under
+    handoffs/pcs/, or one cut to fit the path budget, to keep apart two folders that start the
+    same. Nothing chooses the text to make two clash, so a hash made for security adds nothing,
+    and SHA-256's module took 6 to 9 ms to load."""
+    # Loaded here, so only a handoff that needs a hash pays for it: about 0.2 ms.
+    import binascii
 
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:HASH_LENGTH]
+    return f"{binascii.crc32(text.encode('utf-8')):08x}"
 
 
 def fitted_folder(parent: str, start: str, digest: str) -> str:
@@ -559,28 +592,26 @@ def find_handoff_place() -> HandoffPlace:
             "git was not found, so the handoff can't be found. Install Git, or add it to PATH."
         )
 
-    # The project's folder: the one holding the main .git, so a worktree gets its main checkout's
-    # name. Outside a git repo, the current folder. Any other failure stops the script, because
-    # treating a repo git can't read as a plain folder would give the wrong handoff.
+    # The project's folder: the repo's own, from where git keeps it, so a worktree gets its main
+    # checkout's. Outside a git repo, the current folder. Any other failure stops the script,
+    # because treating a repo git can't read as a plain folder would give the wrong handoff.
     here = Path.cwd()
-    folder = here.name
+    folder = here
     common = run_git("rev-parse", "--path-format=absolute", "--git-common-dir")
     in_repo = common.code == 0 and bool(common.line)
     if in_repo:
-        folder = Path(common.line).parent.name
+        # A main checkout's .git is in its folder. A bare repo's, a submodule's under its
+        # superproject's .git/modules/, or one kept apart with --separate-git-dir is a folder of
+        # its own, named for the repo.
+        git_folder = Path(common.line)
+        folder = git_folder.parent if git_folder.name.lower() == ".git" else git_folder
     elif "not a git repository" not in common.error.lower():
         raise FactsError(
             f"git could not read this folder, so the handoff can't be found. git: {common.error}"
         )
 
-    folder_name = folder.lower()
-    if not is_folder_name(folder_name):
-        raise FactsError(
-            f'No handoff can be named after the folder "{folder}". Run this in a project folder.'
-        )
-
-    # Where the project is hosted, from its origin address.
-    service = "local"
+    # Where the project is hosted, from its origin address, when that names another computer.
+    service = "pcs"
     parts: list[str] | None = None
     if in_repo:
         # Exit code 2 means there's no origin.
@@ -589,24 +620,27 @@ def find_handoff_place() -> HandoffPlace:
             raise FactsError(f"git could not read this project's origin. git: {origin.error}")
         address = split_address(origin.line) if origin.code == 0 and origin.line else None
         if address is not None:
-            service = "other"
             known = SERVICES.get(address.host)
-            found = service_parts(known, address.path) if known else None
-            if known and found is not None:
+            parts = service_parts(known, address.path) if known else None
+            if known and parts is not None:
                 service = known
-                parts = found
+            else:
+                parts = other_parts(address)
+                if parts is not None:
+                    service = "other"
 
-    # Not on a service in the list: the folder name, and the first commit when there is one.
     if parts is None:
-        first = first_commit_id() if in_repo else None
-        parts = [f"{folder_name}-{first}" if first else folder_name]
-
-    name = "/".join(parts)
-    relative = f"{service}/{name}"
-    # A path too long for every PC to open: its last folder is cut to fit. name stays whole, for
-    # commit messages and gh's repository.
-    if not fits_budget(f"handoffs/{relative}/"):
-        relative = shortened_place(service, parts, name)
+        # Nothing names it on another PC, so its handoff stays on this one. Its folder already
+        # fits the path budget.
+        name = pc_name(folder)
+        relative = f"{service}/{name}"
+    else:
+        name = "/".join(parts)
+        relative = f"{service}/{name}"
+        # A path too long for every PC to open: its last folder is cut to fit. name stays whole,
+        # for commit messages and gh's repository.
+        if not fits_budget(f"handoffs/{relative}/"):
+            relative = shortened_place(service, parts, name)
 
     # The project's folder: the top of this checkout, or the current folder outside one, such as
     # in a bare repo.

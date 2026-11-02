@@ -13,8 +13,8 @@ the developer on 2026-10-17 and 2026-10-18, as part of 0065 (the budget and setu
 changed on 2026-10-29 (git's long-path option from a clone's start, handoffs, knowledge notes, and
 the `LONG` line), 2026-10-30 (the room beside a handoff), 2026-10-31 (a decision of its own,
 a second read after a push GitHub rejects, and `LONG` out of `/dev-home sync`'s summary), and
-2026-11-02 (cutting only a handoff's last folder, dropping what's left at the cut's end, and the
-length in the line for a path in `rules/` too long for Windows).
+2026-11-02 (cutting only a handoff's last folder, dropping what's left at the cut's end, the
+length in the line for a path in `rules/` too long for Windows, and CRC-32 in place of SHA-256).
 
 - **dev-home's folder.** Each run, setup checks that dev-home's folder path, plus the path budget,
   plus 30 characters, fits under 260 characters, so a folder of at most 89, and otherwise prints
@@ -29,11 +29,13 @@ length in the line for a path in `rules/` too long for Windows).
 - **Handoffs.** When `handoffs/<service>/<parts>/`, plus 60 characters of room, would pass the
   path budget, `facts.py` (`find_handoff_place`) keeps the folders above the last part whole, and
   cuts the last from its end so the folder, plus the room, fits, drops any hyphens, spaces, and
-  dots left at the end of the cut, then adds a hyphen and the first 8 hexadecimal characters of
-  the SHA-256 of the `name` fact, or those alone when nothing is left, so no folder starts with a
-  hyphen. When the folders above leave the last no room for even its first character, it joins
-  the one just above it, with a hyphen, and so on up, only as far as it must; no folder has a cap
-  of its own. On GitHub that never happens: a 39-character owner, the longest GitHub allows,
+  dots left at the end of the cut, then adds a hyphen and the CRC-32 of the `name` fact, as 8
+  hexadecimal characters, or those alone when nothing is left, so no folder starts with a hyphen
+  ([0089: Where a handoff lives](0089-where-a-handoff-lives.md) says why CRC-32). A handoff's
+  folder under `handoffs/pcs/<pc>/` already ends with its path's hash, so only the folder's name
+  before it is cut. When the folders above leave the last no room for even its first character,
+  it joins the one just above it, with a hyphen, and so on up, only as far as it must; no folder
+  has a cap of its own. On GitHub that never happens: a 39-character owner, the longest GitHub allows,
   still leaves 13 characters for the repository, so an owner's folder always stays. `name` stays
   whole, for commit messages and `gh`'s repository, and the issue draft's path under `.drafts/`
   uses the same folders. That shortens only past 61 characters of GitHub owner and repository

@@ -111,3 +111,4 @@ file and link to the new one.
 - [0086: dev-home's host](0086-dev-homes-host.md)
 - [0087: Cloning dev-home](0087-cloning-dev-home.md)
 - [0088: Path lengths](0088-path-lengths.md)
+- [0089: Where a handoff lives](0089-where-a-handoff-lives.md)

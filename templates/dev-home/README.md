@@ -9,7 +9,7 @@ setup, a typical day, and safety, and lists the rest of its docs.
 
 | Path | What it is |
 | --- | --- |
-| `handoffs/<service>/<project path>/HANDOFF.md` | Private session state for one project, filed by where it's hosted, such as `handoffs/github/you/tool/`. Projects hosted elsewhere go in `handoffs/other/`, and projects with no remote in `handoffs/local/`, by folder name and first commit. Read and updated with `/handoff`. |
+| `handoffs/<service>/<project path>/HANDOFF.md` | Private session state for one project, filed by where it's hosted, such as `handoffs/github/you/tool/`. Projects on other servers go in `handoffs/other/<server>/<path>/`, and anything else, such as a folder outside git or a repo with no remote, in `handoffs/pcs/<pc>/`, used only on that PC. Read and updated with `/handoff`. |
 | `knowledge/` | General knowledge for coding and AI work. `knowledge/README.md` is the index. |
 | `rules/` | My rules: my own always-on preferences, which every session loads after the operating rules from dev-home-toolkit. `_all-agents/mine/` holds the rules for every agent on every PC, `claude-code/mine/` and `codex/mine/` those for one agent, and `pcs/<pc>/_all-agents/mine/` and `pcs/<pc>/<agent>/mine/` the same for one PC alone, where `<pc>` is the PC's name in lowercase, with any character other than a letter or a digit as a hyphen. Setup gives each a `my-rules.md`, and joins them into a rules file for each agent, which it rewrites: edit the rules here. |
 | `skills/` | My personal skills, if any. Setup links them into Claude Code and Codex. |

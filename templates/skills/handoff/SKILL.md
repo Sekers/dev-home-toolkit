@@ -146,9 +146,9 @@ about this project doesn't belong here either.
    dev-home's copy of its handoff, and this skill's preferences on this PC, without the network.
    The steps below use them by name:
    - `service`: where the project is hosted: `github`, `gitlab`, `bitbucket`, `azure-devops`,
-     `other` for anywhere else, or `local` for a project with no remote.
-   - `name`: the project's name, such as `you/tool`. For `other` and `local`, it's the folder
-     name plus the start of the project's first commit, such as `tools-3f9c2ab`.
+     `other` for any other computer, or `pcs` for anything else, such as a folder outside git,
+     whose handoff stays on this PC.
+   - `name`: the project's name, such as `you/tool`.
    - `handoff`: the handoff's path in dev-home, such as `handoffs/github/you/tool/HANDOFF.md`.
    - `draft`: where a GitHub issue draft goes.
    - `link`: the handoff, as the target for links to it in your replies.
@@ -173,8 +173,10 @@ about this project doesn't belong here either.
    sync, so a handoff made on another PC has arrived.
 3. If that file doesn't exist, list every `HANDOFF.md` under `{{CONTENT_DIR}}/handoffs/`, and ask
    which one, if any, is this project under an old name or address, saying that you'll move it,
-   commit, and push. When the user names one, move it to `<handoff>`, then run the command below,
-   where `<old path>` is where it was, relative to dev-home:
+   commit, and push. Mark each in another PC's folder under `handoffs/pcs/` (this PC's is
+   `environment` in lowercase) as that PC's: moving it takes it from that PC. When the user names
+   one, move it to `<handoff>`, then run the command below, where `<old path>` is where it was,
+   relative to dev-home:
    `{{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py --message "handoff: <name>" "<old path>" "<handoff>"`.
    If none is, offer to create one from `{{SKILL_DIR}}/template.md`: "Create it, commit, and
    push?". On a yes, create it and commit it as in "Changing the handoff".

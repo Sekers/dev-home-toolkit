@@ -747,10 +747,10 @@ def main_block_nodes(tree: ast.Module) -> set[ast.AST]:
 # also checked one by one, below.
 REPORTING_NAMES = {
     "__future__": {"annotations"},
+    "binascii": {"crc32"},
     "collections.abc": {"Callable", "Sequence"},
     "dataclasses": {"dataclass"},
     "functools": {"cache"},
-    "hashlib": {"sha256"},
     "importlib.util": {"spec_from_file_location", "module_from_spec"},
     "io": {"TextIOWrapper"},
     "json": {"loads", "dumps"},
@@ -796,8 +796,6 @@ REPORTING_METHODS = {
     "pop",
     "setdefault",
     "values",
-    # A hash worked out in memory, as text.
-    "hexdigest",
     # Regular expressions and their matches.
     "end",
     "finditer",

@@ -1,6 +1,6 @@
 """facts.py, run as the handoff skill runs it in Codex, from a sandbox's generated copy."""
 
-import hashlib
+import binascii
 import importlib.util
 import json
 import os
@@ -21,7 +21,9 @@ from helpers import (
     Run,
     Sandbox,
     git,
+    make_junction,
     new_repo,
+    remove_link,
     run,
     run_command,
     sandbox_for,
@@ -52,17 +54,22 @@ def facts(
     return run_command(box, " ".join([*options, *(topics or ("handoff",))]), cwd=folder, env=env)
 
 
-def first_commit(repo: Path) -> str:
-    """The start of a repo's first commit on the main line, worked out here without facts.py."""
-    return git("-C", str(repo), "rev-list", "--first-parent", "--max-parents=0", "HEAD")[0][:7]
+def pc_place(box: Sandbox, folder: Path) -> str:
+    """Where facts.py should file the handoff for a folder nothing names on another PC, after
+    handoffs/: this PC's folder, as rules/pcs/ names it, then the folder's name, a hyphen, and the
+    hash of its resolved path, in any letter case where the file system ignores case, worked out
+    here without facts.py."""
+    pc = shared_module(box, "rules").pc_folder(shared_module(box, "computer").computer_name())
+    resolved = os.path.realpath(folder)
+    return f"pcs/{pc}/{Path(resolved).name.lower()}-{short_hash(os.path.normcase(resolved))}"
 
 
 def short_head(repo: Path) -> str:
     return git("-C", str(repo), "rev-parse", "--short=7", "HEAD")[0]
 
 
-# Each address, and the folder under handoffs/ it should get. {id} stands for the start of the
-# sample repo's first commit.
+# Each address, and the folder under handoffs/ it should get. {pcs} stands for the sample repo's
+# folder under pcs/, which a remote that doesn't name another computer gives it.
 ADDRESSES = {
     "https://github.com/You/Tool.git": "github/you/tool",
     "git@github.com:You/Tool.git": "github/you/tool",
@@ -75,16 +82,25 @@ ADDRESSES = {
     "https://Org@dev.azure.com/Org/My%20Project/_git/Repo": "azure-devops/org/my project/repo",
     "git@ssh.dev.azure.com:v3/Org/My%20Project/Repo": "azure-devops/org/my project/repo",
     "https://dev.azure.com/Org/_git/Repo": "azure-devops/org/repo/repo",
-    "https://git.example.com/team/app.git": "other/sample repo-{id}",
-    "git@git.example.com:team/app.git": "other/sample repo-{id}",
-    "https://github.com/just-an-owner": "other/sample repo-{id}",
-    "https://github.com/you/%2E%2E": "other/sample repo-{id}",
-    "https://gitlab.com/team/../../outside": "other/sample repo-{id}",
-    "https://github.com/you/to*ol": "other/sample repo-{id}",
-    "C:/repos/tool": "local/sample repo-{id}",
-    "C:\\repos\\tool": "local/sample repo-{id}",
-    "file:///C:/repos/tool": "local/sample repo-{id}",
-    "../tool": "local/sample repo-{id}",
+    "https://Git.Example.com/Team/App.git": "other/git.example.com/team/app",
+    "git@git.example.com:team/app.git": "other/git.example.com/team/app",
+    "ssh://git@git.example.com:2222/team/app": "other/git.example.com/team/app",
+    "https://git.example.com/a/b//c/d.git": "other/git.example.com/a/b/c/d",
+    "https://github.com/just-an-owner": "other/github.com/just-an-owner",
+    "\\\\NAS\\git\\tool.git": "other/nas/git/tool",
+    "//nas/git/tool.git": "other/nas/git/tool",
+    "file://nas/git/tool.git": "other/nas/git/tool",
+    "https://github.com/you/%2E%2E": "{pcs}",
+    "https://gitlab.com/team/../../outside": "{pcs}",
+    "https://github.com/you/to*ol": "{pcs}",
+    "https://git.example.com/": "{pcs}",
+    "\\\\?\\C:\\repos\\tool": "{pcs}",
+    "C:/repos/tool": "{pcs}",
+    "C:\\repos\\tool": "{pcs}",
+    "C:repos\\tool": "{pcs}",
+    "Z:\\git\\tool.git": "{pcs}",
+    "file:///C:/repos/tool": "{pcs}",
+    "../tool": "{pcs}",
 }
 
 
@@ -107,7 +123,7 @@ def test_files_each_address_under_its_folder(
     box: Sandbox, sample: Path, address: str, folder: str
 ) -> None:
     result = facts_at(box, sample, address)
-    expected = f"handoffs/{folder.replace('{id}', first_commit(sample))}/HANDOFF.md"
+    expected = f"handoffs/{folder.replace('{pcs}', pc_place(box, sample))}/HANDOFF.md"
     assert result.code == 0, str(result)
     assert result.facts["handoff"] == expected, str(result)
 
@@ -140,6 +156,13 @@ def test_both_copies_take_the_host_name_up_to_its_first_dot_in_capitals(
     shared = shared_module(box, "computer").computer_name()
     copy = facts_module(box, "facts_name").computer_name()
     assert shared == copy == "MARKS-MACBOOK-PRO"
+
+
+@pytest.mark.parametrize("name", ["OFFICE", "Lab PC_2.local", "Café", "A" * 40, ""])
+def test_both_copies_name_a_pcs_folder_the_same(box: Sandbox, name: str) -> None:
+    # A PC's handoffs go in the folder rules/pcs/ names it by.
+    shared = shared_module(box, "rules").pc_folder(name)
+    assert facts_module(box, "facts_pc").pc_folder(name) == shared
 
 
 def dev_home_skills(box: Sandbox) -> Run:
@@ -438,10 +461,10 @@ def test_writes_what_a_link_cant_hold_encoded_and_the_path_as_utf8(box: Sandbox)
 # A handoff's folder past the path budget (decision 0088).
 
 
-def short_hash(name: str) -> str:
-    """The start of a name's SHA-256, which a shortened handoff folder ends with, worked out here
-    without facts.py."""
-    return hashlib.sha256(name.encode("utf-8")).hexdigest()[:8]
+def short_hash(text: str) -> str:
+    """A text's CRC-32 as 8 hexadecimal characters, which a shortened handoff folder, or one under
+    pcs/, ends with, worked out here without facts.py."""
+    return f"{binascii.crc32(text.encode('utf-8')):08x}"
 
 
 def test_facts_copies_of_the_path_budget_and_the_length_count_match_paths_py(
@@ -604,34 +627,39 @@ def test_with_no_room_below_the_folders_above_the_last_joins_them_only_as_far_as
     assert result.facts["handoff"] == f"handoffs/{folder}/HANDOFF.md", str(result)
 
 
-def test_a_long_folder_name_outside_git_is_cut_to_fit_too(box: Sandbox) -> None:
+def test_a_long_folder_name_outside_git_is_cut_before_its_hash(box: Sandbox) -> None:
     plain = box.root / f"Plain {'f' * 60}"
     plain.mkdir()
     result = facts(box, plain)
-    name = f"plain {'f' * 60}"
-    # The start fits 54: 139, less 60 of room, less handoffs/local/, a hyphen, 8, and a slash.
-    expected = f"handoffs/local/{name[:54]}-{short_hash(name)}/HANDOFF.md"
+    pc, folder = pc_place(box, plain).rsplit("/", 1)
+    start, digest = folder.rsplit("-", 1)
+    # The start keeps what fits: 139, less 60 of room, less handoffs/pcs/<pc>/, a hyphen, 8 of
+    # hash, and a slash.
+    kept = 139 - 60 - len(f"handoffs/{pc}/") - 10
+    assert len(start) > kept, "the folder's name is long enough to cut"
+    name = f"{pc.removeprefix('pcs/')}/{start[:kept]}-{digest}"
     assert result.facts["name"] == name, str(result)
-    assert result.facts["handoff"] == expected, str(result)
+    assert result.facts["handoff"] == f"handoffs/pcs/{name}/HANDOFF.md", str(result)
+    assert len(f"handoffs/pcs/{name}/") + 60 == 139
 
 
-def test_another_host_goes_under_other_by_folder_and_first_commit(box: Sandbox) -> None:
+def test_another_computer_goes_under_other_by_its_address(box: Sandbox) -> None:
     repo = new_repo(box, "Other Host", origin="https://git.example.com/team/app.git")
     result = facts(box, repo)
-    name = f"other host-{first_commit(repo)}"
     assert result.facts["service"] == "other", str(result)
-    assert result.facts["name"] == name, str(result)
-    assert result.facts["draft"] == f".drafts/other/{name}/issue.md", str(result)
+    assert result.facts["name"] == "git.example.com/team/app", str(result)
+    assert result.facts["draft"] == ".drafts/other/git.example.com/team/app/issue.md", str(result)
 
 
-def test_no_origin_goes_under_local_and_a_space_becomes_percent_20(box: Sandbox) -> None:
+def test_no_origin_stays_on_this_pc_and_a_space_becomes_percent_20(box: Sandbox) -> None:
     repo = new_repo(box, "No Origin")
-    name = f"no origin-{first_commit(repo)}"
+    place = pc_place(box, repo)
     result = facts(box, repo)
-    assert result.facts["service"] == "local", str(result)
-    assert result.facts["handoff"] == f"handoffs/local/{name}/HANDOFF.md", str(result)
+    assert result.facts["service"] == "pcs", str(result)
+    assert result.facts["name"] == place.removeprefix("pcs/"), str(result)
+    assert result.facts["handoff"] == f"handoffs/{place}/HANDOFF.md", str(result)
     assert result.facts["link"] == (
-        f"../dev-home/handoffs/local/{name.replace(' ', '%20')}/HANDOFF.md"
+        f"../dev-home/handoffs/{place.replace(' ', '%20')}/HANDOFF.md"
     ), str(result)
 
 
@@ -639,8 +667,8 @@ def test_in_a_subfolder_the_links_lead_up(box: Sandbox) -> None:
     repo = new_repo(box, "With Sub")
     (repo / "docs").mkdir()
     result = facts(box, repo / "docs")
-    name = f"with%20sub-{first_commit(repo)}"
-    assert result.facts["link"] == f"../../dev-home/handoffs/local/{name}/HANDOFF.md", str(result)
+    place = pc_place(box, repo).replace(" ", "%20")
+    assert result.facts["link"] == f"../../dev-home/handoffs/{place}/HANDOFF.md", str(result)
     assert result.facts["project"] == "..", str(result)
 
 
@@ -650,8 +678,8 @@ def test_in_claude_codes_cli_the_links_are_file_urls(box: Sandbox) -> None:
     repo = new_repo(box, "Cli Links")
     (repo / "docs").mkdir(exist_ok=True)
     result = facts(box, repo / "docs", env={"CLAUDE_CODE_ENTRYPOINT": "cli"})
-    name = f"cli%20links-{first_commit(repo)}"
-    handoff = f"file:///{box.content.as_posix()}/handoffs/local/{name}/HANDOFF.md"
+    place = pc_place(box, repo).replace(" ", "%20")
+    handoff = f"file:///{box.content.as_posix()}/handoffs/{place}/HANDOFF.md"
     project = f"file:///{repo.as_posix().replace(' ', '%20')}"
     assert result.facts["link"] == handoff, str(result)
     assert result.facts["project"].lower() == project.lower(), str(result)
@@ -660,62 +688,88 @@ def test_in_claude_codes_cli_the_links_are_file_urls(box: Sandbox) -> None:
 def test_anywhere_else_claude_code_runs_the_links_stay_relative(box: Sandbox) -> None:
     repo = new_repo(box, "Vscode Links")
     result = facts(box, repo, env={"CLAUDE_CODE_ENTRYPOINT": "claude-vscode"})
-    name = f"vscode%20links-{first_commit(repo)}"
-    assert result.facts["link"] == f"../dev-home/handoffs/local/{name}/HANDOFF.md", str(result)
+    place = pc_place(box, repo).replace(" ", "%20")
+    assert result.facts["link"] == f"../dev-home/handoffs/{place}/HANDOFF.md", str(result)
     assert result.facts["project"] == ".", str(result)
 
 
-def test_merged_in_unrelated_history_keeps_the_main_lines_first_commit(box: Sandbox) -> None:
-    repo = new_repo(box, "Merged")
-    first = first_commit(repo)
-    git("-C", str(repo), "checkout", "--quiet", "--orphan", "other-history")
-    git("-C", str(repo), "commit", "--quiet", "--allow-empty", "-m", "test: other history")
-    git("-C", str(repo), "checkout", "--quiet", "main")
-    git(
-        "-C",
-        str(repo),
-        "merge",
-        "--quiet",
-        "--no-ff",
-        "--allow-unrelated-histories",
-        "-m",
-        "test: merge",
-        "other-history",
-    )
-    assert len(git("-C", str(repo), "rev-list", "--max-parents=0", "HEAD")) == 2
-    result = facts(box, repo)
-    assert result.facts["handoff"] == f"handoffs/local/merged-{first}/HANDOFF.md", str(result)
-
-
-def test_a_repo_with_no_commits_goes_by_its_folder_name_alone(box: Sandbox) -> None:
-    repo = new_repo(box, "Empty Repo", commits=())
-    result = facts(box, repo)
-    assert result.facts["handoff"] == "handoffs/local/empty repo/HANDOFF.md", str(result)
-
-
-def test_a_shallow_clone_goes_by_its_folder_name_alone(box: Sandbox) -> None:
-    # A shallow clone's oldest commit is only where the download stopped, not the first one.
+def test_with_no_commits_or_a_shallow_history_the_origin_still_decides(box: Sandbox) -> None:
+    # Commits play no part: a repo with none yet, or a shallow clone, whose oldest commit is only
+    # where the download stopped, goes by its origin like any other.
+    empty = new_repo(box, "Empty Repo", commits=())
+    result = facts(box, empty)
+    assert result.facts["handoff"] == f"handoffs/{pc_place(box, empty)}/HANDOFF.md", str(result)
+    git("-C", str(empty), "remote", "add", "origin", "https://git.example.com/team/empty.git")
+    result = facts(box, empty)
+    expected = "handoffs/other/git.example.com/team/empty/HANDOFF.md"
+    assert result.facts["handoff"] == expected, str(result)
     source = new_repo(box, "shallow-source", commits=("one", "two"))
     shallow = box.root / "Shallow Clone"
     git("clone", "--quiet", "--depth", "1", f"file:///{source.as_posix()}", str(shallow))
+    git("-C", str(shallow), "remote", "set-url", "origin", "git@github.com:you/shallow.git")
     result = facts(box, shallow)
-    assert result.facts["handoff"] == "handoffs/local/shallow clone/HANDOFF.md", str(result)
+    assert result.facts["handoff"] == "handoffs/github/you/shallow/HANDOFF.md", str(result)
 
 
-def test_a_folder_outside_git_goes_under_local_by_its_name(box: Sandbox) -> None:
+def test_a_folder_outside_git_stays_on_this_pc(box: Sandbox) -> None:
     plain = box.root / "Plain Folder"
     plain.mkdir()
     result = facts(box, plain)
-    assert result.facts["handoff"] == "handoffs/local/plain folder/HANDOFF.md", str(result)
+    assert result.facts["service"] == "pcs", str(result)
+    assert result.facts["handoff"] == f"handoffs/{pc_place(box, plain)}/HANDOFF.md", str(result)
     assert result.facts["project"] == ".", str(result)
 
 
-def test_a_worktree_uses_its_main_checkouts_name_and_origin(box: Sandbox) -> None:
+def test_a_folder_gets_one_handoff_however_a_session_reaches_it(box: Sandbox) -> None:
+    folder = box.root / "Reached Folder"
+    folder.mkdir()
+    expected = f"handoffs/{pc_place(box, folder)}/HANDOFF.md"
+    via = box.root / "via junction"
+    make_junction(via, folder)
+    starts = [folder, via]
+    if os.name == "nt":
+        # In any letter case, as editors give the drive letter, where the file system ignores it.
+        starts += [Path(str(folder).lower()), Path(str(folder).upper())]
+    try:
+        for start in starts:
+            assert facts(box, start).facts["handoff"] == expected, start
+    finally:
+        remove_link(via)
+
+
+def test_two_folders_with_the_same_name_get_handoffs_of_their_own(box: Sandbox) -> None:
+    first, second = box.root / "one" / "Notes", box.root / "two" / "Notes"
+    handoffs = []
+    for folder in (first, second):
+        folder.mkdir(parents=True)
+        handoffs.append(facts(box, folder).facts["handoff"])
+    assert handoffs == [f"handoffs/{pc_place(box, f)}/HANDOFF.md" for f in (first, second)]
+    assert handoffs[0] != handoffs[1]
+
+
+def test_a_bare_repos_worktree_goes_by_the_bare_repo_itself(box: Sandbox) -> None:
+    # Two bare repos in one folder, each worked on through a worktree. Their origin is the folder
+    # each was cloned from, a path on this PC.
+    source = new_repo(box, "bare source")
+    handoffs = []
+    for name in ("One.git", "Two.git"):
+        bare = box.root / "bare repos" / name
+        git("clone", "--quiet", "--bare", str(source), str(bare))
+        # Named so git can name a branch after it.
+        worktree = box.root / f"work-on-{name.removesuffix('.git').lower()}"
+        git("-C", str(bare), "worktree", "add", "--quiet", str(worktree))
+        result = facts(box, worktree)
+        assert result.facts["handoff"] == f"handoffs/{pc_place(box, bare)}/HANDOFF.md", str(result)
+        handoffs.append(result.facts["handoff"])
+    assert handoffs[0] != handoffs[1]
+
+
+def test_a_worktree_uses_its_main_checkouts_folder_and_origin(box: Sandbox) -> None:
     main = new_repo(box, "Main Checkout")
     worktree = box.root / "worktree"
     git("-C", str(main), "worktree", "add", "--quiet", str(worktree))
     result = facts(box, worktree)
-    expected = f"handoffs/local/main checkout-{first_commit(main)}/HANDOFF.md"
+    expected = f"handoffs/{pc_place(box, main)}/HANDOFF.md"
     assert result.facts["handoff"] == expected, str(result)
     git("-C", str(main), "remote", "add", "origin", "git@github.com:you/tool.git")
     result = facts(box, worktree)

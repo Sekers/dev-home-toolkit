@@ -18,11 +18,12 @@ a file setup moves there, which starts with moved-. rules/ has no layout version
 so its layout is 1.
 
 So does handoffs/, handoffs-1.txt: the path of each handoff facts.py names, from dev-home's
-folder, with a placeholder for each folder below the service's, such as <owner> and <repo>, and
-the sections of the handoff skill's template, which the skill and facts.py read by name, each as
-section: and the line that starts it. A folder cut to fit the path budget is written as the path
-it was cut from, since decision 0088's rule cuts any of them the same way. handoffs/ has no
-layout version of its own yet either.
+folder, with a placeholder for each folder below the service's, such as <owner> and <repo>, <host>
+and <path> for other's computer and the one or more folders after it, and <pc> and
+<folder>-<hash> for a PC's handoffs, and the sections of the handoff skill's template, which the
+skill and facts.py read by name, each as section: and the line that starts it. A folder cut to
+fit the path budget is written as the path it was cut from, since decision 0088's rule cuts any
+of them the same way. handoffs/ has no layout version of its own yet either.
 
 helpers.py checks every run of the scripts in a test: each key path the run adds to one of these
 files must be on that file's list for the layout its schemaVersion names, each file it creates in
@@ -46,13 +47,15 @@ HANDOFFS_FOLDER = "handoffs"
 HANDOFFS_LIST = LISTS / "handoffs-1.txt"
 # What starts a template section's line on handoffs' list.
 SECTION = "section: "
-# The folders below a hosting service's own, from a repo's address, as facts.py names them.
-# GitLab's subgroups, when it has any, come between its two as one <subgroups>.
+# The folders below each service's own, as facts.py names them. GitLab's subgroups, when it has
+# any, come between its two as one <subgroups>, and other's <path> stands for one or more folders.
 HANDOFF_FOLDERS = {
     "github": ("<owner>", "<repo>"),
     "bitbucket": ("<owner>", "<repo>"),
     "gitlab": ("<group>", "<project>"),
     "azure-devops": ("<organization>", "<project>", "<repo>"),
+    "other": ("<host>", "<path>"),
+    "pcs": ("<pc>", "<folder>-<hash>"),
 }
 # How a folder cut to fit the path budget ends: a hyphen and 8 hexadecimal characters, or those
 # alone. facts.py cuts only a handoff's folder that, with the room beside it, passes the budget
@@ -60,9 +63,6 @@ HANDOFF_FOLDERS = {
 CUT = re.compile(r"(?:.*-)?[0-9a-f]{8}")
 PATH_BUDGET = 139
 HANDOFF_ROOM = 60
-# How other and local name a project with a first commit: its folder name, a hyphen, and the start
-# of that commit.
-WITH_COMMIT = re.compile(r".+-[0-9a-f]{7}")
 
 
 @dataclass(frozen=True)
@@ -164,15 +164,18 @@ def handoffs_key(service: str, name: str, handoff: str) -> str:
         and folders[:-1] == whole[: len(folders) - 1]
         and CUT.fullmatch(folders[-1])
     )
-    if folders != whole and not cut:
+    if (folders != whole and not cut) or service not in HANDOFF_FOLDERS:
         return handoff
+    placeholders = list(HANDOFF_FOLDERS[service])
     if service == "gitlab" and len(parts) > 2:
-        placeholders = ["<group>", "<subgroups>", "<project>"]
-    elif service in HANDOFF_FOLDERS:
-        placeholders = list(HANDOFF_FOLDERS[service])
+        placeholders.insert(1, "<subgroups>")
+    # <subgroups> and other's <path> may each stand for several folders.
+    if service in ("gitlab", "other"):
+        shaped = len(parts) >= len(placeholders)
     else:
-        placeholders = ["<folder>-<commit>" if WITH_COMMIT.fullmatch(name) else "<folder>"]
-    if len(placeholders) != len(parts) and service != "gitlab":
+        shaped = len(parts) == len(placeholders)
+    # A PC's handoff folder always ends with its path's hash, as a cut one does.
+    if not shaped or (service == "pcs" and not CUT.fullmatch(parts[-1])):
         return handoff
     return "/".join([HANDOFFS_FOLDER, service, *placeholders, "HANDOFF.md"])
 

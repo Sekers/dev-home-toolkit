@@ -15,7 +15,6 @@ from helpers import (
     REPO_ROOT,
     LayoutCheck,
     Sandbox,
-    git,
     layout_snapshot,
     layouts_checked,
     new_repo,
@@ -151,8 +150,8 @@ def test_handoffs_list_holds_exactly_the_paths_facts_names_and_the_templates_sec
         found.add(layouts.handoffs_key(facts["service"], facts["name"], facts["handoff"]))
 
     # A project on each service facts.py knows, GitLab's with and without a subgroup, one on
-    # another host, and one with no origin. A path the list lacks fails the run that named it, in
-    # helpers.py, so only a path facts.py no longer names can be left.
+    # another computer, one with no origin, and a folder outside git. A path the list lacks fails
+    # the run that named it, in helpers.py, so only a path facts.py no longer names can be left.
     origins = [
         "https://github.com/you/tool",
         "https://gitlab.com/team/app",
@@ -164,14 +163,9 @@ def test_handoffs_list_holds_exactly_the_paths_facts_names_and_the_templates_sec
     ]
     for number, origin in enumerate(origins):
         named(new_repo(box, f"handoff project {number}", origin=origin))
-    # Projects with no first commit to name them by: one with no commits yet, and a shallow clone
-    # on another host.
-    named(new_repo(box, "handoff no commits", commits=()))
-    source = new_repo(box, "handoff source", commits=("one", "two"))
-    shallow = box.root / "handoff shallow"
-    git("clone", "--quiet", "--depth", "1", f"file:///{source.as_posix()}", str(shallow))
-    git("-C", str(shallow), "remote", "set-url", "origin", "https://git.example.com/team/app")
-    named(shallow)
+    plain = box.root / "handoff plain"
+    plain.mkdir()
+    named(plain)
     listed = layouts.read_list(layouts.HANDOFFS_LIST)
     paths = {line for line in listed if not line.startswith(layouts.SECTION)}
     unnamed = sorted(paths - found)

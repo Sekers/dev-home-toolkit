@@ -130,7 +130,8 @@ often finds more.
 ## Where handoffs are kept
 
 The handoff skill finds each project's handoff from the address the repo syncs with (its
-`origin`), so it's the same on every PC, whatever the folder is called.
+`origin`). When that address names another computer, the handoff is the same on every PC with the
+repo, whatever its folder is called. Anything else has a handoff on each PC of its own.
 
 | Project | Its handoff in dev-home |
 | --- | --- |
@@ -138,22 +139,28 @@ The handoff skill finds each project's handoff from the address the repo syncs w
 | On GitLab | `handoffs/gitlab/<group>/<project>/` (subgroups add levels) |
 | On Bitbucket | `handoffs/bitbucket/<workspace>/<repo>/` |
 | On Azure DevOps | `handoffs/azure-devops/<org>/<project>/<repo>/` |
-| Hosted anywhere else | `handoffs/other/<folder>-<first commit>/` |
-| No remote | `handoffs/local/<folder>-<first commit>/` |
+| On any other server, or a network share | `handoffs/other/<server>/<path>/`, such as `handoffs/other/git.example.com/team/app/` |
+| Anything else: a folder outside git, a repo with no remote, or one whose remote is a folder on this PC | `handoffs/pcs/<pc>/<folder>-<code>/` |
 
-`<first commit>` is the first 7 characters of the repo's first commit. It's the same in every
-clone, so two projects with the same folder name get separate handoffs. A repo with no commits
-yet, a shallow clone, or a folder outside git uses just the folder name.
+A handoff under `pcs/` is used only on that PC: dev-home syncs it, but no other PC's sessions find
+it. `<pc>` is the PC's name, written as `rules/pcs/` writes it, and `<code>` is made from the
+folder's full path, so two folders with the same name get handoffs of their own, and a folder gets
+the same one however you reach it, such as through a link, or with its drive letter in either
+case. A remote on a mapped drive, such as `Z:`, counts as a folder on this PC, since the same
+letter can mean another place on another PC.
 
 A project whose folder would be too long for every PC to open keeps the folders above its last
 one, such as the owner's on GitHub, and only the last is cut to fit, then ended with a code made
 from the project's full name, so two long names that start the same still get folders of their
 own. On GitHub, that happens only past 61 characters of owner and repository together. When the
 folders above leave no room at all, as long Azure DevOps or GitLab names can, the last folder
-joins the one above it, with a hyphen, only as far as it must. The full name stays in use everywhere else, such as in
-commit messages and the issues the skill files.
+joins the one above it, with a hyphen, only as far as it must. The full name stays in use
+everywhere else, such as in commit messages and the issues the skill files. A folder under `pcs/`
+already ends with its code, so only the folder's name before it is cut.
 
 When the agent finds no handoff at a project's path, it lists the existing ones and asks whether
 one of them is this project's under an old address, as happens when a project is renamed,
-transferred, or published for the first time. It offers to move that one, or, if none is, to
-create a new handoff. Either way, it asks first, then commits and pushes.
+transferred, published for the first time, or moved to another folder. It marks each one in
+another PC's folder under `pcs/` as that PC's, since moving one takes it from the PC that uses it,
+as you might when a folder moves to a new PC. It offers to move the one you pick, or, if none is
+this project's, to create a new handoff. Either way, it asks first, then commits and pushes.

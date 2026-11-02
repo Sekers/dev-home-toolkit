@@ -6,10 +6,8 @@ handoffs/gitlab/<group>/<project>/HANDOFF.md
 handoffs/gitlab/<group>/<subgroups>/<project>/HANDOFF.md
 handoffs/bitbucket/<owner>/<repo>/HANDOFF.md
 handoffs/azure-devops/<organization>/<project>/<repo>/HANDOFF.md
-handoffs/other/<folder>-<commit>/HANDOFF.md
-handoffs/other/<folder>/HANDOFF.md
-handoffs/local/<folder>-<commit>/HANDOFF.md
-handoffs/local/<folder>/HANDOFF.md
+handoffs/other/<host>/<path>/HANDOFF.md
+handoffs/pcs/<pc>/<folder>-<hash>/HANDOFF.md
 section: **State as of
 section: ## Next up
 section: ## Work in progress
