@@ -1,5 +1,6 @@
 """facts.py, run as the handoff skill runs it in Codex, from a sandbox's generated copy."""
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -11,6 +12,7 @@ import uuid
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import pytest
 
@@ -91,15 +93,20 @@ def sample(box: Sandbox) -> Path:
     return new_repo(box, "Sample Repo", origin="https://github.com/You/Tool.git")
 
 
+def facts_at(box: Sandbox, sample: Path, address: str) -> Run:
+    """The handoff topic for the sample repo with another origin, put back afterwards."""
+    git("-C", str(sample), "remote", "set-url", "origin", address)
+    try:
+        return facts(box, sample)
+    finally:
+        git("-C", str(sample), "remote", "set-url", "origin", "https://github.com/You/Tool.git")
+
+
 @pytest.mark.parametrize(("address", "folder"), ADDRESSES.items())
 def test_files_each_address_under_its_folder(
     box: Sandbox, sample: Path, address: str, folder: str
 ) -> None:
-    git("-C", str(sample), "remote", "set-url", "origin", address)
-    try:
-        result = facts(box, sample)
-    finally:
-        git("-C", str(sample), "remote", "set-url", "origin", "https://github.com/You/Tool.git")
+    result = facts_at(box, sample, address)
     expected = f"handoffs/{folder.replace('{id}', first_commit(sample))}/HANDOFF.md"
     assert result.code == 0, str(result)
     assert result.facts["handoff"] == expected, str(result)
@@ -426,6 +433,186 @@ def test_writes_what_a_link_cant_hold_encoded_and_the_path_as_utf8(box: Sandbox)
     assert result.facts["handoff"] == (
         "handoffs/azure-devops/org/my project/r\u00e9po #1 (100%)/HANDOFF.md"
     ), str(result)
+
+
+# A handoff's folder past the path budget (decision 0088).
+
+
+def short_hash(name: str) -> str:
+    """The start of a name's SHA-256, which a shortened handoff folder ends with, worked out here
+    without facts.py."""
+    return hashlib.sha256(name.encode("utf-8")).hexdigest()[:8]
+
+
+def test_facts_copies_of_the_path_budget_and_the_length_count_match_paths_py(
+    box: Sandbox,
+) -> None:
+    # A skill's script can't import internal/shared, so facts.py keeps copies of its own.
+    copy = facts_module(box, "facts_paths")
+    paths = shared_module(box, "paths")
+    assert copy.PATH_BUDGET == paths.PATH_BUDGET
+    # Plain letters, accented ones, an emoji Windows counts as 2, and half of one, which counts 1.
+    for path in ("handoffs/github/you/", "knowledge/\u00e9t\u00e9.md", "\U0001f600.md", "\ud83d"):
+        assert copy.windows_length(path) == paths.windows_length(path), path
+
+
+def test_the_longest_addresses_that_fit_keep_their_folders(box: Sandbox, sample: Path) -> None:
+    # 61 characters of GitHub owner and repository, and 54 of Azure DevOps organization, project,
+    # and repository: with 60 of room beside the handoff, 139 inside dev-home.
+    github = facts_at(box, sample, f"https://github.com/{'o' * 39}/{'r' * 22}")
+    expected = f"handoffs/github/{'o' * 39}/{'r' * 22}/HANDOFF.md"
+    assert github.facts["handoff"] == expected, str(github)
+    azure = facts_at(box, sample, f"https://dev.azure.com/{'o' * 20}/{'p' * 20}/_git/{'r' * 14}")
+    expected = f"handoffs/azure-devops/{'o' * 20}/{'p' * 20}/{'r' * 14}/HANDOFF.md"
+    assert azure.facts["handoff"] == expected, str(azure)
+
+
+@pytest.mark.parametrize(
+    ("address", "name", "start"),
+    [
+        # One character past each address above. The folders above the last stay whole, and the
+        # last keeps what fits: 139 characters, less 60 of room, less the folders above, a
+        # hyphen, 8 of hash, and a slash.
+        (
+            f"https://github.com/{'o' * 39}/{'r' * 23}",
+            f"{'o' * 39}/{'r' * 23}",
+            f"github/{'o' * 39}/{'r' * 13}",
+        ),
+        (
+            f"https://dev.azure.com/{'o' * 20}/{'p' * 20}/_git/{'r' * 15}",
+            f"{'o' * 20}/{'p' * 20}/{'r' * 15}",
+            f"azure-devops/{'o' * 20}/{'p' * 20}/{'r' * 5}",
+        ),
+    ],
+    ids=["github", "azure-devops"],
+)
+def test_past_the_path_budget_only_the_last_folder_is_cut(
+    box: Sandbox, sample: Path, address: str, name: str, start: str
+) -> None:
+    result = facts_at(box, sample, address)
+    folder = f"{start}-{short_hash(name)}"
+    assert result.code == 0, str(result)
+    assert result.facts["name"] == name, "the name stays whole, for commits and gh"
+    assert result.facts["handoff"] == f"handoffs/{folder}/HANDOFF.md", str(result)
+    assert result.facts["draft"] == f".drafts/{folder}/issue.md", str(result)
+    assert result.facts["link"] == f"../dev-home/handoffs/{folder}/HANDOFF.md", str(result)
+    assert len(f"handoffs/{folder}/") + 60 == 139
+
+
+def test_two_long_names_that_start_the_same_get_folders_of_their_own(
+    box: Sandbox, sample: Path
+) -> None:
+    for last in ("a", "b"):
+        name = f"you/{'r' * 70}{last}"
+        result = facts_at(box, sample, f"https://github.com/{name}")
+        folder = f"you/{'r' * 49}-{short_hash(name)}"
+        assert result.facts["handoff"] == f"handoffs/github/{folder}/HANDOFF.md", str(result)
+
+
+@pytest.mark.parametrize(
+    ("address", "name", "start"),
+    [
+        # The cut keeps 49 under handoffs/github/you/, which ends at a hyphen and a dot.
+        (
+            f"https://github.com/you/{'a' * 47}-.{'b' * 30}",
+            f"you/{'a' * 47}-.{'b' * 30}",
+            f"github/you/{'a' * 47}",
+        ),
+        # The cut keeps 41 under handoffs/azure-devops/org/p/, which ends at a space and a hyphen.
+        (
+            f"https://dev.azure.com/org/p/_git/{'r' * 39}%20-{'s' * 20}",
+            f"org/p/{'r' * 39} -{'s' * 20}",
+            f"azure-devops/org/p/{'r' * 39}",
+        ),
+    ],
+    ids=["hyphen-and-dot", "space-and-hyphen"],
+)
+def test_the_cut_drops_the_hyphens_spaces_and_dots_left_at_its_end(
+    box: Sandbox, sample: Path, address: str, name: str, start: str
+) -> None:
+    result = facts_at(box, sample, address)
+    folder = f"{start}-{short_hash(name)}"
+    assert result.facts["name"] == name, str(result)
+    assert result.facts["handoff"] == f"handoffs/{folder}/HANDOFF.md", str(result)
+
+
+def test_with_nothing_left_after_the_cut_the_folder_is_the_hash_alone(
+    box: Sandbox, sample: Path
+) -> None:
+    # A folder that started with a hyphen could be taken for an option by a command.
+    name = f"you/{'-' * 80}"
+    result = facts_at(box, sample, f"https://github.com/{name}")
+    expected = f"handoffs/github/you/{short_hash(name)}/HANDOFF.md"
+    assert result.facts["handoff"] == expected, str(result)
+
+
+def test_a_character_windows_counts_as_two_is_cut_whole(box: Sandbox, sample: Path) -> None:
+    # Six emoji, which Windows counts 2 each. The last folder's start fits 41, and 40 of r leave
+    # 1, too few for the next emoji.
+    emoji = "\U0001f600" * 6
+    address = f"https://dev.azure.com/org/p/_git/{'r' * 40}{quote(emoji)}"
+    result = facts_at(box, sample, address)
+    name = f"org/p/{'r' * 40}{emoji}"
+    folder = f"azure-devops/org/p/{'r' * 40}-{short_hash(name)}"
+    assert result.facts["name"] == name, str(result)
+    assert result.facts["handoff"] == f"handoffs/{folder}/HANDOFF.md", str(result)
+
+
+@pytest.mark.parametrize(
+    ("address", "name", "start"),
+    [
+        # 44 characters of organization and project leave the last folder room for its first
+        # character, so nothing joins.
+        (
+            f"https://dev.azure.com/{'o' * 22}/{'p' * 22}/_git/{'r' * 11}",
+            f"{'o' * 22}/{'p' * 22}/{'r' * 11}",
+            f"azure-devops/{'o' * 22}/{'p' * 22}/r",
+        ),
+        # 50 leave it none, so the repository joins the project, under the organization.
+        (
+            f"https://dev.azure.com/{'o' * 25}/{'p' * 25}/_git/{'r' * 10}",
+            f"{'o' * 25}/{'p' * 25}/{'r' * 10}",
+            f"azure-devops/{'o' * 25}/{'p' * 21}",
+        ),
+        # Under three long GitLab groups, joining the nearest isn't enough, so two join.
+        (
+            f"https://gitlab.com/{'a' * 30}/{'b' * 30}/{'c' * 30}/{'d' * 10}",
+            f"{'a' * 30}/{'b' * 30}/{'c' * 30}/{'d' * 10}",
+            f"gitlab/{'a' * 30}/{'b' * 22}",
+        ),
+        # An organization of 48 leaves no room below it, so everything joins.
+        (
+            f"https://dev.azure.com/{'o' * 48}/p/_git/{'r' * 10}",
+            f"{'o' * 48}/p/{'r' * 10}",
+            f"azure-devops/{'o' * 47}",
+        ),
+        # Twenty GitLab levels of 255 characters join into one, cut first to what could fit.
+        (
+            f"https://gitlab.com/{'/'.join(['g' * 255] * 19 + ['p' * 255])}",
+            "/".join(["g" * 255] * 19 + ["p" * 255]),
+            f"gitlab/{'g' * 53}",
+        ),
+    ],
+    ids=["no-join", "join-one", "join-two", "join-all", "deep"],
+)
+def test_with_no_room_below_the_folders_above_the_last_joins_them_only_as_far_as_it_must(
+    box: Sandbox, sample: Path, address: str, name: str, start: str
+) -> None:
+    result = facts_at(box, sample, address)
+    folder = f"{start}-{short_hash(name)}"
+    assert result.facts["name"] == name, str(result)
+    assert result.facts["handoff"] == f"handoffs/{folder}/HANDOFF.md", str(result)
+
+
+def test_a_long_folder_name_outside_git_is_cut_to_fit_too(box: Sandbox) -> None:
+    plain = box.root / f"Plain {'f' * 60}"
+    plain.mkdir()
+    result = facts(box, plain)
+    name = f"plain {'f' * 60}"
+    # The start fits 54: 139, less 60 of room, less handoffs/local/, a hyphen, 8, and a slash.
+    expected = f"handoffs/local/{name[:54]}-{short_hash(name)}/HANDOFF.md"
+    assert result.facts["name"] == name, str(result)
+    assert result.facts["handoff"] == expected, str(result)
 
 
 def test_another_host_goes_under_other_by_folder_and_first_commit(box: Sandbox) -> None:

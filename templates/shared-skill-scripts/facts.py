@@ -78,6 +78,17 @@ unrelated repos, so two projects with the same folder name get separate handoffs
 With no commits yet, in a shallow clone, or outside git, there's no first commit to use, so the
 folder name stands alone.
 
+A handoff's folder too long for the path budget of decision 0088, 139 characters inside dev-home,
+once 60 characters of room for the files beside a handoff are added, keeps the folders above its
+last one whole, and only the last is cut from its end to fit, with any hyphens, spaces, and dots
+left at the cut dropped, then given a hyphen and the first 8 hexadecimal characters of the
+SHA-256 of name (those alone, when nothing is left), which keep apart two long names that start
+the same. When the folders above leave the last no room for even its first character, as a long
+Azure DevOps organization and project can, it joins with the one just above it, with a hyphen,
+and so on up, only as far as it must. name stays whole, since commit messages and gh's
+repository use it, and draft uses the same folders. On GitHub, cutting takes more than 61
+characters of owner and repository together, and the owner's folder always stays.
+
 A worktree uses its main checkout's origin and folder name, so it shares that checkout's
 handoff.
 
@@ -207,6 +218,18 @@ SERVICES = {
     "dev.azure.com": "azure-devops",
     "ssh.dev.azure.com": "azure-devops",
 }
+
+# The longest any path inside dev-home may be (decision 0088): a copy of PATH_BUDGET in
+# dev-home-toolkit's internal/shared/paths.py, which a skill's script can't import, so a test
+# checks that the two are the same.
+PATH_BUDGET = 139
+
+# Room for the files beside a handoff: the longest path inside a handoff's folder, HANDOFF.md
+# included (decision 0088).
+HANDOFF_ROOM = 60
+
+# How many hexadecimal characters of a hash end a handoff's folder that has been shortened.
+HASH_LENGTH = 8
 
 # dev-home's folder, filled in by setup.
 CONTENT_DIR = "{{CONTENT_DIR}}"
@@ -474,6 +497,61 @@ def relative_to_here(path: str) -> str:
     return relative.replace("\\", "/")
 
 
+def windows_length(path: str) -> int:
+    """A path's length as Windows counts it, in UTF-16 units, so a character such as an emoji
+    counts 2: a copy of windows_length in dev-home-toolkit's internal/shared/paths.py, which a
+    test checks counts the same."""
+    return len(path.encode("utf-16-le", "surrogatepass")) // 2
+
+
+def fits_budget(folder: str) -> bool:
+    """Whether a folder inside dev-home, written with a slash at its end, leaves the room for the
+    files beside a handoff within the path budget."""
+    return windows_length(folder) + HANDOFF_ROOM <= PATH_BUDGET
+
+
+def short_hash(text: str) -> str:
+    """The start of the SHA-256 of a text, which ends a handoff's folder that has been cut, to
+    keep apart two folders that start the same."""
+    # Loaded here, so only a handoff whose folder is cut pays for it: about 6 ms, most of it
+    # loading OpenSSL.
+    import hashlib
+
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:HASH_LENGTH]
+
+
+def fitted_folder(parent: str, start: str, digest: str) -> str:
+    """One folder for a handoff under parent, a folder inside dev-home written with a slash at its
+    end: start, cut from its end until the folder fits the path budget, with any hyphens, spaces,
+    and dots left at its end dropped, then a hyphen and the digest, or the digest alone when
+    nothing is left, so no folder starts with a hyphen."""
+    # Every character counts at least 1, so no more than this many can fit. Cutting to it first
+    # keeps the loop short, however long the name.
+    most = PATH_BUDGET - HANDOFF_ROOM - windows_length(f"{parent}-{digest}/")
+    start = start[: max(most, 0)]
+    while start and not fits_budget(f"{parent}{start}-{digest}/"):
+        start = start[:-1]
+    start = start.rstrip("-. ")
+    return f"{start}-{digest}" if start else digest
+
+
+def shortened_place(service: str, parts: list[str], name: str) -> str:
+    """Where a handoff whose folders are too long for the path budget goes, after handoffs/: the
+    folders above the last stay whole, and the last is cut to fit. When the folders above leave it
+    no room for even its first character, it joins with the one just above it, with a hyphen, and
+    so on up, only as far as it must: keeping a folder whole hides no more of the name than
+    joining it would."""
+    digest = short_hash(name)
+    keep = len(parts) - 1
+    while keep > 0:
+        above = "/".join([service, *parts[:keep]])
+        if fits_budget(f"handoffs/{above}/{parts[keep][0]}-{digest}/"):
+            break
+        keep -= 1
+    parent = "/".join([service, *parts[:keep]])
+    return f"{parent}/{fitted_folder(f'handoffs/{parent}/', '-'.join(parts[keep:]), digest)}"
+
+
 def find_handoff_place() -> HandoffPlace:
     """Where the current project's handoff lives. Stops when it can't be told for sure."""
     if find_program("git") is None:
@@ -523,7 +601,12 @@ def find_handoff_place() -> HandoffPlace:
         first = first_commit_id() if in_repo else None
         parts = [f"{folder_name}-{first}" if first else folder_name]
 
-    relative = "/".join([service, *parts])
+    name = "/".join(parts)
+    relative = f"{service}/{name}"
+    # A path too long for every PC to open: its last folder is cut to fit. name stays whole, for
+    # commit messages and gh's repository.
+    if not fits_budget(f"handoffs/{relative}/"):
+        relative = shortened_place(service, parts, name)
 
     # The project's folder: the top of this checkout, or the current folder outside one, such as
     # in a bare repo.
@@ -535,7 +618,7 @@ def find_handoff_place() -> HandoffPlace:
 
     return HandoffPlace(
         service=service,
-        name="/".join(parts),
+        name=name,
         relative=relative,
         handoff=f"handoffs/{relative}/HANDOFF.md",
         project_root=project_root,

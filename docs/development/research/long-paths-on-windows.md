@@ -122,6 +122,32 @@ Put together:
 - The `name` fact, such as `you/tool`, is also the repository `gh` files issues in. So any change
   to a long handoff's folder may change only the folder, never `name`.
 
+## Shortened handoff folders
+
+What `facts.py`'s `find_handoff_place` gives for made-up addresses past the budget, worked out on
+2026-11-02 with its functions, as [0088: Path lengths](../decisions/0088-path-lengths.md) has
+them. A handoff's folder may have 79 characters inside dev-home, its slash included, once the
+60 characters of room beside a handoff are added. Each length below counts the folder with its
+slash:
+
+```text
+GitHub, 80 characters, cut to 78:
+handoffs/github/example-org/a-tool-whose-name-is-long-enough-to-pass-the-budget/
+handoffs/github/example-org/a-tool-whose-name-is-long-enough-to-pass-34659102/
+
+GitLab, 82, cut to 79:
+handoffs/gitlab/example-group/platform-team/shared-libraries/configuration-loader/
+handoffs/gitlab/example-group/platform-team/shared-libraries/configur-0fc19225/
+
+Azure DevOps, 92, cut to 79, with the repository joined to the project:
+handoffs/azure-devops/example-organization-name/customer portal redesign program/portal-web/
+handoffs/azure-devops/example-organization-name/customer portal redes-53a2d371/
+```
+
+- GitHub: the cut ends at `pass-`, and the hyphen is dropped, so the folder is 78.
+- Azure DevOps: the organization and project together have 57 characters, past the 44 that leave
+  the repository room for its first character, so the repository joins the project.
+
 ## Checking paths at a sync
 
 **Measured** (2026-10-29, on a fast PC, medians), for where a sync could check the paths in

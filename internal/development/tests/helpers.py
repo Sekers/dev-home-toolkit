@@ -748,6 +748,7 @@ REPORTING_NAMES = {
     "collections.abc": {"Callable", "Sequence"},
     "dataclasses": {"dataclass"},
     "functools": {"cache"},
+    "hashlib": {"sha256"},
     "importlib.util": {"spec_from_file_location", "module_from_spec"},
     "io": {"TextIOWrapper"},
     "json": {"loads", "dumps"},
@@ -769,6 +770,7 @@ REPORTING_NAMES = {
 # file. Adding a name is a safety change: say so in the commit.
 REPORTING_METHODS = {
     # Text.
+    "encode",
     "endswith",
     "isspace",
     "join",
@@ -792,6 +794,8 @@ REPORTING_METHODS = {
     "pop",
     "setdefault",
     "values",
+    # A hash worked out in memory, as text.
+    "hexdigest",
     # Regular expressions and their matches.
     "end",
     "finditer",

@@ -139,7 +139,7 @@ CHANGES = [
     "Path('x').copy('y')",
     "Path('x').move_into('y')",
     "Path('x').open('w')",
-    "text.encode('utf-8')",
+    "text.title()",
     "getattr(Path('x'), 'write_text')('y')",
     "write = open\nwrite('x', 'w')",
     "__builtins__.open('x', 'w')",

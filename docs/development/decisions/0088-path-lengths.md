@@ -1,8 +1,8 @@
 # 0088: Path lengths
 
-**Built:** yes, except: shortening a handoff's folder, and a line for a folder in `rules/` that
-setup can't list. Setup skips its check of dev-home's folder in a test profile, whose dev-home
-sits deep in the repo's folder, so the tests check it directly.
+**Built:** yes, except: a line for a folder in `rules/` that setup can't list. Setup skips its
+check of dev-home's folder in a test profile, whose dev-home sits deep in the repo's folder, so
+the tests check it directly.
 
 **Decision:** every path in dev-home stays within the path budget: 139 characters inside
 dev-home's folder, the longest path in `rules/` that its caps on names allow
@@ -13,8 +13,9 @@ reports any other path past the budget from the first point its code sees it, ne
 Decided by
 the developer on 2026-10-17 and 2026-10-18, as part of 0065 (the budget and setup's check), and
 changed on 2026-10-29 (git's long-path option from a clone's start, handoffs, knowledge notes, and
-the `LONG` line), 2026-10-30 (the room beside a handoff), and 2026-10-31 (a decision of its own,
-a second read after a push GitHub rejects, and `LONG` out of `/dev-home sync`'s summary).
+the `LONG` line), 2026-10-30 (the room beside a handoff), 2026-10-31 (a decision of its own,
+a second read after a push GitHub rejects, and `LONG` out of `/dev-home sync`'s summary), and
+2026-11-02 (cutting only a handoff's last folder, and dropping what's left at the cut's end).
 
 - **dev-home's folder.** Each run, setup checks that dev-home's folder path, plus the path budget,
   plus 30 characters, fits under 260 characters, so a folder of at most 89, and otherwise prints
@@ -26,18 +27,23 @@ a second read after a push GitHub rejects, and `LONG` out of `/dev-home sync`'s 
 - **Knowledge notes.** The knowledge skill's filing rules cap each name at 60 characters, `.md`
   included, so a note, `knowledge/<subject>/<topic>.md`, is at most 131 characters.
 - **Handoffs.** When `handoffs/<service>/<parts>/`, plus 60 characters of room, would pass the
-  path budget, `facts.py` (`find_handoff_place`) makes the folders after the service folder one:
-  the parts joined with hyphens, then a hyphen and the first 8 hexadecimal characters of the
-  SHA-256 of the `name` fact, with the joined parts cut from the end so the folder, plus the room,
-  fits. `name` stays whole, for commit messages and `gh`'s repository, and the issue draft's path
-  under `.drafts/` uses the same folder. That shortens only past 61 characters of GitHub owner and
-  repository together, or 54 of Azure DevOps organization, project, and repository. The room is
-  for files beside a handoff, planned but not designed: any path inside a handoff's folder,
-  subfolders and `.md` included, at most 60 characters. Their design confirms or changes that
-  number before 1.0.0, while a change needs no conversion. `facts.py` imports only Python's
-  standard library, as a skill's script, so it can't import `internal/shared/`: it has its own
-  copies of the path budget and of the length count, and a test checks that they match
-  `paths.py`'s.
+  path budget, `facts.py` (`find_handoff_place`) keeps the folders above the last part whole, and
+  cuts the last from its end so the folder, plus the room, fits, drops any hyphens, spaces, and
+  dots left at the end of the cut, then adds a hyphen and the first 8 hexadecimal characters of
+  the SHA-256 of the `name` fact, or those alone when nothing is left, so no folder starts with a
+  hyphen. When the folders above leave the last no room for even its first character, it joins
+  the one just above it, with a hyphen, and so on up, only as far as it must; no folder has a cap
+  of its own. On GitHub that never happens: a 39-character owner, the longest GitHub allows,
+  still leaves 13 characters for the repository, so an owner's folder always stays. `name` stays
+  whole, for commit messages and `gh`'s repository, and the issue draft's path under `.drafts/`
+  uses the same folders. That shortens only past 61 characters of GitHub owner and repository
+  together, or 54 of Azure DevOps organization, project, and repository, and joins on Azure
+  DevOps only past 44 of organization and project together. The room is for files beside a
+  handoff, planned but not designed: any path inside a handoff's folder, subfolders and `.md`
+  included, at most 60 characters. Their design confirms or changes that number before 1.0.0,
+  while a change needs no conversion. `facts.py` imports only Python's standard library, as a
+  skill's script, so it can't import `internal/shared/`: it has its own copies of the path budget
+  and of the length count, and a test checks that they match `paths.py`'s.
 - **`rules/`.** The end user's files in `mine/` get the `LONG` line below, like any other path,
   but setup itself checks no rules file's length. A file in `rules/` that setup can't read gets a
   line, and so does a folder there that setup can't list.
@@ -96,6 +102,14 @@ a second read after a push GitHub rejects, and `LONG` out of `/dev-home sync`'s 
   open the file. The start keeps the folder recognizable, and the hash keeps apart two long names
   that start the same. It's rare: the developer's longest owner and repository together had 38
   characters on 2026-10-30.
+- Only the last folder cut: a shortened handoff stays in the folders above it, as other handoffs
+  of the same owner, group, or project do, and the developer wants GitHub organizations and users
+  to keep their folders (2026-11-02). Keeping a folder whole hides no more of the name than
+  joining it would, since a slash and a hyphen each take one character, so folders join only
+  when there's no room otherwise.
+- Hyphens, spaces, and dots dropped at the cut's end: repository names are often hyphenated, so
+  without it a double hyphen before the hash would be common, and dropping them only makes the
+  folder shorter (the developer, 2026-11-02).
 - The room: 60 characters, the cap on a file setup moves into `rules/` and on a knowledge note's
   name, fits a folder per script with its plans, such as `report-builder/monthly-plan.md`. One
   limit on the whole path inside a handoff's folder, not one per name as `rules/` and knowledge
@@ -134,8 +148,17 @@ a second read after a push GitHub rejects, and `LONG` out of `/dev-home sync`'s 
   - Numbering, as `rules/` does for moved files: two PCs that haven't synced take the same name.
   - Keeping the start and the end: it hides a difference in the middle, such as an Azure DevOps
     project per region, cuts words at both ends, and is a second way of cutting.
-  - A cap per folder level: a handoff's depth varies by service, and it would cut names that fit.
+  - Joining every folder after the service's into one, as first written here: a shortened handoff
+    leaves its owner's folder for a place among the owners' folders, and shows no more of the
+    name.
+  - A cap per folder level, or on the organization's folder alone: a handoff's depth varies by
+    service, and it would cut names that fit. GitHub owners never need one; a cap on an Azure
+    DevOps organization alone leaves no room under a long project, and one on the project cuts
+    names whose paths fit; and a cut folder above the last needs a hash of its own, 9 more
+    characters.
   - Cutting each folder evenly: harder to predict.
+  - Keeping a hyphen, space, or dot left at the cut's end: it gives folders such as
+    `name--<hash>`.
 - For the room: 40 characters for a file name (a script's name with a plan's often passes it); no
   room (files beside a handoff after 1.0.0 would need a conversion).
 - For other paths:

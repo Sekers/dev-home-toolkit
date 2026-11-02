@@ -145,6 +145,14 @@ The handoff skill finds each project's handoff from the address the repo syncs w
 clone, so two projects with the same folder name get separate handoffs. A repo with no commits
 yet, a shallow clone, or a folder outside git uses just the folder name.
 
+A project whose folder would be too long for every PC to open keeps the folders above its last
+one, such as the owner's on GitHub, and only the last is cut to fit, then ended with a code made
+from the project's full name, so two long names that start the same still get folders of their
+own. On GitHub, that happens only past 61 characters of owner and repository together. When the
+folders above leave no room at all, as long Azure DevOps or GitLab names can, the last folder
+joins the one above it, with a hyphen, only as far as it must. The full name stays in use everywhere else, such as in
+commit messages and the issues the skill files.
+
 When the agent finds no handoff at a project's path, it lists the existing ones and asks whether
 one of them is this project's under an old address, as happens when a project is renamed,
 transferred, or published for the first time. It offers to move that one, or, if none is, to
