@@ -1,0 +1,21 @@
+# dev-home's handoffs/ in layout 1: the path of each handoff facts.py names, and the sections of
+# the handoff skill's template. layouts.py says what the placeholders stand for, and
+# docs/development/testing.md when this list changes.
+handoffs/github/<owner>/<repo>/HANDOFF.md
+handoffs/gitlab/<group>/<project>/HANDOFF.md
+handoffs/gitlab/<group>/<subgroups>/<project>/HANDOFF.md
+handoffs/bitbucket/<owner>/<repo>/HANDOFF.md
+handoffs/azure-devops/<organization>/<project>/<repo>/HANDOFF.md
+handoffs/other/<folder>-<commit>/HANDOFF.md
+handoffs/other/<folder>/HANDOFF.md
+handoffs/local/<folder>-<commit>/HANDOFF.md
+handoffs/local/<folder>/HANDOFF.md
+section: **State as of
+section: ## Next up
+section: ## Work in progress
+section: ## To do
+section: ## Bugs
+section: ## Waiting on others
+section: ## Private notes
+section: ## Needs a real system (ask the user before running anything)
+section: ## Environments

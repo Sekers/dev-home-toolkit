@@ -3,6 +3,7 @@ tests checks that what it adds to a file is on that file's list; these check the
 everything on a list is something the code still writes, and that the check itself works."""
 
 import json
+import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -14,11 +15,15 @@ from helpers import (
     REPO_ROOT,
     LayoutCheck,
     Sandbox,
+    git,
     layout_snapshot,
     layouts_checked,
+    new_repo,
+    run_command,
     run_python,
     sandbox_for,
     shared_module,
+    skill_command,
 )
 
 
@@ -130,6 +135,98 @@ def test_each_list_holds_exactly_what_the_code_writes(
             "code no longer writes them, take them off the list; otherwise make this test write "
             "them."
         )
+
+
+def test_handoffs_list_holds_exactly_the_paths_facts_names_and_the_templates_sections(
+    box: Sandbox,
+) -> None:
+    words = skill_command(box, "handoff", "facts.py").split(" ")
+    command = " ".join([*words[: words.index("--stamp") + 2], "handoff"])
+    found: set[str] = set()
+
+    def named(folder: Path) -> None:
+        result = run_command(box, command, cwd=folder)
+        assert result.code == 0, str(result)
+        facts = result.facts
+        found.add(layouts.handoffs_key(facts["service"], facts["name"], facts["handoff"]))
+
+    # A project on each service facts.py knows, GitLab's with and without a subgroup, one on
+    # another host, and one with no origin. A path the list lacks fails the run that named it, in
+    # helpers.py, so only a path facts.py no longer names can be left.
+    origins = [
+        "https://github.com/you/tool",
+        "https://gitlab.com/team/app",
+        "https://gitlab.com/team/sub/app",
+        "https://bitbucket.org/space/repo",
+        "https://dev.azure.com/org/project/_git/repo",
+        "https://git.example.com/team/app",
+        None,
+    ]
+    for number, origin in enumerate(origins):
+        named(new_repo(box, f"handoff project {number}", origin=origin))
+    # Projects with no first commit to name them by: one with no commits yet, and a shallow clone
+    # on another host.
+    named(new_repo(box, "handoff no commits", commits=()))
+    source = new_repo(box, "handoff source", commits=("one", "two"))
+    shallow = box.root / "handoff shallow"
+    git("clone", "--quiet", "--depth", "1", f"file:///{source.as_posix()}", str(shallow))
+    git("-C", str(shallow), "remote", "set-url", "origin", "https://git.example.com/team/app")
+    named(shallow)
+    listed = layouts.read_list(layouts.HANDOFFS_LIST)
+    paths = {line for line in listed if not line.startswith(layouts.SECTION)}
+    unnamed = sorted(paths - found)
+    assert not unnamed, (
+        f"{layouts.HANDOFFS_LIST} has paths facts.py named for no project here: "
+        f"{', '.join(unnamed)}. If facts.py no longer names them, take them off the list; "
+        "otherwise add a project here that it names them for."
+    )
+    template = box.toolkit / "templates" / "skills" / "handoff" / "template.md"
+    sections = layouts.handoff_sections(template.read_text(encoding="utf-8"))
+    assert listed - paths == sections, f"{layouts.HANDOFFS_LIST} and {template} differ"
+
+
+def test_the_cut_check_counts_with_the_budget_and_room_facts_uses(box: Sandbox) -> None:
+    # layouts.py can't import facts.py, a skill's script, so it keeps copies of its own.
+    assert layouts.PATH_BUDGET == shared_module(box, "paths").PATH_BUDGET
+    facts = box.toolkit / "templates" / "shared-skill-scripts" / "facts.py"
+    room = re.search(r"^HANDOFF_ROOM = (\d+)$", facts.read_text(encoding="utf-8"), re.MULTILINE)
+    assert room is not None and int(room.group(1)) == layouts.HANDOFF_ROOM, room
+
+
+def handoff_facts(service: str, name: str, handoff: str) -> dict[str, str]:
+    return {"service": service, "name": name, "handoff": handoff}
+
+
+def test_a_handoff_path_is_checked_as_the_path_any_cut_was_made_from() -> None:
+    whole = handoff_facts("github", "you/tool", "handoffs/github/you/tool/HANDOFF.md")
+    assert layouts.handoffs_problems(whole) == []
+    # Cut to fit the path budget: the last folder, or folders joined above it.
+    long = "r" * 80
+    cut = handoff_facts(
+        "github", f"you/{long}", f"handoffs/github/you/{long[:49]}-0123abcd/HANDOFF.md"
+    )
+    assert layouts.handoffs_problems(cut) == []
+    joined = handoff_facts(
+        "azure-devops",
+        f"org/{'p' * 30}/{long}",
+        f"handoffs/azure-devops/org/{'p' * 30}-0123abcd/HANDOFF.md",
+    )
+    assert layouts.handoffs_problems(joined) == []
+    # A run that names no handoff has nothing to check.
+    assert layouts.handoffs_problems({"environment": "PC"}) == []
+
+
+def test_a_handoff_path_the_list_lacks_fails_naming_it() -> None:
+    moved = handoff_facts("github", "you/tool", "handoffs/github/tool/HANDOFF.md")
+    (problem,) = layouts.handoffs_problems(moved)
+    assert "handoffs' list doesn't have: handoffs/github/tool/HANDOFF.md. " in problem, problem
+    unknown = handoff_facts("example", "you/tool", "handoffs/example/you/tool/HANDOFF.md")
+    (problem,) = layouts.handoffs_problems(unknown)
+    assert "doesn't have: handoffs/example/you/tool/HANDOFF.md. " in problem, problem
+    # A folder that only looks cut: the whole path fits, so facts.py never cuts it.
+    hashed = handoff_facts("github", "you/tool", "handoffs/github/you/0123abcd/HANDOFF.md")
+    (problem,) = layouts.handoffs_problems(hashed)
+    assert "doesn't have: handoffs/github/you/0123abcd/HANDOFF.md. " in problem, problem
 
 
 BEFORE = {"schemaVersion": 1, "devHome": {"folder": "C:/dev-home"}}

@@ -36,10 +36,12 @@ proposing a commit, and points here; its rules apply too.
   real work.
 - The layout tests keep a list of what the code writes into each file another version of
   dev-home-toolkit may read: so far `local-settings.json` and `dev-home.json`, by their
-  `schemaVersion`. The lists are in `tests/layout-lists/`, and `tests/layouts.py` says how
-  they're written. Every script a test runs is checked afterwards: each key path it added to one
-  of those files has to be on that file's list, and `layouts_checked` in `helpers.py` does the
-  same for code a test runs in its own process. A test that writes one of those files during such
+  `schemaVersion`, the files setup creates in dev-home's `rules/`, and the handoff paths
+  `facts.py` names, with the handoff template's sections. The lists are in `tests/layout-lists/`,
+  and `tests/layouts.py` says how they're written. Every script a test runs is checked
+  afterwards: each key path it added to one of those files, each file it created in `rules/`,
+  and each handoff path it printed has to be on its list, and `layouts_checked` in `helpers.py`
+  does the same for code a test runs in its own process. A test that writes one of those files during such
   a run, standing in for another run, does it inside `writing_meanwhile`, so what it writes isn't
   counted as the run's. `test_layouts.py` checks that the code still writes everything on each
   list, and that the check works. A change in what a key means, or in which files the code reads,

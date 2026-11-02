@@ -17,13 +17,21 @@ dev-home's folder, with <pc> for a PC's folder, <agent> for an agent's, and <mov
 a file setup moves there, which starts with moved-. rules/ has no layout version of its own yet,
 so its layout is 1.
 
+So does handoffs/, handoffs-1.txt: the path of each handoff facts.py names, from dev-home's
+folder, with a placeholder for each folder below the service's, such as <owner> and <repo>, and
+the sections of the handoff skill's template, which the skill and facts.py read by name, each as
+section: and the line that starts it. A folder cut to fit the path budget is written as the path
+it was cut from, since decision 0088's rule cuts any of them the same way. handoffs/ has no
+layout version of its own yet either.
+
 helpers.py checks every run of the scripts in a test: each key path the run adds to one of these
-files must be on that file's list for the layout its schemaVersion names, and each file it creates
-in rules/ on rules' list. test_layouts.py checks that the code still writes everything on each
-list."""
+files must be on that file's list for the layout its schemaVersion names, each file it creates in
+rules/ on rules' list, and each handoff path it prints, as facts.py's handoff topic does, on
+handoffs' list. test_layouts.py checks that the code still writes everything on each list."""
 
 import json
-from collections.abc import Sequence
+import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -34,6 +42,27 @@ STATE = "$state"
 SETTING = "<setting>"
 RULES_FOLDER = "rules"
 RULES_LIST = LISTS / "rules-1.txt"
+HANDOFFS_FOLDER = "handoffs"
+HANDOFFS_LIST = LISTS / "handoffs-1.txt"
+# What starts a template section's line on handoffs' list.
+SECTION = "section: "
+# The folders below a hosting service's own, from a repo's address, as facts.py names them.
+# GitLab's subgroups, when it has any, come between its two as one <subgroups>.
+HANDOFF_FOLDERS = {
+    "github": ("<owner>", "<repo>"),
+    "bitbucket": ("<owner>", "<repo>"),
+    "gitlab": ("<group>", "<project>"),
+    "azure-devops": ("<organization>", "<project>", "<repo>"),
+}
+# How a folder cut to fit the path budget ends: a hyphen and 8 hexadecimal characters, or those
+# alone. facts.py cuts only a handoff's folder that, with the room beside it, passes the budget
+# (decision 0088).
+CUT = re.compile(r"(?:.*-)?[0-9a-f]{8}")
+PATH_BUDGET = 139
+HANDOFF_ROOM = 60
+# How other and local name a project with a first commit: its folder name, a hyphen, and the start
+# of that commit.
+WITH_COMMIT = re.compile(r".+-[0-9a-f]{7}")
 
 
 @dataclass(frozen=True)
@@ -118,6 +147,62 @@ def rules_problems(path: Path, relative: Sequence[str], before: list[bytes]) -> 
         f"{RULES_LIST}; from 1.0.0, raise rules/'s layout version, save a list for the new layout, "
         "and add a conversion step (see docs/development/testing.md)."
     ]
+
+
+def handoffs_key(service: str, name: str, handoff: str) -> str:
+    """The handoff path facts.py names, by its service, name, and handoff lines, as handoffs'
+    list writes it (see the description above). A path that's neither the service and name
+    whole, nor a cut of them, is written as it is, which no list line matches."""
+    parts = name.split("/")
+    whole = [HANDOFFS_FOLDER, service, *parts]
+    folders = handoff.split("/")[:-1]
+    # Counted as Windows counts it, in UTF-16 units.
+    whole_length = len(("/".join(whole) + "/").encode("utf-16-le", "surrogatepass")) // 2
+    cut = (
+        whole_length + HANDOFF_ROOM > PATH_BUDGET
+        and len(folders) > 2
+        and folders[:-1] == whole[: len(folders) - 1]
+        and CUT.fullmatch(folders[-1])
+    )
+    if folders != whole and not cut:
+        return handoff
+    if service == "gitlab" and len(parts) > 2:
+        placeholders = ["<group>", "<subgroups>", "<project>"]
+    elif service in HANDOFF_FOLDERS:
+        placeholders = list(HANDOFF_FOLDERS[service])
+    else:
+        placeholders = ["<folder>-<commit>" if WITH_COMMIT.fullmatch(name) else "<folder>"]
+    if len(placeholders) != len(parts) and service != "gitlab":
+        return handoff
+    return "/".join([HANDOFFS_FOLDER, service, *placeholders, "HANDOFF.md"])
+
+
+def handoffs_problems(facts: Mapping[str, str]) -> list[str]:
+    """What's wrong with the handoff path a run printed, by the key: value lines it printed, when
+    it printed one, as facts.py's handoff topic does: one handoffs' list doesn't have."""
+    if "handoff" not in facts:
+        return []
+    key = handoffs_key(facts.get("service", ""), facts.get("name", ""), facts["handoff"])
+    if key in read_list(HANDOFFS_LIST):
+        return []
+    return [
+        f"The run named the handoff {facts['handoff']}, which handoffs' list doesn't have: {key}. "
+        f"A change to where facts.py files handoffs is a layout change: before 1.0.0, add it to "
+        f"{HANDOFFS_LIST}; from 1.0.0, raise handoffs/'s layout version, save a list for the new "
+        "layout, and add a conversion step (see docs/development/testing.md)."
+    ]
+
+
+def handoff_sections(template: str) -> set[str]:
+    """The lines of the handoff skill's template that the skill and facts.py read by name, as
+    handoffs' list writes them: each heading below the title, and the State line's start."""
+    sections = set()
+    for line in template.splitlines():
+        if line.startswith("## "):
+            sections.add(SECTION + line)
+        elif line.startswith("**State as of"):
+            sections.add(SECTION + "**State as of")
+    return sections
 
 
 def declared_settings(toolkit: Path) -> set[str]:

@@ -1,14 +1,14 @@
 # 0068: Versions and layouts in dev-home
 
 **Built:** yes, except: the newest version, the early update check, `layoutVersions`, the layout
-tests for `handoffs/` and `knowledge/`, and the release step's lock on released lists. The layout
-tests for `dev-home.json`, `local-settings.json`, and `rules/` are built.
+test for `knowledge/`, and the release step's lock on released lists.
 
 **Decision:** `dev-home.json` records the newest dev-home-toolkit version that has set dev-home
 up, and a layout version for each part of dev-home, and tests catch a layout change made without
 one. It needs version numbers
 ([0060: The release data file](0060-the-release-data-file.md)).
-Decided by the developer on 2026-10-18, and changed on 2026-10-22 (setting names in the lists).
+Decided by the developer on 2026-10-18, and changed on 2026-10-22 (setting names in the lists)
+and 2026-11-02 (cut handoff folders in the list).
 
 - **The newest version** is a new field in `dev-home.json`, its name settled when building.
   `schemaVersion` doesn't change, since setup keeps keys it doesn't know there (`dev_home_text` in
@@ -42,7 +42,10 @@ Decided by the developer on 2026-10-18, and changed on 2026-10-22 (setting names
   names replaced by placeholders, each note's field names, JSON keys, and template sections. A
   setting's name counts as a made-up name, since its declaration and `formerNames` already handle
   one being added, renamed, or removed (`docs/development/settings.md`), so a new key in a
-  folder's entry is a layout change and a new setting isn't. The list is saved in
+  folder's entry is a layout change and a new setting isn't. `handoffs/`'s files are the paths
+  `facts.py` names for handoffs, and a folder cut to fit the path budget counts as the path it was
+  cut from, since one rule cuts them all
+  ([0088: Path lengths](0088-path-lengths.md)). The list is saved in
   dev-home-toolkit's repo for each version. A difference fails the test until the version is
   raised, the new list saved, and a conversion step exists.
   Every test counts: a file that matches nothing on its part's list fails the test that wrote it.

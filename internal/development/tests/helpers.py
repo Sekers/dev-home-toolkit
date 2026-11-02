@@ -500,7 +500,8 @@ def run(
     """Runs a command as an agent's shell tool does: input from nowhere, so a script can never
     wait for an answer, and its output and errors together, read as UTF-8. With answer, that's
     its input instead, as a person typing it. Then checks what it changed in the files the
-    layout lists cover (see LayoutCheck)."""
+    layout lists cover (see LayoutCheck), and any handoff path it printed (see
+    layouts.handoffs_problems)."""
     check_in_sandbox(argv)
     check = LayoutCheck(box)
     done = subprocess.run(
@@ -514,6 +515,7 @@ def run(
         check=False,
     )
     result = Run(done.returncode, done.stdout.decode("utf-8", errors="replace").splitlines())
+    check.problems += layouts.handoffs_problems(result.facts)
     check.finish(f"{' '.join(argv)}, {result}")
     return result
 
