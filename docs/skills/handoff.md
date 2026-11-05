@@ -140,7 +140,7 @@ repo, whatever its folder is called. Anything else has a handoff on each PC of i
 | On Bitbucket | `handoffs/bitbucket/<workspace>/<repo>/` |
 | On Azure DevOps | `handoffs/azure-devops/<org>/<project>/<repo>/` |
 | On any other server, or a network share | `handoffs/other/<server>/<path>/`, such as `handoffs/other/git.example.com/team/app/` |
-| Anything else: a folder outside git, a repo with no remote, or one whose remote is a folder on this PC | `handoffs/pcs/<pc>/<folder>-<code>/` |
+| Anything else: a folder outside git, a repo with no remote, or one whose remote is a folder on this PC, or one on this PC's WSL or `localhost` | `handoffs/pcs/<pc>/<folder>-<code>/` |
 
 A handoff under `pcs/` is used only on that PC: dev-home syncs it, but no other PC's sessions find
 it. `<pc>` is the PC's name, written as `rules/pcs/` writes it, and `<code>` is made from the

@@ -8,10 +8,12 @@ follows that address: a known hosting service's repo under the service's folder,
 `handoffs/github/<owner>/<repo>/`, and any other under `handoffs/other/<host>/<path>/`, a network
 share's path, such as `\\nas\git\tool.git`, included. Anything else gets a handoff on its own PC,
 under `handoffs/pcs/<pc>/<folder>-<hash>/`: a folder outside git, and a repo with no `origin`, or
-whose `origin` is a path on this PC, a mapped drive included. Decided by the developer on
-2026-11-02, replacing filing by folder name and first commit under `other/` and `local/`, and by
-folder name alone. Sessions started in the home folder getting a handoff of their PC's was
-decided on 2026-10-03, and every other folder outside git on 2026-10-19.
+whose `origin` is a path on this PC, a mapped drive included, or names a computer that every PC
+takes as itself. Decided by the developer on 2026-11-02, replacing filing by folder name and
+first commit under `other/` and `local/`, and by folder name alone, and changed on 2026-11-03
+and 2026-11-05 (an `origin` that names this PC). Sessions started in the home folder getting a
+handoff of their PC's was decided on 2026-10-03, and every other folder outside git on
+2026-10-19.
 
 - **`<pc>`** is the PC's folder as `rules/pcs/` names it
   ([0065: Where end users' rules live](0065-where-end-users-rules-live.md)), and the `service`
@@ -26,6 +28,12 @@ decided on 2026-10-03, and every other folder outside git on 2026-10-19.
   SHA-256 (0088).
 - **Commits play no part.** A repo with no commits yet, or a shallow clone, goes by its `origin`
   like any other.
+- **A computer every PC takes as itself** is a host of `localhost`, `localhost.localdomain`, or a
+  name that ends in `.localhost` or `.localhost.localdomain`; an IPv4 address that starts with
+  `127.`, such as `127.0.0.1` (a name such as `127.example.com` doesn't count); `0.0.0.0`; or
+  `wsl$` or `wsl.localhost`, through which Windows reaches the PC's own WSL. Any letter case
+  counts. It's a check of the text alone, with no git call and no lookup. An IPv6 address,
+  such as `[::1]`, goes under `pcs/` too, since `facts.py` reads no IPv6 host as a computer.
 - **The move question.** When the handoff skill finds no handoff at the project's path, it lists
   the existing ones to move, and marks each in another PC's folder under `handoffs/pcs/` as that
   PC's, since moving it takes it from that PC.
@@ -47,6 +55,14 @@ decided on 2026-10-03, and every other folder outside git on 2026-10-19.
 - `pcs/` matches `rules/pcs/<pc>/`, and is how Claude Code keeps its own data outside a repo: its
   memory docs key it by the folder's root and keep it on that machine (read 2026-10-19). Nothing is
   asked, and nothing is written in the end user's folders.
+- An `origin` that names this PC, such as `ssh://git@localhost/you/tool` or
+  `\\wsl$\Ubuntu\home\you\tool`, reaches a different computer from each PC. Filed under
+  `other/`, two PCs' unrelated repos at the same such address would share one handoff, without a
+  word. On Linux, systemd-resolved answers `localhost`, `localhost.localdomain`, and every name
+  that ends in either with the PC's own address (its man page, read 2026-11-05), and a connection
+  to `0.0.0.0` reaches the PC too (Wikipedia's "0.0.0.0", read 2026-11-05). Windows didn't
+  resolve `gitea.localhost` or `wsl.localhost` (tested 2026-11-05), so names that end in
+  `.localhost` matter mainly on Linux, which dev-home-toolkit will support.
 - A network share's path names a computer, as an address does, with the same text on every PC
   that uses it. A mapped drive's letter can differ between PCs, and telling that it's a share
   would mean asking Windows about the network on every `/handoff`, which is slow, and hangs while
@@ -66,10 +82,12 @@ decided on 2026-10-03, and every other folder outside git on 2026-10-19.
 **Costs:** a folder outside git, or a repo whose `origin` names no other computer, never shares a
 handoff across PCs, even when a sync service keeps it on both; to share one, give the repo a
 remote. A server reached by two names, such as an SSH alias on one PC and its real name on
-another, gets a handoff under each, as known services already did. A folder that moves or is
-renamed, and a repo that moves to another host, gets a new handoff, which the move question offers
-to bring along. Before 1.0.0, existing handoffs under `local/` and `other/` move by hand, through
-the move question ([0080: Compatibility before 1.0.0](0080-compatibility-before-1-0-0.md)).
+another, gets a handoff under each, as known services already did. A server every PC reaches
+through an SSH tunnel, as `localhost:<port>`, gets a handoff on each PC; to share one, use the
+server's real name in the `origin`. A folder that moves or is renamed, and a repo that moves to
+another host, gets a new handoff, which the move question offers to bring along. Before 1.0.0,
+existing handoffs under `local/` and `other/` move by hand, through the move question
+([0080: Compatibility before 1.0.0](0080-compatibility-before-1-0-0.md)).
 
 **Options set aside:**
 
@@ -94,6 +112,13 @@ the move question ([0080: Compatibility before 1.0.0](0080-compatibility-before-
   shared handoffs.
 - Every repo not on a known service under `pcs/`: a repo on a company's Git server moves between
   PCs as a GitHub one does.
+- For an `origin` that names this PC, on 2026-11-03: leaving it under `other/`, with a line in
+  Costs (the mix-up stays silent); looking the host up (it uses the network, is slow, can hang
+  offline, and `facts.py` never uses the network); and every share path, `\\<host>\...`, under
+  `pcs/` (a real network share would stop being shared, and `ssh://git@localhost/...` would
+  still mix). On 2026-11-05: only `localhost`, `127.x`, `wsl$`, and `wsl.localhost`, the hosts
+  decided on 2026-11-03 (two Linux PCs, each with its own server at a name that ends in
+  `.localhost`, would still share one handoff).
 - Known services by host too, such as `handoffs/github.com/you/tool/`: Azure DevOps' HTTPS and SSH
   addresses differ, so its clones would split, and every existing handoff would move.
 - For the hash: the raw path (a drive letter's case changes between sessions); ignoring case

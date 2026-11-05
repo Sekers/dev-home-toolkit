@@ -79,8 +79,10 @@ own folder is called.
 Anything else gets a handoff on this PC alone, under pcs, in this PC's folder, named as rules/pcs/
 names it, then the folder's name, a hyphen, and a hash of its full path, such as
 pcs/office/notes-1a2b3c4d: a folder outside git, and a repo with no origin, or whose origin is a
-folder on this PC, such as C:/repos/tool or one on a mapped drive. Nothing about such a folder is
-the same on another PC, and the hash keeps apart two folders with the same name. The path is
+folder on this PC, such as C:/repos/tool or one on a mapped drive, or names a computer that every
+PC takes as itself: localhost, localhost.localdomain, or a name that ends in either, a 127.x
+address, 0.0.0.0, or its own WSL, through //wsl$ or //wsl.localhost. Nothing about such a folder
+is the same on another PC, and the hash keeps apart two folders with the same name. The path is
 resolved first, following links and short names, and its letter case is ignored where the file
 system ignores it, so a folder gets the same hash however a session reaches it.
 
@@ -401,22 +403,37 @@ URL_ADDRESS = re.compile(
 SCP_ADDRESS = re.compile(r"^(?:[^@/:]+@)?(?P<host>[^/:@]+):(?P<path>[^/].*)$")
 # \\server\share\path, a network share, which Windows takes with forward slashes too.
 SHARE_ADDRESS = re.compile(r"^(?:\\\\|//)(?P<host>[^\\/]+)[\\/](?P<path>.+)$")
+# Computers that every PC takes as itself. On Linux, systemd-resolved answers localhost,
+# localhost.localdomain, and every name that ends in either with the PC's own address, and a
+# connection to 0.0.0.0 reaches the PC too. Windows reaches the PC's own WSL through the shares
+# wsl$ and wsl.localhost, which ends in .localhost. Lowercase, as split_address compares them.
+THIS_PC_HOSTS = frozenset({"localhost", "localhost.localdomain", "wsl$", "0.0.0.0"})
+THIS_PC_ENDINGS = (".localhost", ".localhost.localdomain")
+# 127.0.0.1 and every other address that starts with 127, each of which reaches the PC itself.
+# Shorter forms, such as 127.1, count too: Windows doesn't resolve them, but other systems may
+# read them as 127.0.0.1, and no computer elsewhere goes by such a name.
+LOOPBACK_ADDRESS = re.compile(r"^127(?:\.[0-9]+){1,3}$")
 
 
 def split_address(address: str) -> Address | None:
     """Splits a remote address that names another computer into that computer's name and the
     path after it, dropping any scheme, user name, port, and trailing .git, with forward slashes
-    in the path. Returns None for anything else, such as a path on this PC."""
+    in the path. Returns None for anything else, such as a path on this PC, or an address that
+    names this PC, such as localhost: the same address reaches a different computer from each
+    PC, so it can't tell the project apart. It's a check of the text alone, with no lookup."""
     # A drive path, such as C:\repos\tool or C:repos, would otherwise look like host:path below.
     if DRIVE_PATH.match(address):
         return None
     match = URL_ADDRESS.match(address) or SHARE_ADDRESS.match(address) or SCP_ADDRESS.match(address)
     if not match:
         return None
+    host = match.group("host").lower()
+    if host in THIS_PC_HOSTS or host.endswith(THIS_PC_ENDINGS) or LOOPBACK_ADDRESS.match(host):
+        return None
     path = match.group("path").replace("\\", "/").rstrip("/")
     if path.lower().endswith(".git"):
         path = path[:-4]
-    return Address(match.group("host").lower(), path)
+    return Address(host, path)
 
 
 def service_parts(service: str, path: str) -> list[str] | None:
@@ -682,7 +699,8 @@ def handoff_lines(place: HandoffPlace) -> list[str]:
 def computer_name() -> str:
     """The computer's host name up to the first dot, in capitals: a copy of computer_name in
     dev-home-toolkit's internal/shared/computer.py, which a test checks gives the same name."""
-    # Loaded here, so only the environment topic pays for it.
+    # Loaded here, so only what needs the computer's name pays for it: the environment topic, and
+    # finding a handoff under handoffs/pcs/.
     import socket
 
     try:

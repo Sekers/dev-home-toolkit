@@ -90,6 +90,11 @@ ADDRESSES = {
     "\\\\NAS\\git\\tool.git": "other/nas/git/tool",
     "//nas/git/tool.git": "other/nas/git/tool",
     "file://nas/git/tool.git": "other/nas/git/tool",
+    # Names that only start like this PC's own are other computers.
+    "https://localhost.example.com/team/app": "other/localhost.example.com/team/app",
+    "git@127.example.com:team/app.git": "other/127.example.com/team/app",
+    "\\\\wsl\\git\\tool.git": "other/wsl/git/tool",
+    "https://notlocalhost/team/app": "other/notlocalhost/team/app",
     "https://github.com/you/%2E%2E": "{pcs}",
     "https://gitlab.com/team/../../outside": "{pcs}",
     "https://github.com/you/to*ol": "{pcs}",
@@ -101,6 +106,24 @@ ADDRESSES = {
     "Z:\\git\\tool.git": "{pcs}",
     "file:///C:/repos/tool": "{pcs}",
     "../tool": "{pcs}",
+    # Computers every PC takes as itself, in any letter case: each PC's address reaches its own.
+    "ssh://git@localhost/you/tool.git": "{pcs}",
+    "ssh://git@LocalHost:2222/you/tool": "{pcs}",
+    "localhost:you/tool.git": "{pcs}",
+    "ssh://git@Gitea.LocalHost:2222/you/tool": "{pcs}",
+    "git@localhost.localdomain:you/tool.git": "{pcs}",
+    "https://git.localhost.localdomain/team/app": "{pcs}",
+    "ssh://git@0.0.0.0/you/tool": "{pcs}",
+    "file://localhost/srv/git/tool.git": "{pcs}",
+    "\\\\localhost\\C$\\repos\\tool.git": "{pcs}",
+    "git@127.0.0.1:you/tool.git": "{pcs}",
+    "https://127.4.5.6/team/app": "{pcs}",
+    "git@127.1:you/tool.git": "{pcs}",
+    "\\\\127.0.0.1\\repos\\tool.git": "{pcs}",
+    "ssh://git@[::1]/you/tool.git": "{pcs}",
+    "\\\\wsl$\\Ubuntu\\home\\you\\tool": "{pcs}",
+    "\\\\WSL.localhost\\Ubuntu\\home\\you\\tool": "{pcs}",
+    "//wsl.localhost/Ubuntu/home/you/tool": "{pcs}",
 }
 
 
