@@ -105,13 +105,15 @@ fits none of them, ask the user. In any section, start an item with "For the use
 user can do it, and only when that's known. If work shows an item needs the user, or doesn't,
 change the label.
 
-- **State line:** the date, what was checked, and the result, such as tests passing. Name the
-  commit you checked by its hash, such as `3f9c2ab`, so a later read can list the commits that
-  came after it (see `newer` in "Find this project's handoff").
+- **State line:** the date of the last `update` and the commit it brought the handoff up to date
+  with, then the latest result of each kind of check, such as the tests or an in-game run, each
+  with its date and the commit it ran at. Name commits by hash, such as `3f9c2ab`, so a later
+  read can list the commits after them (see `newer` in "Find this project's handoff"). Nothing
+  else goes there.
 - **Next up:** what the user wants the next session to start with. Only the user changes it (see
   "Next up").
-- **Work in progress:** work started but not finished: what's done, what's left, and how to pick
-  it up, such as a branch or uncommitted files.
+- **Work in progress:** work started but not finished: what's done, in a few words rather than
+  commit by commit, what's left, and how to pick it up, such as a branch or uncommitted files.
 - **To do:** planned work, and decisions still to make. For a decision, start the item with
   "Decide whether" or similar: research it and recommend, but the user decides. Start an item
   with what it changes when that helps, such as "Wiki:" or "README:". A decision already made
@@ -213,7 +215,7 @@ about this project doesn't belong here either.
 3. Find this project's handoff (see above), read it, and summarize where things stand. Start
    with Next up, as written, if it isn't empty. Then, from the facts:
    - `newer` above 0: say in one line how many commits the project has had since the State
-     line's check, and what they cover, from the `newer-commit` lines. The handoff may not
+     line's commit, and what they cover, from the `newer-commit` lines. The handoff may not
      reflect them yet.
    - `behind` above 0, or `checked` starts with `missing`: say that this checkout lacks commits
      the handoff's last check had, so the user should pull the project before relying on the
@@ -267,9 +269,11 @@ Follow "Changing the handoff". While updating:
   the handoff".
 - Go through every section (see "Sections"): keep what's still true word for word, change what
   changed, and remove what's finished. Rewording unchanged text makes it drift, and makes merges
-  between PCs more likely to conflict. Set the "State as of" line to what you actually checked
-  this session; if you checked nothing, leave it. Don't run the project's tests or a build only
-  to bring that line up to date: it records what the session already checked.
+  between PCs more likely to conflict. In the "State as of" line, set the date and the commit
+  this update brought the handoff up to date with, replace the result of each kind of check this
+  session ran, keep the other checks' results, and drop anything else. Don't run the project's
+  tests or a build only to bring that line up to date: it records what the session already
+  checked.
 - If the handoff doesn't match the template (`{{SKILL_DIR}}/template.md`), bring it in line as
   part of this update: add missing headings, put them in the template's order, and move each
   item from an old section to the one that fits now, such as Backlog or Wiki items into To do, a
@@ -527,7 +531,8 @@ candidates too. On Windows, Codex runs even approved commands inside its sandbox
 1. Change, commit, and push only as "When to change, commit, and push" says. If the handoff looks
    stale, say so and ask.
 2. Current state only. An update brings the whole file up to date. No "done" markers,
-   dated entries, or running logs; git history holds the history.
+   dated entries, or running logs, such as a check's result that a newer one replaced, or a list
+   of commits; git history holds the history.
 3. Private. Never copy, quote, paraphrase, or mention handoff content or dev-home paths in
    project files, commits, PRs, or issues. Treat the project repos as public. Two exceptions,
    neither of which ever mentions dev-home or handoffs: a GitHub issue the user approved word for

@@ -2,7 +2,7 @@
 
 ---
 
-**State as of YYYY-MM-DD.** <What was checked, such as a commit by its hash, and the result.>
+**State as of YYYY-MM-DD.** <The commit the handoff is up to date with, then the latest result of each kind of check, each with its date and commit.>
 
 ## Next up
 
