@@ -1,9 +1,10 @@
 """Says whether each GitHub issue the current project's handoff links to is open or closed.
 
 The handoff skill's update runs it in the project's folder, in the same turn as its read of the
-handoff just before editing it. It finds the handoff as facts.py's handoff topic does, takes each
-link of the form https://github.com/<owner>/<repo>/issues/<number> once, in the order the links
-come, and asks GitHub about all of them in one gh request. It leaves out a link after "See also:",
+handoff just before editing it. It finds the handoff as facts.py's handoff topic does, reads it and
+then its further files (every other .md file in its folder, by name), takes each link of the form
+https://github.com/<owner>/<repo>/issues/<number> once, in the order the links come, and asks
+GitHub about all of them in one gh request. It leaves out a link after "See also:",
 written exactly so, in its item, which the handoff keeps only for what that issue holds, so its
 state never matters. An item ends at the next line that starts an item, a heading, or a new
 paragraph. It prints one line for each issue it checks:
@@ -137,6 +138,30 @@ def find_gh(facts: ModuleType) -> str | None:
     """gh's full path, found as facts.py finds git: never in the current folder, a project's."""
     found: str | None = facts.find_program("gh")
     return found
+
+
+def handoff_text(handoff: Path) -> str:
+    """The handoff's text, then each further file's: every other .md file in its folder, by name.
+    A blank line goes between files, so no item runs on from one file into the next. Empty when
+    the handoff doesn't exist."""
+    try:
+        texts = [handoff.read_text(encoding="utf-8-sig")]
+    except FileNotFoundError:
+        return ""
+    names = [
+        path.name
+        for path in handoff.parent.iterdir()
+        if path.name.lower().endswith(".md")
+        and path.name.lower() != handoff.name.lower()
+        and path.is_file()
+    ]
+    for name in sorted(names, key=str.lower):
+        try:
+            texts.append((handoff.parent / name).read_text(encoding="utf-8-sig"))
+        except FileNotFoundError:
+            # Deleted since the folder was listed, such as by another session.
+            continue
+    return "\n\n".join(texts)
 
 
 def issue_links(text: str) -> list[Issue]:
@@ -393,11 +418,7 @@ def main() -> int:
                 )
             ]
         else:
-            try:
-                text = (Path(facts.CONTENT_DIR) / place.handoff).read_text(encoding="utf-8-sig")
-            except FileNotFoundError:
-                text = ""
-            issues = issue_links(text)
+            issues = issue_links(handoff_text(Path(facts.CONTENT_DIR) / place.handoff))
             if issues:
                 lines = check_links(issues, find_gh(facts))
             else:

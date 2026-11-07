@@ -304,6 +304,39 @@ def test_leaves_out_links_after_see_also_in_their_item(box: Sandbox) -> None:
     assert found == [url + n for n in ("1", "4", "5", "2", "3", "6", "8", "7")], found
 
 
+def test_checks_the_further_files_beside_the_handoff_after_it(
+    box: Sandbox,
+    project: Path,
+    handoff: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    url = "https://github.com/you/tool/issues/"
+    folder = handoff.parent
+    others = {
+        # Further files come after the handoff, by name, and keep "See also:" to their own item.
+        "b-plugins.md": f"# Plugins\n\nWaiting on {url}2.\n",
+        "a-export.md": f"# Export\n\nWaiting on {url}3. See also: {url}4\n",
+        # Only .md files beside the handoff are further files.
+        "notes.txt": f"{url}5\n",
+        "old/HANDOFF.md": f"{url}6\n",
+    }
+    # A "See also:" ending the handoff's last line doesn't reach into the first further file.
+    write_text(handoff, f"- Waiting on {url}1. See also:\n")
+    for name, text in others.items():
+        write_text(folder / name, text)
+    try:
+        module = load(box)
+        open_issue = {"issue": {"state": "OPEN", "stateReason": None, "duplicateOf": None}}
+        gh = FakeGh(module, 0, {"data": {f"i{n}": open_issue for n in range(3)}})
+        lines = run_here(box, project, monkeypatch, capsys, gh, module)
+    finally:
+        for name in others:
+            (folder / name).unlink()
+        (folder / "old").rmdir()
+    assert lines == [f"OPEN      {url}{n}" for n in (1, 3, 2)], lines
+
+
 @pytest.mark.parametrize(
     ("body", "printed"),
     [

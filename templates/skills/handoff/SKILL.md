@@ -29,14 +29,14 @@ matching command does or to draft first.
 | --- | --- |
 | `/handoff` | Summarizes the handoff, starting with Next up. |
 | `/handoff <question>` | The same, then answers the question. |
-| `/handoff update` | Full update: brings the whole handoff up to date. If Next up looks done, asks before clearing it. |
+| `/handoff update` | Full update: brings the whole handoff up to date, and removes from Next up what's finished. |
 | `/handoff update <text>` | The same full update, with the user's text worked in. The text can also set, add to, or clear Next up. |
 | `/handoff next` | Shows Next up. |
 | `/handoff next <text>` | Replaces Next up with the text. Nothing else changes. |
 | `/handoff next clear` | Empties Next up. |
 | `/handoff issue` | Lists the items that could become GitHub issues. |
 | `/handoff issue <item>` | Files that item as a GitHub issue, then links to it from the handoff. |
-| `/handoff audit` | Has a second agent, with no context from this session, read the handoff as a new session would. Then fixes what the handoff or the project's files settle, commits, and asks about the rest. |
+| `/handoff audit` | Does a full update and commits it. Then has a second agent, with no context from this session, read the handoff as a new session would, fixes what the handoff or the project's files settle, commits, and asks about the rest. |
 | `/handoff audit <model> <effort>` | The same, on that model or at that effort, or both, in either order. |
 
 The commands that change the handoff are `/handoff update`, `next`, `issue`, and `audit`
@@ -110,8 +110,8 @@ change the label.
   with its date and the commit it ran at. Name commits by hash, such as `3f9c2ab`, so a later
   read can list the commits after them (see `newer` in "Find this project's handoff"). Nothing
   else goes there.
-- **Next up:** what the user wants the next session to start with. Only the user changes it (see
-  "Next up").
+- **Next up:** what the user wants the next session to start with. Only the user adds to it or
+  rewords it (see "Next up").
 - **Work in progress:** work started but not finished: what's done, in a few words rather than
   commit by commit, what's left, and how to pick it up, such as a branch or uncommitted files.
 - **To do:** planned work, and decisions still to make. For a decision, start the item with
@@ -119,9 +119,10 @@ change the label.
   with what it changes when that helps, such as "Wiki:" or "README:". A decision already made
   but not built yet goes here, with what a fresh session needs to build it without asking the
   user anything already answered: what to change, any wording the user approved (word for
-  word), the reasons, and the options set aside, with why. Before the item is removed as built,
-  its reasons belong in the project's own files; if they aren't there yet, offer to move them
-  (see "Update").
+  word), the reasons, and the options set aside, with why. In a project whose AGENTS.md says
+  where it records its decisions, that goes in a decision draft beside the handoff (see
+  `{{SKILL_DIR}}/further-files.md`). Before the item is removed as built, its reasons belong in
+  the project's own files; if they aren't there yet, offer to move them (see "Update").
 - **Bugs:** defects found but not fixed yet. One may become an issue in the project's tracker,
   public or private (see "GitHub issues").
 - **Waiting on others:** work blocked on someone or something outside the project: who, what,
@@ -177,8 +178,9 @@ about this project doesn't belong here either.
    which one, if any, is this project under an old name or address, saying that you'll move it,
    commit, and push. Mark each in another PC's folder under `handoffs/pcs/` (this PC's is
    `environment` in lowercase) as that PC's: moving it takes it from that PC. When the user names
-   one, move it to `<handoff>`, then run the command below, where `<old path>` is where it was,
-   relative to dev-home:
+   one, move it to `<handoff>`, with every other file in its folder, then run the command below,
+   where `<old path>` is where it was, relative to dev-home, and add both paths of each other
+   file you moved:
    `{{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py --message "handoff: <name>" "<old path>" "<handoff>"`.
    If none is, offer to create one from `{{SKILL_DIR}}/template.md`: "Create it, commit, and
    push?". On a yes, create it and commit it as in "Changing the handoff".
@@ -222,7 +224,8 @@ about this project doesn't belong here either.
      handoff or the code.
    - `newer` is `unknown`: never say the handoff matches the code, since nothing compared them.
 
-   If the user asked a question, answer it.
+   If the user asked a question, answer it. An item with a `details` link keeps the rest of
+   what's known about it in that file: read it when the question needs more than the summary.
 
 ## Changing the handoff
 
@@ -233,11 +236,13 @@ about this project doesn't belong here either.
    and wait for the yes.
 3. Read the handoff again right before editing it, and keep any change another session made
    since you last read it: a worktree of this project shares this handoff, and a sync can bring
-   in another PC's version.
+   in another PC's version. For `update`, `audit`, and `issue`, also read
+   `{{SKILL_DIR}}/further-files.md` in the same turn, and follow it.
 4. After editing, check the handoff for anything rule 7 forbids, and take it out.
 5. Run
-   `{{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py --message "handoff: <name>" "<handoff>"`.
-   It commits only this handoff, then syncs.
+   `{{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py --message "handoff: <name>" "<handoff>"`,
+   adding the path, relative to dev-home, of each further file you added, changed, or deleted. It
+   commits only those files, then syncs.
    - `OFFLINE` or `PENDING`: the commit is safe on this PC, and a later sync pushes it.
    - `PROBLEM`: stop and show it. The handoff is safe on this PC.
 
@@ -254,9 +259,9 @@ Follow "Changing the handoff". While updating:
   conversation and the `newer-commit` lines. For each entry the work still needs, check that a
   new session would find it:
   - A decision: once it's built, its reasons and the options set aside are in the project's own
-    files, where the project's AGENTS.md says; until then, they're in its To do item (see To do
-    in "Sections"). When a built decision's reasons aren't in the project's files, offer the
-    exact text, as below for moving an item.
+    files, where the project's AGENTS.md says; until then, they're in its To do item or its
+    decision draft (see To do in "Sections"). When a built decision's reasons aren't in the
+    project's files, offer the exact text, as below for moving an item.
   - A finding: where the project's AGENTS.md says research goes. If it's general and the
     `knowledge` skill is available, offer it as a knowledge candidate, as the always-on rules say.
   - Work left unfinished: its item says what's done, what's next, and the files or branch
@@ -268,7 +273,8 @@ Follow "Changing the handoff". While updating:
   it changed. Make the searches this needs in the same turn as the read in step 3 of "Changing
   the handoff".
 - Go through every section (see "Sections"): keep what's still true word for word, change what
-  changed, and remove what's finished. Rewording unchanged text makes it drift, and makes merges
+  changed, remove what's finished, and move each item that has passed about 100 words into its
+  own file (see `{{SKILL_DIR}}/further-files.md`). Rewording unchanged text makes it drift, and makes merges
   between PCs more likely to conflict. In the "State as of" line, set the date and the commit
   this update brought the handoff up to date with, replace the result of each kind of check this
   session ran, keep the other checks' results, and drop anything else. Don't run the project's
@@ -282,17 +288,21 @@ Follow "Changing the handoff". While updating:
   before moving one into them, such as a lasting decision or trap. To move an item into the
   project's files, show the exact text and where it goes, and edit those files only after a
   yes; committing them follows the project's own rules. Say what you moved and why.
-- Next up: if the user's text says what to do with it, do that. Otherwise, if this session
-  finished all of it, ask "Next up looks done: clear it?" before committing, and clear it only
-  on a yes. If this session finished part of it, ask the same about that part. With no answer,
-  leave it as it is.
+- Next up: if the user's text says what to do with it, do that. Otherwise, remove from it what's
+  finished, even when that's only part of a step: what this session finished, or confirmed
+  finished from the project itself, such as in commits it brought in, the code, or an issue
+  closed as completed. Keep the rest as written, apart from list numbers. When you're unsure
+  whether something is finished, such as work done but not yet checked, or a commit that may
+  cover only part of a step, leave it. After committing,
+  quote what you removed, say what you left because you were unsure, and say that
+  `/handoff next` changes it.
 - Text after `update` is the user's instructions for this update, in any words: a decision, a
   new bug, an item to drop, what's next up, and so on. Put each part where it fits, and
   afterwards say where each part went. If a part is unclear, or conflicts with what you found
   this session, ask before committing.
 - Issue links: in the same turn as the read in step 3 of "Changing the handoff", run
   `{{PYTHON}} -I {{SKILL_DIR}}/issue_status.py` in the project. It finds every GitHub issue the
-  handoff links to and asks GitHub about all of them at once. It prints one line for each:
+  handoff and its further files link to, and asks GitHub about all of them at once. It prints one line for each:
   `OPEN`; `CLOSED` with GitHub's reason in parentheses; or `UNCHECKED` with why, such as `gh`
   not signed in; or one `OK` line when the handoff links no issues. A duplicate's line names the
   issue it duplicates, that issue's state, and its title. The line for an issue closed as not
@@ -305,8 +315,9 @@ Follow "Changing the handoff". While updating:
   `GitHub issue [#<number>]`), or one it's waiting on, such as another project's. Keep the
   items whose tracked issues are open or weren't checked, and say which weren't checked and why.
   When a tracked issue is closed:
-  - As completed, or with no reason: remove an item filed as that issue, like any finished item,
-    and say which ones you removed. Keep any other item, and tell the user that the issue closed
+  - As completed, or with no reason: remove an item filed as that issue, like any finished item
+    (a decision draft's item first gets the offer in `{{SKILL_DIR}}/further-files.md`), and say
+    which ones you removed. Keep any other item, and tell the user that the issue closed
     and what the item says to do next.
   - As a duplicate: GitHub shows the duplicate on the original's page, so the original is where
     the work goes on. Replace the link with one to the original, from the line, and for an item
@@ -330,20 +341,25 @@ only if any qualify (see "Issue candidates"); most updates have none. File none 
 
 ## Audit
 
-`/handoff audit` has a second agent, with no context from this session, read the handoff as a
-new session would, and report what a new session couldn't act on. This session then fixes what
-it can. It follows "Changing the handoff", with these steps for the edit:
+`/handoff audit` first brings the handoff up to date, then has a second agent, with no context
+from this session, read it as a new session would, and report what a new session couldn't act
+on. This session then fixes what it can. It follows "Changing the handoff", with Read steps 1
+and 2 run once, and these steps for the edit:
 
 1. Anything after `audit` must be a model or an effort level your agent product accepts, in
    either order, such as `/handoff audit sonnet xhigh`. If anything else follows, treat it as a
    question: answer it, and ask before starting an audit.
-2. Tell the user, word for word: "I'm having a fresh agent read the handoff the way a new session
+2. Do a full update, as in "Update", and commit it, holding back its questions, such as whether
+   to move an item into the project's own files, and their changes. Once step 4 has started the second agent, ask them one at a
+   time, each as the last line, and commit each answer's change; in Codex, whose chat waits, ask
+   after step 7.
+3. Tell the user, word for word: "I'm having a fresh agent read the handoff the way a new session
    would, and list anything that's out of date, contradictory, or missing a next step. This can
    take several minutes and cost more than most commands, more for a long handoff." Then add, in
    Claude Code, "You can keep working while it runs."; in Codex, "This chat waits until it's
    done." When the command named a model or effort, put it after "a fresh agent", such as "a
    fresh agent, on Sonnet at xhigh effort,".
-3. Start the second agent (a subagent) fresh, without this conversation: in Claude Code, a
+4. Start the second agent (a subagent) fresh, without this conversation: in Claude Code, a
    general-purpose agent, never a fork. Start it in the background where your agent product
    allows it.
    - Neither named: name neither, so it runs on the session's model and effort.
@@ -358,12 +374,13 @@ it can. It follows "Changing the handoff", with these steps for the edit:
    > handoff. Change no file, and run nothing that writes; reading files and read-only git
    > commands are fine. The handoff is `<handoff>`, and the project is in `<folder>`. Start with
    > the project's AGENTS.md, or its README if it has none, for where it keeps its decisions and
-   > rules. Go through every section of the handoff, and report each item that a new session, on
-   > another PC or in another agent, couldn't act on without asking the user something already
-   > answered:
+   > rules. Go through every section of the handoff, and every file beside it that a `details`
+   > link names, and report each item that a new session, on another PC or in another agent,
+   > couldn't act on without asking the user something already answered:
    >
    > - out of date: the project's files, or a later item or decision, have overtaken it
-   > - contradicting another item, or the project's files
+   > - contradicting another item, its own `details` file, or the project's files
+   > - a summary that leaves out a rule its `details` file says always to follow
    > - pointing to an item, section, or file that doesn't exist, or by a name that doesn't match
    > - unfinished work without what's done, what's next, or the files and branches involved
    > - a decision made but not built, without its reasons and the options set aside; or a
@@ -372,29 +389,33 @@ it can. It follows "Changing the handoff", with these steps for the edit:
    > For each, give the item's line in the handoff and quote its first few words, say what's
    > wrong, and give the evidence: a file and line, or a commit. Report only real problems, and
    > say "none" for a section with none. Keep the report under 600 words.
-4. When it reports, read only the parts of the handoff its findings point to: each item it
+5. When it reports, read only the parts of the handoff its findings point to: each item it
    quotes, and both items of a contradiction. Read each at the line the finding gives, and when
    its first words aren't there, search for them, since another session may have moved it. This
    takes the place of step 3 of "Changing the handoff": an edit that replaces only the text it
    targets keeps whatever another session changed elsewhere. Check each finding against those
    parts and the project's files as they are now, and drop any finding you can't confirm, or
    whose text has changed since.
-5. Fix each finding that the handoff or the project's files settle, such as a pointer by the
+6. Fix each finding that the handoff or the project's files settle, such as a pointer by the
    wrong name, or an item that a later decision has overtaken. When two items contradict each
    other and a recorded decision settles which is right, follow the later decision, and say so.
    Never change Next up, and never reword text the user approved word for word: when a finding
    touches either, ask instead. A fix in the project's own files is shown as exact text first, as
    in "Update".
-6. Commit as in "Changing the handoff". Then tell the user each change and why, in one line
-   each, and list what only they can answer, such as a missing reason, ending with "Answer any of
-   these and I'll add it, commit, and push." When nothing is wrong, say so, and commit nothing.
+7. Commit as in "Changing the handoff". Then tell the user each change and why, in one line
+   each, and list what only they can answer, such as a missing reason. When nothing is wrong, say
+   so, and commit nothing. Then, as the last line, ask the next held question with no answer yet,
+   asking again one you asked while the second agent ran. When you listed anything, end with
+   "Answer any of these and I'll add it, commit, and push." Put that line in this message when
+   every held question has its answer, or else in your reply once the last one is answered.
 
 ## Next up
 
 Next up is what the user wants the next session to start with. It's the section directly under
-the "State as of" line, so it's the first thing anyone reads. Only the user changes it: through
-`next`, the text of an `update`, or a yes when an update asks to clear finished work. Never
-add, change, or remove it on your own judgment.
+the "State as of" line, so it's the first thing anyone reads. Only the user adds to it or
+rewords it: through `next`, or the text of an `update`. An update also removes what's finished
+(see "Update"). Never add to it, reword it, or remove anything else from it on your own
+judgment.
 
 - `/handoff next`: run Read steps 1 and 2, then show Next up as written, or say it's empty.
   Change nothing.
@@ -426,6 +447,7 @@ It follows "Changing the handoff", with these steps before the edit:
    `gh issue list --repo <owner>/<repo> --state all --search "<a few key words>"`. If one
    matches, show it and ask whether to link to it instead of filing a new one.
 3. Draft the title, body, and labels:
+   - When the item has a `details` link, read its file and draft from it too.
    - Write them fresh for the public. Copy no wording from the handoff, and never mention
      dev-home or handoffs.
    - Leave out anything rule 7 forbids, local paths, PC names, and anything else in the item
@@ -444,7 +466,9 @@ It follows "Changing the handoff", with these steps before the edit:
    with one `--label` for each label. If it fails, show the error and change nothing.
 
 The edit: replace the item with `GitHub issue [#<number>](<issue URL>): <title>` in the same
-place, and keep under it only the notes that couldn't go in the issue. For text that wasn't in
+place, and keep under it only the notes that couldn't go in the issue. When the item has a
+further file, keep in it only those notes, with the item's `details` link, or delete it when
+there are none. A decision draft stays whole, with its link, to move into the project later. For text that wasn't in
 the handoff, add the link where it fits. When the work needs another issue that the new one
 doesn't link to, such as a related issue that holds part of what's known, end the item with
 "See also:" and a link to it: it stays until the item is removed (see "Update").
@@ -516,7 +540,7 @@ which to file, as the last line.
 ## In Codex
 
 Read, `update`, `next`, and `audit` work, but edit only, so leave "commit, and push" out of your
-questions: a draft ends with "Save this?". Skip every sync, git, and `gh` step, including the
+questions and offers: a draft ends with "Save this?". Skip every sync, git, and `gh` step, including the
 issue link checks. In place of Read step 2's command, run
 `{{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py --skill handoff --stamp {{SKILL_STAMP}} handoff environment newer-commits preferences`,
 which prints the same facts and only reads files. If it prints an error instead, show it and

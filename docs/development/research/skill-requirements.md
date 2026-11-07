@@ -395,7 +395,9 @@ because there "tools" means development tools.
   Renaming the GitHub repo needs the developer's go-ahead at the time. Checked on 2026-10-17,
   when building it: no GitHub repo and no PyPI project had the name.
 - The order, once 6b is committed: the rename, then the glossary with its sweep, both before 6c;
-  then 6c to 6e, steps 7 to 9, `/handoff update audit`, and shared skill text; then the opt-in;
+  then 6c to 6e, steps 7 to 9, `/handoff update audit` (replaced on 2026-10-23 by audits that
+  start with an update, [0042](../decisions/0042-handoff-audit.md)), and shared skill text; then
+  the opt-in;
   then the release work and 1.0.0. Why: the text 6c to step 9 add, such as the always-on lines,
   setup's questions and menu, and the docs, is approved word for word, so it's written once, in
   its final words and name. The rename comes before the glossary because a word search for

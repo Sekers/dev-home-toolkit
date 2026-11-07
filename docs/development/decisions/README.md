@@ -113,3 +113,6 @@ file and link to the new one.
 - [0088: Path lengths](0088-path-lengths.md)
 - [0089: Where a handoff lives](0089-where-a-handoff-lives.md)
 - [0090: What the State line holds](0090-what-the-state-line-holds.md)
+- [0091: Further files](0091-further-files.md)
+- [0092: Decision drafts](0092-decision-drafts.md)
+- [0093: What an update removes from Next up](0093-what-an-update-removes-from-next-up.md)

@@ -8,14 +8,14 @@ steps agents follow are in the skill itself:
 | --- | --- |
 | `/handoff` | Syncs your dev-home, then summarizes this project's handoff, starting with Next up, with a link to the file. If the project has commits since the one the handoff last checked, it says how many and what they cover. If this copy of the project lacks commits that check had, it says to pull first. |
 | `/handoff <question>` | The same, then answers the question. |
-| `/handoff update` | Brings the whole handoff up to date, including what this session decided, built, changed, and learned, and lists where each went so you can spot a gap. If Next up looks done, asks before clearing it. |
+| `/handoff update` | Brings the whole handoff up to date, including what this session decided, built, changed, and learned, and lists where each went so you can spot a gap. Removes from Next up what's finished, and quotes what it removed. |
 | `/handoff update <text>` | The same, with your text worked in, in any words. The text can also set, add to, or clear Next up. |
 | `/handoff next` | Shows Next up. |
 | `/handoff next <text>` | Replaces Next up. Nothing else changes. |
 | `/handoff next clear` | Empties Next up. |
 | `/handoff issue` | Lists the items that could become GitHub issues. |
-| `/handoff issue <item>` | Files an item as an issue in the project's GitHub repo, and replaces the item with a link to it. For now, only in Claude Code, for projects on GitHub, with `gh` signed in. |
-| `/handoff audit` | Has a fresh agent read the handoff as a new session would, then fixes what it can and asks you about the rest. See [Audits](#audits). |
+| `/handoff issue <item>` | Files an item as an issue in the project's GitHub repo, and replaces the item with a link to it, keeping any notes the issue couldn't hold. For now, only in Claude Code, for projects on GitHub, with `gh` signed in. |
+| `/handoff audit` | Updates the handoff first, as `/handoff update` does, then has a fresh agent read it as a new session would, then fixes what it can and asks you about the rest. See [Audits](#audits). |
 | `/handoff audit <model> <effort>` | The same, on that model or at that effort, or both, such as `/handoff audit sonnet xhigh`. |
 
 A command that changes the handoff saves, commits, and pushes only that file: typing the command
@@ -41,8 +41,20 @@ is your go-ahead. Some examples:
 - **Commits cover only the handoff.** If an update moves an item into your project's own files,
   such as a decision into its AGENTS.md, the agent shows you the text first and never commits
   those files: your project's own rules, and your own rules, decide that.
-- **Next up changes only when you say so.** When an update finishes it, the agent asks before
-  clearing it.
+- **Only you add to Next up or reword it.** An update removes what's finished, even part of a
+  step, whether the session did it or found it done in the project, such as in commits it pulled.
+  It leaves anything it isn't sure of, and its report quotes what it removed; `/handoff next`
+  puts it back.
+- **Long items move into further files.** Once an item passes about 100 words (never Next up or
+  the State line), its details move to
+  a file of their own beside `HANDOFF.md`, and the item keeps a short summary ending in a
+  `details` link, so a session reads the details only when it needs them. The summary keeps any
+  rule that must always be followed. A long environment section moves the same way, to
+  `environment-<name>.md`. In a project whose AGENTS.md says where it records its decisions, a
+  design decided but not built yet is drafted as a decision file beside the handoff. Once it's
+  built, or earlier when you ask, the agent offers to move it into your project, with the exact
+  text. Say no, and it stays in the handoff, under Private notes. These are the handoff skill's
+  [`further-files.md`](../../templates/skills/handoff/further-files.md) rules.
 - **Every handoff has the same sections,** from `templates/skills/handoff/template.md`; the
   handoff skill says what goes in each. `/handoff update` brings an older handoff in line, and
   asks before it moves anything out.
@@ -91,16 +103,19 @@ is your go-ahead. Some examples:
 
 ## Audits
 
-**`/handoff audit` has a second agent read the handoff as a new session would.** That agent knows
-nothing about your sessions. It reads the whole handoff and the project files its items point
-to, then reports every item a new session couldn't act on without asking you: one that's out of
+**`/handoff audit` brings the handoff up to date, then has a second agent read it as a new session
+would.** The update goes first, as `/handoff update` does, so the audit checks the handoff as it
+stands, this session's work included. Its questions, such as whether to move an item into the
+project's own files, come while the second agent works; in Codex, after it. The second agent
+knows nothing about your sessions. It reads the whole handoff, its further files, and the project
+files its items point to, then reports every item a new session couldn't act on without asking you: one that's out of
 date, one that contradicts another item or your project's files, or one that doesn't say what to
 do next, or why. Your agent then checks each finding, fixes what the handoff or your project's
 files settle, commits, and lists what it changed and what only you can answer. It never changes
-Next up, and never rewords text you approved; it asks instead.
+Next up with its fixes, and never rewords text you approved; it asks instead.
 
-An update fixes what the current session changed. An audit finds what earlier sessions left
-behind. Neither can find something nobody wrote down.
+An update fixes what the current session changed, and an audit finds what earlier sessions left
+behind, so an audit does both. Neither can find something nobody wrote down.
 
 **When it's worth running:**
 
@@ -109,7 +124,8 @@ behind. Neither can find something nobody wrote down.
 - when a session was misled by something wrong in the handoff
 
 **What it costs:** it takes minutes rather than seconds, and costs more than most commands. The
-longer the handoff, and the more project files its items name, the more it costs. So run one now
+longer the handoff, and the more project files its items name, the more it costs, since the
+update it starts with reads the whole handoff. So run one now
 and then, not after every update. In Claude Code you can keep working while it runs; in Codex,
 the chat waits.
 
@@ -162,5 +178,6 @@ When the agent finds no handoff at a project's path, it lists the existing ones 
 one of them is this project's under an old address, as happens when a project is renamed,
 transferred, published for the first time, or moved to another folder. It marks each one in
 another PC's folder under `pcs/` as that PC's, since moving one takes it from the PC that uses it,
-as you might when a folder moves to a new PC. It offers to move the one you pick, or, if none is
-this project's, to create a new handoff. Either way, it asks first, then commits and pushes.
+as you might when a folder moves to a new PC. It offers to move the one you pick, with its further
+files, or, if none is this project's, to create a new handoff. Either way, it asks first, then
+commits and pushes.

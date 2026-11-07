@@ -14,7 +14,8 @@ changed on 2026-10-29 (git's long-path option from a clone's start, handoffs, kn
 the `LONG` line), 2026-10-30 (the room beside a handoff), 2026-10-31 (a decision of its own,
 a second read after a push GitHub rejects, and `LONG` out of `/dev-home sync`'s summary), and
 2026-11-02 (cutting only a handoff's last folder, dropping what's left at the cut's end, the
-length in the line for a path in `rules/` too long for Windows, and CRC-32 in place of SHA-256).
+length in the line for a path in `rules/` too long for Windows, and CRC-32 in place of SHA-256),
+and 2026-11-07 (the room beside a handoff used by further files).
 
 - **dev-home's folder.** Each run, setup checks that dev-home's folder path, plus the path budget,
   plus 30 characters, fits under 260 characters, so a folder of at most 89, and otherwise prints
@@ -40,10 +41,9 @@ length in the line for a path in `rules/` too long for Windows, and CRC-32 in pl
   whole, for commit messages and `gh`'s repository, and the issue draft's path under `.drafts/`
   uses the same folders. That shortens only past 61 characters of GitHub owner and repository
   together, or 54 of Azure DevOps organization, project, and repository, and joins on Azure
-  DevOps only past 44 of organization and project together. The room is for files beside a
-  handoff, planned but not designed: any path inside a handoff's folder, subfolders and `.md`
-  included, at most 60 characters. Their design confirms or changes that number before 1.0.0,
-  while a change needs no conversion. `facts.py` imports only Python's standard library, as a
+  DevOps only past 44 of organization and project together. The room is for a handoff's further
+  files ([0091: Further files](0091-further-files.md)), which sit flat in its folder, each name at
+  most 60 characters with `.md`. `facts.py` imports only Python's standard library, as a
   skill's script, so it can't import `internal/shared/`: it has its own copies of the path budget
   and of the length count, and a test checks that they match `paths.py`'s.
 - **`rules/`.** The end user's files in `mine/` get the `LONG` line below, like any other path,
@@ -116,11 +116,9 @@ length in the line for a path in `rules/` too long for Windows, and CRC-32 in pl
   without it a double hyphen before the hash would be common, and dropping them only makes the
   folder shorter (the developer, 2026-11-02).
 - The room: 60 characters, the cap on a file setup moves into `rules/` and on a knowledge note's
-  name, fits a folder per script with its plans, such as `report-builder/monthly-plan.md`. One
-  limit on the whole path inside a handoff's folder, not one per name as `rules/` and knowledge
-  notes have, because those files' layout isn't designed yet, and two levels of 60 would leave 18
-  characters for `handoffs/github/<owner>/<repo>/`. Room now, not later: files beside a handoff
-  after 1.0.0 would need every handoff folder between the two cutoffs cut again, a conversion.
+  name, fits a further file named for a script and its plan, such as
+  `report-builder-monthly-plan.md`. Room from the start: files beside a handoff added after
+  1.0.0 would have needed every handoff folder between the two cutoffs cut again, a conversion.
 - `LONG` is its own word, not `PROBLEM`, since a long path isn't a failure. A `PROBLEM` would fail
   setup's own commits whenever a file too long sits anywhere in dev-home, since they go through
   the sync (`commit_for_setup`), which lists uncommitted files on every run, and the skills stop on
@@ -177,5 +175,4 @@ length in the line for a path in `rules/` too long for Windows, and CRC-32 in pl
   - Checking the end user's skills on every run: 0.23 ms for 10 files, growing in the very case
     it's for, such as a skill that bundles a library.
 
-**Look again if:** Windows turns on long paths by default, or the design of files beside a handoff
-needs more than 60 characters.
+**Look again if:** Windows turns on long paths by default, or further files need longer names.
