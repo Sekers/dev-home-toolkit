@@ -58,6 +58,9 @@ for every handoff. Decided by the developer on 2026-10-30 (further files, from t
   reads, 64 of 168 commands in the transcripts, don't.
 - 60 characters confirms the room [0088: Path lengths](0088-path-lengths.md) reserved beside a
   handoff.
+- A name that differs only in case counts as taken: Windows and macOS file systems ignore case,
+  so `handoff.md` would be `HANDOFF.md` itself (found on 2026-11-07, when a handoff's items first
+  moved).
 
 **Costs:** an item with a file is kept in two places. Fresh agents kept summaries and files in step
 in every update tested, and the audit checks it.

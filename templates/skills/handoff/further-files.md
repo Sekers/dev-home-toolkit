@@ -25,9 +25,10 @@ reads them only when its work needs them. These rules hold for every handoff.
 
 - Name an item's file from its title or opening words, in lowercase letters, digits, and
   hyphens, cut so the name, with `.md`, is at most 60 characters, such as
-  `build-further-files.md`. Add `-2` when that name is taken. When an item says which part of
-  the repo it's about, such as one script in a repo of several, start its file's name with that
-  part's name, such as `report-builder-csv-export.md`.
+  `build-further-files.md`. Add `-2` when that name is taken; a name that differs from another
+  file's only in letter case, such as `handoff.md` beside `HANDOFF.md`, is taken. When an item
+  says which part of the repo it's about, such as one script in a repo of several, start its
+  file's name with that part's name, such as `report-builder-csv-export.md`.
 - An environment's file is named `environment-<name>.md` instead, with the name as its heading
   writes it, and each character other than a letter, digit, or hyphen written as a hyphen, such
   as `environment-WORK-PC.md`. It's cut to 60 characters too.
