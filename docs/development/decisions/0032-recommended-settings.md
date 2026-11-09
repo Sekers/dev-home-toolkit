@@ -5,13 +5,15 @@
 **Decision:** setup offers settings that dev-home-toolkit recommends for the agents, from a list in
 `templates/recommended-settings/recommended-settings.json`. Each entry has an id that is never
 reused, what it does, and the setting for each agent that has one, with any older form of it that
-the recommended value replaces. The first three are for Claude Code:
+the recommended value replaces. The first four are for Claude Code:
 `"attribution": false` (id `attribution-off`), which leaves commits and pull requests without a
 line naming the agent; `"feedbackSurveyRate": 0` (id `feedback-survey-off`), which stops the
-session quality survey and its request to upload the session's transcript; and
+session quality survey and its request to upload the session's transcript;
 `"remoteControlAtStartup": true` (id `remote-control-at-startup`), which connects Remote Control
 when each interactive session starts, so the session can be picked up from claude.ai/code or the
-Claude app.
+Claude app; and `"idleCompaction": false` (id `idle-compaction-off`), which stops Claude Code
+from compacting a long conversation the person has stepped away from, so their next message sends
+the whole conversation rather than a summary.
 
 - Setup offers one for each Claude folder set up whose `settings.json` doesn't already have the
   recommended value: the setting is missing, or set to something else. It offers none in a
@@ -90,8 +92,8 @@ Claude app.
 Changed on 2026-10-15, by the developer on 2026-10-19 (Remote Control at startup), by the
 developer on 2026-10-24 (plain words in place of a diff, what Enter picks, the Remote Control
 offer's words, keeping only the last copy of a setting written more than once, and no question
-about a change made after a yes), and by the developer on 2026-10-28 (each value shown, with what
-it means, in columns; the menu's one row).
+about a change made after a yes), by the developer on 2026-10-28 (each value shown, with what it
+means, in columns; the menu's one row), and by the developer on 2026-11-09 (idle compaction off).
 
 **Why:** these settings suit most people, but each changes the person's own file, so each needs
 their yes on each PC. Codex has neither of the first two: its commit and pull request attribution
@@ -116,6 +118,20 @@ and 2026-10-24). The page says a session that can't connect still starts, with a
 `--remote-control`; the setting is expected to do the same, not tested. That a value in
 `.claude.json` counts only where no settings file sets one is from Claude Code 2.1.309's own code
 (read 2026-10-24, not run).
+
+Idle compaction off was added by the developer on 2026-11-09. While auto-compact is on, Claude
+Code compacts a conversation of at least 200,000 tokens once the person has been away for about
+an hour, while the one-hour prompt cache is still warm, so their next message sends a summary
+instead of the whole conversation. It's on by default, and turning auto-compact off turns it off
+too. That's from Claude Code 2.1.319's own code (read 2026-11-09, not run), and the settings
+reference's entry, read through a summary the same day, agrees; its costs page says idle
+compaction "can use tokens while you're idle". A compaction the person didn't ask for replaces
+the conversation with a summary well before the context window fills, so details they come back
+for can be gone, and it uses tokens even for a session nobody resumes. The cost of turning it
+off: the first message after the cache lapses sends the whole conversation without the cache,
+which likely uses more than the compaction would have (not measured). Its offer says what each
+value means, so a person who prefers the summary can answer no. Since `true` is the default, the
+list gives it the same text as a missing setting, which names the auto-compact exception.
 
 The offers ask in plain words because each is an on-off choice whose effect words can say
 exactly, as Claude Code's own `/config` changes such settings with no diff. A diff would turn a

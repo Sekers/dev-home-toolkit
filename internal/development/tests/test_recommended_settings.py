@@ -47,7 +47,7 @@ def box(request: pytest.FixtureRequest) -> Iterator[Sandbox]:
 
 @pytest.fixture
 def claude(box: Sandbox) -> Iterator[Path]:
-    """~/.claude's settings.json, with none of the recommended settings in it, so all three wait
+    """~/.claude's settings.json, with none of the recommended settings in it, so all four wait
     for an answer. It's put back afterwards, with local-settings.json, ~/.claude.json, and their
     backups removed."""
     path = box.profile / ".claude" / "settings.json"
@@ -113,12 +113,12 @@ def test_a_sync_names_the_recommended_settings_waiting_and_changes_nothing(
     before = claude.read_bytes(), settings.read_bytes()
     result = sync(box)
     again = sync(box)
-    assert result.code == 0 and result.has_line(waiting(3)), str(result)
-    assert again.has_line(waiting(3)), str(again)
+    assert result.code == 0 and result.has_line(waiting(4)), str(result)
+    assert again.has_line(waiting(4)), str(again)
     assert (claude.read_bytes(), settings.read_bytes()) == before
     # The one with the recommended value already isn't counted.
     with_keys(claude, attribution=False)
-    assert sync(box).has_line(waiting(2))
+    assert sync(box).has_line(waiting(3))
 
 
 def test_a_folder_whose_settings_setup_cant_rewrite_is_offered_nothing(
@@ -157,7 +157,14 @@ def test_configure_alone_lists_the_recommended_settings_waiting_with_their_comma
     # Remote Control's false is a value the list knows, so it says what it means.
     off = "      Now:          false\n                    Remote Control is off at startup:"
     assert off in shown, shown
-    for setting_id in ("attribution-off", "feedback-survey-off", "remote-control-at-startup"):
+    assert "      Setting:      idleCompaction, in settings.json\n" in shown, shown
+    assert "      Recommended:  false\n                    Idle compaction is off:" in shown, shown
+    for setting_id in (
+        "attribution-off",
+        "feedback-survey-off",
+        "remote-control-at-startup",
+        "idle-compaction-off",
+    ):
         pattern = (
             rf"^      Yes:\s+--configure 'claudeCode\.recommendedSettings\.{setting_id}\+="
             r"~/\.claude@[0-9a-f]{12}'$"
@@ -173,7 +180,7 @@ def test_configure_alone_lists_the_recommended_settings_waiting_with_their_comma
     assert "--configure 'claudeCode.recommendedSettings-=~/.claude'" in shown, shown
     assert "--configure 'claudeCode.recommendedSettings?=~/.claude@<days>'" in shown, shown
     # The settings show the count, and the list for an agent sends it to the section above.
-    row = r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 3 not answered yet$"
+    row = r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 4 not answered yet$"
     assert result.has_line(row), str(result)
     pattern = r"^  ~/\.claude, attribution-off: not answered yet \(see Waiting for your answer\)\.$"
     assert result.has_line(pattern), str(result)
@@ -198,8 +205,8 @@ def test_the_settings_row_puts_each_folder_on_a_line_of_its_own(box: Sandbox, cl
     index = next(i for i, line in enumerate(result.lines) if line.startswith(first.rstrip()))
     row = result.lines[index : index + 2]
     column = row[0].index("~/.claude:")
-    assert row[0].endswith("~/.claude: 3 not answered yet;"), str(result)
-    assert row[1] == " " * column + "~/.claude-second: 2 not answered yet, 1 already set", str(
+    assert row[0].endswith("~/.claude: 4 not answered yet;"), str(result)
+    assert row[1] == " " * column + "~/.claude-second: 3 not answered yet, 1 already set", str(
         result
     )
 
@@ -227,7 +234,7 @@ def test_a_yes_in_chat_writes_the_setting_with_a_backup_then_saves_the_answer(
     assert answers(box) == {"attribution-off": True}
     # It isn't offered again, and the answer stays once it's done.
     again = sync(box)
-    assert again.has_line(waiting(2)) and not again.has_line(r"^SET\s"), str(again)
+    assert again.has_line(waiting(3)) and not again.has_line(r"^SET\s"), str(again)
 
 
 def test_a_yes_to_a_setting_written_twice_sets_it_once_and_says_only_that(
@@ -257,6 +264,7 @@ def test_the_listing_marks_each_setting_even_when_every_one_is_recommended(
         "Leave Claude Code's name out of your commits and pull requests",
         "Turn off Claude Code's session quality survey",
         "Connect Remote Control when each Claude Code session starts",
+        "Stop Claude Code from compacting a long conversation while you're away",
     ):
         assert listing.has_line(rf"^  {re.escape(name)}\s+recommended$"), str(listing)
 
@@ -265,7 +273,7 @@ def test_a_yes_folder_typed_in_another_case_is_the_same_folder(box: Sandbox, cla
     # The same run's NEW line doesn't count that setting as waiting any more.
     yes = command(configure(box), "claudeCode.recommendedSettings.attribution-off")
     result = configure(box, yes.replace("~/.claude@", "~/.CLAUDE@"))
-    assert result.code == 0 and result.has_line(waiting(2)), str(result)
+    assert result.code == 0 and result.has_line(waiting(3)), str(result)
     assert answers(box) == {"attribution-off": True}
 
 
@@ -308,18 +316,20 @@ def test_all_recommended_in_chat_takes_the_recommended_ones_and_keeps_a_value_so
     result = configure(box, every)
     assert result.code == 0, str(result)
     pattern = (
-        r"^SET\s+Claude Code settings in \.claude: set attribution to false and "
-        r"feedbackSurveyRate to 0 in "
+        r"^SET\s+Claude Code settings in \.claude: set attribution to false, "
+        r"feedbackSurveyRate to 0, and idleCompaction to false in "
     )
     assert result.has_line(pattern), str(result)
     assert len(list(claude.parent.glob(claude.name + ".bak-*"))) == 1
     written = settings_of(claude)
     assert written["attribution"] is False and written["feedbackSurveyRate"] == 0, written
     assert written["remoteControlAtStartup"] is False, written
+    assert written["idleCompaction"] is False, written
     assert answers(box) == {
         "attribution-off": True,
         "feedback-survey-off": True,
         "remote-control-at-startup": False,
+        "idle-compaction-off": True,
     }
     # This PC's settings got one backup, for the no and the yeses together.
     settings = box.toolkit / "local-settings.json"
@@ -350,7 +360,7 @@ def test_a_no_or_a_reminder_in_chat_is_saved_and_a_reminder_never_replaces_an_an
         "attribution-off": False,
         "feedback-survey-off": {"$state": "remind", "on": on},
     }
-    assert sync(box).has_line(waiting(1))
+    assert sync(box).has_line(waiting(2))
     refused = configure(box, f"{name}.attribution-off?=~/.claude@3")
     pattern = r"^PROBLEM\s+attribution-off in ~/\.claude already has an answer, no, and a reminder"
     assert refused.code == 1 and refused.has_line(pattern), str(refused)
@@ -358,6 +368,7 @@ def test_a_no_or_a_reminder_in_chat_is_saved_and_a_reminder_never_replaces_an_an
     none = configure(box, f"{name}-=~/.claude")
     assert none.code == 0, str(none)
     assert answers(box)["remote-control-at-startup"] is False
+    assert answers(box)["idle-compaction-off"] is False
     assert answers(box)["feedback-survey-off"] == {"$state": "remind", "on": on}
     assert "attribution" not in settings_of(claude)
     assert not sync(box).has_line(r"^NEW\s")
@@ -385,7 +396,7 @@ def test_a_value_in_claude_json_counts_where_settings_json_has_none(
     # needs nothing, and a false there is a value someone chose.
     older = box.profile / ".claude.json"
     write_text(older, json.dumps({"remoteControlAtStartup": True, "projects": {}}) + "\n")
-    assert sync(box).has_line(waiting(2))
+    assert sync(box).has_line(waiting(3))
     write_text(older, json.dumps({"remoteControlAtStartup": False}) + "\n")
     listing = configure(box)
     now = "      Now:          false\n"
@@ -411,7 +422,7 @@ def test_a_yes_whose_value_changed_later_is_shown_and_can_be_set_again(
     assert configure(box, yes).code == 0
     with_keys(claude, attribution={"commit": "Mine"})
     result = sync(box)
-    assert result.has_line(waiting(2)) and not result.has_line(r"^SET\s"), str(result)
+    assert result.has_line(waiting(3)) and not result.has_line(r"^SET\s"), str(result)
     assert settings_of(claude)["attribution"] == {"commit": "Mine"}
     listing = configure(box)
     pattern = (
@@ -422,7 +433,7 @@ def test_a_yes_whose_value_changed_later_is_shown_and_can_be_set_again(
     )
     assert listing.has_line(pattern), str(listing)
     row = r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 1 yes \(1 changed since\), "
-    assert listing.has_line(row + r"2 not answered yet$"), str(listing)
+    assert listing.has_line(row + r"3 not answered yet$"), str(listing)
     again = configure(box, command(listing, "claudeCode.recommendedSettings.attribution-off"))
     assert again.code == 0 and settings_of(claude)["attribution"] is False, str(again)
     # Taken out, as /config's default does, it's named as missing, not as a value.
@@ -489,7 +500,7 @@ def test_answers_to_recommended_settings_are_checked_with_this_pcs_settings(
         r"as not answered yet\. Fix it there\.$"
     )
     assert result.code == 1 and result.has_line(problem), str(result)
-    assert result.has_line(waiting(2)), str(result)
+    assert result.has_line(waiting(3)), str(result)
     kept = settings_of(path)
     assert kept["claudeCode"]["folders"]["~/.claude"]["recommendedSettings"] == {
         "attribution-off": True,
@@ -525,7 +536,8 @@ def test_the_menu_removes_a_gone_folders_answers_to_its_recommended_settings(
 def test_a_sync_reads_claude_json_only_for_a_setting_that_can_wait(
     box: Sandbox, claude: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Remote Control is answered, so only attribution is judged, which never needs .claude.json.
+    # Remote Control is answered, so only attribution and idle compaction are judged, which never
+    # need .claude.json.
     path = box.toolkit / "local-settings.json"
     saved = settings_of(path)
     saved["claudeCode"]["folders"]["~/.claude"]["recommendedSettings"] = {
@@ -542,7 +554,10 @@ def test_a_sync_reads_claude_json_only_for_a_setting_that_can_wait(
 
     monkeypatch.setattr(code, "read_json_object", no_reads)
     found = run.recommended_offers(settings)
-    assert [offer.setting.id for _, _, offers in found for offer in offers] == ["attribution-off"]
+    assert [offer.setting.id for _, _, offers in found for offer in offers] == [
+        "attribution-off",
+        "idle-compaction-off",
+    ]
 
 
 def test_a_yes_is_judged_on_the_read_the_write_plans_on(box: Sandbox, claude: Path) -> None:
@@ -577,6 +592,7 @@ def test_a_folder_with_every_recommended_setting_answered_costs_a_sync_no_reads(
         "attribution-off": True,
         "feedback-survey-off": False,
         "remote-control-at-startup": {"$state": "remind", "on": on},
+        "idle-compaction-off": True,
     }
     write_text(path, json.dumps(saved, indent=2) + "\n")
     run = shared_module(box, "setup").Setup(quiet=True, what_if=False)
@@ -618,6 +634,9 @@ def test_a_recommended_settings_plan_sets_each_value_in_its_place_or_last(box: S
         ("attribution-off", {"commit": "Mine"}, ", a custom value", ""),
         ("attribution-off", True, ", an unknown value", ""),
         ("attribution-off", None, ", an unknown value", ""),
+        ("idle-compaction-off", True, "", "Idle compaction is on, unless auto-compact is off:"),
+        ("idle-compaction-off", None, ", an unknown value", ""),
+        ("idle-compaction-off", "false", ", an unknown value", ""),
     ],
 )
 def test_a_value_setup_doesnt_recommend_says_what_it_means_only_where_known(

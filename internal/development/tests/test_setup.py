@@ -1461,7 +1461,7 @@ def test_claude_code_folders_out_of_order_are_shown_and_put_in_order(
     )
     assert listing.has_line(folders), str(listing)
     nine = next(i for i, line in enumerate(listing.lines) if re.match(r"^  9\s", line))
-    assert listing.lines[nine].endswith("~/.claude: 3 already set;"), str(listing)
+    assert listing.lines[nine].endswith("~/.claude: 4 already set;"), str(listing)
     assert listing.lines[nine + 1].strip().startswith("~/.claude-second: "), str(listing)
     assert result.code == 0 and not result.has_line(r"^SET\s+This PC's settings"), str(result)
     order = ["~/.claude", "~/.claude-gone", "~/.claude-second"]
@@ -2753,7 +2753,7 @@ def test_configure_alone_shows_the_settings_and_how_to_change_them(
     assert result.has_line(pattern), str(result)
     # The recommended settings, which the sandbox's folder has already, so the list has nothing
     # more about them.
-    pattern = r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 3 already set$"
+    pattern = r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 4 already set$"
     assert result.has_line(pattern), str(result)
     assert not result.has_line(r"^Recommended Claude Code settings$"), str(result)
     pattern = r"^\s+claudeCode\.recommendedSettings\.<id>\+=<folder>@<fingerprint>$"
@@ -2998,7 +2998,12 @@ def test_the_recommended_settings_are_the_ones_decided(box: Sandbox) -> None:
     # Reading the list checks every rule the reader knows, such as a summary's length.
     module = shared_module(box, "recommended_settings")
     entries = {entry.id: entry for entry in module.load_recommended()}
-    assert list(entries) == ["attribution-off", "feedback-survey-off", "remote-control-at-startup"]
+    assert list(entries) == [
+        "attribution-off",
+        "feedback-survey-off",
+        "remote-control-at-startup",
+        "idle-compaction-off",
+    ]
     claude = {name: entry.agents["claudeCode"] for name, entry in entries.items()}
     assert all(list(entry.agents) == ["claudeCode"] for entry in entries.values())
     attribution = claude["attribution-off"]
@@ -3007,10 +3012,16 @@ def test_the_recommended_settings_are_the_ones_decided(box: Sandbox) -> None:
     assert claude["feedback-survey-off"].value == 0
     remote = claude["remote-control-at-startup"]
     assert remote.value is True and remote.older_place == ".claude.json" and remote.needs
+    # Claude Code's default is true, so a true there means the same as none.
+    idle = claude["idle-compaction-off"]
+    assert idle.value is False and not idle.older_forms and not idle.older_place
+    assert [known.value for known in idle.other_values] == [True]
+    assert idle.other_values[0].when == idle.when_missing
     assert module.keys_for("claudeCode") == [
         "attribution",
         "feedbackSurveyRate",
         "remoteControlAtStartup",
+        "idleCompaction",
     ]
 
 

@@ -3387,6 +3387,7 @@ RECOMMENDED = r"^Make these changes in its settings\.json\? "
 ATTRIBUTION = r"^Leave Claude Code's name out of your commits and pull requests\? "
 SURVEY = r"^Turn off Claude Code's session quality survey\? "
 REMOTE = r"^Connect Remote Control when each Claude Code session starts\? "
+IDLE = r"^Stop Claude Code from compacting a long conversation while you're away\? "
 SET_AGAIN = rf"{ATTRIBUTION}'y' to set it again, 'n', or Enter to keep it as it is \[y/n/Enter\]: $"
 
 
@@ -3458,22 +3459,23 @@ def test_a_run_by_hand_offers_the_recommended_settings_and_enter_takes_the_recom
     )
     assert re.search(remote, out, re.M), out
     pattern = (
-        r"^SET\s+Claude Code settings in \.claude: set attribution to false and "
-        r"feedbackSurveyRate to 0, and added dev-home-toolkit to permissions\."
-        r"additionalDirectories in .*settings\.json\. Backup of the old file: "
+        r"^SET\s+Claude Code settings in \.claude: set attribution to false, "
+        r"feedbackSurveyRate to 0, and idleCompaction to false, and added dev-home-toolkit to "
+        r"permissions\.additionalDirectories in .*settings\.json\. Backup of the old file: "
     )
     assert re.search(pattern, out, re.M), out
     assert len(set(waiting.parent.glob("settings.json.bak-*")) - backups) == 1, out
     assert written["attribution"] is False and written["feedbackSurveyRate"] == 0, written
-    assert written["remoteControlAtStartup"] is False, written
+    assert written["remoteControlAtStartup"] is False and written["idleCompaction"] is False
     assert len(written["permissions"]["additionalDirectories"]) == 2, written
     assert recommended_answers(settings) == {
         "attribution-off": True,
         "feedback-survey-off": True,
         "remote-control-at-startup": False,
+        "idle-compaction-off": True,
     }
     # The menu, after the questions, counts the yeses the work then writes.
-    row = r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 2 yes, 1 no$"
+    row = r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 3 yes, 1 no$"
     assert re.search(row, out, re.M), out
 
 
@@ -3484,17 +3486,22 @@ def test_each_recommended_setting_can_be_answered_skipped_or_given_a_reminder(
     person: Person,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    person.answers.update({RECOMMENDED: "e", ATTRIBUTION: "y", SURVEY: "7", REMOTE: "s"})
+    person.answers.update({RECOMMENDED: "e", ATTRIBUTION: "y", SURVEY: "7", REMOTE: "s", IDLE: "n"})
     returned = setup_here(box)
     out = capsys.readouterr().out
     assert returned == 0, out
     assert f"Setup asks again from {in_days(7)}." in out, out
     reminder = {"$state": "remind", "on": in_days(7)}
-    expected = {"attribution-off": True, "feedback-survey-off": reminder}
+    expected = {
+        "attribution-off": True,
+        "feedback-survey-off": reminder,
+        "idle-compaction-off": False,
+    }
     assert recommended_answers(settings) == expected
     written = json.loads(waiting.read_text(encoding="utf-8"))
     assert written["attribution"] is False, written
     assert "feedbackSurveyRate" not in written and "remoteControlAtStartup" not in written, written
+    assert "idleCompaction" not in written, written
     # Skip saved nothing, so the next run asks about that one alone: its folder and what it is
     # first, then its own question.
     person.asked.clear()
@@ -3524,7 +3531,7 @@ def test_no_answer_to_the_recommended_settings_gives_the_new_line_a_sync_gives(
     assert returned == 0, out
     assert any(re.search(RECOMMENDED, asked) for asked in person.asked), person.asked
     pattern = (
-        r"^NEW\s+Setup has no answer yet about 3 settings dev-home-toolkit recommends for Claude "
+        r"^NEW\s+Setup has no answer yet about 4 settings dev-home-toolkit recommends for Claude "
         r"Code in ~/\.claude, so it leaves them as they are\. "
     )
     assert re.search(pattern, out, re.M), out
@@ -3556,9 +3563,11 @@ def test_the_work_leaves_out_a_yes_whose_value_changed_after_the_answer(
     assert re.search(pattern, out, re.M), out
     assert written["attribution"] == {"commit": "Changed meanwhile"}, written
     assert written["feedbackSurveyRate"] == 0 and written["remoteControlAtStartup"] is True
+    assert written["idleCompaction"] is False, written
     assert recommended_answers(settings) == {
         "feedback-survey-off": True,
         "remote-control-at-startup": True,
+        "idle-compaction-off": True,
     }
 
 
@@ -3581,8 +3590,9 @@ def test_the_work_leaves_out_each_yes_in_a_settings_file_it_wont_rewrite_any_mor
     out = capsys.readouterr().out
     assert returned == 0, out
     pattern = (
-        r"^NEW\s+Claude Code settings in \.claude: left attribution, feedbackSurveyRate, and "
-        r"remoteControlAtStartup as they are in .*settings\.json, since setup won't change the "
+        r"^NEW\s+Claude Code settings in \.claude: left attribution, feedbackSurveyRate, "
+        r"remoteControlAtStartup, and idleCompaction as they are in .*settings\.json, since setup "
+        r"won't change the "
         r"file now: it is not plain JSON .*\. Setup asks again\.$"
     )
     assert re.search(pattern, out, re.M), out
@@ -3598,12 +3608,13 @@ def test_the_menu_keeps_a_yes_whose_value_changed_at_enter_and_sets_it_again_at_
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     # Setup never changes it back by itself: the menu shows the value, Enter keeps it as it is,
-    # and only a y writes it again. The two the folder has already aren't asked about.
+    # and only a y writes it again. The three the folder has already aren't asked about.
     with_keys(
         waiting,
         attribution={"commit": "Mine"},
         feedbackSurveyRate=0,
         remoteControlAtStartup=True,
+        idleCompaction=False,
     )
     saved = json.loads(settings.read_text(encoding="utf-8"))
     saved["claudeCode"]["folders"]["~/.claude"]["recommendedSettings"] = {"attribution-off": True}
@@ -3615,7 +3626,7 @@ def test_the_menu_keeps_a_yes_whose_value_changed_at_enter_and_sets_it_again_at_
     assert kept == 0 and attribution == {"commit": "Mine"}, out
     row = (
         r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 1 yes \(1 changed since\), "
-        r"2 already set$"
+        r"3 already set$"
     )
     assert re.search(row, out, re.M), out
     assert "      Your answer:  yes, but the value changed since\n" in out, out
@@ -3639,7 +3650,7 @@ def test_a_yes_that_replaced_a_no_and_is_left_out_takes_the_no_back_so_it_asks_a
 ) -> None:
     # The person's last answer was a yes, which couldn't be written, so the no it replaced goes
     # too, and the offer comes back, as the NEW line says.
-    with_keys(waiting, feedbackSurveyRate=0, remoteControlAtStartup=True)
+    with_keys(waiting, feedbackSurveyRate=0, remoteControlAtStartup=True, idleCompaction=False)
     saved = json.loads(settings.read_text(encoding="utf-8"))
     saved["claudeCode"]["folders"]["~/.claude"]["recommendedSettings"] = {"attribution-off": False}
     write_text(settings, json.dumps(saved, indent=2) + "\n")

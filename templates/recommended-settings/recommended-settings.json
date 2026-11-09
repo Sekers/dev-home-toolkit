@@ -43,6 +43,21 @@
         ],
         "needs": "It needs a claude.ai sign-in on a Pro, Max, Team, or Enterprise plan, and on Team and Enterprise, an Owner must turn Remote Control on first. Where it can't connect, each session shows a notice; switch it off in /config."
       }
+    },
+    "idle-compaction-off": {
+      "summary": "Stop Claude Code from compacting a long conversation while you're away",
+      "claudeCode": {
+        "key": "idleCompaction",
+        "value": false,
+        "whenRecommended": "Idle compaction is off: Claude Code never compacts a long conversation just because you've stepped away from it, so your next message sends the whole conversation, not a summary.",
+        "whenMissing": "Idle compaction is on, unless auto-compact is off: when you step away from a long conversation, Claude Code can compact it, which uses tokens while you're away, and your next message then sends a summary instead of the whole conversation.",
+        "otherValues": [
+          {
+            "value": true,
+            "when": "Idle compaction is on, unless auto-compact is off: when you step away from a long conversation, Claude Code can compact it, which uses tokens while you're away, and your next message then sends a summary instead of the whole conversation."
+          }
+        ]
+      }
     }
   }
 }
