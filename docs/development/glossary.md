@@ -89,8 +89,8 @@ as "both tools" for Claude Code and Codex.
   its default until it's answered. It isn't missing, which means nothing is recorded yet.\
   _Avoid_: new, pending, unset.
 - **Summary** (`summary`): one sentence of plain text for people, shown in notices and menus, for
-  a skill, a built-in rule, or a release (not built yet). It isn't a skill's `description`, which
-  is for agents deciding when to load it.\
+  a skill, a built-in rule, or a release (not built yet for rules and releases). It isn't a
+  skill's `description`, which is for agents deciding when to load it.\
   _Avoid_: description, blurb, tagline.
 - **Used for** (`usedFor`): what a skill uses a program for, in that program's `dependsOn` entry,
   worded to finish "the skill uses it for".\

@@ -53,6 +53,9 @@ and the Skills section's questions, row, and words for an answer).
   - The main menu's `a` goes through the section's questions too, without opening it. The list
     for an agent leaves the row out: its own skills section lists the skills, from what setup
     recorded, with no planning.
+  - Before the menu, a run of setup by hand lists the skills and preferences with no answer, as
+    the section's rows with no numbers, and asks "Change any of these? [y/N]": a yes opens the
+    section ([0035: Skills per PC](0035-skills-per-pc.md)).
 - An agent can't answer at a console, so it names one setting per run:
   `--configure '<name>=<value>'`, with a plain value, always in single quotes: `true` or `false`,
   a whole number of hours, a path, or `default` for a setting with a default. A folder takes

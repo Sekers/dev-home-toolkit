@@ -623,8 +623,10 @@ def test_asks_each_question_whose_answer_isnt_saved_yet_then_never_again(
     write_text(settings, json.dumps(saved, indent=2) + "\n")
     later = box.profile / ".claude-later"
     later.mkdir()
-    # A list of one names its folder, says what a yes does, and asks only about that folder.
-    person.answers.update({UPDATES: "n", THIS_FOLDER: "n"})
+    # A list of one names its folder, says what a yes does, and asks only about that folder. The
+    # skills and the preference with no answer are asked about once, too: Enter saves each one's
+    # default.
+    person.answers.update({UPDATES: "n", THIS_FOLDER: "n", CHANGE_SKILLS: ""})
     try:
         returned = setup_here(box)
         written = json.loads(settings.read_text(encoding="utf-8"))
@@ -636,8 +638,17 @@ def test_asks_each_question_whose_answer_isnt_saved_yet_then_never_again(
     assert returned == 0 and again == 0, out
     # Every run by hand shows the settings menu too.
     questions = [prompt for prompt in person.asked if not re.search(MENU, prompt)]
-    assert len(asked) == 3 and re.search(MENU, asked[-1]), asked
-    assert questions == asked[:2], person.asked
+    assert len(asked) == 4 and re.search(MENU, asked[-1]), asked
+    assert questions == asked[:3], person.asked
+    default = {"addToAgents": {"$state": "default"}}
+    assert written["skills"] == {
+        "handoff": {
+            **default,
+            "preferences": {"includeSecurityBugsInIssueOffers": {"$state": "default"}},
+        },
+        "knowledge": default,
+        "mine": default,
+    }, written
     assert re.search(rf"^Claude Code folder: {re.escape(str(later))}$", out, re.M), out
     assert "A 'yes' sets up dev-home's skills and rules there." in out, out
     assert "A 'no' removes all of that, if it's there." in " ".join(out.split()), out
@@ -1661,6 +1672,8 @@ def test_the_menu_says_when_dev_homes_check_interval_is_used(
 
 # The Skills section, which the menu's Skills row opens.
 SKILLS_MENU = r"^Number to change, 'a' to go through them all, or Enter to go back: $"
+# The question a run by hand asks while a skill or a preference has no answer.
+CHANGE_SKILLS = r"^Change any of these\? \[y/N\]: $"
 # The answers a question about a setting with a default takes, which go on a line of their own
 # after a question too long to share one.
 WITH_DEFAULT = r"'y', 'n', or 'd' for the default \((yes|no)\) \[[yY]/[nN]/[dD]\]: $"
@@ -1876,6 +1889,122 @@ def test_the_skills_section_offers_no_answer_for_a_skill_whose_name_has_a_dot(
     assert not any("my.notes" in asked for asked in person.asked), person.asked
     assert "my" not in saved["skills"] and "my.notes" not in saved["skills"], saved
     assert json.loads(before)["skills"].keys() <= saved["skills"].keys(), saved
+
+
+def test_a_run_by_hand_lists_what_has_no_answer_and_enter_saves_each_default(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # After the folders' questions, before the menu; dev-home, always added, isn't listed. Each
+    # default is saved, so the next run by hand doesn't ask again.
+    person.answers.update({CHANGE_SKILLS: "", MENU: ""})
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    saved = json.loads(settings.read_text(encoding="utf-8"))
+    asked = list(person.asked)
+    again = setup_here(box)
+    capsys.readouterr()
+    assert returned == 0 and again == 0, out
+    listed = [
+        "These have no answer yet, so each follows its default:",
+        "",
+        "Skills added to your agents on this PC",
+        "  handoff    yes (the default)",
+        "    Keep a private note for each project: where the work stands and what's next",
+        "  knowledge  yes (the default)",
+        "    Keep a private knowledge base of what you learn in coding and AI work",
+        "  mine       yes (the default)",
+        "",
+        "handoff skill preferences",
+        "  Include security bugs in GitHub issue offers   yes (the default)",
+        "",
+    ]
+    lines = out.splitlines()
+    start = lines.index(listed[0])
+    assert lines[start : start + len(listed)] == listed, out
+    assert [re.search(CHANGE_SKILLS, p) is not None for p in asked] == [True, False], asked
+    default = {"$state": "default"}
+    assert saved["skills"]["handoff"] == {
+        "addToAgents": default,
+        "preferences": {"includeSecurityBugsInIssueOffers": default},
+    }, saved
+    assert saved["skills"]["knowledge"] == saved["skills"]["mine"] == {"addToAgents": default}
+    assert not any(re.search(CHANGE_SKILLS, p) for p in person.asked[len(asked) :]), person.asked
+
+
+def test_a_yes_opens_the_skills_section_and_leaving_it_saves_the_default_of_the_rest(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    person.answers.update(
+        {
+            CHANGE_SKILLS: "y",
+            SKILLS_MENU: ["3", ""],
+            add_question("knowledge"): "n",
+            MENU: "",
+        }
+    )
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    saved = json.loads(settings.read_text(encoding="utf-8"))
+    assert returned == 0, out
+    assert "dev-home-toolkit settings: Skills" in out, out
+    default = {"$state": "default"}
+    assert saved["skills"]["knowledge"] == {"addToAgents": False}, saved
+    assert saved["skills"]["mine"] == {"addToAgents": default}, saved
+    assert saved["skills"]["handoff"]["preferences"] == {
+        "includeSecurityBugsInIssueOffers": default
+    }, saved
+
+
+@pytest.mark.parametrize("where", ["at the question", "in the Skills section"])
+def test_input_that_ends_while_asking_about_skills_saves_nothing(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str], where: str
+) -> None:
+    # As when a person closes the console: each item stays with no answer, so a later run by
+    # hand asks again.
+    before = json.loads(settings.read_text(encoding="utf-8"))["skills"]
+    if where == "in the Skills section":
+        person.answers.update({CHANGE_SKILLS: "y"})
+    setup_here(box)
+    capsys.readouterr()
+    assert json.loads(settings.read_text(encoding="utf-8"))["skills"] == before
+
+
+def test_a_skill_that_cant_be_answered_here_never_asks_about_skills(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # One for another operating system, and one with a dot in its name, each with a preference:
+    # with every other skill answered, nothing is asked.
+    elsewhere = "macos" if sys.platform != "darwin" else "windows"
+    loud = {"preferences": {"loud": {"default": True, "label": "Be loud"}}}
+    declared = {
+        "far": {"supportedOn": [{"type": "os", "anyOf": [elsewhere]}], **loud},
+        "my.notes": loud,
+    }
+    folders = []
+    for name, entry in declared.items():
+        folder = box.content / "skills" / name
+        write_text(folder / "SKILL.md", f"---\nname: {name}\ndescription: A test skill.\n---\n")
+        write_text(folder / "dev-home-skill.json", json.dumps(entry) + "\n")
+        folders.append(folder)
+
+    def answered(data: dict[str, Any]) -> None:
+        for name in ("handoff", "knowledge", "mine"):
+            data["skills"][name]["addToAgents"] = True
+        data["skills"]["handoff"]["preferences"] = {"includeSecurityBugsInIssueOffers": True}
+
+    edit(settings, answered)
+    person.answers.update({MENU: ""})
+    try:
+        setup_here(box)
+        out = capsys.readouterr().out
+    finally:
+        for folder in folders:
+            for skills in SKILLS_FOLDERS:
+                if link_target(box.profile / skills / folder.name) is not None:
+                    remove_link(box.profile / skills / folder.name)
+            shutil.rmtree(folder)
+    assert not any(re.search(CHANGE_SKILLS, p) for p in person.asked), person.asked
+    assert "These have no answer yet" not in out, out
 
 
 def test_color_never_shifts_the_skills_sections_columns(
@@ -3312,7 +3441,8 @@ def test_at_a_console_setups_own_file_with_no_copy_asks_nothing_about_the_skills
         copy.write_bytes(copy_before)
     out = capsys.readouterr().out
     assert returned == 0, out
-    assert all(re.search(MENU, prompt) for prompt in person.asked), person.asked
+    asked = [p for p in person.asked if not re.search(MENU, p) and not re.search(CHANGE_SKILLS, p)]
+    assert asked == [], person.asked
     assert "didn't write" not in out and waiting_files(box) == [], out
 
 
@@ -3928,7 +4058,7 @@ def test_the_menu_keeps_a_yes_whose_value_changed_at_enter_and_sets_it_again_at_
     assert re.search(row, out, re.M), out
     assert "      Your answer:  yes, but the value changed since\n" in out, out
     assert "      Now:          true, as recommended\n" in out, out
-    asked = [prompt for prompt in person.asked if not re.search(MENU, prompt)]
+    asked = [p for p in person.asked if not re.search(MENU, p) and not re.search(CHANGE_SKILLS, p)]
     assert len(asked) == 1 and re.search(SET_AGAIN, asked[0]), person.asked
     again = setup_here(box)
     out = capsys.readouterr().out

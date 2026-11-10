@@ -6,9 +6,10 @@ aren't built.
 
 **Decision:** every question that offers something a person can take or turn down uses the same
 answers, built and planned offers alike: issue and knowledge candidates, setup's optional lists
-(skills and recommended settings), the `NEW` line, dev-home-toolkit updates, and copied skills.
-Built-in rules have answers of their own, a departure below. Changed on 2026-10-16, 2026-10-18,
-and 2026-10-24 (a recommended setting is an offer, with no diff to approve). Two terms:
+(Claude Code folders and recommended settings), the `NEW` line, dev-home-toolkit updates, and
+copied skills. Built-in rules, and skills at a run of setup by hand, have answers of their own,
+departures below. Changed on 2026-10-16, 2026-10-18, 2026-10-24 (a recommended setting is an
+offer, with no diff to approve), and 2026-11-09 (skills at a run by hand). Two terms:
 
 - **Session:** one conversation with an agent. A new conversation, or `/clear`, starts a new
   one; resuming a conversation continues it. At a terminal, one run of setup is one session.
@@ -47,6 +48,13 @@ at its default, so the line says once what happened and how to change it, with n
 new preference gets no line at all ([0036: New items](0036-new-items.md)). A folder setup hasn't
 asked about is still an offer, with the answers above, so a folder can hold a reminder
 ([0049: Answers in the settings](0049-answers-in-the-settings.md)).
+
+**Departure:** at a run of setup by hand, skills and preferences with no answer get one
+question, "Change any of these? [y/N]", in place of these answers. Each already works at its
+default, so there's nothing to take or turn down: Enter saves that default, and a yes opens the
+settings menu's Skills section to change any of them
+([0035: Skills per PC](0035-skills-per-pc.md),
+[0033: Prompts for optional lists](0033-prompts-for-optional-lists.md)).
 
 **Departure:** a new built-in rule is announced in one `NEW` line for its batch, once. Its answers
 are `added`, `not added`, `default`, and `unanswered`, as for skills, with no reminders: a rule

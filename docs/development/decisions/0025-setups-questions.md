@@ -15,6 +15,10 @@ give" in
   ([0052: Codex homes](0052-codex-homes.md)). A yes or a no is saved in `claudeCode.folders` or
   `codex.homes`, so it isn't asked again
   ([0034: Runs of setup by hand](0034-runs-of-setup-by-hand.md)).
+- Skills and their preferences with no answer: listed, each with the default it follows, under
+  one question, "Change any of these?", whose Enter saves each one's default, so it's asked once
+  ([0035: Skills per PC](0035-skills-per-pc.md)). A quiet run asks nothing about them, and each
+  follows its default.
 - A quiet run never asks, so it names each folder with no answer, in a line the agent passes on.
   A folder with no answer isn't set up, the session's own included, and setup removes the links
   it made in a folder with a no
@@ -22,7 +26,7 @@ give" in
 - A save removes a key in `local-settings.json` that nothing declares
   ([0049: Answers in the settings](0049-answers-in-the-settings.md)).
 
-Changed on 2026-10-13, 2026-10-14, 2026-10-15, and 2026-10-16.
+Changed on 2026-10-13, 2026-10-14, 2026-10-15, 2026-10-16, and 2026-11-09 (skills).
 
 **Why:** questions asked only on a first run missed what came later. A Claude folder made after a
 PC's first run was never offered, and a first run with `--quiet --content-dir` saved the file

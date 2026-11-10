@@ -823,16 +823,68 @@ def skills_lines(sections: list[tuple[str, list[SkillsRow]]]) -> tuple[list[str]
             if row.numbered:
                 number += 1
                 start = f"  {color(str(number), GREEN)}" + " " * (numbers - len(str(number)))
-            parts = [(f"{row.value}," if row.problem else row.value, "")]
-            if row.problem:
-                parts.append((row.problem, YELLOW))
-            first, *rest = console.wrap_parts(parts, console.LINE_WIDTH - column) or [""]
-            lines.append(f"{start}{row.name:<{width}}{first}")
-            lines += [" " * column + line for line in rest]
-            if row.summary:
-                indent = " " * (2 + numbers)
-                lines += console.wrap(row.summary, indent, indent + "  ")
+            name = f"{start}{row.name:<{width}}"
+            lines += row_lines(name, column, row.value, row, " " * (2 + numbers))
     return lines, picked
+
+
+def row_lines(start: str, column: int, value: str, row: SkillsRow, indent: str) -> list[str]:
+    """One row of the Skills section, or of the list of what has no answer yet: start, which
+    ends at the value column, then the value, with the row's problem after it in yellow, if any,
+    wrapped under the value column; then the summary, if any, set in by indent, wrapped with a
+    hanging indent."""
+    parts = [(f"{value}," if row.problem else value, "")]
+    if row.problem:
+        parts.append((row.problem, YELLOW))
+    first, *rest = console.wrap_parts(parts, console.LINE_WIDTH - column) or [""]
+    lines = [f"{start}{first}", *(" " * column + line for line in rest)]
+    if row.summary:
+        lines += console.wrap(row.summary, indent, indent + "  ")
+    return lines
+
+
+# What a run of setup by hand says before listing the skills and preferences with no answer yet,
+# and its question (decision 0035).
+UNANSWERED_INTRO = "These have no answer yet, so each follows its default:"
+UNANSWERED_QUESTION = "Change any of these?"
+
+
+def unanswered_sections(run: "Setup", settings: LocalSettings) -> list[tuple[str, list[SkillsRow]]]:
+    """The Skills section's rows with no answer yet, under their headings, leaving out any heading
+    with none: only rows a pick can answer, so never a skill this PC's operating system can't
+    run, or with a dot in its name, nor their preferences. A value of the wrong kind isn't one
+    with no answer: setup reports it, to be fixed where it is."""
+    found: list[tuple[str, list[SkillsRow]]] = []
+    for heading, rows in skills_section(run, settings):
+        waiting = []
+        for row in rows:
+            if row.setting is None:
+                continue
+            _, answered, usable = read_value(
+                get(settings.data, row.setting.path, MISSING), row.setting
+            )
+            if usable and not answered:
+                waiting.append(row)
+        if waiting:
+            found.append((heading, waiting))
+    return found
+
+
+def waiting_lines(sections: list[tuple[str, list[SkillsRow]]]) -> list[str]:
+    """The list a run of setup by hand shows of what has no answer yet: the Skills section's rows
+    with no numbers, each with its default, which it follows, and its state, if that differs,
+    and a skill's summary set in under its name."""
+    lines = [UNANSWERED_INTRO]
+    for heading, rows in sections:
+        gap = 2 if heading == SKILLS_HEADING else 3
+        width = max(len(row.name) for row in rows) + gap
+        lines += ["", color(heading, CYAN)]
+        for row in rows:
+            if row.setting is None:
+                continue
+            value = f"{value_text(row.setting, row.setting.default)} (the default)"
+            lines += row_lines(f"  {row.name:<{width}}", 2 + width, value, row, "    ")
+    return lines
 
 
 def skills_summary(run: "Setup", settings: LocalSettings) -> str:
@@ -863,6 +915,12 @@ def skills_summary(run: "Setup", settings: LocalSettings) -> str:
 def skills_menu(run: "Setup", settings: LocalSettings) -> bool:
     """The Skills section, shown again after each change, until Enter goes back: a number changes
     one setting, and a goes through them all. Returns whether an answer changed."""
+    return browse_skills(run, settings)[0]
+
+
+def browse_skills(run: "Setup", settings: LocalSettings) -> tuple[bool, bool]:
+    """The Skills section, as skills_menu shows it. Returns whether an answer changed, and
+    whether input ended, rather than Enter going back."""
     changed = False
     while True:
         lines, picked = skills_lines(skills_section(run, settings))
@@ -874,7 +932,7 @@ def skills_menu(run: "Setup", settings: LocalSettings) -> bool:
             f"Number to change, {console.key('a')} to go through them all, or Enter to go back"
         )
         if not choice:
-            return changed
+            return changed, choice is None
         text = choice.strip().lower()
         if text == "a":
             changed = go_through_skills(run, settings, picked) or changed

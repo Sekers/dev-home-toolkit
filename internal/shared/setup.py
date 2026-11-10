@@ -3688,6 +3688,34 @@ class Setup:
             self.ask_about_folders(agent, settings)
         self.ask_about_copies(settings, content_root, first_setup=first_setup)
         self.ask_about_recommended(settings)
+        # After the folders' questions, since a skill's state depends on their answers.
+        self.ask_about_skills(settings)
+
+    def ask_about_skills(self, settings: LocalSettings) -> None:
+        """At a run by hand, while a skill or a preference has no answer, lists each one, with
+        the default it follows, its state, and its summary, then asks whether to change any
+        (decision 0035). Enter, or a no, saves each one's default, so it isn't asked about again;
+        a yes opens the settings menu's Skills section, and leaving it saves the default of any
+        still unanswered. Input that ends without an answer saves nothing, and a quiet run never
+        asks."""
+        if not self.can_ask:
+            return
+        waiting = configure.unanswered_sections(self, settings)
+        if not waiting:
+            return
+        self.line()
+        for text in configure.waiting_lines(waiting):
+            self.line(text)
+        self.line()
+        answer = self.choose(configure.UNANSWERED_QUESTION, False)
+        if answer is None:
+            return
+        if answer and configure.browse_skills(self, settings)[1]:
+            return
+        for _, rows in configure.unanswered_sections(self, settings):
+            for row in rows:
+                if row.setting is not None:
+                    put(settings.data, row.setting.path, {STATE: "default"})
 
     def ask_about_folders(self, agent: Agent, settings: LocalSettings) -> None:
         """Asks about each of an agent's folders that setup knows of with no answer yet, or a

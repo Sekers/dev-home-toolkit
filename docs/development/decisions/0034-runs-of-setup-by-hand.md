@@ -1,13 +1,15 @@
 # 0034: Runs of setup by hand
 
-**Built:** yes, except: the questions about skills, in steps 2 and 3.
+**Built:** yes.
 
 **Decision:** every run of `setup.py` at a console goes in this order:
 
 1. dev-home first: its folder, then, when it's missing, clone or create it, with the repo's name,
    after checking that `gh` is there and signed in. If that fails, setup stops and saves nothing.
-2. The questions not answered yet: extra Claude folders and Codex, automatic updates, the
-   copies question, skills, and recommended settings. The copies question is always asked on a
+2. The questions not answered yet, in this order: automatic updates, extra Claude folders and
+   Codex, the copies question, recommended settings, and skills, which come after the folders'
+   questions, since a skill's state depends on them
+   ([0035: Skills per PC](0035-skills-per-pc.md)). The copies question is always asked on a
    PC's first setup, with `dev-home.json`'s answer as the default, since adding a PC is when that
    answer most often changes, except for a dev-home setup has just created, which nothing else
    can be using yet. Wherever a saved answer exists, a question shows it as the default.

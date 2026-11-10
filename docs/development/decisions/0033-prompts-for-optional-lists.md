@@ -1,10 +1,9 @@
 # 0033: Prompts for optional lists
 
-**Built:** yes, except: the list of skills, which isn't built. Claude Code folders and recommended
-settings are asked through it.
+**Built:** yes.
 
-**Decision:** every list of optional items setup offers, recommended settings and skills now and
-later lists such as built-in rules, is asked with one prompt: **All**, **All recommended** (the
+**Decision:** every list of optional items setup offers, Claude Code folders and recommended
+settings now, and later lists such as built-in rules, is asked with one prompt: **All**, **All recommended** (the
 default, which Enter takes), **None**, or **Ask for each**, where each item's question defaults to
 whether it's recommended (`[Y/n]` or `[y/N]`); whether a recommended setting is recommended for a
 folder depends on what that folder's settings have now
@@ -25,8 +24,17 @@ value as "Enter keeps its value", since every item in it is a recommended settin
 know whether that value is the person's own choice.
 Changed on 2026-10-20, with skip and the reminders that
 [0040: Answers to offers](0040-answers-to-offers.md) set out, by the developer on 2026-10-24 (a
-recommended setting's default depends on the file), and on 2026-10-28 (rows and marks of a list's
-own).
+recommended setting's default depends on the file), on 2026-10-28 (rows and marks of a list's
+own), and on 2026-11-09 (skills' departure).
+
+**Departure:** skills and their preferences aren't asked through this prompt at a run of setup by
+hand. Those with no answer are listed, each with the default it follows, and one question asks
+"Change any of these? [y/N]": Enter saves each one's default, and a yes opens the settings menu's
+Skills section ([0035: Skills per PC](0035-skills-per-pc.md)). A skill already works at its
+default, so the question only offers a change; and the list mixes skills and preferences, two
+types of item, which this prompt would ask about one type at a time. New skills that arrive with
+a quiet sync get the `NEW` line's notice instead ([0036: New items](0036-new-items.md)). Decided
+with the developer on 2026-10-10, with its wording on 2026-11-09.
 
 **Why:** one prompt to learn, however long the lists grow, and each new list costs only its
 catalog. Someone in a hurry presses Enter, and someone careful goes through each. With every
