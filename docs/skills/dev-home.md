@@ -48,7 +48,7 @@ skill itself: [`SKILL.md`](../../templates/skills/dev-home/SKILL.md).
   added, and the list says so.
 - **Each PC adds every skill to your agents unless you say no there,** or the skill says it
   isn't recommended; `dev-home` is always added. To change it, ask, such as
-  `/dev-home configure don't add tidy on this PC`, which changes `skills.tidy.addedToAgents`. A
+  `/dev-home configure don't add tidy on this PC`, which changes `skills.tidy.addToAgents`. A
   skill that works only on another operating system isn't added, and one that works only in one
   agent goes only where that agent reads it. One that needs a program or a newer Python this PC
   lacks is still added, and the list says what's missing (see

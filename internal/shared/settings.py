@@ -47,8 +47,8 @@ SKILL_FIELDS = (
     "formerNames",
 )
 PREFERENCE_FIELDS = ("default", "label", "help", "formerNames")
-# Each skill's answer to whether this PC adds it to the agents, at skills.<skill>.addedToAgents.
-ADDED_TO_AGENTS = "addedToAgents"
+# Each skill's answer to whether this PC adds it to the agents, at skills.<skill>.addToAgents.
+ADD_TO_AGENTS = "addToAgents"
 # The rule for a skill's name (see name_problem): the Agent Skills standard's longest name; the
 # words claude.ai and Anthropic's API keep out of a skill's name; and the two names Claude Code
 # keeps for the skills it downloads from claude.ai, and skips. It saves them in a skills folder
@@ -576,7 +576,7 @@ class Skill:
         if self.always_added:
             return None
         return Setting(
-            f"skills.{self.name}.{ADDED_TO_AGENTS}",
+            f"skills.{self.name}.{ADD_TO_AGENTS}",
             "yes-no",
             self.recommended,
             True,
@@ -891,7 +891,7 @@ def unanswered_only(entry: object) -> bool:
 
 
 def saved_skill_path(data: dict[str, Any], skill: str, rest: str) -> str:
-    """Where a skill's setting is in this PC's settings, such as skills.handoff.addedToAgents,
+    """Where a skill's setting is in this PC's settings, such as skills.handoff.addToAgents,
     with the skill's name as the file has it, matched without case, or as given when the file
     has no entry for it."""
     saved = data.get("skills")
@@ -1141,7 +1141,7 @@ def check_settings(
             for group, saved in list(inner.items()):
                 where = f"skills.{skill}.{group}"
                 added = declared.skills[name].added_setting
-                if group == ADDED_TO_AGENTS and added is not None:
+                if group == ADD_TO_AGENTS and added is not None:
                     check_value(where, saved, added)
                 elif group != "preferences":
                     remove(inner, group, where, ("skills", skill, group))

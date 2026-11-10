@@ -45,7 +45,7 @@ it is: it adds no links to it, and removes none.
 
 `true` or `false`, and `true` when it's missing: whether a PC adds the skill to your agents until
 you choose. Each PC saves your choice in its `local-settings.json`, as
-`skills.<name>.addedToAgents`, and `/dev-home configure` changes it. The first time a PC's setup
+`skills.<name>.addToAgents`, and `/dev-home configure` changes it. The first time a PC's setup
 finds a skill you haven't chosen for, it names the skill once, in a `NEW` line, with whether it
 was added.
 

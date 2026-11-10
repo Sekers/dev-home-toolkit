@@ -65,7 +65,7 @@ def test_each_list_holds_exactly_what_the_code_writes(
         "updates.installAutomatically=default",
         "skills.handoff.preferences.includeSecurityBugsInIssueOffers=false",
         "skills.handoff.preferences.includeSecurityBugsInIssueOffers=default",
-        "skills.knowledge.addedToAgents=true",
+        "skills.knowledge.addToAgents=true",
         f"claudeCode.folders?={second.as_posix()}@3",
         "claudeCode.recommendedSettings.feedback-survey-off-=~/.claude",
         "claudeCode.recommendedSettings.attribution-off?=~/.claude@3",
@@ -303,7 +303,7 @@ def test_key_paths_name_made_up_names_and_declared_settings_by_placeholder() -> 
         "devHome": {"folder": "C:/dev-home"},
         "updates": {"installAutomatically": {"$state": "default"}},
         "claudeCode": {"folders": {"~/.claude-x": {"setUp": {"$state": "remind", "on": "x"}}}},
-        "skills": {"tidy": {"preferences": {"short": False}, "addedToAgents": True}},
+        "skills": {"tidy": {"preferences": {"short": False}, "addToAgents": True}},
     }
     paths = layouts.key_paths(data, part, {"devHome.folder", "updates.installAutomatically"})
     assert paths == {
@@ -313,5 +313,5 @@ def test_key_paths_name_made_up_names_and_declared_settings_by_placeholder() -> 
         "claudeCode.folders.<folder>.setUp.$state",
         "claudeCode.folders.<folder>.setUp.on",
         "skills.<skill>.preferences.<preference>",
-        "skills.<skill>.addedToAgents",
+        "skills.<skill>.addToAgents",
     }

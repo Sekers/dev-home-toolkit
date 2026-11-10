@@ -37,7 +37,7 @@ from .output import CYAN, GREEN, color, status_line
 from .paths import comparable, forward, is_inside, resolve_home, same_path, unsafe_reason
 from .recommended_settings import DONE, ids_for
 from .settings import (
-    ADDED_TO_AGENTS,
+    ADD_TO_AGENTS,
     AGENTS,
     AUTO_UPDATE,
     BY_PATH,
@@ -172,7 +172,7 @@ def usage() -> str:
             "?=<folder>@<days> asks again about each in that many days.",
         ),
         (
-            f"skills.<skill>.{ADDED_TO_AGENTS}=true|false",
+            f"skills.<skill>.{ADD_TO_AGENTS}=true|false",
             "Whether to add a skill to your agents on this PC.",
         ),
         ("skills.<skill>.preferences.<name>=true|false", "A preference a skill declares."),
@@ -1262,14 +1262,14 @@ def assign_recommended(
 
 def declared_setting(settings: LocalSettings, name: str) -> Setting:
     """One of dev-home-toolkit's own settings; whether a skill is added to the agents, named as
-    skills.<skill>.addedToAgents; or a skill's preference, named as
+    skills.<skill>.addToAgents; or a skill's preference, named as
     skills.<skill>.preferences.<name>; with its path spelled as the skill declares it. Raises
     SettingError for a skill or a preference that isn't declared, a skill whose
     dev-home-skill.json can't be read, or a skill that's always added."""
     if not name.startswith("skills."):
         return BY_PATH[name]
     parts = name.split(".")
-    if len(parts) == 3 and parts[2] == ADDED_TO_AGENTS and parts[1]:
+    if len(parts) == 3 and parts[2] == ADD_TO_AGENTS and parts[1]:
         listed = skill_declarations(settings.content_dir)
         skills = listed.skills
         found = find_skill(skills, parts[1])
@@ -1286,7 +1286,7 @@ def declared_setting(settings: LocalSettings, name: str) -> Setting:
         return added
     if len(parts) != 4 or parts[2] != "preferences" or not all(parts):
         raise SettingError(
-            f"A skill's setting is named skills.<skill>.{ADDED_TO_AGENTS}, or "
+            f"A skill's setting is named skills.<skill>.{ADD_TO_AGENTS}, or "
             f"skills.<skill>.preferences.<name> for a preference, not {name}."
         )
     preferences = skill_declarations(settings.content_dir).preferences

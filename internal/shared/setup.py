@@ -133,7 +133,7 @@ each home's writable_roots. Until Codex is answered yes or no, setup adds no lin
 and a sync names its homes in a NEW line, as for a folder. One reminder covers every home.
 
 Each skill is added to the agents on this PC, or not, by its answer in
-skills.<name>.addedToAgents, and dev-home always. A skill this PC has no answer for follows its
+skills.<name>.addToAgents, and dev-home always. A skill this PC has no answer for follows its
 default, from its dev-home-skill.json: added, unless it says it isn't recommended. Setup saves
 such a skill as unanswered, the one thing a quiet run writes for it, and names it once in a NEW
 line, with whether it was added. A skill goes into each skills folder whose agents meet its
@@ -249,7 +249,7 @@ from .recommended_settings import (
 from .recommended_settings import MISSING as MISSING_VALUE
 from .recommended_settings import shown as json_text
 from .settings import (
-    ADDED_TO_AGENTS,
+    ADD_TO_AGENTS,
     AUTO_UPDATE,
     BY_PATH,
     CLAUDE_CODE,
@@ -3866,9 +3866,9 @@ class Setup:
             # user's own (see name_problem in settings.py).
             if "." in name:
                 continue
-            path = saved_skill_path(settings.data, name, ADDED_TO_AGENTS)
+            path = saved_skill_path(settings.data, name, ADD_TO_AGENTS)
             entry = get(settings.data, path.rsplit(".", 1)[0], MISSING)
-            if entry is MISSING or (isinstance(entry, dict) and ADDED_TO_AGENTS not in entry):
+            if entry is MISSING or (isinstance(entry, dict) and ADD_TO_AGENTS not in entry):
                 put(settings.data, path, {STATE: "unanswered"})
                 new.append(name)
         return new
@@ -4935,7 +4935,7 @@ def plan_skill(
     said_no = False
     wanted = True
     if setting is not None:
-        saved = get(data, saved_skill_path(data, skill.name, ADDED_TO_AGENTS), MISSING)
+        saved = get(data, saved_skill_path(data, skill.name, ADD_TO_AGENTS), MISSING)
         wanted = bool(read_value(saved, setting)[0])
         said_no = saved is False
     needs = requirements.warned_about(skill.requires)

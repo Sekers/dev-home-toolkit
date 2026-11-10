@@ -44,7 +44,7 @@ as "both tools" for Claude Code and Codex.
   skill is never set up: it's added.\
   _Avoid_: installed, configured, enabled (for a folder).
 - **Added to your agents**: a skill that setup has linked into this PC's skills folders, by the
-  end user's answer, the skill's default, or its `supportedOn`; `skills.<name>.addedToAgents` holds
+  end user's answer, the skill's default, or its `supportedOn`; `skills.<name>.addToAgents` holds
   the answer. It's "added to your agents" in text for the end user, "added to the user's agents"
   in the skills, and "added" or "added to the agents" elsewhere.\
   _Avoid_: set up, installed, enabled (for a skill).

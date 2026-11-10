@@ -35,7 +35,7 @@ got there.
 - **Part 6a, committed (`acdd061`):** the reader of the whole `dev-home-skill.json`
   (`internal/shared/settings.py`), and the checker with the types `os`, `tool`, `program`, and
   `python` (`internal/shared/requirements.py`).
-- **Part 6b, committed (`408ae14`):** each PC's answer, `skills.<name>.addedToAgents`; the
+- **Part 6b, committed (`408ae14`):** each PC's answer, `skills.<name>.addToAgents`; the
   one-time `NEW` line for a new skill; links added and removed by each skill's plan, per skills
   folder; the recorded state in `internal/.generated/skill-states.json`, which `/dev-home skills`
   shows; `formerNames` for a renamed skill; `--configure` for the answer; and the reference page
@@ -228,7 +228,7 @@ declare a minimum dev-home-toolkit version.
 
 ### The end user's answer, and what ships not recommended
 
-The per-PC answer, `skills.<name>.addedToAgents`, stays the switch for whether a PC wants a skill.
+The per-PC answer, `skills.<name>.addToAgents`, stays the switch for whether a PC wants a skill.
 A skill that suits only some setups, such as one for a single work tracker, ships with
 `recommended: false`, so a PC gets it only after the end user says yes there. That serves "suits
 only some setups" better than guessing from installed programs.

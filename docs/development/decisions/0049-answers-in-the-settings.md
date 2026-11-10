@@ -20,7 +20,7 @@ Each setting is one of four kinds, and accepts only the forms that fit it:
 
 | Kind | Examples | Forms | Until it's answered |
 | --- | --- | --- | --- |
-| Has a default, and setup asks about it | `updates.installAutomatically`, skill preferences, `skills.<name>.addedToAgents` | missing, `unanswered`, `default`, plain | Follows the default, and a run of setup by hand asks |
+| Has a default, and setup asks about it | `updates.installAutomatically`, skill preferences, `skills.<name>.addToAgents` | missing, `unanswered`, `default`, plain | Follows the default, and a run of setup by hand asks |
 | Has a default, and nobody asks about it | `updates.checkEveryHours`, `devHome.checkEveryHours` | missing, `default`, plain | Follows the default |
 | No default | `devHome.folder`, `multiMachine` | missing, plain | Whatever the setting says: with `multiMachine` unanswered every sync fetches, and without a dev-home folder setup stops |
 | Offer | each folder's `setUp`, recommended settings, update notices | missing, `remind`, plain | Offered again, as [0040: Answers to offers](0040-answers-to-offers.md) says. An unanswered folder isn't set up |
@@ -43,7 +43,7 @@ setting counts as missing.
   At any question, Enter keeps the saved answer, a plain value or the default alike, and means
   default only when nothing is answered yet.
 - A skill's preferences are saved as `skills.<name>.preferences.<preference>`, beside
-  dev-home-toolkit's own settings for that skill, such as `skills.<name>.addedToAgents`.
+  dev-home-toolkit's own settings for that skill, such as `skills.<name>.addToAgents`.
 - dev-home-toolkit's own settings are declared in `internal/shared/setting-definitions.json`, the way
   a skill declares its preferences in its `dev-home-skill.json`: each with its kind, its default,
   a label, help, and `formerNames`, the names it had before.

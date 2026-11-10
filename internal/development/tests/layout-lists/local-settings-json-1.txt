@@ -12,8 +12,8 @@ codex.homes.<folder>.setUp
 codex.homes.<folder>.setUp.$state
 codex.homes.<folder>.setUp.on
 schemaVersion
-skills.<skill>.addedToAgents
-skills.<skill>.addedToAgents.$state
+skills.<skill>.addToAgents
+skills.<skill>.addToAgents.$state
 skills.<skill>.preferences.<preference>
 skills.<skill>.preferences.<preference>.$state
 testHomeDir

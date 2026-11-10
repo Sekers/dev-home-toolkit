@@ -5,10 +5,11 @@
 **Decision:** setup decides which skills are added to the agents on each PC, meaning linked into
 each Claude Code folder's `skills/` and into `~/.agents/skills` for Codex. Claude Code's and
 Codex's own menus decide whether an added skill is shown in an account or a project. Changed on
-2026-10-12, 2026-10-16, and 2026-10-17, before it was built.
+2026-10-12, 2026-10-16, and 2026-10-17, before it was built, and on 2026-11-10 (the answer's
+name).
 
 - Each PC saves a yes or no for each skill in `local-settings.json`, as
-  `skills.<name>.addedToAgents`. A no removes
+  `skills.<name>.addToAgents`. A no removes
   setup's links for it, and its always-on lines leave each agent's rules file
   ([0058: Skills' always-on lines](0058-skills-always-on-lines.md)).
   Nothing is deleted.
@@ -54,8 +55,14 @@ rust-v0.161.0:
 - A file in the skill's folder rather than its frontmatter: dev-home-toolkit's skills and the
   person's own work the same way, setup reads JSON with Python's standard library, and a skill
   copied from elsewhere will need a file of its own anyway, to record where it came from.
-- `addedToAgents` and `alwaysAddedToAgents`: "installed" already means installing
-  dev-home-toolkit updates, and "added" alone could read as added to dev-home.
+- `addToAgents` and `alwaysAddedToAgents`: "install" already means installing dev-home-toolkit
+  updates, and "add" alone could read as adding to dev-home. `addToAgents` is the end user's
+  answer, so it names what a yes does, as every other yes-or-no answer in `local-settings.json`
+  does, such as `installAutomatically`, a folder's `setUp`, and the handoff skill's
+  `includeSecurityBugsInIssueOffers`. The skill's state can differ from the answer, such as a
+  skill added in Claude Code but not in Codex.
+  `alwaysAddedToAgents` describes the skill, as the other fields of `dev-home-skill.json` do,
+  such as `recommended` and `supportedOn`.
 
 **Options set aside:**
 
@@ -69,6 +76,8 @@ rust-v0.161.0:
   skill copied from someone else would edit their `SKILL.md`.
 - The person's own skills always added: one made for one PC could only be hidden per agent and
   per account.
+- `addedToAgents` for the answer, its name until 2026-11-10: the only answer in
+  `local-settings.json` named for a state, which the answer doesn't always give.
 - `skills.<name>.installed` and `alwaysInstalled` (see Why), and one `requires` list, or fields
   named `tools`, `programs`, and `os`, in place of `supportedOn` and `dependsOn`
   ([0062: Keeping a skill off](0062-keeping-a-skill-off.md) says why there are two lists).

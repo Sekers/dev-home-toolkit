@@ -134,7 +134,7 @@ backup of this PC's settings, and commits and pushes the shared one.
    Below the table, give each compatibility text. When a program is missing, add that one
    installed since the agent started is found only once the agent, and any editor it runs in, is
    restarted. To add a skill to their agents, or take one out, the user changes
-   `skills.<name>.addedToAgents` (see "Configure"). If the user has none of their own, say where
+   `skills.<name>.addToAgents` (see "Configure"). If the user has none of their own, say where
    one goes: `{{CONTENT_DIR}}/skills/<name>/SKILL.md`. The list is this PC's copy, so a skill
    added on another PC shows up after the next sync.
 

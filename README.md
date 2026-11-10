@@ -176,7 +176,7 @@ one's name is its path, which `--configure` takes too:
 - `codex.instructionsMaxKiB` is how much of `AGENTS.md`, from its home and a project's folders
   together, Codex reads, in KiB (128 unless set): setup raises each Codex home's
   `project_doc_max_bytes` to match, and never lowers it. With no value there, Codex reads 32 KiB.
-- `skills.<name>.addedToAgents` is whether setup adds a skill to your agents on this PC: `true`
+- `skills.<name>.addToAgents` is whether setup adds a skill to your agents on this PC: `true`
   or `false`. Until you choose, it follows the skill's default, and setup saves it as
   `{"$state": "unanswered"}`. `dev-home` is always added, so it has none.
 - A skill's preferences go under `skills` too, such as

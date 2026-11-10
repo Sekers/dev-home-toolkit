@@ -957,7 +957,7 @@ def test_at_a_console_settings_in_the_older_layout_are_set_aside_and_asked_again
     assert re.search(r"^SET\s+The old settings, set aside: .*local-settings\.json\.bak-", out, re.M)
     assert kept == [old_text], kept
     # Each skill but dev-home, which is always added, is new to the settings.
-    unanswered = {"addedToAgents": {"$state": "unanswered"}}
+    unanswered = {"addToAgents": {"$state": "unanswered"}}
     assert written == {
         "schemaVersion": 1,
         "testHomeDir": saved["testHomeDir"],
@@ -1713,7 +1713,7 @@ def test_a_file_that_changes_after_its_change_is_planned_is_left_alone(
 # Another run saving this PC's settings while this one asks its questions or waits for the lock.
 
 # What setup saves for a skill new to the PC: no answer yet about adding it to the agents.
-UNANSWERED = {"addedToAgents": {"$state": "unanswered"}}
+UNANSWERED = {"addToAgents": {"$state": "unanswered"}}
 # The update check this run's own answer sets, by hand in the menu or through --configure.
 OWN_HOURS = 7
 WAYS = ("quiet", "by hand", "configure")
@@ -1786,7 +1786,7 @@ def test_an_answer_saved_meanwhile_stays_and_the_work_follows_it(
     edit(settings, lambda data: data["skills"].pop("mine"))
 
     def answered(data: dict[str, Any]) -> None:
-        data["skills"]["mine"] = {"addedToAgents": False}
+        data["skills"]["mine"] = {"addToAgents": False}
         data["devHome"]["checkEveryHours"] = 6
 
     saved_meanwhile(box, monkeypatch, answered)
@@ -1796,7 +1796,7 @@ def test_an_answer_saved_meanwhile_stays_and_the_work_follows_it(
         saved = json.loads(settings.read_text(encoding="utf-8"))
         links = [link_target(box.profile / skills / "mine") for skills in SKILLS_FOLDERS]
     assert returned == 0, out
-    assert saved["skills"]["mine"] == {"addedToAgents": False}, saved
+    assert saved["skills"]["mine"] == {"addToAgents": False}, saved
     assert saved["devHome"]["checkEveryHours"] == 6, saved
     assert saved["updates"].get("checkEveryHours") == own_answer(how), saved
     assert not re.search(r"^NEW\s.*'mine'", out, re.M), out
@@ -1875,11 +1875,11 @@ def test_a_rename_another_run_made_meanwhile_keeps_the_answer_it_saved(
     folder = box.content / "skills" / "renamed"
     write_text(folder / "SKILL.md", "---\nname: renamed\ndescription: A test skill.\n---\n")
     write_text(folder / "dev-home-skill.json", json.dumps({"formerNames": ["former"]}) + "\n")
-    edit(settings, lambda data: data["skills"].update(former={"addedToAgents": False}))
+    edit(settings, lambda data: data["skills"].update(former={"addToAgents": False}))
 
     def moved_then_yes(data: dict[str, Any]) -> None:
         data["skills"].pop("former")
-        data["skills"]["renamed"] = {"addedToAgents": True}
+        data["skills"]["renamed"] = {"addToAgents": True}
 
     saved_meanwhile(box, monkeypatch, moved_then_yes)
     try:
@@ -1893,7 +1893,7 @@ def test_a_rename_another_run_made_meanwhile_keeps_the_answer_it_saved(
                 remove_link(box.profile / skills / "renamed")
         shutil.rmtree(folder)
     assert returned == 0, out
-    assert saved["skills"]["renamed"] == {"addedToAgents": True}, saved
+    assert saved["skills"]["renamed"] == {"addToAgents": True}, saved
     assert "former" not in saved["skills"], saved
     assert saved["updates"].get("checkEveryHours") == own_answer(how), saved
     assert links == [folder, folder], out
