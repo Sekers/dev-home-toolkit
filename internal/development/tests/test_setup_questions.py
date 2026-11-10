@@ -286,6 +286,43 @@ def test_a_key_to_type_stands_apart_from_the_words_around_it(
     assert key == ("\x1b[32m'a'\x1b[0m" if colored else "'a'")
 
 
+def test_a_long_prompt_breaks_at_a_space_and_keeps_its_answers_whole(
+    box: Sandbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    console = shared_module(box, "console")
+    answers = "'y', 'n', or 'd' for the default (yes) [y/n/D]: "
+    # One line when it fits.
+    assert console.prompt_lines("Install updates?", answers) == [f"Install updates? {answers}"]
+    # Otherwise the question, then the answers on a line of their own, where the answer is typed.
+    question = "handoff skill: Include security bugs in GitHub issue offers?"
+    assert console.prompt_lines(question, answers) == [question, answers]
+    # A longer question breaks only at spaces, and the answers go on its last line when they fit.
+    words = " ".join(f"word{number}" for number in range(20))
+    lines = console.prompt_lines(words, answers)
+    assert len(lines) == 2 and lines[-1].endswith(f"word19 {answers}"), lines
+    assert all(len(line.rstrip()) <= 100 for line in lines), lines
+    assert " ".join(lines) == f"{words} {answers}", lines
+    # A color code takes no room at the console: these 92 characters fit, with 27 more of codes.
+    monkeypatch.setattr(shared_module(box, "output"), "use_color", lambda: True)
+    keys = f"{console.key('y')}, {console.key('n')}, or {console.key('d')}"
+    assert len(console.prompt_lines("x" * 50, f"{keys} for the default [y/n/D]: ")) == 1
+
+
+def test_text_in_colored_parts_wraps_at_spaces_with_each_part_in_its_color(
+    box: Sandbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    console = shared_module(box, "console")
+    output = shared_module(box, "output")
+    parts = [("yes,", ""), ("but added in Claude Code", output.YELLOW)]
+    assert console.wrap_parts(parts, 20) == ["yes, but added in", "Claude Code"]
+    monkeypatch.setattr(output, "use_color", lambda: True)
+    yellow, reset = output.YELLOW, output.RESET
+    assert console.wrap_parts(parts, 20) == [
+        f"yes, {yellow}but added in{reset}",
+        f"{yellow}Claude Code{reset}",
+    ]
+
+
 def test_a_list_with_nothing_recommended_takes_enter_as_none(box: Sandbox, person: Person) -> None:
     person.answers[r"^Add them\?"] = ["", "n", "a"]
     enter = choose_from_list(box, False, False)
@@ -1298,12 +1335,12 @@ def backups_removed(settings: Path) -> Iterator[Path]:
 def test_the_menu_changes_the_setting_picked_and_keeps_a_backup(
     box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    person.answers.update({MENU: ["11", "2", ""], UPDATES: "y"})
+    person.answers.update({MENU: ["12", "2", ""], UPDATES: "y"})
     returned = setup_here(box, "--configure")
     out = capsys.readouterr().out
     assert returned == 0, out
     assert "dev-home-toolkit settings" in out and "Shared by every copy of dev-home" in out, out
-    assert "Type a number from 1 to 10, or 'a', or press Enter to go on." in out, out
+    assert "Type a number from 1 to 11, or 'a', or press Enter to go on." in out, out
     saved = json.loads(backups_removed.read_text(encoding="utf-8"))
     assert saved["updates"]["installAutomatically"] is True, saved
     assert re.search(r"^SET\s+This PC's settings: .* Backup of the old file: ", out, re.M), out
@@ -1580,7 +1617,7 @@ def test_the_menu_keeps_several_copies_unless_the_others_are_retired(
 ) -> None:
     person.answers.update(
         {
-            MENU: ["10", ""],
+            MENU: ["11", ""],
             ELSEWHERE_YES: "n",
             RETIRED: "n",
         }
@@ -1599,7 +1636,7 @@ def test_the_menu_says_when_dev_homes_check_interval_is_used(
     # Picked in multi-PC mode, then again after switching to single-PC mode, which isn't saved.
     person.answers.update(
         {
-            MENU: ["4", "10", "4", ""],
+            MENU: ["4", "11", "4", ""],
             CONTENT_HOURS: ["", ""],
             ELSEWHERE_YES: "n",
             RETIRED: "y",
@@ -1620,6 +1657,266 @@ def test_the_menu_says_when_dev_homes_check_interval_is_used(
     assert multi in out and single in out and out.index(multi) < out.index(single), out
     assert re.search(r"every 12 hours \(the default in single-PC mode\)", out), out
     assert git("-C", str(box.remote), "rev-parse", "main") == head
+
+
+# The Skills section, which the menu's Skills row opens.
+SKILLS_MENU = r"^Number to change, 'a' to go through them all, or Enter to go back: $"
+# The answers a question about a setting with a default takes, which go on a line of their own
+# after a question too long to share one.
+WITH_DEFAULT = r"'y', 'n', or 'd' for the default \((yes|no)\) \[[yY]/[nN]/[dD]\]: $"
+SECURITY_BUGS = "handoff skill: Include security bugs in GitHub issue offers?"
+
+
+def add_question(skill: str) -> str:
+    """The Skills section's question about adding a skill to the agents on this PC."""
+    return rf"^Add the {skill} skill to your agents\? {WITH_DEFAULT}"
+
+
+def test_the_skills_row_opens_each_skill_and_preference_and_changes_the_one_picked(
+    box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # dev-home has nothing to change, a number out of range is refused, and the section shows
+    # each change as it's made.
+    person.answers.update(
+        {
+            MENU: ["10", ""],
+            SKILLS_MENU: ["1", "9", "2", "5", ""],
+            add_question("handoff"): "n",
+            rf"^{WITH_DEFAULT}": "n",
+        }
+    )
+    returned = setup_here(box, "--configure")
+    out = capsys.readouterr().out
+    saved = json.loads(backups_removed.read_text(encoding="utf-8"))
+    assert returned == 0, out
+    lines = out.splitlines()
+    for pattern in (
+        r"^\s+10\s+Skills >\s+4 added, 1 preference$",
+        r"^\s+11\s+Copies of dev-home in active use\s",
+        r"^dev-home-toolkit settings: Skills$",
+        r"^Skills added to your agents on this PC$",
+        r"^  1  dev-home   always$",
+        r"^     Sync your dev-home with GitHub, list your skills, and change settings$",
+        r"^  2  handoff    not answered yet \(defaults to yes\)$",
+        r"^     Keep a private note for each project: where the work stands and what's next$",
+        r"^  4  mine       not answered yet \(defaults to yes\)$",
+        r"^handoff skill preferences$",
+        r"^  5  Include security bugs in GitHub issue offers   not answered yet \(defaults to "
+        r"yes\)$",
+        r"^dev-home is always added to your agents, so there's nothing to change\.$",
+        r"^Type a number from 1 to 5, or 'a', or press Enter to go back\.$",
+        # Each question has the setting's help above it, after a blank line.
+        r"^Whether setup adds the skill to each Claude Code folder and Codex home it sets up on "
+        r"this PC\.$",
+        r"^Whether the handoff skill includes security bugs in its GitHub issue offers, with a ",
+        rf"^{re.escape(SECURITY_BUGS)}$",
+        # Shown again after the changes: the main menu counts the no.
+        r"^  2  handoff    no$",
+        r"^  5  Include security bugs in GitHub issue offers   no$",
+        r"^\s+10\s+Skills >\s+3 added, 1 not added, 1 preference$",
+    ):
+        assert any(re.search(pattern, line) for line in lines), (pattern, out)
+    # mine has no summary, so nothing is under its row.
+    assert lines[lines.index("  4  mine       not answered yet (defaults to yes)") + 1] == "", out
+    assert saved["skills"]["handoff"] == {
+        "addToAgents": False,
+        "preferences": {"includeSecurityBugsInIssueOffers": False},
+    }, saved
+
+
+def test_a_in_the_skills_section_goes_through_each_setting_it_can_change(
+    box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Enter follows the default for each skill with no answer yet, which saves it, so the
+    # question comes back only if the default changes; dev-home isn't asked about.
+    person.answers.update(
+        {
+            MENU: ["10", ""],
+            SKILLS_MENU: ["a", ""],
+            add_question("handoff"): "",
+            add_question("knowledge"): "n",
+            add_question("mine"): "",
+            rf"^{WITH_DEFAULT}": "y",
+        }
+    )
+    returned = setup_here(box, "--configure")
+    out = capsys.readouterr().out
+    saved = json.loads(backups_removed.read_text(encoding="utf-8"))
+    assert returned == 0, out
+    assert not any(re.search(add_question("dev-home"), asked) for asked in person.asked), out
+    default = {"$state": "default"}
+    assert saved["skills"]["handoff"] == {
+        "addToAgents": default,
+        "preferences": {"includeSecurityBugsInIssueOffers": True},
+    }, saved
+    assert saved["skills"]["knowledge"] == {"addToAgents": False}, saved
+    assert saved["skills"]["mine"] == {"addToAgents": default}, saved
+    assert re.search(r"^  2  handoff    yes \(the default\)$", out, re.M), out
+
+
+def test_the_menus_a_goes_through_the_skills_section_too(
+    box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Without opening it: every question, and nothing else of the section's. Enter keeps each
+    # other answer.
+    person.answers.update(
+        {
+            MENU: ["a", ""],
+            r"^Your dev-home folder \[.*\]: $": "",
+            UPDATES: "",
+            UPDATE_HOURS: "",
+            CONTENT_HOURS: "",
+            RULES_WARNING: "",
+            CODEX_LIMIT: "",
+            ANSWERED_CLAUDE: "",
+            CODEX_ANSWERED: "",
+            add_question("knowledge"): "n",
+            ELSEWHERE_YES: "",
+        }
+    )
+    returned = setup_here(box, "--configure")
+    out = capsys.readouterr().out
+    saved = json.loads(backups_removed.read_text(encoding="utf-8"))
+    assert returned == 0, out
+    assert saved["skills"]["knowledge"] == {"addToAgents": False}, saved
+    assert "dev-home-toolkit settings: Skills" not in out, out
+    for skill in ("handoff", "mine"):
+        assert any(re.search(add_question(skill), asked) for asked in person.asked), person.asked
+
+
+def test_the_skills_section_shows_what_keeps_a_skill_off_each_agent_or_this_pc(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # One that works only in Claude Code, where Codex is set up too; one for another operating
+    # system, with a preference; and one with a name Claude Code keeps, answered no. The state is
+    # worked out again from the answers in the menu, so a change shows at once, without a run.
+    elsewhere = "macos" if sys.platform != "darwin" else "windows"
+    shown = "macOS" if elsewhere == "macos" else "Windows"
+    declared = {
+        "one-agent": {"supportedOn": [{"type": "agent", "anyOf": ["claude-code"]}]},
+        "far": {
+            "summary": "Work far away",
+            "supportedOn": [{"type": "os", "anyOf": [elsewhere]}],
+            "preferences": {"loud": {"default": True, "label": "Be loud"}},
+        },
+        "synced": {},
+    }
+    folders = []
+    for name, entry in declared.items():
+        folder = box.content / "skills" / name
+        write_text(folder / "SKILL.md", f"---\nname: {name}\ndescription: A test skill.\n---\n")
+        write_text(folder / "dev-home-skill.json", json.dumps(entry) + "\n")
+        folders.append(folder)
+    edit(settings, lambda data: data["skills"].update(synced={"addToAgents": False}))
+    # Each question the section asks but the one about one-agent ends the input, which changes
+    # nothing.
+    person.answers.update(
+        {MENU: ["10", ""], SKILLS_MENU: ["a", ""], add_question("one-agent"): "n"}
+    )
+    try:
+        setup_here(box, "--configure")
+        out = capsys.readouterr().out
+    finally:
+        for folder in folders:
+            for skills in SKILLS_FOLDERS:
+                if link_target(box.profile / skills / folder.name) is not None:
+                    remove_link(box.profile / skills / folder.name)
+            shutil.rmtree(folder)
+    lines = out.splitlines()
+    one_agent = next(i for i, line in enumerate(lines) if re.match(r"^  \d+  one-agent  ", line))
+    pattern = r"^  \d+  one-agent  not answered yet \(defaults to yes\), but added to your agents "
+    assert re.match(pattern, lines[one_agent]) and len(lines[one_agent]) <= 100, out
+    # The rest of a long value goes under the value column.
+    assert re.fullmatch(r" {16}\S.* works only in Claude Code", lines[one_agent + 1]), out
+    # Not supported: no number, no way to change it, and none of its preferences.
+    far = lines.index(f"     far        not supported: works only on {shown}")
+    assert lines[far + 1] == "     Work far away", out
+    assert "(far skill)" not in out and "far skill preferences" not in out, out
+    assert not any(re.search(add_question("far"), asked) for asked in person.asked), out
+    # A yes wouldn't add it either, until it's renamed.
+    pattern = (
+        r"^  \d+  synced     no; has a name Claude Code keeps for the skills it downloads from "
+        r"claude\.ai$"
+    )
+    assert any(re.search(pattern, line) for line in lines), out
+    # The no shows at once, and the main menu counts each state.
+    assert any(re.fullmatch(r"  \d+  one-agent  no", line) for line in lines), out
+    pattern = (
+        r"^\s+10\s+Skills >\s+4 added, 1 added to some agents, 1 not added, 1 not supported, "
+        r"1 preference$"
+    )
+    assert any(re.search(pattern, line) for line in lines), out
+    pattern = r"^\s+10\s+Skills >\s+4 added, 2 not added, 1 not supported, 1 preference$"
+    assert any(re.search(pattern, line) for line in lines), out
+
+
+def test_the_skills_section_offers_no_answer_for_a_skill_whose_name_has_a_dot(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A setting's name is its path, with dots between its parts, so setup can't save one for it:
+    # its PROBLEM line says to rename it. So its row has no number, and nothing asks about it or
+    # lists its preferences, which would otherwise be saved under another skill's name.
+    folder = box.content / "skills" / "my.notes"
+    write_text(folder / "SKILL.md", "---\nname: my.notes\ndescription: A test skill.\n---\n")
+    preferences = {"preferences": {"loud": {"default": True, "label": "Be loud"}}}
+    write_text(folder / "dev-home-skill.json", json.dumps(preferences) + "\n")
+    before = settings.read_bytes()
+    person.answers.update({MENU: ["10", ""], SKILLS_MENU: ["a", ""], WITH_DEFAULT: ""})
+    try:
+        setup_here(box, "--configure")
+        out = capsys.readouterr().out
+        saved = json.loads(settings.read_text(encoding="utf-8"))
+    finally:
+        for skills in SKILLS_FOLDERS:
+            if link_target(box.profile / skills / "my.notes") is not None:
+                remove_link(box.profile / skills / "my.notes")
+        shutil.rmtree(folder)
+    assert re.search(r"^     my\.notes   not answered yet \(defaults to yes\)$", out, re.M), out
+    assert "Be loud" not in out and "my.notes skill preferences" not in out, out
+    assert not any("my.notes" in asked for asked in person.asked), person.asked
+    assert "my" not in saved["skills"] and "my.notes" not in saved["skills"], saved
+    assert json.loads(before)["skills"].keys() <= saved["skills"].keys(), saved
+
+
+def test_color_never_shifts_the_skills_sections_columns(
+    box: Sandbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configure = shared_module(box, "configure")
+    output = shared_module(box, "output")
+    row = configure.SkillsRow
+    problem = "but added to your agents in Claude Code, not in Codex: works only in Claude Code"
+    skills = [
+        row("dev-home", "always", summary="Sync your dev-home"),
+        row("clipper", "not answered yet (defaults to yes)", problem, summary="Save its history"),
+        row("tidy", "not supported: works only on macOS", numbered=False),
+    ]
+    sections = [
+        (configure.SKILLS_HEADING, skills),
+        ("clipper skill preferences", [row("Keep the history for a week", "no")]),
+    ]
+    plain, picked = configure.skills_lines(sections)
+    monkeypatch.setattr(output, "use_color", lambda: True)
+    colored, _ = configure.skills_lines(sections)
+    assert [console_text(line) for line in colored] == plain, colored
+    assert [r.name for r in picked] == ["dev-home", "clipper", "Keep the history for a week"]
+    assert all(len(line) <= 100 for line in plain), plain
+    # The problem is yellow, and goes on under the value column, here the 16th, before the
+    # summary under the name.
+    assert f"{output.YELLOW}but added" in "\n".join(colored), colored
+    clipper = plain.index(
+        "  2  clipper   not answered yet (defaults to yes), but added to your agents in Claude "
+        "Code, not in"
+    )
+    assert plain[clipper + 1 : clipper + 3] == [
+        " " * 15 + "Codex: works only in Claude Code",
+        "     Save its history",
+    ], plain
+    assert "     tidy      not supported: works only on macOS" in plain, plain
+
+
+def console_text(line: str) -> str:
+    """A line as the console shows it, without its color codes."""
+    return re.sub(r"\x1b\[[0-9;]*m", "", line)
 
 
 def test_a_run_by_hand_makes_a_folders_settings_change_without_asking(

@@ -2758,6 +2758,9 @@ def test_configure_alone_shows_the_settings_and_how_to_change_them(
     assert not result.has_line(r"^Recommended Claude Code settings$"), str(result)
     pattern = r"^\s+claudeCode\.recommendedSettings\.<id>\+=<folder>@<fingerprint>$"
     assert result.has_line(pattern), str(result)
+    # The menu's Skills row, which works each skill's state out, isn't here: the skills have a
+    # section of their own below, from what setup recorded.
+    assert not result.has_line(r"Skills >"), str(result)
     pattern = r"^\s+10\s+Copies of dev-home in active use\s+several \(multi-PC mode\)$"
     assert result.has_line(pattern), str(result)
     assert result.has_line(r"^\s+multiMachine=true\|false\s"), str(result)

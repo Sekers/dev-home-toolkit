@@ -1,7 +1,6 @@
 # 0072: Fields in skill and rule files
 
-**Built:** yes, except: `summary` in the settings menu's Skills section, which comes with that
-section, and rules' files, which come with built-in rules.
+**Built:** yes, except: rules' files, which come with built-in rules.
 
 **Decision:** a skill's `dev-home-skill.json` and a built-in rule's `dev-home-rule.json` use the
 same fields for the same facts, read by one reader in `internal/shared/`. Each file holds only what

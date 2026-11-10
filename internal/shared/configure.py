@@ -28,12 +28,13 @@ import hashlib
 import json
 import re
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from . import console, rules
-from .output import CYAN, GREEN, color, status_line
+from .output import CYAN, GREEN, YELLOW, color, status_line
 from .paths import comparable, forward, is_inside, resolve_home, same_path, unsafe_reason
 from .recommended_settings import DONE, ids_for
 from .settings import (
@@ -510,8 +511,11 @@ def content_hours_text(settings: LocalSettings, several: bool | None, found: str
     return "every time (until you choose a mode)"
 
 
-def overview(run: "Setup", settings: LocalSettings) -> list[str]:
-    """Every setting and its value, numbered as the menu numbers them."""
+def overview(run: "Setup", settings: LocalSettings, *, menu: bool = False) -> list[str]:
+    """Every setting and its value, numbered as the menu numbers them. With menu, the row for the
+    Skills section too, which works out each skill's state with setup's planning. The list for
+    an agent leaves it out, since skills_overview lists the skills there, from what setup
+    recorded, at no cost in time."""
     several, found = several_copies(run, settings)
     if found in LAYOUT_NOTES:
         copies = f"{DEV_HOME_SETTINGS} {LAYOUT_NOTES[found]}"
@@ -533,6 +537,10 @@ def overview(run: "Setup", settings: LocalSettings) -> list[str]:
         for agent in AGENTS
     ]
     this_pc.append((RECOMMENDED_LABEL, recommended_summary(run, settings)))
+    # Last under This PC, since a skill's answer is per PC, unlike a built-in rule's, whose row
+    # goes under the shared heading (decision 0026).
+    if menu:
+        this_pc.append((SKILLS_LABEL, skills_summary(run, settings)))
     shared = [("Copies of dev-home in active use", copies)]
     width = max(len(label) for label, _ in this_pc + shared) + 2
     # The numbers' column, wide enough for the last, with at least two spaces after one digit.
@@ -700,8 +708,217 @@ def skills_overview(settings: LocalSettings) -> list[str]:
                 f"  {preference.label} ({name} skill): {shown}. To change it: "
                 f"{setting.path}=true|false|default"
             )
-    lines = ["", color("Skills added to your agents on this PC", CYAN), *added] if added else []
+    lines = ["", color(SKILLS_HEADING, CYAN), *added] if added else []
     return lines + (["", color("Skill preferences", CYAN), *preferences] if preferences else [])
+
+
+# The Skills section, which the menu's Skills row opens (decision 0026): each skill and whether
+# it's added to the agents on this PC, then each skill's preferences.
+SKILLS_LABEL = "Skills >"
+SKILLS_TITLE = "dev-home-toolkit settings: Skills"
+SKILLS_HEADING = "Skills added to your agents on this PC"
+
+
+@dataclass(frozen=True)
+class SkillsRow:
+    """One row of the Skills section: what it names, a skill or a preference's label; its value
+    as the row shows it, then, for a skill, the part saying how its state differs from its
+    answer, a problem, if any; its state, for a skill, as setup's planning gives it; its summary,
+    under it; the setting a pick changes, or None for one nothing changes, dev-home's; the
+    question a pick asks, with the help above it; and whether it has a number, which a skill
+    this PC's operating system can't run doesn't."""
+
+    name: str
+    value: str
+    problem: str = ""
+    state: str = ""
+    summary: str = ""
+    setting: Setting | None = None
+    question: str = ""
+    help: str = ""
+    numbered: bool = True
+
+
+def skills_section(run: "Setup", settings: LocalSettings) -> list[tuple[str, list[SkillsRow]]]:
+    """The Skills section's headings, each with its rows: whether each skill is added to the
+    agents on this PC, then each skill's preferences. A skill's state is worked out again each
+    time, with setup's own planning, from the answers as they stand in the menu, so it never goes
+    stale after a change here, as what the last run recorded would. A skill this PC's operating
+    system can't run shows its state in place of its answer, and none of its preferences: nothing
+    changed here can add it or change what it does."""
+    # Loaded here, since setup loads this module.
+    from .setup import NOT_SUPPORTED
+
+    declared = run.skills_declared(settings)
+    folders = run.skills_folders(run.agent_folders(settings), declared)
+    plans = run.plan_skills(settings.data, declared, folders)
+    skills: list[SkillsRow] = []
+    preferences: list[tuple[str, list[SkillsRow]]] = []
+    for name, skill in declared.skills.items():
+        state = plans[name.lower()].state
+        if state.startswith(f"{NOT_SUPPORTED}:"):
+            skills.append(SkillsRow(name, state, "", state, skill.summary, numbered=False))
+            continue
+        setting = skill.added_setting
+        if setting is None:
+            value, wanted, whole = "always", True, "always added to your agents"
+        else:
+            saved = get(settings.data, setting.path, MISSING)
+            value, wanted = value_shown(setting, saved), bool(read_value(saved, setting)[0])
+            whole = "added to your agents"
+        problem = ""
+        if wanted and state != whole:
+            problem = f"but {state}"
+        elif not wanted and skill.kept_off:
+            # A yes wouldn't add it either, until it's renamed.
+            value += f"; {skill.kept_off}"
+        question = f"{setting.label}?" if setting else ""
+        help_text = setting.help if setting else ""
+        # A setting's name is its path, with dots between its parts, so for a skill with a dot in
+        # its name, setup can't save an answer or a preference: it follows its defaults, and its
+        # PROBLEM line says to rename it (see name_problem in settings.py). So its row has no
+        # number, and its preferences aren't listed.
+        if "." in name:
+            skills.append(SkillsRow(name, value, problem, state, skill.summary, numbered=False))
+            continue
+        skills.append(
+            SkillsRow(name, value, problem, state, skill.summary, setting, question, help_text)
+        )
+        rows = [
+            SkillsRow(
+                preference.label,
+                value_shown(
+                    preference.setting, get(settings.data, preference.setting.path, MISSING)
+                ),
+                setting=preference.setting,
+                question=f"{name} skill: {preference.label}?",
+                help=preference.help,
+            )
+            for preference in skill.preferences.values()
+        ]
+        if rows:
+            preferences.append((f"{name} skill preferences", rows))
+    return [(SKILLS_HEADING, skills), *preferences]
+
+
+def skills_lines(sections: list[tuple[str, list[SkillsRow]]]) -> tuple[list[str], list[SkillsRow]]:
+    """The Skills section as the menu shows it, and the rows its numbers pick, in order. Each row
+    has its value in a column of its own, wrapped under it, with a problem in yellow, and a
+    skill's summary under its name, wrapped with a hanging indent."""
+    picked = [row for _, rows in sections for row in rows if row.numbered]
+    # The numbers' column, wide enough for the last, with at least two spaces after one digit.
+    numbers = max(len(str(len(picked))), 2) + 1
+    lines = [color(SKILLS_TITLE, CYAN)]
+    number = 0
+    for heading, rows in sections:
+        if not rows:
+            continue
+        # Preferences' labels are longer, so their values stand further off.
+        gap = 2 if heading == SKILLS_HEADING else 3
+        width = max(len(row.name) for row in rows) + gap
+        column = 2 + numbers + width
+        lines += ["", color(heading, CYAN)]
+        for row in rows:
+            start = " " * (2 + numbers)
+            if row.numbered:
+                number += 1
+                start = f"  {color(str(number), GREEN)}" + " " * (numbers - len(str(number)))
+            parts = [(f"{row.value}," if row.problem else row.value, "")]
+            if row.problem:
+                parts.append((row.problem, YELLOW))
+            first, *rest = console.wrap_parts(parts, console.LINE_WIDTH - column) or [""]
+            lines.append(f"{start}{row.name:<{width}}{first}")
+            lines += [" " * column + line for line in rest]
+            if row.summary:
+                indent = " " * (2 + numbers)
+                lines += console.wrap(row.summary, indent, indent + "  ")
+    return lines, picked
+
+
+def skills_summary(run: "Setup", settings: LocalSettings) -> str:
+    """The menu's Skills row: how many skills have each state, as the Skills section works them
+    out, leaving out any with none, then how many preferences it lists, such as "3 added, 1
+    preference"."""
+    # Loaded here, since setup loads this module.
+    from .setup import NOT_SUPPORTED
+
+    sections = skills_section(run, settings)
+    states = [row.state for row in sections[0][1]]
+    whole = ("added to your agents", "always added to your agents")
+    # Added to the agents of some skills folders, and not others, such as only in Claude Code.
+    some = tuple(f"{state} in " for state in whole)
+    counts = [
+        (sum(state in whole for state in states), "added"),
+        (sum(state.startswith(some) for state in states), "added to some agents"),
+        (sum(state.startswith("not added") for state in states), "not added"),
+        (sum(state.startswith(f"{NOT_SUPPORTED}:") for state in states), "not supported"),
+    ]
+    parts = [f"{count} {words}" for count, words in counts if count]
+    preferences = sum(len(rows) for _, rows in sections[1:])
+    if preferences:
+        parts.append(f"{preferences} preference{'' if preferences == 1 else 's'}")
+    return ", ".join(parts) or "none"
+
+
+def skills_menu(run: "Setup", settings: LocalSettings) -> bool:
+    """The Skills section, shown again after each change, until Enter goes back: a number changes
+    one setting, and a goes through them all. Returns whether an answer changed."""
+    changed = False
+    while True:
+        lines, picked = skills_lines(skills_section(run, settings))
+        run.line()
+        for line in lines:
+            run.line(line)
+        run.line()
+        choice = run.ask(
+            f"Number to change, {console.key('a')} to go through them all, or Enter to go back"
+        )
+        if not choice:
+            return changed
+        text = choice.strip().lower()
+        if text == "a":
+            changed = go_through_skills(run, settings, picked) or changed
+        elif text.isdigit() and 1 <= int(text) <= len(picked):
+            changed = change_skills_row(run, settings, picked[int(text) - 1]) or changed
+        else:
+            run.line(
+                f"Type a number from 1 to {len(picked)}, or {console.key('a')}, or press Enter to "
+                "go back."
+            )
+
+
+def go_through_skills(
+    run: "Setup", settings: LocalSettings, picked: Sequence[SkillsRow] | None = None
+) -> bool:
+    """Asks about each row of the Skills section that a pick can change, in order, as the menu's
+    a does, or the Skills section's: the rows picked, or else those the section has now. Returns
+    whether an answer changed."""
+    if picked is None:
+        picked = skills_lines(skills_section(run, settings))[1]
+    changed = False
+    for row in picked:
+        if row.setting is not None:
+            changed = change_skills_row(run, settings, row) or changed
+    return changed
+
+
+def change_skills_row(run: "Setup", settings: LocalSettings, row: SkillsRow) -> bool:
+    """Asks about one row of the Skills section: its help, if any, after a blank line, then its
+    question, which takes yes, no, or default. Returns whether the answer changed."""
+    if row.setting is None:
+        run.line(f"{row.name} is always added to your agents, so there's nothing to change.")
+        return False
+    if row.help:
+        run.line()
+        for text in console.wrap(row.help):
+            run.line(text)
+    run.line()
+    answer = run.choose_or_default(row.question, row.setting, settings.data)
+    saved = get(settings.data, row.setting.path, MISSING)
+    if answer is MISSING or (type(answer) is type(saved) and answer == saved):
+        return False
+    put(settings.data, row.setting.path, answer)
+    return True
 
 
 # The menu
@@ -720,14 +937,20 @@ def menu(run: "Setup", settings: LocalSettings) -> bool:
     }
     # Numbered as overview numbers the rows: dev-home-toolkit's own settings in the order
     # setting-definitions.json has them, then each agent's folders, then the recommended
-    # settings, then the shared setting.
+    # settings, then the Skills section, then the shared setting.
     order = [changers[setting.path] for setting in SETTINGS]
-    order += [change_claude_folders, change_codex_homes, change_recommended, change_copies]
+    order += [
+        change_claude_folders,
+        change_codex_homes,
+        change_recommended,
+        skills_menu,
+        change_copies,
+    ]
     steps = {str(number): step for number, step in enumerate(order, 1)}
     changed = False
     while True:
         run.line()
-        for line in overview(run, settings):
+        for line in overview(run, settings, menu=True):
             run.line(line)
         run.line()
         choice = run.ask(
@@ -735,15 +958,19 @@ def menu(run: "Setup", settings: LocalSettings) -> bool:
         )
         if not choice:
             return changed
-        picked = list(steps) if choice.strip().lower() == "a" else [choice.strip()]
-        if not all(number in steps for number in picked):
+        if choice.strip().lower() == "a":
+            # Through the Skills section's settings too, rather than opening it.
+            for step in order:
+                every = go_through_skills if step is skills_menu else step
+                changed = every(run, settings) or changed
+            continue
+        if choice.strip() not in steps:
             run.line(
                 f"Type a number from 1 to {len(steps)}, or {console.key('a')}, or press Enter to "
                 "go on."
             )
             continue
-        for number in picked:
-            changed = steps[number](run, settings) or changed
+        changed = steps[choice.strip()](run, settings) or changed
 
 
 def change_content_dir(run: "Setup", settings: LocalSettings) -> bool:

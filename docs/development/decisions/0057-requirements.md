@@ -74,8 +74,11 @@ a skill off, and which only warn, is a decision of its own:
     of the Python that `internal/.python` leads to would take a process.
 - Setup records its result for each skill, as one state that says where it's added and why it
   isn't elsewhere, such as "added to your agents in Claude Code, not in Codex: works only in
-  Claude Code", in `internal/.generated/skill-states.json`, which `/dev-home skills` reads, and
-  later the settings menu. Beside the state go the skill's `summary`, if it has one, which
+  Claude Code", in `internal/.generated/skill-states.json`, which `/dev-home skills` reads. The
+  settings menu works the state out with setup's own planning instead, from the answers as they
+  stand there, with this PC's facts gathered once a run and shared by the menu and the work
+  ([0026: setup.py --configure](0026-setup-py-configure.md)). Beside the state go the skill's
+  `summary`, if it has one, which
   `/dev-home skills` shows ([0030: /dev-home skills](0030-dev-home-skills.md)), and the programs
   and the Python minimum the skill only warns about, which `/dev-home skills` checks again where
   the agent runs.

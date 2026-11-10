@@ -723,6 +723,10 @@ class Setup:
         # What the skills declare, read once a run with this PC's settings, for the dev-home
         # folder named here (see skills_declared).
         self.declared: tuple[str, SkillDeclarations] | None = None
+        # This PC's facts that skills' requirements are checked against, gathered once a run for
+        # each set of programs the skills name, which another dev-home folder chosen in the menu
+        # can change, and shared by the menu and the work (see plan_skills).
+        self.pc_facts: dict[frozenset[str], requirements.ThisPC] = {}
         # Set once this run clones dev-home, which then may have another copy still in use, or
         # creates one, which nothing else can be using yet.
         self.cloned = False
@@ -3911,12 +3915,16 @@ class Setup:
     ) -> dict[str, SkillPlan]:
         """What setup does with each skill on this PC (see plan_skill), by its name in lowercase,
         from its answer in data and what it requires, checked against this PC's facts, gathered
-        once."""
-        pc = requirements.this_pc(
+        once a run. The settings menu plans with the answers as they stand there, each time it
+        shows the skills, and the work plans again with the answers it saves."""
+        programs = frozenset(
             requirements.programs_named(
                 requirement for skill in declared.skills.values() for requirement in skill.requires
             )
         )
+        pc = self.pc_facts.get(programs)
+        if pc is None:
+            pc = self.pc_facts[programs] = requirements.this_pc(programs)
         plans = {
             name.lower(): plan_skill(skill, data, pc, folders)
             for name, skill in declared.skills.items()

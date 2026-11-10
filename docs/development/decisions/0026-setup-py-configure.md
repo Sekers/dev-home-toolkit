@@ -1,6 +1,6 @@
 # 0026: setup.py --configure
 
-**Built:** yes, except: the settings menu's Skills section.
+**Built:** yes, except: the `Built-in rules >` row, which comes with built-in rules.
 
 **Decision:** `setup.py --configure` is how people and agents change a setting after the first
 run: `devHome.folder`, `updates.installAutomatically`, `updates.checkEveryHours`,
@@ -10,8 +10,9 @@ and the shared `multiMachine`. It's also where an agent answers setup's question
 and the recommended settings waiting for an answer, which its "Waiting for your answer" section
 lists too ([0038: Recommended settings from chat](0038-recommended-settings-from-chat.md)).
 Changed on 2026-10-17, 2026-10-20, 2026-10-23 (setup's questions), 2026-10-28 (recommended
-settings), 2026-11-09 (skills' summaries, and the state of one this PC's operating system can't
-run, in the list for agents), and 2026-11-10 (that skill's preferences).
+settings), 2026-11-09 (the Skills section, skills' summaries, and the state of one this PC's
+operating system can't run, in the list for agents), and 2026-11-10 (that skill's preferences,
+and the Skills section's questions, row, and words for an answer).
 
 - At a console, it shows a menu: every setting with its current value, under "This PC" and
   "Shared by every copy of dev-home", in aligned columns, with headings and setup's colors, in
@@ -21,6 +22,37 @@ run, in the list for agents), and 2026-11-10 (that skill's preferences).
   one answered no included, so a no can be taken back. Every run of setup at a console shows the
   same menu after its questions, `--configure` or not, where Enter goes on with setup's work
   ([0034: Runs of setup by hand](0034-runs-of-setup-by-hand.md)).
+- **The Skills section** opens from the menu's last row under "This PC", row 10, `Skills >`. The
+  planned `Built-in rules >` row goes under "Shared by every copy of dev-home", after the copies
+  row ([0067: Built-in rules](0067-built-in-rules.md)). The `Skills >` row counts the skills by
+  state, leaving out a count of none, then the preferences the section lists, such as "3 added,
+  1 added to some agents, 1 not supported, 1 preference".
+  - The section, titled "dev-home-toolkit settings: Skills", lists under "Skills added to your
+    agents on this PC" each skill by its number, name, and answer, with its `summary` under its
+    name, then each skill's preferences under "`<skill>` skill preferences". Titles and headings
+    are cyan, numbers green, and a problem yellow, at a console that shows color.
+  - A skill's state is worked out each time the section or the row is shown, with setup's own
+    planning, from the answers as they stand in the menu. This PC's facts are gathered once a
+    run, kept on the `Setup` object, and shared by the menu and the work
+    ([0057: Requirements](0057-requirements.md)). After the answer: for a skill answered yes, by
+    default, or always that isn't added to every agent, ", but" and its state, the "but" part
+    yellow, wrapped under the value column; for one answered no that a yes wouldn't add either,
+    because of a name Claude Code keeps, "; " and the reason. A skill this PC's operating system
+    can't run shows its state in place of its answer, with no number, and none of its
+    preferences. So does a skill with a dot in its name, with its answer, since setup can't save
+    an answer or a preference for it until it's renamed
+    ([0072: Fields in skill and rule files](0072-fields-in-skill-and-rule-files.md)).
+  - An answer shows in the menu's words: "not answered yet (defaults to yes)" with none, and
+    "yes (the default)" only for an answer of default.
+  - A number asks that row's question, `a` goes through every row with one, and Enter goes back.
+    dev-home's row has nothing to change. A skill's question is its setting's help, after a blank
+    line, then its label: "Add the handoff skill to your agents?". A preference's is its help, if
+    it has one, then the skill's name and its label: "handoff skill: Include security bugs in
+    GitHub issue offers?". Both take yes, no, or default, and a prompt wider than the console
+    breaks at a space, with the answers kept whole, on its last line or a line of their own.
+  - The main menu's `a` goes through the section's questions too, without opening it. The list
+    for an agent leaves the row out: its own skills section lists the skills, from what setup
+    recorded, with no planning.
 - An agent can't answer at a console, so it names one setting per run:
   `--configure '<name>=<value>'`, with a plain value, always in single quotes: `true` or `false`,
   a whole number of hours, a path, or `default` for a setting with a default. A folder takes
@@ -62,8 +94,8 @@ run, in the list for agents), and 2026-11-10 (that skill's preferences).
   ([0057: Requirements](0057-requirements.md)). Its preferences are left out, of the list and of
   the menu's Skills section: preferences are saved per PC, so changing one here does nothing.
   Their saved values stay, and they show again once the skill works on this PC (the developer,
-  2026-11-10). The settings menu's Skills section is to show the same once it's built, in a layout
-  shown to the developer first.
+  2026-11-10). The settings menu's Skills section shows the same cases, from states it works out
+  fresh (see above).
 - A change to `local-settings.json` keeps a dated backup first, as setup's changes to Claude
   Code's and Codex's settings do. (A key nothing declares is removed, as
   [0049: Answers in the settings](0049-answers-in-the-settings.md) says.) A new `devHome.folder`
@@ -111,6 +143,22 @@ run, in the list for agents), and 2026-11-10 (that skill's preferences).
 - The backup beside the file, because every other backup setup makes is beside its file, where
   the README teaches people to look. Git ignores it because it holds the PC's paths, and the
   repo is public.
+- The Skills section's place: a skill's answer is per PC, in `local-settings.json`, while a
+  built-in rule's is a `state` line in its file in dev-home, which every PC shares, so each
+  heading stays true, nobody turns off a rule thinking it affects only this PC, and rows 1 to 9
+  keep their numbers. The developer's choice, 2026-11-09.
+- States worked out fresh: `skill-states.json` is written during the work, after the menu, so
+  read in the menu it goes stale after a change to a skill's answer or to the agents' folders,
+  and it's missing on a first run. The planned `Built-in rules >` submenu has no such record and
+  works its state out fresh, so both behave alike, and agents added later bring more states that
+  depend on which folders are answered yes. Gathering this PC's facts once a run (about 6.5 ms
+  on one PC, 2026-11-09, while planning 4 skills from them took 0.02 ms) keeps the run no
+  longer than before.
+- A preference's question: the skill's name, then the label, works for every skill, end users'
+  own included, with no new field, and the skill comes first, matching its heading. The `Skills >`
+  row's counts show at a glance what's off. The menu's words for an answer, so "yes (the
+  default)" means a choice there, as on every other row. The developer's choices, 2026-11-09 and
+  2026-11-10.
 
 **Options set aside:**
 
@@ -134,6 +182,23 @@ run, in the list for agents), and 2026-11-10 (that skill's preferences).
   why a "yes" skill is missing); the state on a second, indented line (an agent summing up the
   list could split one skill's two lines apart); and listing the preferences of a skill this PC's
   operating system can't run (no code, but a change that does nothing here).
+- For the Skills section's place: both submenus at the end of "This PC" (the heading would be
+  wrong for rules); `Skills >` right after the agents' folders, as row 9 (it renumbers the
+  recommended settings' row).
+- For its states: the recorded state, shown only when it names a reason beyond the answer (stale
+  after a change, and nothing on a first run); the state on its own line under the row (reads
+  like the summary, lost without color); a no's reason as "no, but not added: ..." (reads as a
+  contradiction); fresh states without gathering the facts once a run (about 7 ms each time the
+  section is shown); checking each skill's links on disk in the menu (more code for a case the
+  work's `PROBLEM` line covers).
+- For a preference's question: a new optional `question` field, falling back to the label (a
+  field in a public format, hard to change later; two forms of question; more for skill authors
+  to write); the skill after the label, "Include security bugs in GitHub issue offers (handoff
+  skill)?" (the reader learns the skill only at the end). For a skill's: "handoff skill:" before
+  the label too (repeats the name), or no help above it.
+- For the `Skills >` row: added skills and preferences only (hides what's off). For an answer:
+  "yes (the default)" for a skill with no answer too, as the first layout showed (reads as a
+  chosen default).
 - For setup's questions: a new `--answer` option (four more pre-approved command patterns and
   more skill text, for nothing an end user would notice); the agent moving the files itself
   (every safety rule becomes steps each agent must follow, and a deleted file skips the Recycle

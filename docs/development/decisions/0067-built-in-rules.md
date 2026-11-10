@@ -68,7 +68,10 @@ Decided by the developer on 2026-10-17 and 2026-10-18.
   `unanswered`, as for skills, with no reminders. All recommended saves `default`, which follows
   the recommendation, setup moving the file between `on/` and `off/`.
 - **Changing one:** setup's menu shows each agent's value on the rule's row, and picking the rule
-  asks which agents to change, all of its agents listed first, or one. A request through
+  asks which agents to change, all of its agents listed first, or one. Those rows live in a
+  `Built-in rules >` submenu, whose row goes under "Shared by every copy of dev-home", after the
+  copies row, since every PC shares a rule's answer
+  ([0026: setup.py --configure](0026-setup-py-configure.md)). A request through
   `/dev-home configure` changes the agents it names, or every copy when it names none. Editing a
   copy changes only that copy.
 - **Shown to end users:** a count of recommended rules not yet answered, only in `/dev-home sync`

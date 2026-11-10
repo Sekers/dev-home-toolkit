@@ -1,5 +1,6 @@
 """Asking the person at the console a question, only when someone is there to answer."""
 
+import itertools
 import os
 import re
 import sys
@@ -28,6 +29,55 @@ def wrap(
         break_long_words=False,
         break_on_hyphens=False,
     )
+
+
+def wrap_parts(parts: Sequence[tuple[str, str]], width: int = LINE_WIDTH) -> list[str]:
+    """Text in parts, each with its color code, or "" for none, as lines of width, broken only at
+    spaces, as wrap breaks them, with each part's words in its color."""
+    lines: list[list[tuple[str, str]]] = []
+    line: list[tuple[str, str]] = []
+    length = 0
+    for word, code in ((w, code) for text, code in parts for w in text.split(" ") if w):
+        if line and length + 1 + len(word) > width:
+            lines.append(line)
+            line, length = [], 0
+        length += len(word) + (1 if line else 0)
+        line.append((word, code))
+    if line:
+        lines.append(line)
+    shown: list[str] = []
+    for words in lines:
+        runs = itertools.groupby(words, key=lambda pair: pair[1])
+        texts = [(" ".join(word for word, _ in run), code) for code, run in runs]
+        shown.append(" ".join(color(text, code) if code else text for text, code in texts))
+    return shown
+
+
+# A color code, which takes no room at the console (see output.color).
+COLOR_CODE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def prompt_lines(question: str, answers: str, width: int = LINE_WIDTH) -> list[str]:
+    """A question and the answers it takes, such as "'y', 'n', or 'd' ... [y/n/D]: ", as lines of
+    width for the console: one line when they fit, and otherwise the question broken only at
+    spaces, with the answers kept whole after it, on its last line when they fit there, or else
+    on a line of their own. The answer is typed after the last line. Measured as the console
+    shows them, so a color code takes no room."""
+
+    def shown(text: str) -> int:
+        return len(COLOR_CODE.sub("", text).rstrip(" "))
+
+    lines: list[str] = []
+    line = ""
+    for word in question.split(" "):
+        if line and shown(f"{line} {word}") > width:
+            lines.append(line)
+            line = word
+        else:
+            line = f"{line} {word}" if line else word
+    if shown(f"{line} {answers}") <= width:
+        return [*lines, f"{line} {answers}"]
+    return [*lines, line, answers]
 
 
 if sys.platform == "win32":
@@ -99,17 +149,21 @@ def choose_or_default(question: str, default: bool, enter: bool | str) -> bool |
     """True for yes, False for no, and DEFAULT to follow the setting's default, which the
     question names. enter is what Enter gives, shown as the capital letter: the saved yes or no,
     or DEFAULT when nothing is saved yet, or the saved answer already follows the default, so
-    Enter never turns a choice into following the default unnoticed. None when input ends
-    without an answer."""
+    Enter never turns a choice into following the default unnoticed. A prompt wider than the
+    console breaks at a space, keeping the answers whole (see prompt_lines). None when input
+    ends without an answer."""
     letters = {True: "y", False: "n", DEFAULT: "d"}
     hint = "/".join(
         letter.upper() if value == enter else letter for value, letter in letters.items()
     )
     words = "yes" if default else "no"
     offered = f"{key('y')}, {key('n')}, or {key('d')} for the default ({words})"
+    *above, last = prompt_lines(question, f"{offered} [{hint}]: ")
     while True:
+        for line in above:
+            print(line, flush=True)
         try:
-            answer = input(f"{question} {offered} [{hint}]: ")
+            answer = input(last)
         except EOFError:
             return None
         text = answer.strip().lower()
