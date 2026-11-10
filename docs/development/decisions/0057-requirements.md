@@ -51,8 +51,13 @@ a skill off, and which only warn, is a decision of its own:
   a newer Python, or a newer dev-home-toolkit, yes); and the message that says what's missing.
 - A skill goes into a skills folder only when it meets its `supportedOn`: its `os` requirement,
   and its `agent` requirement for every agent setup sets up that reads the folder. An `os`
-  requirement, which
-  nobody can act on, leaves the skill out silently, and `/dev-home skills` lists it. An `agent`
+  requirement, which nobody can act on, leaves the skill out silently, and `/dev-home skills`
+  lists it. Its state is then `not supported: <reason>`, such as "not supported: works only on
+  macOS", whatever its answer, since nothing on this PC can add it, and a mistake in the same
+  file goes unsaid there, since fixing it couldn't add the skill: its `PROBLEM` line names it.
+  "Not supported" is the phrase software uses for platform limits, so it reads as a known limit
+  rather than a failure. A skill with a name Claude Code keeps stays `not added: <reason>`, since
+  renaming it fixes it (the developer, 2026-11-09). An `agent`
   requirement is announced once, in the one-time `NEW` line for new skills, such as
   "'claude-only' (added to your agents in Claude Code, not in Codex: works only in Claude Code)".
   When one stops being met, the answer is kept, setup removes the skill's links with a line
@@ -90,7 +95,8 @@ a skill off, and which only warn, is a decision of its own:
   has a format version: a rule for developers, in [skills.md](../skills.md), says a field never
   changes meaning.
 
-Changed on 2026-10-17 and 2026-10-18, before any release.
+Changed on 2026-10-17 and 2026-10-18, and on 2026-11-09 (the state of a skill this PC's
+operating system can't run), before any release.
 
 **How it grows:**
 
@@ -173,6 +179,11 @@ type, the check per skills folder, and the recorded result are dev-home-toolkit'
   (It now checks again what setup only warns about, where the agent runs, and decides nothing.)
 - Moving the file to `agents/dev-home.json`, as Codex's reference suggests for a product's own
   configuration: that's Codex's convention, not the shared standard, and the file is built.
+- For the state of a skill this PC's operating system can't run: `not added: <reason>`, as until
+  2026-11-09 (it reads like one a yes could add); `no (not supported: ...)` (reads as an answer
+  given); `can't be added: <reason>`, for a name Claude Code keeps too (hides that renaming
+  fixes it, and sounds as if setup failed); `works only on macOS` alone (doesn't say it's off
+  here); `macOS only` (doesn't fit setup's reason text).
 
 **Look again if:** a requirement needs a process to check, or the Agent Skills standard adds a
 requirements format that can be checked.

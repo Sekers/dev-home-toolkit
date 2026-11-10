@@ -5,8 +5,9 @@
 **Decision:** `/dev-home skills` lists every skill: dev-home-toolkit's own, then the person's from
 `skills/` in dev-home, each with whose it is, its state, and its `summary`, or its description
 when it has none. The state says whether the skill is added and why, from the result setup
-records in `internal/.generated/`, and a skill setup hasn't seen yet, such as one made since the
-last sync, says so. Setup records each summary there too, beside the state, and `facts.py` prints
+records in `internal/.generated/`, such as "not supported: works only on macOS" for one this PC's
+operating system can't run ([0057: Requirements](0057-requirements.md)), and a skill setup hasn't
+seen yet, such as one made since the last sync, says so. Setup records each summary there too, beside the state, and `facts.py` prints
 it in quotes after the word `summary`, which the `dev-home` skill tells the agent to show word for
 word ([0072: Fields in skill and rule files](0072-fields-in-skill-and-rule-files.md)). A copied
 skill's `compatibility` text follows its summary or description. A program or a Python version a

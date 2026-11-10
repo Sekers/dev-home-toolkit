@@ -10,7 +10,8 @@ and the shared `multiMachine`. It's also where an agent answers setup's question
 and the recommended settings waiting for an answer, which its "Waiting for your answer" section
 lists too ([0038: Recommended settings from chat](0038-recommended-settings-from-chat.md)).
 Changed on 2026-10-17, 2026-10-20, 2026-10-23 (setup's questions), 2026-10-28 (recommended
-settings), and 2026-11-09 (skills' summaries in the list for agents).
+settings), 2026-11-09 (skills' summaries, and the state of one this PC's operating system can't
+run, in the list for agents), and 2026-11-10 (that skill's preferences).
 
 - At a console, it shows a menu: every setting with its current value, under "This PC" and
   "Shared by every copy of dev-home", in aligned columns, with headings and setup's colors, in
@@ -53,9 +54,15 @@ settings), and 2026-11-09 (skills' summaries in the list for agents).
   `summary` has it in parentheses after its name, such as "handoff (Keep a private note for each
   project: where the work stands and what's next): yes (the default)", as its `NEW` line names it
   ([0072: Fields in skill and rule files](0072-fields-in-skill-and-rule-files.md)). A skill whose
-  recorded state isn't what its answer alone gives, such as one that works only on another
-  operating system, gets ", but on this PC it's ..." with that state, on the same line, before "To
-  change it". The settings menu's Skills section is to show the same once it's built, in a layout
+  recorded state isn't what its answer alone gives, such as one that works only in Claude Code
+  where Codex is set up too, gets ", but on this PC it's ..." with that state, on the same line,
+  before "To change it". One this PC's operating system can't run shows its state in place of its
+  answer, with no "To change it", since no answer here can add it: "tidy (Tidy up downloaded
+  files): not supported: works only on macOS"
+  ([0057: Requirements](0057-requirements.md)). Its preferences are left out, of the list and of
+  the menu's Skills section: preferences are saved per PC, so changing one here does nothing.
+  Their saved values stay, and they show again once the skill works on this PC (the developer,
+  2026-11-10). The settings menu's Skills section is to show the same once it's built, in a layout
   shown to the developer first.
 - A change to `local-settings.json` keeps a dated backup first, as setup's changes to Claude
   Code's and Codex's settings do. (A key nothing declares is removed, as
@@ -125,7 +132,8 @@ settings), and 2026-11-09 (skills' summaries in the list for agents).
 - For the agents' list: leaving it as it was (its heading says "added", while its lines showed
   answers); changing the heading instead (a heading already approved, and it still wouldn't say
   why a "yes" skill is missing); the state on a second, indented line (an agent summing up the
-  list could split one skill's two lines apart).
+  list could split one skill's two lines apart); and listing the preferences of a skill this PC's
+  operating system can't run (no code, but a change that does nothing here).
 - For setup's questions: a new `--answer` option (four more pre-approved command patterns and
   more skill text, for nothing an end user would notice); the agent moving the files itself
   (every safety rule becomes steps each agent must follow, and a deleted file skips the Recycle

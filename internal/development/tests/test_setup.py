@@ -2847,22 +2847,42 @@ def test_configure_alone_shows_an_interval_of_your_own_without_a_note(
 def test_configure_alone_says_where_a_skill_isnt_added_as_its_answer_says(
     box: Sandbox, settings_kept: Path
 ) -> None:
-    # Such as one that works only on another operating system: its answer says yes, but setup
-    # left it out, so the line says so, beside the answer it can change.
+    # Such as one that works only in Claude Code, which the sandbox sets up beside Codex: its
+    # answer says yes, but setup left it out of Codex, so the line says so, beside the answer it
+    # can change.
+    claude_only = {"supportedOn": [{"type": "agent", "anyOf": ["claude-code"]}]}
     elsewhere = "macos" if sys.platform != "darwin" else "windows"
     shown = "macOS" if elsewhere == "macos" else "Windows"
-    supported = {"supportedOn": [{"type": "os", "anyOf": [elsewhere]}]}
-    folder = personal_skill(box, "elsewhere", supported)
+    other_os = {"supportedOn": [{"type": "os", "anyOf": [elsewhere]}]}
+    loud = {"loud": {"default": True, "label": "Be loud"}}
+    folders = [
+        personal_skill(box, "one-agent", {**claude_only, "preferences": loud}),
+        personal_skill(box, "elsewhere", other_os),
+        personal_skill(box, "far", {"summary": "Work far away", "preferences": loud, **other_os}),
+    ]
+    edited = json.loads(read(settings_kept))
+    edited["skills"]["far"] = {"addToAgents": False}
+    write_text(settings_kept, json.dumps(edited, indent=2) + "\n")
     try:
         setup(box)
         result = run_python(box, "setup.py", "--configure")
     finally:
-        remove_personal_skill(box, folder)
+        for folder in folders:
+            remove_personal_skill(box, folder)
     pattern = (
-        r"^\s+elsewhere: not answered yet \(defaults to yes\), but on this PC it's not added: "
-        rf"works only on {shown}\. To change it: skills\.elsewhere\.addToAgents="
+        r"^\s+one-agent: not answered yet \(defaults to yes\), but on this PC it's added to your "
+        r"agents in Claude Code, not in Codex: works only in Claude Code\. To change it: "
+        r"skills\.one-agent\.addToAgents="
     )
     assert result.code == 0 and result.has_line(pattern), str(result)
+    # One this PC's operating system can't run shows that in place of its answer, whatever the
+    # answer is, with no way to change it, and none of its preferences: nothing changed here can
+    # add it or change what it does.
+    assert result.has_line(rf"^\s+elsewhere: not supported: works only on {shown}$"), str(result)
+    pattern = rf"^\s+far \(Work far away\): not supported: works only on {shown}$"
+    assert result.has_line(pattern), str(result)
+    assert result.has_line(r"^\s+Be loud \(one-agent skill\): not answered yet"), str(result)
+    assert not result.has_line(r"\(far skill\)"), str(result)
     # One whose state matches its answer has no such part.
     pattern = r"^\s+handoff \(.+\): not answered yet \(defaults to yes\)\. To change"
     assert result.has_line(pattern), str(result)
@@ -4138,7 +4158,7 @@ def test_a_new_skill_follows_its_default_and_is_named_once(
     assert links["one-agent"] == (box.content / "skills" / "one-agent", None), links
     for name in ("elsewhere", "offered"):
         assert links[name] == (None, None), links
-    assert states["elsewhere"] == {"state": "not added: works only on macOS"}, states
+    assert states["elsewhere"] == {"state": "not supported: works only on macOS"}, states
     assert states["offered"] == {"state": "not added by default"}, states
     # What it needs that setup only warns about, for /dev-home skills to check again.
     added = "added to your agents"
@@ -4231,31 +4251,51 @@ def test_with_no_skills_folder_a_skill_says_why_it_isnt_added(box: Sandbox) -> N
     plain = settings.Skill("plain", own=True)
     # One nobody can act on stays unsaid, as when skills folders are set up.
     silent = setup_module.plan_skill(elsewhere, {}, pc, [])
-    assert (silent.state, silent.told) == ("not added: works only on macOS", False), silent
+    assert (silent.state, silent.told) == ("not supported: works only on macOS", False), silent
     told = setup_module.plan_skill(plain, {}, pc, [])
     expected = "not added: no Claude Code folder or Codex home is set up"
     assert (told.state, told.told) == (expected, True), told
 
 
-def test_a_skill_not_wanted_that_couldnt_be_added_anyway_says_why_not_how(box: Sandbox) -> None:
-    # Not recommended, or said no to, and for another operating system: a yes wouldn't add it, so
-    # its state gives the reason nobody can act on, and the NEW line leaves it out.
+def test_a_skill_for_another_operating_system_is_not_supported_whatever_its_answer(
+    box: Sandbox,
+) -> None:
+    # Wanted or not, nothing on this PC can add it, so its state gives the reason nobody can act
+    # on in place of what its answer gives, and the NEW line leaves it out. A mistake in its file
+    # as well goes unsaid here, since fixing it couldn't add the skill: its PROBLEM line names it.
     setup_module = shared_module(box, "setup")
     settings = shared_module(box, "settings")
     requirements = shared_module(box, "requirements")
     pc = requirements.ThisPC("windows", (3, 13, 0), frozenset())
     mac_only = (requirements.Requirement("os", ("macos",)),)
+    mistake = requirements.Requirement("agent", mistake=True)
     offered = settings.Skill("offered", own=True, recommended=False, requires=mac_only)
     refused = settings.Skill("refused", own=True, requires=mac_only)
+    wanted = settings.Skill("wanted", own=True, requires=mac_only)
+    defaulted = settings.Skill("defaulted", own=True, requires=mac_only)
+    flawed = settings.Skill("flawed", own=True, requires=(*mac_only, mistake))
     plain = settings.Skill("plain", own=True, recommended=False)
     folder = box.profile / ".claude" / "skills"
     folders = [(folder, frozenset({"claude-code"}))]
-    said_no = {"skills": {"refused": {"addToAgents": False}}}
-    for skill, data in ((offered, {}), (refused, said_no)):
+    data = {
+        "skills": {
+            "refused": {"addToAgents": False},
+            "wanted": {"addToAgents": True},
+            "defaulted": {"addToAgents": {"$state": "default"}},
+        }
+    }
+    why = "works only on macOS"
+    for skill in (offered, refused, wanted, defaulted, flawed):
         plan = setup_module.plan_skill(skill, data, pc, folders)
-        why = "works only on macOS"
-        assert (plan.state, plan.told) == (f"not added: {why}", False), plan
-        assert plan.left_out == ((folder, why),), plan
+        assert (plan.state, plan.told) == (f"not supported: {why}", False), plan
+        assert plan.added_to == () and plan.left_out == ((folder, why),), plan
+    # With no skills folder set up, the same.
+    plan = setup_module.plan_skill(flawed, data, pc, [])
+    assert (plan.state, plan.told) == (f"not supported: {why}", False), plan
+    # A mistake alone is one the end user can fix, so the NEW line names it.
+    only_flawed = settings.Skill("only-flawed", own=True, requires=(mistake,))
+    plan = setup_module.plan_skill(only_flawed, {}, pc, [])
+    assert plan.state.startswith("not added: ") and plan.told, plan
     # Not recommended, and nothing else in the way: the NEW line says so, as the default.
     plan = setup_module.plan_skill(plain, {}, pc, folders)
     assert (plan.state, plan.told) == ("not added by default", True), plan

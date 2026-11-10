@@ -153,7 +153,7 @@ description from the frontmatter, on one line; and then its compatibility text f
 has any:
 
     skill: handoff (dev-home-toolkit, added to your agents): summary "Keep a private note for ..."
-    skill: mac-notes (yours, not added: works only on macOS): Keeps notes in Apple Notes.
+    skill: mac-notes (yours, not supported: works only on macOS): Keeps notes in Apple Notes.
     skill: tidy (yours, not added yet: setup hasn't seen it): Tidies a project's imports.
     skill: vpn-check (yours, added to your agents): Checks the VPN. Compatibility: Needs ...
 

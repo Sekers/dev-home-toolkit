@@ -632,7 +632,7 @@ def recommended_overview(run: "Setup", settings: LocalSettings) -> list[str]:
 
 def recorded_states() -> dict[str, str] | None:
     """Each skill's state on this PC, by its name in lowercase, as setup last recorded it, such
-    as "not added: works only on macOS", or None when setup has recorded none."""
+    as "not supported: works only on macOS", or None when setup has recorded none."""
     # Loaded here, since setup loads this module.
     from .setup import SKILL_STATES
 
@@ -654,13 +654,26 @@ def skills_overview(settings: LocalSettings) -> list[str]:
     its summary, if it has one, then each preference the skills declare, by its label and skill,
     each with its value and the name --configure changes it by, so a skill can name a preference
     by its label alone. Where the state setup last recorded for a skill isn't what its answer
-    alone gives, such as for one that works only on another operating system, the line says so,
-    so nobody changes an answer for nothing."""
+    alone gives, such as for one that works only in Claude Code, the line says so, so nobody
+    changes an answer for nothing. One this PC's operating system can't run shows that state in
+    place of its answer, with no way to change it, and none of its preferences, since nothing
+    changed here can add it or change what it does."""
+    # Loaded here, since setup loads this module.
+    from .setup import NOT_SUPPORTED
+
     skills = skill_declarations(settings.content_dir).skills
     states = recorded_states()
     added: list[str] = []
+    unsupported: set[str] = set()
     for name, skill in skills.items():
         shown = f"  {name} ({skill.summary})" if skill.summary else f"  {name}"
+        state = None
+        if states is not None:
+            state = states.get(name.lower(), "not added yet: setup hasn't seen it")
+            if state.startswith(f"{NOT_SUPPORTED}:"):
+                added.append(f"{shown}: {state}")
+                unsupported.add(name)
+                continue
         setting = skill.added_setting
         if setting is None:
             line, expected = f"{shown}: always", "always added to your agents"
@@ -671,15 +684,15 @@ def skills_overview(settings: LocalSettings) -> list[str]:
                 expected = "added to your agents"
             else:
                 expected = "not added: you said no" if saved is False else "not added by default"
-        if states is not None:
-            state = states.get(name.lower(), "not added yet: setup hasn't seen it")
-            if state != expected:
-                line += f", but on this PC it's {state}"
+        if state is not None and state != expected:
+            line += f", but on this PC it's {state}"
         if setting is not None:
             line += f". To change it: {setting.path}=true|false|default"
         added.append(line)
     preferences: list[str] = []
     for name, skill in skills.items():
+        if name in unsupported:
+            continue
         for preference in skill.preferences.values():
             setting = preference.setting
             shown = value_shown(setting, get(settings.data, setting.path, MISSING))

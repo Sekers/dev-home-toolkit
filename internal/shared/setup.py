@@ -323,6 +323,9 @@ GENERATED_FOLDERS = ("skills", "shared-skill-scripts", "last-written")
 LAST_WRITTEN = GENERATED_ROOT / "last-written"
 # What setup decided for each skill on this PC, which facts.py's skills topic shows.
 SKILL_STATES = GENERATED_ROOT / "skill-states.json"
+# How a skill's state starts when this PC's operating system can't run it, such as "not
+# supported: works only on macOS": nothing on this PC can add it, whatever its answer.
+NOT_SUPPORTED = "not supported"
 # The Pythons that didn't run when setup checked them, which syncs skip (see sync_python_link).
 # There only while one is noted.
 FAILED_PYTHONS = GENERATED_ROOT / "failed-pythons.json"
@@ -4931,8 +4934,9 @@ def plan_skill(
     """What setup does with one skill on this PC (see SkillPlan): with a yes, its default, or for
     a skill that's always added, it goes into each skills folder whose agents meet its
     supportedOn, the operating system and the agent; with a no, or a name Claude Code keeps
-    (kept_off), into none. Its dependsOn, a program or a Python version, never keeps it off: setup
-    only warns about it."""
+    (kept_off), into none. One for another operating system is not supported here, whatever its
+    answer, since nothing on this PC can add it. Its dependsOn, a program or a Python version,
+    never keeps it off: setup only warns about it."""
     setting = skill.added_setting
     said_no = False
     wanted = True
@@ -4962,21 +4966,24 @@ def plan_skill(
         return plan((), out_of_each, f"not added: {skill.kept_off}", told=False)
 
     # What keeps it off this whole PC, with no agents to check: the operating system, or an entry
-    # about it or the agent with a mistake. A reason nobody can act on stays unsaid.
+    # about it or the agent with a mistake. The operating system is the one reason nobody can act
+    # on, so the state says that in place of what its answer gives, and the NEW line leaves it
+    # out. A mistake in its file goes unsaid here, since fixing it couldn't add the skill: its
+    # PROBLEM line names it.
     everywhere = keeping_off(frozenset())
+    unsupported = and_list(list(dict.fromkeys(u.reason for u in everywhere if not u.can_act)))
+    if unsupported:
+        out_of_each = [(f, unsupported) for f, _ in folders]
+        return plan((), out_of_each, f"{NOT_SUPPORTED}: {unsupported}", told=False)
     on_this_pc = and_list(list(dict.fromkeys(u.reason for u in everywhere)))
     if not wanted:
-        if everywhere and not any(u.can_act for u in everywhere):
-            # It couldn't be added here even with a yes, so that's what its state says.
-            out_of_each = [(f, on_this_pc) for f, _ in folders]
-            return plan((), out_of_each, f"not added: {on_this_pc}", told=False)
         why = "you said no to" if said_no else "isn't added by default"
         state = "not added: you said no" if said_no else "not added by default"
         return plan((), [(f, why) for f, _ in folders], state, told=True)
     if not folders:
         if not everywhere:
             return plan((), (), "not added: no Claude Code folder or Codex home is set up", True)
-        return plan((), (), f"not added: {on_this_pc}", any(u.can_act for u in everywhere))
+        return plan((), (), f"not added: {on_this_pc}", True)
     added: list[Path] = []
     left_out: list[tuple[Path, str]] = []
     reasons: list[str] = []
