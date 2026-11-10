@@ -650,21 +650,23 @@ def recorded_states() -> dict[str, str] | None:
 
 
 def skills_overview(settings: LocalSettings) -> list[str]:
-    """For an agent: whether each skill is added to the agents on this PC, then each preference
-    the skills declare, by its label and skill, each with its value and the name --configure
-    changes it by, so a skill can name a preference by its label alone. Where the state setup
-    last recorded for a skill isn't what its answer alone gives, such as for one that works only
-    on another operating system, the line says so, so nobody changes an answer for nothing."""
+    """For an agent: whether each skill is added to the agents on this PC, each by its name and
+    its summary, if it has one, then each preference the skills declare, by its label and skill,
+    each with its value and the name --configure changes it by, so a skill can name a preference
+    by its label alone. Where the state setup last recorded for a skill isn't what its answer
+    alone gives, such as for one that works only on another operating system, the line says so,
+    so nobody changes an answer for nothing."""
     skills = skill_declarations(settings.content_dir).skills
     states = recorded_states()
     added: list[str] = []
     for name, skill in skills.items():
+        shown = f"  {name} ({skill.summary})" if skill.summary else f"  {name}"
         setting = skill.added_setting
         if setting is None:
-            line, expected = f"  {name}: always", "always added to your agents"
+            line, expected = f"{shown}: always", "always added to your agents"
         else:
             saved = get(settings.data, setting.path, MISSING)
-            line = f"  {name}: {value_shown(setting, saved)}"
+            line = f"{shown}: {value_shown(setting, saved)}"
             if read_value(saved, setting)[0]:
                 expected = "added to your agents"
             else:

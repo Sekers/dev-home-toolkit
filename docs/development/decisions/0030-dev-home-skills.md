@@ -3,15 +3,19 @@
 **Built:** yes.
 
 **Decision:** `/dev-home skills` lists every skill: dev-home-toolkit's own, then the person's from
-`skills/` in dev-home, each with whose it is, its state, and its description. The state says
-whether the skill is added and why, from the result setup records in `internal/.generated/`, and
-a skill setup hasn't seen yet, such as one made since the last sync, says so. A copied skill's
-`compatibility` text follows its description. A program or a Python version a skill needs only
-warns, and `facts.py` checks it again each time, where the agent runs, from what setup recorded
-([0062: Keeping a skill off](0062-keeping-a-skill-off.md)). It says when one of the person's
-skills isn't added because a dev-home-toolkit skill has its name, as setup does. The list comes
+`skills/` in dev-home, each with whose it is, its state, and its `summary`, or its description
+when it has none. The state says whether the skill is added and why, from the result setup
+records in `internal/.generated/`, and a skill setup hasn't seen yet, such as one made since the
+last sync, says so. Setup records each summary there too, beside the state, and `facts.py` prints
+it in quotes after the word `summary`, which the `dev-home` skill tells the agent to show word for
+word ([0072: Fields in skill and rule files](0072-fields-in-skill-and-rule-files.md)). A copied
+skill's `compatibility` text follows its summary or description. A program or a Python version a
+skill needs only warns, and `facts.py` checks it again each time, where the agent runs, from what
+setup recorded ([0062: Keeping a skill off](0062-keeping-a-skill-off.md)). It says when one of the
+person's skills isn't added because a dev-home-toolkit skill has its name, as setup does, and
+shows no summary for it, since the one recorded by that name is the other skill's. The list comes
 from a `skills` topic in `facts.py`, so it reads only this PC's files, never syncs, and works in
-Codex too. Changed on 2026-10-16 and 2026-10-17.
+Codex too. Changed on 2026-10-16, 2026-10-17, and 2026-11-09 (the summary).
 
 **Why:** a PC adds some skills and not others, by each skill's default and the person's answers
 ([0035: Skills per PC](0035-skills-per-pc.md)), so some of dev-home-toolkit's skills may not be
@@ -21,6 +25,12 @@ takes no judgment, so it belongs in a script (see [skills.md](../skills.md)), an
 topic is one pre-approved command that costs a Python start only when someone types it. `skills`
 names what it shows, and other commands about skills can sit under the same word later.
 
+The summary is the same approved words the settings menu shows, and it makes the list shorter:
+about 60 words fewer per skill with one, about 170 for dev-home-toolkit's three, with nothing for
+the agent to condense. The quotes and the word `summary` tell it apart from a description, which
+the agent condenses. Setup records it beside the state, so `facts.py` needs no copy of the
+reader's rules for it, and reads no more files.
+
 **Options set aside:**
 
 - Also listing skills in the agents' own folders that setup didn't put there, or every skill the
@@ -28,6 +38,9 @@ names what it shows, and other commands about skills can sit under the same word
   aren't dev-home's, and each agent can list its own.
 - Only the person's own skills: dev-home-toolkit's skills that aren't added couldn't be found.
 - `/dev-home list`: a general verb, which would need a second word once anything else is listed.
+- `facts.py` reading each skill's `dev-home-skill.json` for its summary: a change to it would
+  show before the next sync, but at the cost of a second copy of the reader's rules, with a test
+  that the two agree.
 - Showing where each skill is linked: setup already reports a link problem on every sync. (The
   other reason, that `facts.py` would need a copy of setup's rules, no longer holds, since it reads
   what setup records.)

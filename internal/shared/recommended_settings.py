@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .settings import SUMMARY_LIMIT
+
 CATALOG_PATH = (
     Path(__file__).parent.parent.parent
     / "templates"
@@ -50,8 +52,6 @@ OLDER_PLACES = (".claude.json",)
 # An id, as the Agent Skills standard writes a name: lowercase letters, digits, and hyphens, with no
 # hyphen at either end, and none twice in a row.
 ID = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
-# A summary's longest length, as a built-in skill's (decision 0072).
-SUMMARY_LIMIT = 80
 
 
 @dataclass(frozen=True)

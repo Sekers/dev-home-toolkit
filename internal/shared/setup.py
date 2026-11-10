@@ -421,7 +421,8 @@ class SkillPlan:
     as a program, which the NEW line adds to its state; needs is every requirement of that kind,
     which /dev-home skills checks again where the agent runs. Both are empty for a skill that
     isn't added anywhere, since no agent uses it. A skill whose dev-home-skill.json can't be read
-    is left as it is: in neither list."""
+    is left as it is: in neither list. summary is the skill's own, which the NEW line and
+    /dev-home skills show, or empty."""
 
     name: str
     added_to: tuple[Path, ...]
@@ -430,6 +431,7 @@ class SkillPlan:
     told: bool
     warnings: tuple[str, ...] = ()
     needs: tuple[requirements.Requirement, ...] = ()
+    summary: str = ""
 
 
 @dataclass(frozen=True)
@@ -4946,7 +4948,9 @@ def plan_skill(
     ) -> SkillPlan:
         # What's missing is said only for a skill that's added somewhere, which an agent can use.
         missing = (warnings, needs) if added else ((), ())
-        return SkillPlan(skill.name, tuple(added), tuple(left_out), state, told, *missing)
+        return SkillPlan(
+            skill.name, tuple(added), tuple(left_out), state, told, *missing, skill.summary
+        )
 
     def keeping_off(agents: frozenset[str]) -> list[requirements.Unmet]:
         return [u for u in requirements.unmet(skill.requires, pc, agents) if u.keeps_off]
@@ -5037,11 +5041,14 @@ def operating_by_agent(
 
 
 def recorded_state(plan: SkillPlan) -> dict[str, Any]:
-    """One skill's entry in skill-states.json: its state, and what it needs that setup only
-    warns about, for /dev-home skills to check again where the agent runs: each program, by its
-    name, with what the skill uses it for, if its entry says; and the lowest Python it runs on,
-    the highest any entry asks for."""
+    """One skill's entry in skill-states.json: its state; its summary, if it has one, which
+    /dev-home skills shows in place of its description, so facts.py needs no copy of the
+    reader's rules for it; and what it needs that setup only warns about, for /dev-home skills to
+    check again where the agent runs: each program, by its name, with what the skill uses it for,
+    if its entry says; and the lowest Python it runs on, the highest any entry asks for."""
     entry: dict[str, Any] = {"state": plan.state}
+    if plan.summary:
+        entry["summary"] = plan.summary
     programs: dict[str, dict[str, str]] = {}
     for need in plan.needs:
         if need.kind == "program" and need.names[0] not in programs:
@@ -5057,13 +5064,16 @@ def recorded_state(plan: SkillPlan) -> dict[str, Any]:
 
 
 def new_skills_text(new: Sequence[str], plans: dict[str, SkillPlan]) -> str:
-    """The NEW line naming the skills new to this PC, each with its state and what it needs that
-    this PC seems to lack, or "" with none to name. One left out only for a reason nobody can act
-    on, such as the operating system, isn't named (see SkillPlan)."""
+    """The NEW line naming the skills new to this PC, each with its summary, if it has one, its
+    state, and what it needs that this PC seems to lack, or "" with none to name. One left out
+    only for a reason nobody can act on, such as the operating system, isn't named (see
+    SkillPlan)."""
     named = [plans[name.lower()] for name in new if name.lower() in plans]
-    items = [
-        f"'{plan.name}' ({'; '.join([plan.state, *plan.warnings])})" for plan in named if plan.told
-    ]
+    items: list[str] = []
+    for plan in named:
+        if plan.told:
+            parts = [plan.summary] if plan.summary else []
+            items.append(f"'{plan.name}' ({'; '.join([*parts, plan.state, *plan.warnings])})")
     if not items:
         return ""
     one = len(items) == 1

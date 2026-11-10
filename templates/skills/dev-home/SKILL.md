@@ -124,19 +124,20 @@ backup of this PC's settings, and commits and pushes the shared one.
    `{{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py --skill dev-home --stamp {{SKILL_STAMP}} skills`.
    It only reads files on this PC: no sync, and no network. It prints a `skill:` line for each
    skill, dev-home-toolkit's own first, then the user's own from `{{CONTENT_DIR}}/skills/`, each
-   with whose it is, its state, and its description. The state says whether the skill is added
-   to the user's agents on this PC, and if not, why, then what it needs that's missing here, such
-   as a program that isn't on the PATH. A line may end with the skill's compatibility text. If it
-   prints anything else, show it and stop; when it says this skill has changed since you loaded
-   it, the user runs the command again to load the new steps.
+   with whose it is, its state, and its summary, in quotes after `summary`, or else its
+   description. The state says whether the skill is added to the user's agents on this PC, and if
+   not, why, then what it needs that's missing here, such as a program that isn't on the PATH. A
+   line may end with the skill's compatibility text. If it prints anything else, show it and
+   stop; when it says this skill has changed since you loaded it, the user runs the command again
+   to load the new steps.
 2. Show the skills in a table: the command that runs each (`/<name>`, or `$<name>` in Codex),
-   whose it is, its state in full, and what it's for in one short sentence from its description.
-   Below the table, give each compatibility text. When a program is missing, add that one
-   installed since the agent started is found only once the agent, and any editor it runs in, is
-   restarted. To add a skill to their agents, or take one out, the user changes
-   `skills.<name>.addToAgents` (see "Configure"). If the user has none of their own, say where
-   one goes: `{{CONTENT_DIR}}/skills/<name>/SKILL.md`. The list is this PC's copy, so a skill
-   added on another PC shows up after the next sync.
+   whose it is, its state in full, and what it's for: its summary word for word, or else one
+   short sentence from its description. Below the table, give each compatibility text. When a
+   program is missing, add that one installed since the agent started is found only once the
+   agent, and any editor it runs in, is restarted. To add a skill to their agents, or take one
+   out, the user changes `skills.<name>.addToAgents` (see "Configure"). If the user has none of
+   their own, say where one goes: `{{CONTENT_DIR}}/skills/<name>/SKILL.md`. The list is this PC's
+   copy, so a skill added on another PC shows up after the next sync.
 
 ## In Codex
 

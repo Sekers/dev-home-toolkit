@@ -5,14 +5,16 @@
 **Decision:** an update or a sync can bring new items: a dev-home-toolkit skill or recommended
 setting, a personal skill made on another PC, or a Claude Code folder or Codex home setup hasn't
 asked about. Changed on 2026-10-16, 2026-10-24 (`LARGE` lines share the skills' bullet, and a
-recommended setting is asked in plain words), and 2026-10-29 (`LONG` lines share it too).
+recommended setting is asked in plain words), 2026-10-29 (`LONG` lines share it too), and
+2026-11-09 (a new skill's summary).
 
 - When `update.py` runs at a console, the setup it runs afterward does too, and asks about the new
   items right then.
 - A quiet sync adds a new skill by its default, and nothing else. The first setup run that finds
   it saves it as `unanswered`, which
   [0049: Answers in the settings](0049-answers-in-the-settings.md) lets a quiet run write, and
-  names it in one `NEW` line, once: whether it was added to the person's agents, and that
+  names it in one `NEW` line, once: its `summary`, if it has one, then whether it was added to the
+  person's agents, such as `'tidy' (Tidy up downloaded files; added to your agents)`, and that
   `/dev-home configure` changes that. The line offers no answers, since the skill works at its
   default, as a new preference gets no line at all; that's a departure recorded in
   [0040: Answers to offers](0040-answers-to-offers.md). A skill the person made on another PC can
@@ -46,7 +48,9 @@ pass on, so an item that waits on an answer repeats until it's answered, once pe
 answer, even no, ends it. A new skill is already at work at its default, so it needs telling, not
 an answer, and saving it as `unanswered` is what lets its line be said once. `PROBLEM` would say
 something is broken, and set the exit code. When the person is at a terminal, asking right then
-is clearest.
+is clearest. A new skill's summary says what it does when it arrives, for about 12 words, said
+once per skill on each PC
+([0072: Fields in skill and rule files](0072-fields-in-skill-and-rule-files.md)).
 
 The skills share one bullet for these lines: `UPDATE` already repeated on every sync while commits
 waited, and the skills told the end user each time; once per session follows "nothing asked

@@ -70,8 +70,10 @@ a skill off, and which only warn, is a decision of its own:
 - Setup records its result for each skill, as one state that says where it's added and why it
   isn't elsewhere, such as "added to your agents in Claude Code, not in Codex: works only in
   Claude Code", in `internal/.generated/skill-states.json`, which `/dev-home skills` reads, and
-  later the settings menu. Beside the state go the programs and the Python minimum the skill
-  only warns about, which `/dev-home skills` checks again where the agent runs.
+  later the settings menu. Beside the state go the skill's `summary`, if it has one, which
+  `/dev-home skills` shows ([0030: /dev-home skills](0030-dev-home-skills.md)), and the programs
+  and the Python minimum the skill only warns about, which `/dev-home skills` checks again where
+  the agent runs.
 - A skill whose `dev-home-skill.json` can't be read, such as one that isn't valid JSON, is left as
   it is, links and all, and setup reports the file as a `PROBLEM` on every run. What it requires
   isn't known, so it can't be added, but taking it out of every agent over a slip in a hand edit

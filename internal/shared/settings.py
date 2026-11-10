@@ -40,6 +40,7 @@ DEV_HOME_SCHEMA_VERSION = 1
 # in supportedOn and dependsOn.
 SKILL_SETTINGS = "dev-home-skill.json"
 SKILL_FIELDS = (
+    "summary",
     "recommended",
     "alwaysAddedToAgents",
     *LISTS,
@@ -47,6 +48,9 @@ SKILL_FIELDS = (
     "formerNames",
 )
 PREFERENCE_FIELDS = ("default", "label", "help", "formerNames")
+# A summary's longest length (decision 0072): the recommended settings' reader refuses a longer
+# one, and a test checks dev-home-toolkit's own skills. An end user's longer one is shown whole.
+SUMMARY_LIMIT = 80
 # Each skill's answer to whether this PC adds it to the agents, at skills.<skill>.addToAgents.
 ADD_TO_AGENTS = "addToAgents"
 # The rule for a skill's name (see name_problem): the Agent Skills standard's longest name; the
@@ -558,7 +562,8 @@ class Skill:
     requires is what it needs to run, from its supportedOn and dependsOn (see requirements.py),
     preferences are its preferences, by name, and former_names the names it had before, whose
     answers setup moves to this one. kept_off says why setup never adds it, whatever its answer,
-    said to follow "which", or is empty: only for a name Claude Code keeps (see name_problem)."""
+    said to follow "which", or is empty: only for a name Claude Code keeps (see name_problem).
+    summary is its one line for people, shown in notices and lists, or empty when it has none."""
 
     name: str
     own: bool
@@ -568,6 +573,7 @@ class Skill:
     preferences: dict[str, Preference] = field(default_factory=dict)
     former_names: tuple[str, ...] = ()
     kept_off: str = ""
+    summary: str = ""
 
     @property
     def added_setting(self) -> Setting | None:
@@ -636,6 +642,13 @@ def read_skill_file(folder: Path, *, own: bool) -> tuple[Skill | None, list[str]
     problems = [
         f"{path}: {unknown_field(key, SKILL_FIELDS)}" for key in data if key not in SKILL_FIELDS
     ]
+    summary = ""
+    if "summary" in data:
+        text = data["summary"].strip() if isinstance(data["summary"], str) else ""
+        if text and len(text.splitlines()) == 1:
+            summary = text
+        else:
+            problems.append(f"{path}: summary isn't one line of text, so it was left out.")
     recommended = data.get("recommended", True)
     if not isinstance(recommended, bool):
         problems.append(f"{path}: recommended isn't true or false, so it counts as true.")
@@ -693,7 +706,16 @@ def read_skill_file(folder: Path, *, own: bool) -> tuple[Skill | None, list[str]
             entry.get("help", ""),
             tuple(former or ()),
         )
-    skill = Skill(folder.name, own, recommended, always, requires, preferences, tuple(former_names))
+    skill = Skill(
+        folder.name,
+        own,
+        recommended,
+        always,
+        requires,
+        preferences,
+        tuple(former_names),
+        summary=summary,
+    )
     return skill, list(dict.fromkeys(problems))
 
 

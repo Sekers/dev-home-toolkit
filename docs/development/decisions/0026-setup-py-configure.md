@@ -9,8 +9,8 @@ answers to each Claude Code folder's recommended settings, each skill's answer a
 and the shared `multiMachine`. It's also where an agent answers setup's questions about files,
 and the recommended settings waiting for an answer, which its "Waiting for your answer" section
 lists too ([0038: Recommended settings from chat](0038-recommended-settings-from-chat.md)).
-Changed on 2026-10-17, 2026-10-20, 2026-10-23 (setup's questions), and 2026-10-28 (recommended
-settings).
+Changed on 2026-10-17, 2026-10-20, 2026-10-23 (setup's questions), 2026-10-28 (recommended
+settings), and 2026-11-09 (skills' summaries in the list for agents).
 
 - At a console, it shows a menu: every setting with its current value, under "This PC" and
   "Shared by every copy of dev-home", in aligned columns, with headings and setup's colors, in
@@ -49,7 +49,10 @@ settings).
 - In the list printed with neither a console nor a setting, which in practice an agent reads and
   sums up for the person, a setting nobody has answered shows as "not answered yet (defaults to
   ...)" with its default, such as "yes", and the copies setting as "not answered yet (until then,
-  each sync checks GitHub)". Under "Skills added to your agents on this PC", a skill whose
+  each sync checks GitHub)". Under "Skills added to your agents on this PC", each skill with a
+  `summary` has it in parentheses after its name, such as "handoff (Keep a private note for each
+  project: where the work stands and what's next): yes (the default)", as its `NEW` line names it
+  ([0072: Fields in skill and rule files](0072-fields-in-skill-and-rule-files.md)). A skill whose
   recorded state isn't what its answer alone gives, such as one that works only on another
   operating system, gets ", but on this PC it's ..." with that state, on the same line, before "To
   change it". The settings menu's Skills section is to show the same once it's built, in a layout

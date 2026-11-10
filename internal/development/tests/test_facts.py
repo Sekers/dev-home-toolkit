@@ -214,12 +214,13 @@ def test_the_skills_topic_lists_dev_home_toolkit_skills_then_the_users(box: Sand
         ),
         ("mine", "yours, added to your agents"),
     ], str(result)
+    # Its summary, as setup recorded it, in place of its description.
     assert any(
         line.startswith(
-            "skill: handoff (dev-home-toolkit, added to your agents): Read, update, or audit"
+            'skill: handoff (dev-home-toolkit, added to your agents): summary "Keep a private note'
         )
         for line in result.lines
-    )
+    ), str(result)
     expected = "skill: mine (yours, added to your agents): A personal test skill."
     assert result.lines[-1] == expected, str(result)
 
@@ -306,6 +307,44 @@ def test_the_skills_topic_checks_again_what_setup_only_warns_about(box: Sandbox)
         r"\d+\.\d+\.\d+\): A personal test skill\. Compatibility: Needs the office network\."
     )
     assert result.code == 0 and re.fullmatch(pattern, result.lines[-1]), str(result)
+
+
+def test_the_skills_topic_shows_a_recorded_summary_in_place_of_the_description(
+    box: Sandbox,
+) -> None:
+    states = box.generated / "skill-states.json"
+    skills = box.content / "skills"
+    mine = skills / "mine" / "SKILL.md"
+    recorded, written = states.read_text(encoding="utf-8"), mine.read_text(encoding="utf-8")
+    entries = json.loads(recorded)
+    entries["mine"] = {"state": "added to your agents", "summary": "Tidy up downloaded files"}
+    # A summary that isn't text, which setup never records, counts as none.
+    entries["odd"] = {"state": "added to your agents", "summary": 3}
+    write_text(states, json.dumps(entries))
+    write_text(
+        mine,
+        "---\nname: mine\ndescription: A personal test skill.\n"
+        "compatibility: Needs the office network.\n---\n",
+    )
+    write_text(skills / "odd" / "SKILL.md", "---\nname: odd\ndescription: Odd one.\n---\n")
+    # One of the user's with a dev-home-toolkit skill's name has none: the summary recorded by
+    # that name is the other skill's.
+    write_text(skills / "handoff" / "SKILL.md", "---\nname: handoff\ndescription: Mine too.\n---\n")
+    try:
+        result = dev_home_skills(box)
+    finally:
+        write_text(states, recorded)
+        write_text(mine, written)
+        shutil.rmtree(skills / "odd")
+        shutil.rmtree(skills / "handoff")
+    assert result.code == 0, str(result)
+    assert [line for line in result.lines if "(yours" in line] == [
+        "skill: handoff (yours, not added: it has the same name as a dev-home-toolkit skill): "
+        "Mine too.",
+        'skill: mine (yours, added to your agents): summary "Tidy up downloaded files" '
+        "Compatibility: Needs the office network.",
+        "skill: odd (yours, added to your agents): Odd one.",
+    ], str(result)
 
 
 def facts_module(box: Sandbox, name: str) -> Any:

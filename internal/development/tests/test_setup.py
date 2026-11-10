@@ -2761,12 +2761,15 @@ def test_configure_alone_shows_the_settings_and_how_to_change_them(
     pattern = r"^\s+10\s+Copies of dev-home in active use\s+several \(multi-PC mode\)$"
     assert result.has_line(pattern), str(result)
     assert result.has_line(r"^\s+multiMachine=true\|false\s"), str(result)
-    # Whether each skill is added, with the name to change it by, but dev-home's, which is fixed.
+    # Whether each skill is added, by its name and summary, with the name to change it by, but
+    # dev-home's, which is fixed.
     assert result.has_line(r"^Skills added to your agents on this PC$"), str(result)
-    assert result.has_line(r"^\s+dev-home: always$"), str(result)
+    assert result.has_line(r"^\s+dev-home \(Sync your dev-home with GitHub, .+\): always$"), str(
+        result
+    )
     pattern = (
-        r"^\s+handoff: not answered yet \(defaults to yes\)\. To change it: "
-        r"skills\.handoff\.addToAgents=true\|false\|default$"
+        r"^\s+handoff \(Keep a private note for each project: .+\): not answered yet \(defaults "
+        r"to yes\)\. To change it: skills\.handoff\.addToAgents=true\|false\|default$"
     )
     assert result.has_line(pattern), str(result)
     # A skill names a preference by its label, so the agent finds it here, with its name.
@@ -2861,9 +2864,8 @@ def test_configure_alone_says_where_a_skill_isnt_added_as_its_answer_says(
     )
     assert result.code == 0 and result.has_line(pattern), str(result)
     # One whose state matches its answer has no such part.
-    assert result.has_line(r"^\s+handoff: not answered yet \(defaults to yes\)\. To change"), str(
-        result
-    )
+    pattern = r"^\s+handoff \(.+\): not answered yet \(defaults to yes\)\. To change"
+    assert result.has_line(pattern), str(result)
 
 
 def test_configure_changes_one_setting_with_a_backup(box: Sandbox, settings_kept: Path) -> None:
@@ -3739,6 +3741,86 @@ def test_each_dev_home_toolkit_skill_file_reads_with_no_problem(box: Sandbox) ->
     assert skills["dev-home"].always_added, skills["dev-home"]
     for name in ("handoff", "knowledge"):
         assert skills[name].recommended and not skills[name].always_added, skills[name]
+    # Each has a summary for people, written as Codex's short_description is: at most 80
+    # characters, with no period at the end, so it can sit inside another line (decision 0072).
+    for name, skill in skills.items():
+        assert 0 < len(skill.summary) <= settings.SUMMARY_LIMIT, (name, skill.summary)
+        assert not skill.summary.endswith("."), (name, skill.summary)
+
+
+@pytest.mark.parametrize(
+    ("summary", "read"),
+    [
+        ("Tidy up downloaded files", "Tidy up downloaded files"),
+        ("  Tidy up downloaded files \n", "Tidy up downloaded files"),
+        # An end user's may be longer than dev-home-toolkit's: it's shown whole (decision 0072).
+        ("Tidy " * 30, ("Tidy " * 30).strip()),
+        ("Tidy up\ndownloaded files", ""),
+        # Unicode's line separator, which ends a line as a line break does.
+        (f"Tidy up{chr(0x2028)}downloaded files", ""),
+        ("", ""),
+        ("  ", ""),
+        (3, ""),
+        (None, ""),
+    ],
+    ids=[
+        "plain",
+        "spaces around it",
+        "long",
+        "two lines",
+        "a line separator",
+        "empty",
+        "only spaces",
+        "a number",
+        "null",
+    ],
+)
+def test_a_skills_summary_is_one_line_of_text(box: Sandbox, summary: object, read: str) -> None:
+    settings = shared_module(box, "settings")
+    folder = box.content / "skills" / "mine"
+    file = folder / "dev-home-skill.json"
+    write_text(file, json.dumps({"summary": summary}) + "\n")
+    try:
+        skill, problems = settings.read_skill_file(folder, own=True)
+    finally:
+        file.unlink()
+    # One that can't be used is left out, and the rest of the file still counts.
+    assert skill is not None and skill.summary == read, skill
+    left_out = [f"{file}: summary isn't one line of text, so it was left out."]
+    assert problems == ([] if read else left_out), problems
+
+
+def test_a_skills_summary_shows_in_its_new_line_its_state_and_the_list_for_agents(
+    box: Sandbox, settings_kept: Path
+) -> None:
+    folder = personal_skill(box, "tidy", {"summary": "Tidy up downloaded files"})
+    plain = personal_skill(box, "plain")
+    try:
+        first = setup(box)
+        states = json.loads(read(box.generated / "skill-states.json"))
+        listed = run_python(box, "setup.py", "--configure")
+    finally:
+        remove_personal_skill(box, folder)
+        remove_personal_skill(box, plain)
+    # The summary comes first, before the state; a skill without one has its state alone.
+    pattern = (
+        r"^NEW\s+New skills on this PC, following their defaults until you choose: 'plain' "
+        r"\(added to your agents\), 'tidy' \(Tidy up downloaded files; added to your agents\)\. "
+        r"To choose, use /dev-home configure\.$"
+    )
+    assert first.code == 0 and first.has_line(pattern), str(first)
+    # /dev-home skills reads it here, beside the state.
+    expected = {"state": "added to your agents", "summary": "Tidy up downloaded files"}
+    assert states["tidy"] == expected, states
+    assert states["plain"] == {"state": "added to your agents"}, states
+    pattern = (
+        r"^\s+tidy \(Tidy up downloaded files\): not answered yet \(defaults to yes\)\. To change "
+        r"it: skills\.tidy\.addToAgents="
+    )
+    assert listed.has_line(pattern), str(listed)
+    assert listed.has_line(r"^\s+plain: not answered yet \(defaults to yes\)\. To change"), str(
+        listed
+    )
 
 
 def test_a_skill_file_declares_what_the_skill_needs_and_each_mistake_is_a_problem(
@@ -4063,7 +4145,7 @@ def test_a_new_skill_follows_its_default_and_is_named_once(
     program = {"name": "no-such-program-here", "usedFor": "testing"}
     assert states["needy"] == {"state": added, "programs": [program]}, states
     assert states["newer-python"] == {"state": added, "python": "99.0"}, states
-    assert states["dev-home"] == {"state": "always added to your agents"}, states
+    assert states["dev-home"]["state"] == "always added to your agents", states
     assert "skills" not in saved or "dev-home" not in saved["skills"], saved
 
 

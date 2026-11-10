@@ -1,12 +1,13 @@
 # 0072: Fields in skill and rule files
 
-**Built:** yes, except: `summary`, which comes with the settings menu's Skills section, the first
-place that shows it, and rules' files, which come with built-in rules.
+**Built:** yes, except: `summary` in the settings menu's Skills section, which comes with that
+section, and rules' files, which come with built-in rules.
 
 **Decision:** a skill's `dev-home-skill.json` and a built-in rule's `dev-home-rule.json` use the
 same fields for the same facts, read by one reader in `internal/shared/`. Each file holds only what
 its skill or rule needs, and neither has a schema version. Decided by the developer on 2026-10-18,
-and changed on 2026-10-21, before any release.
+and changed on 2026-10-21 and 2026-11-09 (where `summary` shows, and its form), before any
+release.
 
 | Field | Skills | Rules | What it says |
 | --- | --- | --- | --- |
@@ -24,11 +25,22 @@ and changed on 2026-10-21, before any release.
   system, and that listing all three systems leaves out any other, such as Android. Likewise for
   `agent`: no entry means every agent, agents added later included.
 - **No template** lists every field: each file holds only what its skill or rule needs.
-- **`summary`:** one sentence of plain text, with no Markdown and no line breaks. Built-in skills
-  and rules must have one of at most 80 characters, which a test checks. An end user's own skill
-  may have one, which the reference page asks to keep to the same, and setup shows a longer one
-  whole, with no `PROBLEM` line. Setup's menu wraps every summary under its row with a hanging
+- **`summary`:** one sentence of plain text, with no Markdown and no line breaks, written as
+  Codex's `short_description` is: starting with a verb, with no period at the end, such as "Keep
+  a private knowledge base of what you learn in coding and AI work". Built-in skills and rules
+  must have one of at most 80 characters, with no period at the end, which a test checks. An end
+  user's own skill may have one, which the reference page asks to keep to the same, and setup
+  shows a longer one whole, with no `PROBLEM` line. One that isn't one line of text gets a
+  `PROBLEM` line, and is left out. Setup's menu wraps every summary under its row with a hanging
   indent, the way it wraps its other console text.
+- **Where a skill's `summary` shows,** only for a skill with one: in the settings menu's Skills
+  section; in `/dev-home skills`, in place of the description
+  ([0030: /dev-home skills](0030-dev-home-skills.md)); in the `NEW` line, after the skill's name
+  and before its state ([0036: New items](0036-new-items.md)); and in the list
+  `/dev-home configure` prints for agents, after the skill's name
+  ([0026: setup.py --configure](0026-setup-py-configure.md)). A built-in rule's shows in the
+  notices, the menu, and `/dev-home configure`
+  ([0067: Built-in rules](0067-built-in-rules.md)).
 - **`usedFor`** replaces a program entry's `description`: `{ "type": "program", "name": "jira",
   "usedFor": "filing and reading Jira issues" }`. A `NEW` line or `/dev-home skills` then says
   "jira isn't on the PATH, and the skill uses it for filing and reading Jira issues".
@@ -75,8 +87,6 @@ and changed on 2026-10-21, before any release.
 - **The `name:` line** in `SKILL.md` gets a `PROBLEM` line of its own when it's missing or
   doesn't match the folder, which the standard asks for. Claude Code's skills page says `name`
   sets the command a skill runs by, beside the folder's name.
-- **`summary` waits** for the settings menu's Skills section, the first place that shows it
-  (the developer's choice): nothing reads it before then.
 
 **Why:**
 
@@ -99,6 +109,17 @@ and changed on 2026-10-21, before any release.
   while matching uses `description` (its skills docs, read 2026-10-18). 80 characters keeps a
   summary readable at a glance and keeps `NEW` lines short, since agents read them. A long summary
   harms nothing, so an end user's isn't cut or reported.
+- `summary`'s form: Codex's `short_description` is the only field in either agent that does what
+  `summary` does. Claude Code has no line for people: its only text field, `description`, is
+  written for Claude, and its examples run to several sentences ending in periods (its skills
+  page, read 2026-11-09). OpenAI's curated Codex skills write `short_description` verb first,
+  with no final period (12 of 12 checked 2026-11-09, such as "Create, edit, and review PDFs").
+  With no period, a summary can sit inside another line, such as a `NEW` line.
+- Where `summary` shows: the same approved words in the menu, `/dev-home skills`, and the list
+  for agents; a new skill says what it does when it arrives; `/dev-home skills` gets shorter,
+  about 60 words per skill with a summary, with nothing for the agent to condense; and 0067
+  already puts built-in rules' summaries in `/dev-home configure`, so skills and rules match. No
+  new process, git call, or network call (the developer, 2026-11-09).
 - `usedFor`: in a skill's folder, "description" means `SKILL.md`'s text for agents, and an agent
   asked to fill in a program's `description` could write trigger text there. The field is what
   lets a missing program's warning say which part of the skill stops working.
@@ -136,11 +157,15 @@ and changed on 2026-10-21, before any release.
 - For the rule for names: stopping the check for `claude` and `anthropic` in end users' skills
   (fewer `PROBLEM` lines, but it treats that rule unlike the standard's, and drops the warning
   before a skill moves to claude.ai); `synced` as a `PROBLEM` line only, still added (adding it is
-  the harm); showing `summary` now, in `/dev-home skills` and the `NEW` line (its display would be
-  designed twice, once now and again with the Skills section); and the rule repeated in the
-  starter's `AGENTS.md` (setup then copied the starter once, so existing dev-homes never got it
-  and its copies went stale; only sessions started in dev-home load that file; and the rule's
-  `PROBLEM` line already says what to fix).
+  the harm); and the rule repeated in the starter's `AGENTS.md` (setup then copied the starter
+  once, so existing dev-homes never got it and its copies went stale; only sessions started in
+  dev-home load that file; and the rule's `PROBLEM` line already says what to fix).
+- For `summary`'s form: a final period (unlike Codex's form, and a period to strip inside other
+  text); the README's form, "Syncs your dev-home ..." (unlike Codex's form, and longer).
+- For where a skill's `summary` shows: `/dev-home skills` and the `NEW` line only (the list for
+  agents would show rules' summaries and not skills', and a skill that isn't added would be a
+  bare name there); `/dev-home skills` only (a new skill arrives as a bare name); none (the long
+  agent text stays in `/dev-home skills`, worded unlike the menu).
 
 **Look again if:** the Agent Skills standard adds a requirements format or a field for people, or a
 field ever needs a new meaning.

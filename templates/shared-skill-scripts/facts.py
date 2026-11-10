@@ -148,10 +148,11 @@ Prints one line for each skill: dev-home-toolkit's own, from the generated skill
 script, then the user's, from the skills folder in dev-home, each in
 name order. A skill is a folder with a SKILL.md, as setup sees one. Each line says whose the skill
 is and its state on this PC, as setup last recorded it beside the generated skills, then its
-description from the frontmatter, on one line, and its compatibility text from there, if it has
-any:
+summary, in quotes after the word summary, from the same record, or, for a skill with none, its
+description from the frontmatter, on one line; and then its compatibility text from there, if it
+has any:
 
-    skill: handoff (dev-home-toolkit, added to your agents): Read or update this project's ...
+    skill: handoff (dev-home-toolkit, added to your agents): summary "Keep a private note for ..."
     skill: mac-notes (yours, not added: works only on macOS): Keeps notes in Apple Notes.
     skill: tidy (yours, not added yet: setup hasn't seen it): Tidies a project's imports.
     skill: vpn-check (yours, added to your agents): Checks the VPN. Compatibility: Needs ...
@@ -890,18 +891,25 @@ def skills_lines() -> list[str]:
     for folder in [*ours, *theirs]:
         whose = "dev-home-toolkit" if folder in ours else "yours"
         entry = states.get(folder.name.lower()) if states is not None else None
+        summary = ""
         if whose == "yours" and os.path.normcase(folder.name) in taken:
+            # The entry by this name is the dev-home-toolkit skill's, not this one's.
             whose += ", not added: it has the same name as a dev-home-toolkit skill"
         elif entry is not None:
             whose += f", {'; '.join([entry['state'], *missing_needs(entry)])}"
+            recorded = entry.get("summary")
+            summary = recorded if isinstance(recorded, str) else ""
         elif states is not None:
             whose += ", not added yet: setup hasn't seen it"
         try:
             text = (folder / "SKILL.md").read_text(encoding="utf-8-sig", errors="replace")
         except OSError:
             text = ""
-        description = frontmatter_value(text, "description") or "no description"
-        line = f"skill: {folder.name} ({whose}): {description}"
+        if summary:
+            line = f'skill: {folder.name} ({whose}): summary "{summary}"'
+        else:
+            description = frontmatter_value(text, "description") or "no description"
+            line = f"skill: {folder.name} ({whose}): {description}"
         compatibility = frontmatter_value(text, "compatibility")
         lines.append(f"{line} Compatibility: {compatibility}" if compatibility else line)
     return lines

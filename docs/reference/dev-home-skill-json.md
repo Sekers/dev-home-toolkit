@@ -122,7 +122,8 @@ keep working without it where the skill can.
 
 The Agent Skills standard gives a skill's `SKILL.md` a `compatibility` field, free text of up to
 500 characters, for what it needs that setup can't check, such as a VPN or an environment
-variable. Setup doesn't act on it, and `/dev-home skills` shows it after the skill's description.
+variable. Setup doesn't act on it, and `/dev-home skills` shows it after the skill's summary or
+description.
 
 ```yaml
 ---
