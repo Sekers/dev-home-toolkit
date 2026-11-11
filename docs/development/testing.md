@@ -13,6 +13,10 @@ proposing a commit, and points here; its rules apply too.
   share `helpers.py`. `conftest.py` gives every test process the environment the scripts get
   in the sandbox, for the tests that run the scripts' code in that process, and checks after
   each worker's tests that nothing in the real profile points into a sandbox.
+- Only `test_docs.py` reads `README.md` and the pages under `docs/`, and ruff and mypy check only
+  Python, so a commit that changes only those files runs `test_docs.py` alone, as AGENTS.md says:
+  seconds instead of minutes. Keep it that way: put any new test that reads them in
+  `test_docs.py`.
 - The tests never run the scripts in this folder. They copy the repo into
   `internal/development/.test-sandbox/` (git ignores it), leaving out `internal/development/`
   and what's set up for this PC, and run the copy, whose `local-settings.json` sets

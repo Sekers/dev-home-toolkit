@@ -193,6 +193,10 @@ Each area's rules are on a page of their own. Read the page before changing that
   uv run --directory internal/development mypy
   ```
 
+  A commit that changes only `README.md` or pages under `docs/` needs only the docs tests,
+  `uv run --directory internal/development pytest tests/test_docs.py`
+  ([why](docs/development/testing.md)).
+
 - Test only through the tests, which run a copy of this repo in a sandbox. This folder may be
   someone's live setup: running its scripts against a test dev-home rewrites
   `internal/.generated/` and `local-settings.json`, which their real links depend on. Never add
