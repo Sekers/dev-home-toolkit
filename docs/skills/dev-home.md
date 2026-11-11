@@ -49,9 +49,10 @@ skill itself: [`SKILL.md`](../../templates/skills/dev-home/SKILL.md).
 - **Each PC adds every skill to your agents unless you say no there,** or the skill says it
   isn't recommended; `dev-home` is always added. To change it, ask, such as
   `/dev-home configure don't add tidy on this PC`, which changes `skills.tidy.addToAgents`. A
-  skill that works only on another operating system isn't added, and one that works only in one
-  agent goes only where that agent reads it. One that needs a program or a newer Python this PC
-  lacks is still added, and the list says what's missing (see
+  skill that works only on another operating system isn't added, and the list calls it not
+  supported, such as "not supported: works only on macOS"; one that works only in one agent goes
+  only where that agent reads it. One that needs a program or a newer Python this PC lacks is
+  still added, and the list says what's missing (see
   [A skill's dev-home-skill.json](../reference/dev-home-skill-json.md)). One of yours named
   `synced` is never added, since Claude Code keeps that name for the skills it downloads from
   claude.ai.

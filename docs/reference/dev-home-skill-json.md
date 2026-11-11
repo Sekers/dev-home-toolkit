@@ -1,14 +1,15 @@
 # A skill's dev-home-skill.json
 
 A skill can carry a file named `dev-home-skill.json` in its folder, beside its `SKILL.md`, to
-tell dev-home-toolkit what the Agent Skills standard has no place for: whether to add the skill to
-your agents unless you say otherwise, where it works and what it depends on, its preferences, and
-the names it had before. Your own skills, in `skills\` in your dev-home, can have one too. The
-file is optional, and so is each field: a skill without one is added to your agents, and needs
-nothing.
+tell dev-home-toolkit what the Agent Skills standard has no place for: a summary for you, whether
+to add the skill to your agents unless you say otherwise, where it works and what it depends on,
+its preferences, and the names it had before. Your own skills, in `skills\` in your dev-home, can
+have one too. The file is optional, and so is each field: a skill without one is added to your
+agents, and needs nothing.
 
 ```json
 {
+  "summary": "File and read issues in the team's tracker",
   "recommended": true,
   "supportedOn": [
     { "type": "agent", "anyOf": ["claude-code"] }
@@ -23,7 +24,7 @@ nothing.
       "help": "Whether the skill lists issues that are closed."
     }
   },
-  "formerNames": ["tracker"]
+  "formerNames": ["issue-tracker"]
 }
 ```
 
@@ -40,6 +41,23 @@ When the word is close to one setup knows in that place, such as `usedfor` in an
 
 While setup can't read the file at all, such as when it isn't valid JSON, it leaves the skill as
 it is: it adds no links to it, and removes none.
+
+## summary
+
+One line of plain text for you: what the skill does. Setup shows it under the skill's name in
+the settings menu and in its list of skills with no answer, and `/dev-home skills`,
+`/dev-home configure`, and the `NEW` line that names a new skill show it after the name:
+
+```text
+NEW       New skill on this PC, following its default until you choose: 'tracker' (File and read issues in the team's tracker; added to your agents). To choose, use /dev-home configure.
+```
+
+Write it the way dev-home-toolkit's own skills do: one sentence that starts with a verb, with no
+Markdown and no period at the end, in 80 characters or fewer, such as "Keep a private knowledge
+base of what you learn in coding and AI work". Setup shows a longer one whole. One that isn't a
+single line of text gets a `PROBLEM` line, and is left out. Without a summary, `/dev-home skills`
+shows the description in the skill's `SKILL.md` instead, which is written for agents deciding
+when to use the skill.
 
 ## recommended
 
@@ -68,7 +86,7 @@ works in agents dev-home-toolkit sets up later too.
 
 | List | `type` | Takes | What setup does |
 | --- | --- | --- | --- |
-| `supportedOn` | `os` | `anyOf`: a list of one or more of `windows`, `macos`, and `linux` | Adds the skill only on a PC that runs one of them. On any other, it's left out with no `NEW` line, and `/dev-home skills` still lists it, with why. |
+| `supportedOn` | `os` | `anyOf`: a list of one or more of `windows`, `macos`, and `linux` | Adds the skill only on a PC that runs one of them. On any other, it's left out with no `NEW` line, and `/dev-home skills` still lists it as not supported, with why. |
 | `supportedOn` | `agent` | `anyOf`: a list of one or more of `claude-code` and `codex` | Adds the skill only to the skills folders these agents read: each Claude Code folder's `skills\` for `claude-code`, and `~\.agents\skills\` for `codex`. |
 | `dependsOn` | `program` | `name`: the program's name alone, such as `gh`; and, if you like, `usedFor`: what the skill uses it for, worded to finish "the skill uses it for", such as "filing and reading Jira issues" | Adds the skill either way. When a newly started shell wouldn't find the program on your `PATH`, the `NEW` line says so, and `/dev-home skills` checks again in the agent's own shell. |
 | `dependsOn` | `python` | `atLeast`: the lowest Python version, in quotes, such as `"3.13"` | Adds the skill either way. When the installed Python that dev-home-toolkit uses, which runs its own skills, is older, the `NEW` line and `/dev-home skills` say so, with its version. A skill of yours that runs another Python, such as `python` from your `PATH`, may get a warning that doesn't apply to it, so describe its Python version in `compatibility` instead. |
@@ -139,10 +157,19 @@ Settings of the skill's own, each `true` or `false`, which `/dev-home configure`
 PC. Each has a name with no dots, and these fields:
 
 - `default`: `true` or `false`.
-- `label`: a short name, which `/dev-home configure` shows.
+- `label`: what a yes turns on, such as "Include closed issues", so it reads as a question.
 - `help`, optional: what it does.
 - `formerNames`, optional: the names it had before, as a list, so each PC's answer moves to the
   new name.
+
+The settings menu shows a preference's `help`, then asks its `label` as a question, after the
+skill's name. `/dev-home configure` shows the label too.
+
+```text
+Whether the skill lists issues that are closed.
+
+tracker skill: Include closed issues? 'y', 'n', or 'd' for the default (no) [y/n/D]:
+```
 
 ## The skill's name
 

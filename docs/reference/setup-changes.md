@@ -19,8 +19,9 @@ and your rules joined, which setup writes again at each sync.
     your own in your dev-home. Python adds `__pycache__` folders beside the scripts when they
     run, so they start faster next time; setup leaves those alone. Setup also writes
     `skill-states.json` there: whether it added each skill to your agents on this PC, and if not,
-    why, which `/dev-home skills` shows. In `last-written\`, it keeps a copy of the rules file it
-    last wrote in each agent's folder, and of your dev-home's `AGENTS.md` and `CLAUDE.md`, by
+    why, with each skill's summary, which `/dev-home skills` shows. In `last-written\`, it keeps a
+    copy of the rules file it last wrote in each agent's folder, and of your dev-home's
+    `AGENTS.md` and `CLAUDE.md`, by
     which it knows each file is still its own. And when a Python doesn't run as setup checks it,
     setup notes it in `failed-pythons.json` there, so syncs don't wait for it again until that
     Python changes. `new-dev-home.lock` there is the file setup locks while it clones or creates

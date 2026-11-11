@@ -37,8 +37,8 @@ give" in
   doesn't take, comes right after the answer. Any key a question names is marked as
   [0055: Keys and answers in prompts](0055-keys-and-answers-in-prompts.md) says.
 
-Changed on 2026-10-13, 2026-10-14, 2026-10-15, 2026-10-16, and 2026-11-09 (skills, and the
-updates question's text).
+Changed on 2026-10-13, 2026-10-14, 2026-10-15, 2026-10-16, 2026-11-09 (skills, and the updates
+question's text), and 2026-11-11 (the blank lines).
 
 **Why:** questions asked only on a first run missed what came later. A Claude folder made after a
 PC's first run was never offered, and a first run with `--quiet --content-dir` saved the file
