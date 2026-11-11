@@ -5,8 +5,9 @@
 **Decision:** an update or a sync can bring new items: a dev-home-toolkit skill or recommended
 setting, a personal skill made on another PC, or a Claude Code folder or Codex home setup hasn't
 asked about. Changed on 2026-10-16, 2026-10-24 (`LARGE` lines share the skills' bullet, and a
-recommended setting is asked in plain words), 2026-10-29 (`LONG` lines share it too), and
-2026-11-09 (a new skill's summary).
+recommended setting is asked in plain words), 2026-10-29 (`LONG` lines share it too),
+2026-11-09 (a new skill's summary), and 2026-11-11 (the recommended settings' line names each
+one).
 
 - When `update.py` runs at a console, the setup it runs afterward does too, and asks about the new
   items right then.
@@ -28,12 +29,17 @@ recommended setting is asked in plain words), 2026-10-29 (`LONG` lines share it 
   covers a batch, with the shared prompt's choices, in chat or at the next run of setup by hand,
   whichever comes first. It's asked in plain words, and nothing is written without a yes
   ([0032: Recommended settings](0032-recommended-settings.md)). The one line covers every Claude
-  Code folder set up, with how many wait in each, and the answers, as the line for a folder
-  does: "Setup has no answer yet about 3 settings dev-home-toolkit recommends for Claude Code in
-  ~/.claude, and 1 in ~/.claude-work, so it leaves them as they are. Answer with /dev-home
-  configure: all recommended, none, each, or remind me in N days. Or run setup.py in a terminal,
-  and it asks." (the developer's choice of wording, 2026-10-28, over a line without the answers
-  and one naming each setting).
+  Code folder set up. It names each setting waiting, by its id and summary, as the line for new
+  skills names a skill, with the folders it waits in, and gives the answers, as the line for a
+  folder does. Settings waiting in the same folders are named together: "Setup has no answer yet
+  about a setting dev-home-toolkit recommends for Claude Code in ~/.claude and ~/.claude-second:
+  'idle-compaction-off' (Stop Claude Code from compacting a long conversation while you're
+  away). It leaves it as it is. Answer with /dev-home configure: all recommended, none, each, or
+  remind me in N days. Or run setup.py in a terminal, and it asks." Settings waiting in
+  different folders are named in groups, each after its folders, separated by semicolons, such as
+  "in ~/.claude, 'attribution-off' (...); and in ~/.claude and ~/.claude-second,
+  'idle-compaction-off' (...)". The answers are the developer's choice of 2026-10-28, and naming
+  each setting the developer's choice of 2026-11-11.
 - A `NEW` line never sets the exit code. The skills pass `NEW` and `UPDATE` lines on with one
   bullet, worded the same in every skill, which `LARGE` lines share
   ([0065: Where end users' rules live](0065-where-end-users-rules-live.md)), and `LONG` lines too
@@ -50,7 +56,12 @@ an answer, and saving it as `unanswered` is what lets its line be said once. `PR
 something is broken, and set the exit code. When the person is at a terminal, asking right then
 is clearest. A new skill's summary says what it does when it arrives, for about 12 words, said
 once per skill on each PC
-([0072: Fields in skill and rule files](0072-fields-in-skill-and-rule-files.md)).
+([0072: Fields in skill and rule files](0072-fields-in-skill-and-rule-files.md)). A recommended
+setting is named with its summary for the same reason: a count alone didn't say what was waiting,
+so the person needed another round, through `/dev-home configure`, to find out. In the usual
+case, one new setting, the name costs about 10 words more than the count did, and each further
+setting about 10 more, such as about 43 for all four waiting in a folder just set up. The agent
+reads those words on every skill command until the person answers.
 
 The skills share one bullet for these lines: `UPDATE` already repeated on every sync while commits
 waited, and the skills told the end user each time; once per session follows "nothing asked
@@ -67,6 +78,12 @@ own name.
 - Nothing in syncs, only at the next run by hand: weeks could pass.
 - A line for each item: a batch, such as after months without updating or from a set of copied
   skills, would flood the reply.
+- For recommended settings, only how many wait in each folder (the line until 2026-11-11): it
+  didn't say what was waiting.
+- That count, with a pointer saying `/dev-home configure` describes each one: about 6 words more
+  whatever the batch, but the person still needs another round to find out what's new.
+- Recommended settings named in a small batch, and counted above some size: two forms of one
+  line, with a cutoff that would be arbitrary.
 - A bullet for `NEW` alone: 15 words, and `UPDATE` would still repeat.
 - No bullet: each skill's "pass on anything beyond `OK`" repeats the line on every command.
 - The instruction inside the line: a person at a terminal reads it too.

@@ -1449,15 +1449,16 @@ class Setup:
         """Offers the recommended settings with no answer yet, or a reminder that's due, in each
         Claude Code folder set up: at a console, in the shared prompt for optional lists, one list
         for each folder, each setting described in plain words, fitted to what the folder has
-        now. A quiet run, or one where no answer came, names the folders in a NEW line instead."""
+        now. A quiet run, or one where no answer came, names the settings and their folders in a
+        NEW line instead."""
         offers = self.recommended_offers(settings)
         if not offers:
             return
-        unanswered: list[tuple[str, int]] = []
+        unanswered: list[tuple[str, list[RecommendedSetting]]] = []
         for entry, folder, items in offers:
             answer = self.choose_recommended(folder, items) if self.can_ask else None
             if answer is None:
-                unanswered.append((entry, len(items)))
+                unanswered.append((entry, [offer.setting for offer in items]))
             else:
                 self.answer_recommended(settings, items, answer.answers)
         if unanswered:
@@ -4637,22 +4638,35 @@ class Setup:
 RECOMMENDED_MARKS = ("recommended", "Enter keeps its value")
 
 
-def recommended_new_text(waiting: Sequence[tuple[str, int]]) -> str:
-    """The NEW line naming each Claude Code folder, by its entry, with how many recommended
-    settings wait for an answer there, and how to answer."""
-    counts = [f"{count} in {entry}" for entry, count in waiting]
-    first = waiting[0][1]
-    counts[0] = f"{first} setting{'' if first == 1 else 's'} dev-home-toolkit recommends for " + (
-        f"Claude Code in {waiting[0][0]}"
-    )
-    total = sum(count for _, count in waiting)
-    them = "it as it is" if total == 1 else "them as they are"
-    # A comma before the last even with two, since the first part is long.
-    listed = counts[0] if len(counts) == 1 else ", ".join(counts[:-1]) + ", and " + counts[-1]
+def recommended_new_text(waiting: Sequence[tuple[str, Sequence[RecommendedSetting]]]) -> str:
+    """The NEW line naming each recommended setting that waits for an answer, by its id and
+    summary, as the line for new skills names a skill, with the Claude Code folders it waits in,
+    by their entries, and how to answer. waiting is each folder with the settings that wait
+    there. Settings that wait in the same folders are named together, so the usual case, one
+    new setting in every folder, names the folders once."""
+    folders_of: dict[str, list[str]] = {}
+    named: dict[str, str] = {}
+    for entry, settings in waiting:
+        for setting in settings:
+            folders_of.setdefault(setting.id, []).append(entry)
+            named[setting.id] = f"'{setting.id}' ({setting.summary})"
+    groups: dict[tuple[str, ...], list[str]] = {}
+    for setting_id, entries in folders_of.items():
+        groups.setdefault(tuple(entries), []).append(named[setting_id])
+    count = len(named)
+    if len(groups) == 1:
+        [(folders, settings_named)] = groups.items()
+        listed = f" in {and_list(folders)}: {and_list(settings_named)}"
+    else:
+        # Semicolons between the groups, since each may list its settings with commas.
+        parts = [f"in {and_list(where)}, {and_list(each)}" for where, each in groups.items()]
+        listed = ": " + "; ".join(parts[:-1]) + "; and " + parts[-1]
+    about = "a setting" if count == 1 else f"{count} settings"
+    them = "it as it is" if count == 1 else "them as they are"
     return (
-        f"Setup has no answer yet about {listed}, so it leaves {them}. Answer with "
-        "/dev-home configure: all recommended, none, each, or remind me in N days. Or run "
-        f"{by_hand('setup.py')} in a terminal, and it asks."
+        f"Setup has no answer yet about {about} dev-home-toolkit recommends for Claude Code"
+        f"{listed}. It leaves {them}. Answer with /dev-home configure: all recommended, none, "
+        f"each, or remind me in N days. Or run {by_hand('setup.py')} in a terminal, and it asks."
     )
 
 

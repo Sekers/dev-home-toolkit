@@ -80,11 +80,11 @@ the whole conversation rather than a summary.
   When the work can't read this PC's settings again, it writes no yes, since its answer couldn't
   be saved.
   `setup.py --what-if` still shows the diff, for anyone who wants the exact change.
-- A sync names the folders whose recommended settings wait for an answer in one `NEW` line, with
-  how many in each ([0036: New items](0036-new-items.md)). To find out, it reads a folder's
-  `settings.json`, and `.claude.json` where that counts, only while one there has no yes or no,
-  and no reminder before its date: about 1 ms a folder on the developer's PC (2026-10-28), and
-  nothing once every one there is answered.
+- A sync names each recommended setting that waits for an answer, by its id and summary, with
+  the folders it waits in, in one `NEW` line ([0036: New items](0036-new-items.md)). To find
+  out, it reads a folder's `settings.json`, and `.claude.json` where that counts, only while one
+  there has no yes or no, and no reminder before its date: about 1 ms a folder on the
+  developer's PC (2026-10-28), and nothing once every one there is answered.
 - The settings menu has one row for them, counting each folder's answers, which goes through
   each setting in each folder set up, in the offer's columns, with the answer. A yes whose value
   changed since is asked whether to set it again, with Enter keeping it as it is.
@@ -93,7 +93,8 @@ Changed on 2026-10-15, by the developer on 2026-10-19 (Remote Control at startup
 developer on 2026-10-24 (plain words in place of a diff, what Enter picks, the Remote Control
 offer's words, keeping only the last copy of a setting written more than once, and no question
 about a change made after a yes), by the developer on 2026-10-28 (each value shown, with what it
-means, in columns; the menu's one row), and by the developer on 2026-11-09 (idle compaction off).
+means, in columns; the menu's one row), by the developer on 2026-11-09 (idle compaction off), and
+by the developer on 2026-11-11 (the `NEW` line names each setting waiting).
 
 **Why:** these settings suit most people, but each changes the person's own file, so each needs
 their yes on each PC. Codex has neither of the first two: its commit and pull request attribution

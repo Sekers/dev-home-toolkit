@@ -17,6 +17,7 @@ import pytest
 from helpers import (
     Run,
     Sandbox,
+    recommended_list,
     recommended_values,
     run_python,
     sandbox_for,
@@ -26,18 +27,25 @@ from helpers import (
 
 pytestmark = pytest.mark.xdist_group("recommended")
 
-# The NEW line a sync prints while ~/.claude has that many recommended settings with no answer.
-WAITING = (
-    r"^NEW\s+Setup has no answer yet about {count} dev-home-toolkit recommends for Claude Code "
-    r"in ~/\.claude, so it leaves {them}\. Answer with /dev-home configure: all recommended, "
-    r"none, each, or remind me in N days\. Or run .*setup\.py in a terminal, and it asks\.$"
-)
+# Every recommended setting for Claude Code, by its id, in the list's order, and those left once
+# attribution-off has an answer, or the recommended value already.
+ALL = ("attribution-off", "feedback-survey-off", "remote-control-at-startup", "idle-compaction-off")
+BUT_ATTRIBUTION = ALL[1:]
 
 
-def waiting(count: int) -> str:
-    settings = "1 setting" if count == 1 else f"{count} settings"
-    them = "it as it is" if count == 1 else "them as they are"
-    return WAITING.format(count=settings, them=them)
+def waiting(*ids: str) -> str:
+    """The NEW line a sync prints while these recommended settings, by their ids, in the list's
+    order, wait for an answer in ~/.claude alone: each named with its summary."""
+    named = [f"'{each}' ({recommended_list()[each]['summary']})" for each in ids]
+    listed = " and ".join(named) if len(named) < 3 else ", ".join(named[:-1]) + ", and " + named[-1]
+    about = "a setting" if len(ids) == 1 else f"{len(ids)} settings"
+    them = "it as it is" if len(ids) == 1 else "them as they are"
+    return (
+        rf"^NEW\s+Setup has no answer yet about {about} dev-home-toolkit recommends for Claude "
+        rf"Code in ~/\.claude: {re.escape(listed)}\. It leaves {them}\. Answer with /dev-home "
+        r"configure: all recommended, none, each, or remind me in N days\. Or run .*setup\.py in "
+        r"a terminal, and it asks\.$"
+    )
 
 
 @pytest.fixture(scope="module")
@@ -113,12 +121,37 @@ def test_a_sync_names_the_recommended_settings_waiting_and_changes_nothing(
     before = claude.read_bytes(), settings.read_bytes()
     result = sync(box)
     again = sync(box)
-    assert result.code == 0 and result.has_line(waiting(4)), str(result)
-    assert again.has_line(waiting(4)), str(again)
+    assert result.code == 0 and result.has_line(waiting(*ALL)), str(result)
+    assert again.has_line(waiting(*ALL)), str(again)
     assert (claude.read_bytes(), settings.read_bytes()) == before
-    # The one with the recommended value already isn't counted.
+    # The one with the recommended value already isn't named.
     with_keys(claude, attribution=False)
-    assert sync(box).has_line(waiting(3))
+    assert sync(box).has_line(waiting(*BUT_ATTRIBUTION))
+
+
+def test_the_new_line_names_settings_that_wait_in_the_same_folders_together(
+    box: Sandbox,
+) -> None:
+    # The usual case, one new setting waiting in every folder, names the folders once; settings
+    # that wait in different folders are named in groups, each with its folders.
+    new_text = shared_module(box, "setup").recommended_new_text
+    by_id = {entry.id: entry for entry in shared_module(box, "recommended_settings").RECOMMENDED}
+    idle = by_id["idle-compaction-off"]
+    one = new_text([("~/.claude", [idle]), ("~/.claude-second", [idle])])
+    assert one.startswith(
+        "Setup has no answer yet about a setting dev-home-toolkit recommends for Claude Code in "
+        "~/.claude and ~/.claude-second: 'idle-compaction-off' (Stop Claude Code from compacting "
+        "a long conversation while you're away). It leaves it as it is. Answer with "
+    ), one
+    mixed = new_text([("~/.claude", [by_id[each] for each in ALL]), ("~/.claude-second", [idle])])
+    assert mixed.startswith(
+        "Setup has no answer yet about 4 settings dev-home-toolkit recommends for Claude Code: in "
+        "~/.claude, 'attribution-off' (Leave Claude Code's name out of your commits and pull "
+        "requests), 'feedback-survey-off' (Turn off Claude Code's session quality survey), and "
+        "'remote-control-at-startup' (Connect Remote Control when each Claude Code session "
+        "starts); and in ~/.claude and ~/.claude-second, 'idle-compaction-off' (Stop Claude Code "
+        "from compacting a long conversation while you're away). It leaves them as they are. "
+    ), mixed
 
 
 def test_a_folder_whose_settings_setup_cant_rewrite_is_offered_nothing(
@@ -234,7 +267,7 @@ def test_a_yes_in_chat_writes_the_setting_with_a_backup_then_saves_the_answer(
     assert answers(box) == {"attribution-off": True}
     # It isn't offered again, and the answer stays once it's done.
     again = sync(box)
-    assert again.has_line(waiting(3)) and not again.has_line(r"^SET\s"), str(again)
+    assert again.has_line(waiting(*BUT_ATTRIBUTION)) and not again.has_line(r"^SET\s"), str(again)
 
 
 def test_a_yes_to_a_setting_written_twice_sets_it_once_and_says_only_that(
@@ -273,7 +306,7 @@ def test_a_yes_folder_typed_in_another_case_is_the_same_folder(box: Sandbox, cla
     # The same run's NEW line doesn't count that setting as waiting any more.
     yes = command(configure(box), "claudeCode.recommendedSettings.attribution-off")
     result = configure(box, yes.replace("~/.claude@", "~/.CLAUDE@"))
-    assert result.code == 0 and result.has_line(waiting(3)), str(result)
+    assert result.code == 0 and result.has_line(waiting(*BUT_ATTRIBUTION)), str(result)
     assert answers(box) == {"attribution-off": True}
 
 
@@ -360,7 +393,7 @@ def test_a_no_or_a_reminder_in_chat_is_saved_and_a_reminder_never_replaces_an_an
         "attribution-off": False,
         "feedback-survey-off": {"$state": "remind", "on": on},
     }
-    assert sync(box).has_line(waiting(2))
+    assert sync(box).has_line(waiting("remote-control-at-startup", "idle-compaction-off"))
     refused = configure(box, f"{name}.attribution-off?=~/.claude@3")
     pattern = r"^PROBLEM\s+attribution-off in ~/\.claude already has an answer, no, and a reminder"
     assert refused.code == 1 and refused.has_line(pattern), str(refused)
@@ -396,7 +429,8 @@ def test_a_value_in_claude_json_counts_where_settings_json_has_none(
     # needs nothing, and a false there is a value someone chose.
     older = box.profile / ".claude.json"
     write_text(older, json.dumps({"remoteControlAtStartup": True, "projects": {}}) + "\n")
-    assert sync(box).has_line(waiting(3))
+    but_remote = ("attribution-off", "feedback-survey-off", "idle-compaction-off")
+    assert sync(box).has_line(waiting(*but_remote))
     write_text(older, json.dumps({"remoteControlAtStartup": False}) + "\n")
     listing = configure(box)
     now = "      Now:          false\n"
@@ -422,7 +456,8 @@ def test_a_yes_whose_value_changed_later_is_shown_and_can_be_set_again(
     assert configure(box, yes).code == 0
     with_keys(claude, attribution={"commit": "Mine"})
     result = sync(box)
-    assert result.has_line(waiting(3)) and not result.has_line(r"^SET\s"), str(result)
+    assert result.has_line(waiting(*BUT_ATTRIBUTION)), str(result)
+    assert not result.has_line(r"^SET\s"), str(result)
     assert settings_of(claude)["attribution"] == {"commit": "Mine"}
     listing = configure(box)
     pattern = (
@@ -500,7 +535,7 @@ def test_answers_to_recommended_settings_are_checked_with_this_pcs_settings(
         r"as not answered yet\. Fix it there\.$"
     )
     assert result.code == 1 and result.has_line(problem), str(result)
-    assert result.has_line(waiting(3)), str(result)
+    assert result.has_line(waiting(*BUT_ATTRIBUTION)), str(result)
     kept = settings_of(path)
     assert kept["claudeCode"]["folders"]["~/.claude"]["recommendedSettings"] == {
         "attribution-off": True,

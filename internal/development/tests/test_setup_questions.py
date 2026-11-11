@@ -3959,7 +3959,7 @@ def test_no_answer_to_the_recommended_settings_gives_the_new_line_a_sync_gives(
     assert any(re.search(RECOMMENDED, asked) for asked in person.asked), person.asked
     pattern = (
         r"^NEW\s+Setup has no answer yet about 4 settings dev-home-toolkit recommends for Claude "
-        r"Code in ~/\.claude, so it leaves them as they are\. "
+        r"Code in ~/\.claude: 'attribution-off' \(.*\)\. It leaves them as they are\. "
     )
     assert re.search(pattern, out, re.M), out
     assert (settings.read_bytes(), waiting.read_bytes()) == before

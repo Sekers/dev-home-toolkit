@@ -2,8 +2,10 @@
 up, from templates/recommended-settings/recommended-settings.json (decision 0032, "Recommended
 settings").
 
-Each entry, by an id that's never reused, has a summary, one line saying what it does, and, for
-each agent that has such a setting, that agent's block, by the agent's group in
+Each entry, by an id that's never reused, has a summary, one line saying what it does, with no
+period at the end, as a skill's summary has none (decision 0072), since setup's question and the
+NEW line put it inside a sentence of their own. And, for each agent that has such a setting,
+that agent's block, by the agent's group in
 local-settings.json, such as claudeCode. A block names the key, at the top of the agent's settings
 file, and the recommended value, with the older forms of it that the recommended value replaces,
 and the file older versions of the agent kept it in, if any. Its texts say what the setting means
@@ -264,6 +266,8 @@ def load_recommended(path: Path = CATALOG_PATH) -> tuple[RecommendedSetting, ...
         summary = text_field(where, entry, "summary", required=True)
         if len(summary) > SUMMARY_LIMIT:
             raise ValueError(f"{where}: summary is longer than {SUMMARY_LIMIT} characters.")
+        if summary.rstrip().endswith("."):
+            raise ValueError(f"{where}: summary ends with a period.")
         # A list at a console names its items by their summaries.
         same = next((other.id for other in found if other.summary == summary), None)
         if same is not None:

@@ -233,14 +233,19 @@ def write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8", newline="\n")
 
 
+def recommended_list() -> dict[str, Any]:
+    """The settings dev-home-toolkit recommends, by their ids, as the list in this repo has them."""
+    path = REPO_ROOT / "templates" / "recommended-settings" / "recommended-settings.json"
+    entries: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))["recommendedSettings"]
+    return entries
+
+
 def recommended_values() -> dict[str, Any]:
     """Each setting dev-home-toolkit recommends for Claude Code, by its key, with the recommended
     value, as the list in this repo has them."""
-    path = REPO_ROOT / "templates" / "recommended-settings" / "recommended-settings.json"
-    entries = json.loads(path.read_text(encoding="utf-8"))["recommendedSettings"].values()
     return {
         entry["claudeCode"]["key"]: entry["claudeCode"]["value"]
-        for entry in entries
+        for entry in recommended_list().values()
         if "claudeCode" in entry
     }
 
