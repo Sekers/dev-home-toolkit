@@ -1033,6 +1033,7 @@ def menu(run: "Setup", settings: LocalSettings) -> bool:
 
 def change_content_dir(run: "Setup", settings: LocalSettings) -> bool:
     # Setup checks the folder next, as it does on a first run, and asks again if it isn't one.
+    run.explain()
     answer = run.ask("Your dev-home folder", settings.content_dir)
     if not answer or same_path(forward(answer), settings.content_dir or "."):
         return False
@@ -1063,9 +1064,13 @@ def change_auto_update(run: "Setup", settings: LocalSettings) -> bool:
     return True
 
 
-def change_number(run: "Setup", settings: LocalSettings, path: str, question: str) -> bool:
-    """Asks for a setting that holds a whole number, 0 or more, such as a number of hours."""
+def change_number(
+    run: "Setup", settings: LocalSettings, path: str, question: str, about: str = ""
+) -> bool:
+    """Asks for a setting that holds a whole number, 0 or more, such as a number of hours, after
+    about, a paragraph about it, if any."""
     current = setting_value(settings.data, path)[0]
+    run.explain(*([about] if about else []))
     while True:
         answer = run.ask(question, str(current))
         if answer is None:
@@ -1093,13 +1098,13 @@ def change_content_hours(run: "Setup", settings: LocalSettings) -> bool:
     several, _ = several_copies(run, settings)
     commands = "/handoff, plain /knowledge, and /knowledge add"
     if several is False:
-        run.line(
+        about = (
             f"In single-PC mode, {commands} check GitHub for dev-home's changes this often. "
             "/dev-home sync always checks."
         )
     else:
         mode = "is in multi-PC mode" if several else "isn't in single-PC mode"
-        run.line(
+        about = (
             f"dev-home {mode}, so {commands} check GitHub for its changes every time. The number "
             "you set here is used only in single-PC mode."
         )
@@ -1108,6 +1113,7 @@ def change_content_hours(run: "Setup", settings: LocalSettings) -> bool:
         settings,
         "devHome.checkEveryHours",
         "Check GitHub for dev-home's changes every how many hours (0 for every time)",
+        about,
     )
 
 
@@ -1121,13 +1127,14 @@ def change_rules_warning(run: "Setup", settings: LocalSettings) -> bool:
 
 
 def change_codex_limit(run: "Setup", settings: LocalSettings) -> bool:
-    run.line(
+    return change_number(
+        run,
+        settings,
+        CODEX_INSTRUCTIONS_MAX,
+        "Codex's instruction limit, in how many KiB",
         "Codex reads AGENTS.md, from its home and the project's folders together, up to this size, "
         "and leaves the rest out without saying so. Setup only ever raises project_doc_max_bytes "
-        "in each Codex home's config.toml; with no value there, Codex reads 32 KiB."
-    )
-    return change_number(
-        run, settings, CODEX_INSTRUCTIONS_MAX, "Codex's instruction limit, in how many KiB"
+        "in each Codex home's config.toml; with no value there, Codex reads 32 KiB.",
     )
 
 
@@ -1236,6 +1243,7 @@ def change_folders(run: "Setup", settings: LocalSettings, agent: Agent) -> bool:
         if not folder.is_dir():
             # A folder that's gone keeps its answer, in case it comes back, until it's removed,
             # with the answers to its recommended settings.
+            run.explain()
             if run.choose(f"{folder} no longer exists. Remove it from the settings?", False):
                 settings.folders[agent.setting].pop(entry, None)
                 remove_folder_entry(settings.data, agent.setting, entry)

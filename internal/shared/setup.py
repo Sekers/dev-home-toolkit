@@ -819,16 +819,30 @@ class Setup:
         answer = console.choose_or_default(question, bool(setting.default), enter)
         return MISSING if answer is None else saved_answer(answer)
 
+    def explain(self, *paragraphs: str) -> None:
+        """Before a question at a console, so it stands apart from what came before it: a blank
+        line, then each paragraph about it, broken only at spaces to fit the console, each with a
+        blank line after it. A follow-up to the same question, such as one asked again after an
+        answer it doesn't take, comes right after the answer instead."""
+        self.line()
+        for paragraph in paragraphs:
+            for text in console.wrap(paragraph):
+                self.line(text)
+            self.line()
+
     # The questions about settings, which the first run and --configure's menu both ask.
 
     def ask_auto_update(self, data: dict[str, Any]) -> object:
-        """Whether a sync installs updates by itself, as choose_or_default returns it."""
-        self.line(
-            "sync.py can pull dev-home-toolkit updates on every sync, or only tell you when there "
-            "are some,"
+        """Whether a sync installs updates by itself, as choose_or_default returns it, asked by
+        the setting's label, after a paragraph saying what dev-home-toolkit is and what each
+        answer does (decision 0025)."""
+        self.explain(
+            "dev-home-toolkit sets up your dev-home and connects it to Claude Code and Codex. A "
+            "sync that finds a new version of dev-home-toolkit can install it right away, or only "
+            "tell you, so you can look at it first and install it with update.py."
         )
-        self.line("so you can look at them first and pull them with update.py.")
-        return self.choose_or_default("Pull updates automatically?", BY_PATH[AUTO_UPDATE], data)
+        setting = BY_PATH[AUTO_UPDATE]
+        return self.choose_or_default(f"{setting.label}?", setting, data)
 
     def introduce_folders(self, agent: Agent, folders: Sequence[Path]) -> None:
         """Before a question about an agent's folders: which they are, then what a yes does (see
@@ -877,12 +891,10 @@ class Setup:
     def ask_copies(self, current: bool | None) -> bool | None:
         """Whether dev-home is in active use anywhere besides this PC. With no answer yet, there's
         no default: both wrong answers cost something."""
-        self.line(
+        self.explain(
             "dev-home can live on one PC (single-PC mode), as a private backup with its history on "
-            "GitHub,"
-        )
-        self.line(
-            "or be used from several (multi-PC mode), which then check GitHub before each command."
+            "GitHub, or be used from several (multi-PC mode), which then check GitHub before each "
+            "command."
         )
         return self.choose(
             "Is dev-home in active use anywhere besides this PC, such as on another PC or in a "
@@ -939,8 +951,10 @@ class Setup:
                 "the file aside and ask its questions again.",
             )
             raise CannotGoOnError
-        self.line(f"{SETTINGS_PATH} is in an older layout, from before its settings were grouped.")
-        self.line("Setup can rename it to a dated backup, then ask its questions again.")
+        self.explain(
+            f"{SETTINGS_PATH} is in an older layout, from before its settings were grouped. Setup "
+            "can rename it to a dated backup, then ask its questions again."
+        )
         if not self.choose("Set it aside and answer the questions again?", True):
             self.status("PROBLEM", f"Stopped: {SETTINGS_PATH} is in an older layout.")
             raise CannotGoOnError
@@ -1740,10 +1754,10 @@ class Setup:
             )
             return
 
-        self.line(f"There is no dev-home at {path} yet.")
+        self.explain(f"There is no dev-home at {path} yet.")
         choice = self.ask(
-            "Clone your existing dev-home from GitHub (c), create a new private one (n), or stop "
-            "here (s)?",
+            f"Clone your existing dev-home from GitHub ({console.key('c')}), create a new private "
+            f"one ({console.key('n')}), or stop here ({console.key('s')})?",
             "s",
         )
         stopped = f"Stopped: there is no dev-home at {path} yet."
@@ -2016,10 +2030,12 @@ class Setup:
                 )
             return
         if older:
-            self.line(
+            self.line()
+            for text in console.wrap(
                 f"{path} is in an older layout. Setup asks its question again, with its old answer "
                 "as the default, then rewrites it."
-            )
+            ):
+                self.line(text)
         configure.change_copies(self, settings)
         if self.wanted_copies is None and (older or answer is None):
             self.status(
@@ -2043,6 +2059,8 @@ class Setup:
             return
         path = content_root / DEV_HOME_SETTINGS
         new_text = dev_home_text(found.data, several)
+        if self.can_ask:
+            self.line()
         self.status("CHANGE", f"dev-home's copies: {path}")
         self.print_diff(found.text, new_text)
         if not self.should(path, "Write this, then commit and push it"):
@@ -3564,13 +3582,10 @@ class Setup:
         elif not settings.content_dir:
             default = forward(TOOLKIT_ROOT.parent / "dev-home")
             if self.can_ask:
-                self.line(
+                self.explain(
                     "dev-home is your private repo for handoffs and a knowledge base. Setup needs "
-                    "its folder on this PC:"
-                )
-                self.line(
-                    "where it is now, or where it should go. Press Enter to accept the suggestion "
-                    "in brackets."
+                    "its folder on this PC: where it is now, or where it should go. Press Enter to "
+                    "accept the suggestion in brackets."
                 )
             answer = self.ask("Your dev-home folder", default)
             if answer is None:
@@ -3612,7 +3627,7 @@ class Setup:
             if not self.can_ask:
                 self.not_a_dev_home_problem(folder)
                 raise CannotGoOnError
-            self.line(
+            self.explain(
                 f"{folder} doesn't look like a dev-home: it has no {DEV_HOME_SETTINGS}, which "
                 "every dev-home has."
             )

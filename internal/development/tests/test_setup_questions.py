@@ -47,7 +47,7 @@ pytestmark = pytest.mark.xdist_group("setup-questions")
 
 # The question about installing updates, whatever Enter gives.
 UPDATES = (
-    r"^Pull updates automatically\? 'y', 'n', or 'd' for the default \(yes\) "
+    r"^Install dev-home-toolkit updates automatically\? 'y', 'n', or 'd' for the default \(yes\) "
     r"\[[yY]/[nN]/[dD]\]: $"
 )
 
@@ -61,14 +61,24 @@ class Person:
     """Answers questions at the console: the answer whose pattern the question matches, the next
     of a list of them, one each time it's asked, or what a function gives, for a person who also
     does something while answering. A question with no answer ends the input, as when a person
-    closes the console."""
+    closes the console. With echo, each question goes to the output with its answer after it, as
+    a console shows them, so a test can read the whole exchange in order."""
 
     def __init__(self, answers: dict[str, str | list[str] | Callable[[str], str]]) -> None:
         self.answers = answers
         self.asked: list[str] = []
+        self.echo = False
 
     def __call__(self, prompt: str = "") -> str:
         self.asked.append(prompt)
+        answer = self.answer(prompt)
+        if self.echo:
+            print(prompt + (answer or ""), flush=True)
+        if answer is None:
+            raise EOFError
+        return answer
+
+    def answer(self, prompt: str) -> str | None:
         for pattern, answer in self.answers.items():
             if re.search(pattern, prompt):
                 if isinstance(answer, list):
@@ -78,7 +88,16 @@ class Person:
                 if callable(answer):
                     return answer(prompt)
                 return answer
-        raise EOFError
+        return None
+
+
+def line_above(out: str, asked: list[str], pattern: str) -> str:
+    """The line a console shows right above the first question that matches pattern, in an
+    exchange a Person echoed: "" for a blank line, and for the start of the output."""
+    prompt = next(p for p in asked if re.search(pattern, p))
+    lines = out.split("\n")
+    index = next(i for i, line in enumerate(lines) if line.startswith(prompt))
+    return lines[index - 1] if index else ""
 
 
 @pytest.fixture
@@ -737,6 +756,32 @@ def test_enter_at_the_first_updates_question_follows_the_default(
     assert written["updates"]["installAutomatically"] == {"$state": "default"}, written
 
 
+def test_the_updates_question_says_what_dev_home_toolkit_is_then_asks_by_the_settings_label(
+    box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A blank line, the paragraph broken only at spaces to fit the console, another blank line,
+    # then the setting's label as the question, in the words the developer approved.
+    unanswered_updates(settings)
+    person.echo = True
+    person.answers[UPDATES] = "n"
+    returned = setup_here(box)
+    out = capsys.readouterr().out
+    assert returned == 0, out
+    shown = (
+        "\n\n"
+        "dev-home-toolkit sets up your dev-home and connects it to Claude Code and Codex. A sync "
+        "that finds a\n"
+        "new version of dev-home-toolkit can install it right away, or only tell you, so you can "
+        "look at it\n"
+        "first and install it with update.py.\n"
+        "\n"
+        "Install dev-home-toolkit updates automatically? 'y', 'n', or 'd' for the default (yes) "
+        "[y/n/D]: n\n"
+    )
+    # The output starts on a line of its own.
+    assert shown in "\n" + out, out
+
+
 def test_with_no_answer_to_the_updates_question_nothing_is_saved(
     box: Sandbox, settings: Path, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -983,14 +1028,10 @@ def test_at_a_console_settings_in_the_older_layout_are_set_aside_and_asked_again
     old = {"contentDir": content, "autoUpdate": True, "testHomeDir": saved["testHomeDir"]}
     old_text = json.dumps(old, indent=2) + "\n"
     write_text(settings, old_text)
+    person.echo = True
+    folder = r"^Your dev-home folder \[.*\]: $"
     person.answers.update(
-        {
-            SET_ASIDE: "",
-            r"^Your dev-home folder \[.*\]: $": content,
-            UPDATES: "n",
-            THIS_FOLDER: "",
-            CODEX: "",
-        }
+        {SET_ASIDE: "", folder: content, UPDATES: "n", THIS_FOLDER: "", CODEX: ""}
     )
     try:
         returned = setup_here(box)
@@ -1004,6 +1045,22 @@ def test_at_a_console_settings_in_the_older_layout_are_set_aside_and_asked_again
     assert returned == 0, out
     assert re.search(r"^SET\s+The old settings, set aside: .*local-settings\.json\.bak-", out, re.M)
     assert kept == [old_text], kept
+    # Each question stands apart, after a blank line, or after a paragraph that does.
+    for question in (SET_ASIDE, folder, UPDATES, THIS_FOLDER, CODEX):
+        assert line_above(out, person.asked, question) == "", (question, out)
+    paragraphs = [
+        "dev-home is your private repo for handoffs and a knowledge base. Setup needs its folder "
+        "on this PC: where it is now, or where it should go. Press Enter to accept the suggestion "
+        "in brackets.",
+        "dev-home-toolkit sets up your dev-home and connects it to Claude Code and Codex. A sync "
+        "that finds a new version of dev-home-toolkit can install it right away, or only tell "
+        "you, so you can look at it first and install it with update.py.",
+    ]
+    # Each between blank lines, broken to fit the console.
+    shown = {" ".join(block.split()): block for block in out.split("\n\n")}
+    assert all(paragraph in shown for paragraph in paragraphs), out
+    lines = [line for paragraph in paragraphs for line in shown[paragraph].split("\n")]
+    assert len(lines) > len(paragraphs) and all(len(line) <= 100 for line in lines), lines
     # Each skill but dev-home, which is always added, is new to the settings.
     unanswered = {"addToAgents": {"$state": "unanswered"}}
     assert written == {
@@ -1045,7 +1102,8 @@ def test_at_a_console_asks_again_for_a_folder_that_isnt_a_dev_home(
     returned = setup_here(box, "--content-dir", str(project))
     out = capsys.readouterr().out
     assert returned == 0, out
-    assert re.search(r"console-project doesn't look like a dev-home: it has no ", out), out
+    words = " ".join(out.split())
+    assert re.search(r"console-project doesn't look like a dev-home: it has no ", words), out
     assert json.loads(settings.read_text(encoding="utf-8"))["devHome"]["folder"] == content
 
 
@@ -1070,6 +1128,7 @@ def test_a_folder_chosen_in_the_menu_is_checked_before_anything_is_saved(
     project = box.root / "menu-project"
     write_text(project / "README.md", "# a project\n")
     before = settings.read_text(encoding="utf-8")
+    person.echo = True
     person.answers.update(
         {MENU: ["1", ""], r"^Your dev-home folder \[.*\]: $": str(project), NOT_A_DEV_HOME: ""}
     )
@@ -1078,6 +1137,11 @@ def test_a_folder_chosen_in_the_menu_is_checked_before_anything_is_saved(
     assert returned == 1, out
     pattern = r"^PROBLEM\s+Stopped: .*menu-project doesn't look like a dev-home\."
     assert re.search(pattern, out, re.M), out
+    # Asked after the menu, so it stands apart from the menu's question, and its own paragraph
+    # does too.
+    above = r"\n\n\S*menu-project[ \n]doesn't[ \n]look[ \n]like[ \n]a[ \n]dev-home:[ \n]"
+    assert re.search(above, out), out
+    assert line_above(out, person.asked, NOT_A_DEV_HOME) == "", out
     assert settings.read_text(encoding="utf-8") == before
 
 
@@ -1135,13 +1199,31 @@ def test_asks_how_many_copies_with_no_default_then_commits_and_pushes_the_answer
     box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
     home, remote = own_dev_home(box, "copies-unanswered", None)
-    # Enter has no default, so the question comes again, after saying what to type.
+    # Enter has no default, so the question comes again, right after saying what to type.
+    person.echo = True
     person.answers.update({ELSEWHERE: ["", "y"], SAVE_COPIES: "y"})
     returned = check_copies(box, home)
     out = capsys.readouterr().out
     assert returned == 0, out
     assert sum(1 for asked in person.asked if re.search(ELSEWHERE, asked)) == 2, person.asked
-    assert re.search(r"^Type 'y' or 'n'\.$", out, re.M), out
+    question = (
+        "Is dev-home in active use anywhere besides this PC, such as on another PC or in a cloud "
+        "session? [y/n]: "
+    )
+    shown = (
+        "\n\n"
+        "dev-home can live on one PC (single-PC mode), as a private backup with its history on "
+        "GitHub, or be\n"
+        "used from several (multi-PC mode), which then check GitHub before each command.\n"
+        "\n"
+        f"{question}\n"
+        "Type 'y' or 'n'.\n"
+        f"{question}y\n"
+        "\n"
+        "CHANGE "
+    )
+    # The output starts on a line of its own.
+    assert shown in "\n" + out, out
     assert json.loads((home / "dev-home.json").read_text(encoding="utf-8")) == {
         "schemaVersion": 1,
         "multiMachine": True,
@@ -1263,10 +1345,20 @@ def test_an_older_dev_home_json_is_asked_again_and_rewritten_in_place(
 ) -> None:
     # Its old answer is the default, so Enter keeps it, and git has the old file.
     home, remote = own_dev_home(box, "copies-older", '{"multiMachine": false, "x": 1}\n')
+    person.echo = True
     person.answers.update({ELSEWHERE_NO: "", SAVE_COPIES: "y"})
     returned = check_copies(box, home)
     out = capsys.readouterr().out
     assert returned == 0, out
+    # Saying so stands apart from what came before, and so does the question after it. The note
+    # is broken only at spaces, wherever its path leaves them.
+    words = (
+        "dev-home.json is in an older layout. Setup asks its question again, with its old answer "
+        "as the default, then rewrites it."
+    )
+    note = r"[ \n]".join(re.escape(word) for word in words.split())
+    assert re.search(rf"\n\n\S*{note}\n\ndev-home can live on one PC ", "\n" + out), out
+    assert line_above(out, person.asked, ELSEWHERE_NO) == "", out
     saved = json.loads((home / "dev-home.json").read_text(encoding="utf-8"))
     assert saved == {"schemaVersion": 1, "multiMachine": False, "x": 1}, saved
     assert sorted(entry.name for entry in home.glob("dev-home.json*")) == ["dev-home.json"]
@@ -1363,6 +1455,7 @@ def test_the_menu_goes_through_every_setting_with_its_answer_as_the_default(
     # Enter keeps each answer, except the update check's hours, set to 6, and the rules warning,
     # set to 48 KiB.
     content = json.loads(backups_removed.read_text(encoding="utf-8"))["devHome"]["folder"]
+    person.echo = True
     person.answers.update(
         {
             MENU: ["a", ""],
@@ -1383,6 +1476,31 @@ def test_the_menu_goes_through_every_setting_with_its_answer_as_the_default(
     assert returned == 0, out
     assert "Type a whole number of hours: 0 or more." in out, out
     assert "Type a whole number of KiB: 0 or more." in out, out
+    # Each question stands apart, after a blank line, or after a paragraph that does, and is asked
+    # again right after an answer it doesn't take.
+    questions = (
+        r"^Your dev-home folder \[.*\]: $",
+        UPDATES,
+        UPDATE_HOURS,
+        CONTENT_HOURS,
+        RULES_WARNING,
+        CODEX_LIMIT,
+        ANSWERED_CLAUDE,
+        CODEX_ANSWERED,
+        ELSEWHERE_YES,
+    )
+    for question in questions:
+        assert line_above(out, person.asked, question) == "", (question, out)
+    hours = (
+        "Check GitHub for dev-home-toolkit updates every how many hours (0 for every sync) [24]: "
+    )
+    assert f"\n\n{hours}six\nType a whole number of hours: 0 or more.\n{hours}6\n" in out, out
+    # A paragraph is broken only at spaces to fit the console.
+    codex = (
+        "Codex reads AGENTS.md, from its home and the project's folders together, up to this "
+        "size, and leaves"
+    )
+    assert re.search(rf"^{re.escape(codex)}$", out, re.M), out
     assert saved["updates"]["checkEveryHours"] == 6, saved
     assert saved["rules"] == {"warnAboveKiB": 48}, saved
     assert any(re.search(CODEX_LIMIT, p) for p in person.asked), person.asked
@@ -1407,6 +1525,7 @@ def test_the_menu_answers_codex_once_for_every_home(
         write_text(backups_removed, json.dumps(start, indent=2) + "\n")
         remove = rf"^{re.escape(str(gone))} no longer exists\. Remove it from the settings\? "
         remove += r"\[y/N\]: $"
+        person.echo = True
         person.answers.update({MENU: ["8", ""], remove: "y", CODEX_ANSWERED: "n"})
         returned = setup_here(box, "--configure")
         out = capsys.readouterr().out
@@ -1416,6 +1535,7 @@ def test_the_menu_answers_codex_once_for_every_home(
     assert re.search(row, out, re.M), out
     asked = [p for p in person.asked if re.search(remove, p) or re.search(CODEX_ANSWERED, p)]
     assert len(asked) == 2 and re.search(remove, asked[0]), person.asked
+    assert line_above(out, person.asked, remove) == "", out
     assert saved["codex"] == {"homes": {"~/.codex": {"setUp": False}}}, saved
 
 
@@ -1665,7 +1785,8 @@ def test_the_menu_says_when_dev_homes_check_interval_is_used(
         "In single-PC mode, /handoff, plain /knowledge, and /knowledge add check GitHub for "
         "dev-home's changes this often. /dev-home sync always checks."
     )
-    assert multi in out and single in out and out.index(multi) < out.index(single), out
+    words = " ".join(out.split())
+    assert multi in words and single in words and words.index(multi) < words.index(single), out
     assert re.search(r"every 12 hours \(the default in single-PC mode\)", out), out
     assert git("-C", str(box.remote), "rev-parse", "main") == head
 
@@ -2468,7 +2589,7 @@ def test_never_raises_even_when_its_lines_cant_be_printed(
 
 # A missing dev-home folder: clone, create, or stop. gh is faked.
 
-CHOICE = r"create a new private one \(n\), or stop here \(s\)\? \[s\]: $"
+CHOICE = r"create a new private one \('n'\), or stop here \('s'\)\? \[s\]: $"
 REPO_NAME = r"^Your dev-home repo on GitHub: .*\[dev-home\]: $"
 NEW_NAME = r"^Name for the new private repo on GitHub \[dev-home\]: $"
 
@@ -2494,6 +2615,28 @@ def test_stops_without_an_answer_to_go_on(
     assert re.search(r"^PROBLEM\s+Stopped: there is no dev-home at ", out, re.M), out
     assert fake_gh.calls == [("auth", "status")], fake_gh.calls
     assert not (missing / ".git").exists()
+
+
+def test_the_question_about_a_missing_dev_home_stands_apart_and_marks_its_keys(
+    box: Sandbox,
+    settings: Path,
+    person: Person,
+    fake_gh: FakeGh,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    person.echo = True
+    person.answers[CHOICE] = "s"
+    returned = setup_here(box, "--content-dir", str(box.root / "not-yet-dev-home"))
+    out = capsys.readouterr().out
+    assert returned == 1, out
+    # Broken only at spaces, wherever the folder's path leaves them.
+    shown = (
+        r"\n\nThere[ \n]is[ \n]no[ \n]dev-home[ \n]at[ \n]\S*not-yet-dev-home[ \n]yet\.\n\nClone "
+        r"your existing dev-home from GitHub \('c'\), create a new private one \('n'\), or stop "
+        r"here \('s'\)\? \[s\]: s\n"
+    )
+    # The output starts on a line of its own.
+    assert re.search(shown, "\n" + out), out
 
 
 @pytest.mark.parametrize(
