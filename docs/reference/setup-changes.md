@@ -72,13 +72,13 @@ and your rules joined, which setup writes again at each sync.
     The patterns keep them out of that folder's sessions. Your yes to the folder approves them
     too, and every sync puts them back if they go missing.
   - Each setting dev-home-toolkit recommends that you say yes to for that folder, such as
-    `"attribution": false`, which leaves Claude Code's name out of your commits and pull
-    requests. Setup asks about each one once per folder, in a terminal or through
-    `/dev-home configure`, showing its value now and what that means, and writes your yes in
-    `settings.json`, with a backup, in the same write as the lines above. Once you've answered,
-    it never changes the setting back or asks again, even after you change it in Claude Code's
-    `/config`; `/dev-home configure` shows the value and sets it again on a yes. It doesn't offer
-    them where it won't rewrite `settings.json`, such as one with comments.
+    `"attribution": {"commit": "", "pr": "", "sessionUrl": false}`, which leaves Claude Code's
+    name out of your commits and pull requests. Setup asks about each one once per folder, in a
+    terminal or through `/dev-home configure`, showing its value now and what that means, and
+    writes your yes in `settings.json`, with a backup, in the same write as the lines above. Once
+    you've answered, it never changes the setting back or asks again, even after you change it in
+    Claude Code's `/config`; `/dev-home configure` shows the value and sets it again on a yes. It
+    doesn't offer them where it won't rewrite `settings.json`, such as one with comments.
   - If `settings.json` has a setting dev-home-toolkit recommends written more than once, such as
     `attribution`, every sync takes out the earlier copies, with a backup. Claude Code uses only
     the last copy, so nothing it does changes. Whenever setup changes the file, any other key

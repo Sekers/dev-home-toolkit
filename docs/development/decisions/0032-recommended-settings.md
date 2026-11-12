@@ -6,8 +6,9 @@
 `templates/recommended-settings/recommended-settings.json`. Each entry has an id that is never
 reused, what it does, and the setting for each agent that has one, with any older form of it that
 the recommended value replaces. The first four are for Claude Code:
-`"attribution": false` (id `attribution-off`), which leaves commits and pull requests without a
-line naming the agent; `"feedbackSurveyRate": 0` (id `feedback-survey-off`), which stops the
+`"attribution": {"commit": "", "pr": "", "sessionUrl": false}` (id `attribution-off`), which leaves
+commits and pull requests without a line naming the agent or a link to the session;
+`"feedbackSurveyRate": 0` (id `feedback-survey-off`), which stops the
 session quality survey and its request to upload the session's transcript;
 `"remoteControlAtStartup": true` (id `remote-control-at-startup`), which connects Remote Control
 when each interactive session starts, so the session can be picked up from claude.ai/code or the
@@ -33,7 +34,9 @@ the whole conversation rather than a summary.
   requests get "Generated with Claude Code", and cloud and Remote Control sessions add a link to
   the session; the older form with empty `commit` and `pr` is partly off, hiding the first two
   but not the link; and text the person wrote shows as a custom value, which a yes replaces, so
-  someone keeping it can answer no.
+  someone keeping it can answer no. `false`, which Claude Code reads as hiding all attribution,
+  isn't counted as the recommended value and has no text yet, so it shows as an unknown value,
+  which a yes replaces.
 - The `remote-control-at-startup` offer is the same in every folder, since setup can't see the
   plan or the organization's switch it depends on. Its words say what it needs: a claude.ai
   sign-in on a Pro, Max, Team, or Enterprise plan, where on Team and Enterprise an Owner must
@@ -100,24 +103,36 @@ developer on 2026-10-24 (plain words in place of a diff, what Enter picks, the R
 offer's words, keeping only the last copy of a setting written more than once, and no question
 about a change made after a yes), by the developer on 2026-10-28 (each value shown, with what it
 means, in columns; the menu's one row), by the developer on 2026-11-09 (idle compaction off), and
-by the developer on 2026-11-11 (the `NEW` line names each setting waiting, and the menu's row
-counts each setting by its value).
+by the developer on 2026-11-11 (the `NEW` line names each setting waiting, the menu's row counts
+each setting by its value, and attribution is written as its three parts).
 
 **Why:** these settings suit most people, but each changes the person's own file, so each needs
 their yes on each PC. Codex has neither of the first two: its commit and pull request attribution
 is a setting of the ChatGPT workspace, which Codex asks OpenAI for, and it has no session survey
-(checked in Codex's source at rust-v0.161.0, 2026-10-07). `"attribution": false` needs Claude
-Code 2.1.281 or later, which decision 0014, "Supported versions of Claude Code and Codex", allows.
-Answers are per folder because a work account can need different settings, and a saved yes never
-causes a later write by itself, so setup never undoes an edit the person made. Nor does it ask
-about one: Claude Code's own settings are where people manage these, and a missing value can be a
-choice too, since `/config`'s "default" for Remote Control deletes the key. The menu shows the
-real value instead, as the Skills section shows a skill's real state where it differs from its
-answer. A value already there gets an offer too, because it isn't always a choice: an older form
-can hide less than the person meant. A recommended setting written twice is tidied without a
-question because keeping the last copy changes nothing Claude Code does, and leaving both would
-keep a value in the file that does nothing; it's only that setting, since other keys may repeat
-on purpose.
+(checked in Codex's source at rust-v0.161.0, 2026-10-07). Answers are per folder because a work
+account can need different settings, and a saved yes never causes a later write by itself, so
+setup never undoes an edit the person made. Nor does it ask about one: Claude Code's own settings
+are where people manage these, and a missing value can be a choice too, since `/config`'s
+"default" for Remote Control deletes the key. The menu shows the real value instead, as the Skills
+section shows a skill's real state where it differs from its answer. A value already there gets
+an offer too, because it isn't always a choice: an older form can hide less than the person
+meant. A recommended setting written twice is tidied without a question because keeping the last
+copy changes nothing Claude Code does, and leaving both would keep a value in the file that does
+nothing; it's only that setting, since other keys may repeat on purpose.
+
+Attribution is written as its three parts, each off, rather than as `false` (the developer,
+2026-11-11). `false` hides whatever parts Claude Code has, so what it does changes whenever Claude
+Code adds, removes, or changes a part, while nothing in the file changes; the three parts say
+exactly what's off. The two-part form became partly off that way when Claude Code 2.1.183 added
+the session link. The three parts are also what Claude Code writes: whenever its CLI saves a user
+setting, such as an effort level changed in the VS Code extension, it replaces `false` with them
+(tested in Claude Code 2.1.321 and 2.1.322, [research](../research/claude-code-attribution.md)).
+`false` isn't counted as the same as the three parts, because that claim holds only until Claude
+Code changes a part, and nothing would notice when it stopped holding. Before 1.0.0, a `false`
+that setup wrote earlier gets no handling of its own
+([0080: Compatibility before 1.0.0](0080-compatibility-before-1-0-0.md)). The two-part form stays
+an older form: setup never wrote it, people write it for Claude Code, and Claude Code's own
+message for a wrong value still gives it as its example.
 
 Remote Control at startup was added by the developer on 2026-10-19. Only user and managed
 settings can turn it on, since Claude Code ignores a `true` in a project's settings; that and
@@ -177,8 +192,13 @@ since a break at any space could split a folder's name that has a space in it.
   being asked.
 - Offering only where the setting is missing, and treating any value already there as the
   person's choice: it left an older form that hides less than the person meant as it was.
-- The three-key form of `attribution` (`commit`, `pr`, and `sessionUrl`), which only older
-  versions of Claude Code need.
+- For attribution's value (2026-11-11): `false`, as until then (what it hides changes whenever
+  Claude Code changes a part, and Claude Code's own writer replaces it with the three parts
+  anyway); counting `false` as the same as the three parts, through a list of forms that mean the
+  same (the match goes out of date when Claude Code changes a part, and nothing would notice);
+  `false` as an older form (no compatibility before 1.0.0); a text of its own for `false` (not
+  needed yet); and taking out the two-part older form (setup would call it a custom value with no
+  text, and Enter would keep it, leaving the session link on for the people this setting is for).
 - Turning off telemetry: in Claude Code it also stops feature flags, which can make Remote
   Control unavailable, so it's not a safe default for everyone.
 - Turning off Claude Code's built-in git instructions (`"includeGitInstructions": false`): the
@@ -239,6 +259,7 @@ since a break at any space could split a folder's name that has a space in it.
   set", which split one outcome in two; and counting a yes given in this run apart, as "yes, not
   written yet", which the Skills row doesn't do for a skill.
 
-**Look again if:** Codex gains a local setting for attribution or a survey, Claude Code's
-settings start syncing between machines, or Claude Code lets a program see whether Remote Control
-can work for an account.
+**Look again if:** Claude Code adds, removes, or changes a part of `attribution`, which changes
+what the three parts, the two-part form's text, and `false` mean; Codex gains a local setting for
+attribution or a survey; Claude Code's settings start syncing between machines; or Claude Code
+lets a program see whether Remote Control can work for an account.

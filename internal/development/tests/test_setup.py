@@ -3031,8 +3031,11 @@ def test_the_recommended_settings_are_the_ones_decided(box: Sandbox) -> None:
     ]
     claude = {name: entry.agents["claudeCode"] for name, entry in entries.items()}
     assert all(list(entry.agents) == ["claudeCode"] for entry in entries.values())
+    # Attribution all off by its parts, which keeps its meaning if Claude Code adds a part, and
+    # which Claude Code writes in place of false when it saves its settings (decision 0032).
     attribution = claude["attribution-off"]
-    assert attribution.key == "attribution" and attribution.value is False
+    assert attribution.key == "attribution"
+    assert attribution.value == {"commit": "", "pr": "", "sessionUrl": False}
     assert attribution.older_forms == ({"commit": "", "pr": ""},) and attribution.when_older_form
     assert claude["feedback-survey-off"].value == 0
     remote = claude["remote-control-at-startup"]

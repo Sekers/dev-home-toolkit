@@ -4,7 +4,7 @@
       "summary": "Leave Claude Code's name out of your commits and pull requests",
       "claudeCode": {
         "key": "attribution",
-        "value": false,
+        "value": { "commit": "", "pr": "", "sessionUrl": false },
         "olderForms": [{ "commit": "", "pr": "" }],
         "whenRecommended": "Attribution is off: Claude Code adds no co-author line to your commits, no \"Generated with Claude Code\" to your pull requests, and no link to the session.",
         "whenMissing": "Attribution is on: Claude Code adds a co-author line to your commits and \"Generated with Claude Code\" to your pull requests, and cloud and Remote Control sessions add a link to the session.",

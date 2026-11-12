@@ -4068,6 +4068,9 @@ SURVEY = r"^Turn off Claude Code's session quality survey\? "
 REMOTE = r"^Connect Remote Control when each Claude Code session starts\? "
 IDLE = r"^Stop Claude Code from compacting a long conversation while you're away\? "
 SET_AGAIN = rf"{ATTRIBUTION}'y' to set it again, 'n', or Enter to keep it as it is \[y/n/Enter\]: $"
+# Claude Code's attribution all off, as a yes writes it, and as a SET line names that.
+OFF = {"commit": "", "pr": "", "sessionUrl": False}
+SET_OFF = re.escape('set attribution to {"commit": "", "pr": "", "sessionUrl": false}')
 
 
 @pytest.fixture
@@ -4127,7 +4130,10 @@ def test_a_run_by_hand_offers_the_recommended_settings_and_enter_takes_the_recom
     assert f"\n{intro}\n\n  Leave Claude Code's name" in out, out
     assert '      Now:          {"commit": "", "pr": ""}, an older form\n' in out, out
     # The recommended value says what it means for the person, as the value now does.
-    off = "      Recommended:  false\n                    Attribution is off: Claude Code adds no"
+    off = (
+        '      Recommended:  {"commit": "", "pr": "", "sessionUrl": false}\n'
+        "                    Attribution is off: Claude Code adds no"
+    )
     assert off in out, out
     now = "      Now:          false\n                    Remote Control is off at startup:"
     assert now in out, out
@@ -4138,13 +4144,13 @@ def test_a_run_by_hand_offers_the_recommended_settings_and_enter_takes_the_recom
     )
     assert re.search(remote, out, re.M), out
     pattern = (
-        r"^SET\s+Claude Code settings in \.claude: set attribution to false, "
+        rf"^SET\s+Claude Code settings in \.claude: {SET_OFF}, "
         r"feedbackSurveyRate to 0, and idleCompaction to false, and added dev-home-toolkit to "
         r"permissions\.additionalDirectories in .*settings\.json\. Backup of the old file: "
     )
     assert re.search(pattern, out, re.M), out
     assert len(set(waiting.parent.glob("settings.json.bak-*")) - backups) == 1, out
-    assert written["attribution"] is False and written["feedbackSurveyRate"] == 0, written
+    assert written["attribution"] == OFF and written["feedbackSurveyRate"] == 0, written
     assert written["remoteControlAtStartup"] is False and written["idleCompaction"] is False
     assert len(written["permissions"]["additionalDirectories"]) == 2, written
     assert recommended_answers(settings) == {
@@ -4179,7 +4185,7 @@ def test_each_recommended_setting_can_be_answered_skipped_or_given_a_reminder(
     }
     assert recommended_answers(settings) == expected
     written = json.loads(waiting.read_text(encoding="utf-8"))
-    assert written["attribution"] is False, written
+    assert written["attribution"] == OFF, written
     assert "feedbackSurveyRate" not in written and "remoteControlAtStartup" not in written, written
     assert "idleCompaction" not in written, written
     # Skip saved nothing, so the next run asks about that one alone: its folder and what it is
@@ -4318,8 +4324,8 @@ def test_the_menu_keeps_a_yes_whose_value_changed_at_enter_and_sets_it_again_at_
     assert len(asked) == 1 and re.search(SET_AGAIN, asked[0]), person.asked
     again = setup_here(box)
     out = capsys.readouterr().out
-    assert again == 0 and json.loads(waiting.read_text(encoding="utf-8"))["attribution"] is False
-    pattern = r"^SET\s+Claude Code settings in \.claude: set attribution to false"
+    assert again == 0 and json.loads(waiting.read_text(encoding="utf-8"))["attribution"] == OFF
+    pattern = rf"^SET\s+Claude Code settings in \.claude: {SET_OFF}"
     assert re.search(pattern, out, re.M), out
     assert recommended_answers(settings) == {"attribution-off": True}
 

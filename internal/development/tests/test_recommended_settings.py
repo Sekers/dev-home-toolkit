@@ -31,6 +31,9 @@ pytestmark = pytest.mark.xdist_group("recommended")
 # attribution-off has an answer, or the recommended value already.
 ALL = ("attribution-off", "feedback-survey-off", "remote-control-at-startup", "idle-compaction-off")
 BUT_ATTRIBUTION = ALL[1:]
+# Claude Code's attribution all off, as a yes writes it, and as a SET line names that.
+OFF = {"commit": "", "pr": "", "sessionUrl": False}
+SET_OFF = re.escape('set attribution to {"commit": "", "pr": "", "sessionUrl": false}')
 
 
 def waiting(*ids: str) -> str:
@@ -125,7 +128,7 @@ def test_a_sync_names_the_recommended_settings_waiting_and_changes_nothing(
     assert again.has_line(waiting(*ALL)), str(again)
     assert (claude.read_bytes(), settings.read_bytes()) == before
     # The one with the recommended value already isn't named.
-    with_keys(claude, attribution=False)
+    with_keys(claude, attribution=OFF)
     assert sync(box).has_line(waiting(*BUT_ATTRIBUTION))
 
 
@@ -225,7 +228,7 @@ def test_configure_alone_lists_the_recommended_settings_waiting_with_their_comma
 
 def test_the_settings_row_puts_each_folder_on_a_line_of_its_own(box: Sandbox, claude: Path) -> None:
     second = box.profile / ".claude-second"
-    write_text(second / "settings.json", '{"attribution": false}\n')
+    write_text(second / "settings.json", json.dumps({"attribution": OFF}) + "\n")
     path = box.toolkit / "local-settings.json"
     saved = settings_of(path)
     saved["claudeCode"]["folders"]["~/.claude-second"] = {"setUp": True}
@@ -274,7 +277,7 @@ def test_the_settings_row_counts_each_setting_by_the_value_the_folder_has(
     assert answers(box)["remote-control-at-startup"] is False
     assert result.has_line(r"^  ~/\.claude, remote-control-at-startup: no\. For yes: "), str(result)
     # With every one recommended, the row says all of them.
-    with_keys(claude, attribution=False, feedbackSurveyRate=0)
+    with_keys(claude, attribution=OFF, feedbackSurveyRate=0)
     pattern = r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: all 4 as recommended$"
     again = configure(box)
     assert again.has_line(pattern), str(again)
@@ -288,7 +291,7 @@ def test_a_yes_in_chat_writes_the_setting_with_a_backup_then_saves_the_answer(
     result = configure(box, yes)
     assert result.code == 0, str(result)
     pattern = (
-        r"^SET\s+Claude Code settings in \.claude: set attribution to false in .*settings\.json\. "
+        rf"^SET\s+Claude Code settings in \.claude: {SET_OFF} in .*settings\.json\. "
         r"Backup of the old file: "
     )
     assert result.has_line(pattern), str(result)
@@ -297,7 +300,7 @@ def test_a_yes_in_chat_writes_the_setting_with_a_backup_then_saves_the_answer(
         r"Backup of the old file: "
     )
     assert result.has_line(pattern), str(result)
-    assert settings_of(claude)["attribution"] is False
+    assert settings_of(claude)["attribution"] == OFF
     backup = next(claude.parent.glob(claude.name + ".bak-*"))
     assert backup.read_text(encoding="utf-8") == before
     assert answers(box) == {"attribution-off": True}
@@ -318,10 +321,10 @@ def test_a_yes_to_a_setting_written_twice_sets_it_once_and_says_only_that(
         listing
     )
     result = configure(box, command(listing, "claudeCode.recommendedSettings.attribution-off"))
-    pattern = r"^SET\s+Claude Code settings in \.claude: set attribution to false in .*\. Backup"
+    pattern = rf"^SET\s+Claude Code settings in \.claude: {SET_OFF} in .*\. Backup"
     assert result.code == 0 and result.has_line(pattern), str(result)
     written = claude.read_text(encoding="utf-8")
-    assert written.count('"attribution"') == 1 and settings_of(claude)["attribution"] is False
+    assert written.count('"attribution"') == 1 and settings_of(claude)["attribution"] == OFF
 
 
 def test_the_listing_marks_each_setting_even_when_every_one_is_recommended(
@@ -385,13 +388,13 @@ def test_all_recommended_in_chat_takes_the_recommended_ones_and_keeps_a_value_so
     result = configure(box, every)
     assert result.code == 0, str(result)
     pattern = (
-        r"^SET\s+Claude Code settings in \.claude: set attribution to false, "
+        rf"^SET\s+Claude Code settings in \.claude: {SET_OFF}, "
         r"feedbackSurveyRate to 0, and idleCompaction to false in "
     )
     assert result.has_line(pattern), str(result)
     assert len(list(claude.parent.glob(claude.name + ".bak-*"))) == 1
     written = settings_of(claude)
-    assert written["attribution"] is False and written["feedbackSurveyRate"] == 0, written
+    assert written["attribution"] == OFF and written["feedbackSurveyRate"] == 0, written
     assert written["remoteControlAtStartup"] is False, written
     assert written["idleCompaction"] is False, written
     assert answers(box) == {
@@ -506,7 +509,7 @@ def test_a_yes_whose_value_changed_later_is_shown_and_can_be_set_again(
     row = r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 1 changed since your yes, "
     assert listing.has_line(row + r"3 not answered yet$"), str(listing)
     again = configure(box, command(listing, "claudeCode.recommendedSettings.attribution-off"))
-    assert again.code == 0 and settings_of(claude)["attribution"] is False, str(again)
+    assert again.code == 0 and settings_of(claude)["attribution"] == OFF, str(again)
     # Taken out, as /config's default does, it's named as missing, not as a value.
     data = settings_of(claude)
     del data["attribution"]
@@ -704,6 +707,11 @@ def test_a_recommended_settings_plan_sets_each_value_in_its_place_or_last(box: S
         ("feedback-survey-off", True, ", an unknown value", ""),
         ("attribution-off", {"commit": "Mine"}, ", a custom value", ""),
         ("attribution-off", True, ", an unknown value", ""),
+        # Claude Code reads false as hiding all attribution, but setup doesn't count it as the
+        # recommended three parts: what false hides changes whenever Claude Code adds, removes,
+        # or changes an attribution part, while the three parts stay what they say. It has no
+        # text of its own for now, so it shows as unknown (decision 0032).
+        ("attribution-off", False, ", an unknown value", ""),
         ("attribution-off", None, ", an unknown value", ""),
         ("idle-compaction-off", True, "", "Idle compaction is on, unless auto-compact is off:"),
         ("idle-compaction-off", None, ", an unknown value", ""),
