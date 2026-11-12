@@ -587,6 +587,11 @@ class Waiting:
     guidance: list[Guidance]
 
 
+# What a recommended setting's answer says after "yes, " when the folder's value changed since
+# the yes, which the settings menu shows in yellow (decision 0026).
+CHANGED_SINCE = "but the value changed since"
+
+
 @dataclass(frozen=True)
 class RecommendedOffer:
     """A recommended setting in a Claude Code folder set up (decision 0032): the folder, by its
@@ -620,6 +625,12 @@ class RecommendedOffer:
         return self.state != DONE and not answered_for_now(self.answer, today)
 
     @property
+    def changed_since(self) -> bool:
+        """Whether it's a yes saved before this run whose folder no longer has the recommended
+        value, since the person or another program changed it (decision 0032)."""
+        return self.answer is True and not self.pending and self.state != DONE
+
+    @property
     def about(self) -> tuple[console.Row, ...]:
         """What the offer says about it, fitted to what the folder has now."""
         rows = offer_text(self.setting, CLAUDE_CODE.group, self.current, "settings.json")
@@ -634,8 +645,10 @@ class RecommendedOffer:
         """Its answer as the settings menu and the list for an agent show it."""
         if self.pending:
             return "yes, which setup writes once its questions are done"
+        if self.changed_since:
+            return f"yes, {CHANGED_SINCE}"
         if self.answer is True:
-            return "yes" if self.state == DONE else "yes, but the value changed since"
+            return "yes"
         if self.answer is False:
             return "no"
         if isinstance(self.answer, Reminder):

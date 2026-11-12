@@ -478,10 +478,13 @@ def answer_text(answer: bool | Reminder | None) -> str:
 
 
 def folders_text(run: "Setup", settings: LocalSettings, agent: Agent) -> str:
-    """An agent's folders as the menu shows them, each with its answer."""
+    """An agent's folders as the menu shows them, each with its answer, and "(not found)" in
+    yellow after one that's gone, as the menu shows each value that differs from its answer
+    (decision 0026)."""
+    gone = " " + color("(not found)", YELLOW)
     folders = ", ".join(
         f"{name}: {answer_text(answer)}"
-        + ("" if Path(resolve_home(name, run.home)).is_dir() else " (not found)")
+        + ("" if Path(resolve_home(name, run.home)).is_dir() else gone)
         for name, answer in folder_answers(run, settings, agent)
     )
     return folders or "none found"
@@ -581,18 +584,25 @@ def recommended_counts(offers: Sequence["RecommendedOffer"]) -> str:
     the recommended value, whatever their answer, or that will have it once the work writes a yes
     this run gave, as the Skills row counts a skill by what setup will do; then each of the
     others by its answer. Such as "all 4 as recommended", or "2 of 4 as recommended, 1 changed
-    since your yes, 1 no". Each answer stays saved, and picking the row shows it."""
+    since your yes, 1 no". A yes whose value changed since is in yellow, as the menu shows each
+    value that differs from its answer (decision 0026). Each answer stays saved, and picking the
+    row shows it."""
     rest = [offer for offer in offers if offer.state != DONE and not offer.pending]
     done = len(offers) - len(rest)
-    counts = [
-        f"all {done} as recommended" if done == len(offers) > 1 else "",
-        f"{done} of {len(offers)} as recommended" if done < len(offers) or done == 1 else "",
-        f"{sum(1 for offer in rest if offer.answer is True)} changed since your yes",
-        f"{sum(1 for offer in rest if offer.answer is False)} no",
-        f"{sum(1 for offer in rest if isinstance(offer.answer, Reminder))} remind me",
-        f"{sum(1 for offer in rest if offer.answer is None)} not answered yet",
-    ]
-    return ", ".join(count for count in counts if count and not count.startswith("0 "))
+    counts: list[str] = []
+    if done == len(offers) > 1:
+        counts.append(f"all {done} as recommended")
+    elif done:
+        counts.append(f"{done} of {len(offers)} as recommended")
+    for number, words, code in (
+        (sum(1 for offer in rest if offer.changed_since), "changed since your yes", YELLOW),
+        (sum(1 for offer in rest if offer.answer is False), "no", ""),
+        (sum(1 for offer in rest if isinstance(offer.answer, Reminder)), "remind me", ""),
+        (sum(1 for offer in rest if offer.answer is None), "not answered yet", ""),
+    ):
+        if number:
+            counts.append(color(f"{number} {words}", code) if code else f"{number} {words}")
+    return ", ".join(counts)
 
 
 def recommended_summary(run: "Setup", settings: LocalSettings) -> str:
@@ -1346,7 +1356,7 @@ def change_recommended(run: "Setup", settings: LocalSettings) -> bool | None:
                 offer.setting.summary,
                 offer.recommended,
                 offer.question,
-                (*offer.about, console.Row("Your answer:", offer.answer_text)),
+                (*offer.about, console.Row("Your answer:", answer_shown(offer))),
             )
             for offer in offers
         ]
@@ -1359,6 +1369,19 @@ def change_recommended(run: "Setup", settings: LocalSettings) -> bool | None:
     return changed
 
 
+def answer_shown(offer: "RecommendedOffer") -> str:
+    """A recommended setting's answer as the menu shows it under the setting: its answer_text,
+    with the part after "yes, " in yellow for a yes whose value changed since, as the menu shows
+    each value that differs from its answer (decision 0026). The line is far shorter than the
+    console, so the color codes never make it wrap."""
+    # Loaded here, since setup loads this module.
+    from .setup import CHANGED_SINCE
+
+    if offer.changed_since:
+        return f"yes, {color(CHANGED_SINCE, YELLOW)}"
+    return offer.answer_text
+
+
 def ask_recommended(run: "Setup", offer: "RecommendedOffer") -> console.OfferAnswer | None:
     """The menu's question about one recommended setting in one folder: an offer for one with no
     yes or no, where Enter keeps a reminder; yes or no for one answered, with Enter keeping the
@@ -1367,7 +1390,7 @@ def ask_recommended(run: "Setup", offer: "RecommendedOffer") -> console.OfferAns
     answer came."""
     if not run.can_ask or (offer.answer is None and offer.state == DONE):
         return None
-    if offer.answer is True and offer.state != DONE and not offer.pending:
+    if offer.changed_since:
         return console.choose_again(offer.question)
     if isinstance(offer.answer, bool):
         return run.choose(offer.question, offer.answer)

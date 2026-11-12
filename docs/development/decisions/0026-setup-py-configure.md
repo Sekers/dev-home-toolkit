@@ -13,7 +13,7 @@ Changed on 2026-10-17, 2026-10-20, 2026-10-23 (setup's questions), 2026-10-28 (r
 settings), 2026-11-09 (the Skills section, skills' summaries, and the state of one this PC's
 operating system can't run, in the list for agents), 2026-11-10 (that skill's preferences,
 and the Skills section's questions, row, and words for an answer), and 2026-11-11 (a pick that
-asks nothing).
+asks nothing, and yellow for each value that differs from its answer).
 
 - At a console, it shows a menu: every setting with its current value, under "This PC" and
   "Shared by every copy of dev-home", in aligned columns, with headings and setup's colors, in
@@ -28,6 +28,13 @@ asks nothing).
   about, like Codex's homes on a PC without Codex, gets one line saying why, right under the
   answer, and then the menu's question again, right under that line, without the menu shown
   again. This holds in the main menu and in the Skills section.
+- Each value that says its state differs from its answer is yellow, at a console that shows
+  color: in the Skills section, a skill's ", but" state (see below); in the main menu, "(not
+  found)" after a folder answered yes that's gone, and the recommended settings' "changed since
+  your yes"; and under that row, "but the value changed since" after a yes. The words say it
+  without color too, so nothing is lost with `NO_COLOR` or in copied text
+  ([0055: Keys and answers in prompts](0055-keys-and-answers-in-prompts.md)). "Not answered yet"
+  stays plain: it waits for an answer rather than differing from one.
 - **The Skills section** opens from the menu's last row under "This PC", row 10, `Skills >`. The
   planned `Built-in rules >` row goes under "Shared by every copy of dev-home", after the copies
   row ([0067: Built-in rules](0067-built-in-rules.md)). The `Skills >` row counts the skills by
@@ -174,6 +181,9 @@ asks nothing).
   question asked again after an answer it doesn't take
   ([0025: Setup's questions](0025-setups-questions.md)). The menu is still just above, since
   only that line came after it.
+- Yellow for a value that differs from its answer: it's the reason to open that row, and the
+  Skills section already marked a skill's state that way, while plain text made "changed since
+  your yes" look like the other counts (the developer, 2026-11-11).
 
 **Options set aside:**
 
@@ -229,6 +239,9 @@ asks nothing).
   on dev-home's row, as a skill this PC's operating system can't run has none (it renumbers the
   rows, makes a skill that's always added look unavailable, and leaves a number out of range as
   it was).
+- For a value that differs from its answer (2026-11-11): yellow for the recommended settings'
+  count alone (the same kind of state would stay plain in two other places), and no color (the
+  one count that may need the person looks like the rest).
 
 **Look again if:** the settings outgrow a menu, or people often ask for a reminder on a date
 rather than in a number of days.

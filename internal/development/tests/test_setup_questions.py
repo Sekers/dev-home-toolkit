@@ -361,10 +361,15 @@ def test_a_list_of_items_breaks_only_after_a_comma_with_a_hanging_indent(box: Sa
     ]
     assert console.wrap_items("a, bbbbbbbbbb, c", 5) == ["a,", "  bbbbbbbbbb,", "  c"]
     assert console.wrap_items("") == [""]
+    # A color code takes no room at the console: these 46 characters fit in 46, with 9 more of
+    # codes.
+    output = shared_module(box, "output")
+    colored = f"~/.claude-second: 2 of 4 as recommended, {output.YELLOW}1 no{output.RESET};"
+    assert console.wrap_items(colored, 46) == [colored]
 
 
 def test_the_recommended_settings_row_counts_every_answer_by_the_value_the_folder_has(
-    box: Sandbox,
+    box: Sandbox, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Each answer setup saves, given or not this run, with the recommended value and without.
     setup = shared_module(box, "setup")
@@ -394,6 +399,48 @@ def test_the_recommended_settings_row_counts_every_answer_by_the_value_the_folde
     assert counts([offer(None, True)]) == "1 of 1 as recommended"
     assert counts([offer(None, False)]) == "1 not answered yet"
     assert counts([]) == ""
+    # At a console that shows color, a yes whose value changed since is yellow, as each value that
+    # differs from its answer is (decision 0026), and the rest stay plain. With none changed, no
+    # color code is left behind.
+    output = shared_module(box, "output")
+    monkeypatch.setattr(output, "use_color", lambda: True)
+    yellow, reset = output.YELLOW, output.RESET
+    changed = f"{yellow}1 changed since your yes{reset}"
+    assert counts([offer(True, False), offer(False, False)]) == f"{changed}, 1 no"
+    assert counts([offer(True, True), offer(False, False)]) == "1 of 2 as recommended, 1 no"
+
+
+def test_the_menu_shows_each_value_that_differs_from_its_answer_in_yellow(
+    box: Sandbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # As a skill's state that differs from its answer is (decision 0026): a folder answered yes
+    # that's gone, and a recommended setting's yes whose value changed since. The words say it
+    # all without color, as in the list for an agent.
+    setup = shared_module(box, "setup")
+    configure = shared_module(box, "configure")
+    recommended = shared_module(box, "recommended_settings")
+    settings_module = shared_module(box, "settings")
+    output = shared_module(box, "output")
+    run = setup.Setup(quiet=False, what_if=False)
+    settings, _ = run.read_settings()
+    agent = settings_module.CLAUDE_CODE
+    settings.folders[agent.setting]["~/.claude-gone"] = True
+    setting = recommended.for_agent(agent.group)[0]
+    other = recommended.Current("settings.json", "another value")
+    changed = setup.RecommendedOffer(box.profile / ".claude", "~/.claude", setting, other, True)
+    plain = configure.folders_text(run, settings, agent)
+    assert "~/.claude-gone: yes (not found)" in plain, plain
+    assert configure.answer_shown(changed) == "yes, but the value changed since"
+    monkeypatch.setattr(output, "use_color", lambda: True)
+    yellow, reset = output.YELLOW, output.RESET
+    shown = configure.folders_text(run, settings, agent)
+    assert f"~/.claude-gone: yes {yellow}(not found){reset}" in shown, shown
+    assert shown.count(yellow) == 1, shown
+    assert configure.answer_shown(changed) == f"yes, {yellow}but the value changed since{reset}"
+    # A yes the folder still has, and any other answer, stay plain.
+    done = recommended.Current("settings.json", setting.agents[agent.group].value)
+    kept = setup.RecommendedOffer(box.profile / ".claude", "~/.claude", setting, done, True)
+    assert configure.answer_shown(kept) == "yes"
 
 
 def test_a_list_with_nothing_recommended_takes_enter_as_none(box: Sandbox, person: Person) -> None:
