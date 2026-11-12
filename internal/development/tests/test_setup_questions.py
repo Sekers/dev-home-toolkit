@@ -342,6 +342,60 @@ def test_text_in_colored_parts_wraps_at_spaces_with_each_part_in_its_color(
     ]
 
 
+def test_a_list_of_items_breaks_only_after_a_comma_with_a_hanging_indent(box: Sandbox) -> None:
+    console = shared_module(box, "console")
+    text = "~/.claude-second: 2 of 4 as recommended, 1 changed since your yes, 1 no;"
+    # One line when it fits.
+    assert console.wrap_items(text) == [text]
+    # Otherwise each line ends at a comma, and the next is set in, so a name such as
+    # ~/.claude-second, or a count, is never split, though "~/.claude-second:" ends in no comma.
+    assert console.wrap_items(text, 40) == [
+        "~/.claude-second: 2 of 4 as recommended,",
+        "  1 changed since your yes, 1 no;",
+    ]
+    # An item too long for a line gets one of its own, whole.
+    assert console.wrap_items(text, 30) == [
+        "~/.claude-second: 2 of 4 as recommended,",
+        "  1 changed since your yes,",
+        "  1 no;",
+    ]
+    assert console.wrap_items("a, bbbbbbbbbb, c", 5) == ["a,", "  bbbbbbbbbb,", "  c"]
+    assert console.wrap_items("") == [""]
+
+
+def test_the_recommended_settings_row_counts_every_answer_by_the_value_the_folder_has(
+    box: Sandbox,
+) -> None:
+    # Each answer setup saves, given or not this run, with the recommended value and without.
+    setup = shared_module(box, "setup")
+    recommended = shared_module(box, "recommended_settings")
+    settings = shared_module(box, "settings")
+    counts = shared_module(box, "configure").recommended_counts
+    group = settings.CLAUDE_CODE.group
+    setting = recommended.for_agent(group)[0]
+
+    def offer(answer: Any, recommended_value: bool, pending: bool = False) -> Any:
+        value = setting.agents[group].value if recommended_value else "another value"
+        current = recommended.Current("settings.json", value)
+        folder = box.profile / ".claude"
+        return setup.RecommendedOffer(folder, "~/.claude", setting, current, answer, pending)
+
+    reminder = settings.Reminder(None)
+    answers = (True, False, reminder, None)
+    # With the recommended value, every answer counts as recommended.
+    assert counts([offer(answer, True) for answer in answers]) == "all 4 as recommended"
+    # Without it, each counts by its answer, but a yes given this run, which the work writes.
+    offers = [offer(answer, False) for answer in answers] + [offer(True, False, pending=True)]
+    expected = (
+        "1 of 5 as recommended, 1 changed since your yes, 1 no, 1 remind me, 1 not answered yet"
+    )
+    assert counts(offers) == expected
+    # One alone, and none.
+    assert counts([offer(None, True)]) == "1 of 1 as recommended"
+    assert counts([offer(None, False)]) == "1 not answered yet"
+    assert counts([]) == ""
+
+
 def test_a_list_with_nothing_recommended_takes_enter_as_none(box: Sandbox, person: Person) -> None:
     person.answers[r"^Add them\?"] = ["", "n", "a"]
     enter = choose_from_list(box, False, False)
@@ -4044,8 +4098,9 @@ def test_a_run_by_hand_offers_the_recommended_settings_and_enter_takes_the_recom
         "remote-control-at-startup": False,
         "idle-compaction-off": True,
     }
-    # The menu, after the questions, counts the yeses the work then writes.
-    row = r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 3 yes, 1 no$"
+    # The menu, after the questions, counts the yeses the work then writes as recommended, as the
+    # Skills row counts a skill by what setup will do.
+    row = r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 3 of 4 as recommended, 1 no$"
     assert re.search(row, out, re.M), out
 
 
@@ -4194,11 +4249,14 @@ def test_the_menu_keeps_a_yes_whose_value_changed_at_enter_and_sets_it_again_at_
     out = capsys.readouterr().out
     attribution = json.loads(waiting.read_text(encoding="utf-8"))["attribution"]
     assert kept == 0 and attribution == {"commit": "Mine"}, out
-    row = (
-        r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 1 yes \(1 changed since\), "
-        r"3 already set$"
-    )
-    assert re.search(row, out, re.M), out
+    # The three the folder has already count as recommended, whether or not they have an answer.
+    # Past the console's width, the counts break after a comma, with the rest set in.
+    row = r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 3 of 4 as recommended,$"
+    lines = out.splitlines()
+    nine = next(index for index, line in enumerate(lines) if re.search(row, line))
+    column = lines[nine].index("~/.claude:")
+    assert lines[nine + 1] == " " * (column + 2) + "1 changed since your yes", out
+    assert len(f"{lines[nine]} 1 changed since your yes") > 100 >= len(lines[nine]), out
     assert "      Your answer:  yes, but the value changed since\n" in out, out
     assert "      Now:          true, as recommended\n" in out, out
     asked = [p for p in person.asked if not re.search(MENU, p) and not re.search(CHANGE_SKILLS, p)]

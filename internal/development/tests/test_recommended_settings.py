@@ -239,9 +239,45 @@ def test_the_settings_row_puts_each_folder_on_a_line_of_its_own(box: Sandbox, cl
     row = result.lines[index : index + 2]
     column = row[0].index("~/.claude:")
     assert row[0].endswith("~/.claude: 4 not answered yet;"), str(result)
-    assert row[1] == " " * column + "~/.claude-second: 3 not answered yet, 1 already set", str(
-        result
+    second_row = "~/.claude-second: 1 of 4 as recommended, 3 not answered yet"
+    assert row[1] == " " * column + second_row, str(result)
+
+
+def test_the_settings_row_counts_each_setting_by_the_value_the_folder_has(
+    box: Sandbox, claude: Path
+) -> None:
+    # One with the recommended value counts as recommended whatever its answer, a no included,
+    # and each of the others by its answer. The list for an agent keeps the row on one line,
+    # though it passes the console's width.
+    with_keys(
+        claude,
+        attribution={"commit": "Mine"},
+        remoteControlAtStartup=True,
+        idleCompaction=False,
     )
+    path = box.toolkit / "local-settings.json"
+    saved = settings_of(path)
+    later = (date.today() + timedelta(days=7)).isoformat()
+    saved["claudeCode"]["folders"]["~/.claude"]["recommendedSettings"] = {
+        "attribution-off": True,
+        "feedback-survey-off": {"$state": "remind", "on": later},
+        "remote-control-at-startup": False,
+    }
+    write_text(path, json.dumps(saved, indent=2) + "\n")
+    result = configure(box)
+    row = (
+        r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 2 of 4 as recommended, "
+        r"1 changed since your yes, 1 remind me$"
+    )
+    assert result.code == 0 and result.has_line(row), str(result)
+    # Each answer is still saved, and the list says what it is.
+    assert answers(box)["remote-control-at-startup"] is False
+    assert result.has_line(r"^  ~/\.claude, remote-control-at-startup: no\. For yes: "), str(result)
+    # With every one recommended, the row says all of them.
+    with_keys(claude, attribution=False, feedbackSurveyRate=0)
+    pattern = r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: all 4 as recommended$"
+    again = configure(box)
+    assert again.has_line(pattern), str(again)
 
 
 def test_a_yes_in_chat_writes_the_setting_with_a_backup_then_saves_the_answer(
@@ -467,7 +503,7 @@ def test_a_yes_whose_value_changed_later_is_shown_and_can_be_set_again(
         r"'claudeCode\.recommendedSettings\.attribution-off-=~/\.claude'\.$"
     )
     assert listing.has_line(pattern), str(listing)
-    row = r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 1 yes \(1 changed since\), "
+    row = r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 1 changed since your yes, "
     assert listing.has_line(row + r"3 not answered yet$"), str(listing)
     again = configure(box, command(listing, "claudeCode.recommendedSettings.attribution-off"))
     assert again.code == 0 and settings_of(claude)["attribution"] is False, str(again)

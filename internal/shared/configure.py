@@ -546,17 +546,27 @@ def overview(run: "Setup", settings: LocalSettings, *, menu: bool = False) -> li
     # The numbers' column, wide enough for the last, with at least two spaces after one digit.
     numbers = max(len(str(len(this_pc) + len(shared))), 2) + 1
 
-    def row(number: int, label: str, value: str) -> str:
+    def row(number: int, label: str, value: str) -> list[str]:
         # A value in parts, one for each folder, puts each after the first on a line of its own,
-        # under the first, each but the last ending with a semicolon.
-        gap = " " * (numbers - len(str(number)))
-        under = ";\n" + " " * (2 + numbers + width)
-        return f"  {color(str(number), GREEN)}{gap}{label:<{width}}{under.join(value.split(NEXT))}"
+        # under the first, each but the last ending with a semicolon. In the menu, the recommended
+        # settings' row breaks a folder's part between its counts to fit the console, never inside
+        # a count or a folder's name, with a hanging indent. The list for an agent keeps each part
+        # on one line, so an agent reading it can't split a folder's counts apart.
+        column = 2 + numbers + width
+        parts = value.split(NEXT)
+        texts = [f"{part};" for part in parts[:-1]] + parts[-1:]
+        if menu and label == RECOMMENDED_LABEL:
+            room = console.LINE_WIDTH - column
+            texts = [line for text in texts for line in console.wrap_items(text, room)]
+        start = f"  {color(str(number), GREEN)}{' ' * (numbers - len(str(number)))}{label:<{width}}"
+        return [start + texts[0], *(" " * column + text for text in texts[1:])]
 
     lines = [color("dev-home-toolkit settings", CYAN), "", color("This PC", CYAN)]
-    lines += [row(number, label, value) for number, (label, value) in enumerate(this_pc, 1)]
+    for number, (label, value) in enumerate(this_pc, 1):
+        lines += row(number, label, value)
     lines += ["", color("Shared by every copy of dev-home", CYAN)]
-    lines += [row(len(this_pc) + 1, label, value) for label, value in shared]
+    for label, value in shared:
+        lines += row(len(this_pc) + 1, label, value)
     return lines
 
 
@@ -567,18 +577,20 @@ NEXT = "\n"
 
 
 def recommended_counts(offers: Sequence["RecommendedOffer"]) -> str:
-    """One folder's answers to its recommended settings, counted, as the menu's row shows them,
-    such as "3 yes (1 changed since), 1 no"."""
-    yes = sum(1 for offer in offers if offer.answer is True)
-    changed = sum(
-        1 for offer in offers if offer.answer is True and not offer.pending and offer.state != DONE
-    )
+    """One folder's recommended settings, counted as the menu's row shows them: first those with
+    the recommended value, whatever their answer, or that will have it once the work writes a yes
+    this run gave, as the Skills row counts a skill by what setup will do; then each of the
+    others by its answer. Such as "all 4 as recommended", or "2 of 4 as recommended, 1 changed
+    since your yes, 1 no". Each answer stays saved, and picking the row shows it."""
+    rest = [offer for offer in offers if offer.state != DONE and not offer.pending]
+    done = len(offers) - len(rest)
     counts = [
-        f"{yes} yes" + (f" ({changed} changed since)" if changed else "") if yes else "",
-        f"{sum(1 for offer in offers if offer.answer is False)} no",
-        f"{sum(1 for offer in offers if isinstance(offer.answer, Reminder))} remind me",
-        f"{sum(1 for o in offers if o.answer is None and o.state != DONE)} not answered yet",
-        f"{sum(1 for o in offers if o.answer is None and o.state == DONE)} already set",
+        f"all {done} as recommended" if done == len(offers) > 1 else "",
+        f"{done} of {len(offers)} as recommended" if done < len(offers) or done == 1 else "",
+        f"{sum(1 for offer in rest if offer.answer is True)} changed since your yes",
+        f"{sum(1 for offer in rest if offer.answer is False)} no",
+        f"{sum(1 for offer in rest if isinstance(offer.answer, Reminder))} remind me",
+        f"{sum(1 for offer in rest if offer.answer is None)} not answered yet",
     ]
     return ", ".join(count for count in counts if count and not count.startswith("0 "))
 

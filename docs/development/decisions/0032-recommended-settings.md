@@ -85,16 +85,23 @@ the whole conversation rather than a summary.
   out, it reads a folder's `settings.json`, and `.claude.json` where that counts, only while one
   there has no yes or no, and no reminder before its date: about 1 ms a folder on the
   developer's PC (2026-10-28), and nothing once every one there is answered.
-- The settings menu has one row for them, counting each folder's answers, which goes through
-  each setting in each folder set up, in the offer's columns, with the answer. A yes whose value
-  changed since is asked whether to set it again, with Enter keeping it as it is.
+- The settings menu has one row for them. For each Claude folder set up, it counts first the
+  settings that have the recommended value, whatever their answer, a no included, or that will
+  have it once the work writes a yes given in this run: "all 4 as recommended", or "2 of 4 as
+  recommended". Then it counts each of the others by its answer: "changed since your yes", "no",
+  "remind me", or "not answered yet". At a console, when a folder's counts don't fit on one
+  line, they break after a comma, never inside a count or a folder's name, with each line after
+  the first set in two spaces; the list for an agent keeps each folder on one line. Picking the
+  row goes through each setting in each folder set up, in the offer's columns, with the answer. A
+  yes whose value changed since is asked whether to set it again, with Enter keeping it as it is.
 
 Changed on 2026-10-15, by the developer on 2026-10-19 (Remote Control at startup), by the
 developer on 2026-10-24 (plain words in place of a diff, what Enter picks, the Remote Control
 offer's words, keeping only the last copy of a setting written more than once, and no question
 about a change made after a yes), by the developer on 2026-10-28 (each value shown, with what it
 means, in columns; the menu's one row), by the developer on 2026-11-09 (idle compaction off), and
-by the developer on 2026-11-11 (the `NEW` line names each setting waiting).
+by the developer on 2026-11-11 (the `NEW` line names each setting waiting, and the menu's row
+counts each setting by its value).
 
 **Why:** these settings suit most people, but each changes the person's own file, so each needs
 their yes on each PC. Codex has neither of the first two: its commit and pull request attribution
@@ -149,6 +156,17 @@ value gets a text only where Claude Code's docs say what it means, since a guess
 wrong, and the developer chose to say "an unknown value" rather than guess. The menu
 gets one row, like the row for Claude Code folders, rather than a submenu ahead of the Skills
 submenu (the developer's choice, 2026-10-28).
+
+The row counts each setting by its value because a glance at the menu asks whether the
+recommended settings are in effect, and whether any needs an answer. A value from a yes and one
+the folder already had answer that the same way, so counting them apart read as two outcomes
+(the developer, 2026-11-11). Which one it was matters only once the value changes, and the row
+shows it then: "changed since your yes" for a yes, and "not answered yet" for a value that was
+already there, which setup then offers. Each answer stays saved, and picking the row shows it. A
+yes given in this run counts as recommended, as the Skills row counts a skill by what setup will
+do with the answers given so far
+([0026: setup.py --configure](0026-setup-py-configure.md)). The counts break only after a comma,
+since a break at any space could split a folder's name that has a space in it.
 
 **Options set aside:**
 
@@ -217,6 +235,9 @@ submenu (the developer's choice, 2026-10-28).
 - For the settings menu (2026-10-28): a submenu with a numbered row for each folder and setting,
   which would build a submenu ahead of the design of the menu's Skills section
   ([0026: setup.py --configure](0026-setup-py-configure.md)).
+- For the menu's row (2026-11-11): counting answers, as until then, such as "3 yes, 1 already
+  set", which split one outcome in two; and counting a yes given in this run apart, as "yes, not
+  written yet", which the Skills row doesn't do for a skill.
 
 **Look again if:** Codex gains a local setting for attribution or a survey, Claude Code's
 settings start syncing between machines, or Claude Code lets a program see whether Remote Control

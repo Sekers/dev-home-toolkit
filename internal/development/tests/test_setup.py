@@ -1461,7 +1461,7 @@ def test_claude_code_folders_out_of_order_are_shown_and_put_in_order(
     )
     assert listing.has_line(folders), str(listing)
     nine = next(i for i, line in enumerate(listing.lines) if re.match(r"^  9\s", line))
-    assert listing.lines[nine].endswith("~/.claude: 4 already set;"), str(listing)
+    assert listing.lines[nine].endswith("~/.claude: all 4 as recommended;"), str(listing)
     assert listing.lines[nine + 1].strip().startswith("~/.claude-second: "), str(listing)
     assert result.code == 0 and not result.has_line(r"^SET\s+This PC's settings"), str(result)
     order = ["~/.claude", "~/.claude-gone", "~/.claude-second"]
@@ -2753,7 +2753,7 @@ def test_configure_alone_shows_the_settings_and_how_to_change_them(
     assert result.has_line(pattern), str(result)
     # The recommended settings, which the sandbox's folder has already, so the list has nothing
     # more about them.
-    pattern = r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: 4 already set$"
+    pattern = r"^\s+9\s+Recommended Claude Code settings\s+~/\.claude: all 4 as recommended$"
     assert result.has_line(pattern), str(result)
     assert not result.has_line(r"^Recommended Claude Code settings$"), str(result)
     pattern = r"^\s+claudeCode\.recommendedSettings\.<id>\+=<folder>@<fingerprint>$"

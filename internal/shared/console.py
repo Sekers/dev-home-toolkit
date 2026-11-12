@@ -53,6 +53,22 @@ def wrap_parts(parts: Sequence[tuple[str, str]], width: int = LINE_WIDTH) -> lis
     return shown
 
 
+def wrap_items(text: str, width: int = LINE_WIDTH, hang: str = "  ") -> list[str]:
+    """Text that lists items separated by commas, such as "~/.claude: 3 of 4 as recommended, 1
+    no", as lines of width, broken only after a comma, so an item such as a folder's name stays
+    whole. Each line after the first is set in by hang. An item too long for a line gets one of
+    its own."""
+    items = text.split(", ")
+    lines: list[str] = []
+    for index, item in enumerate(items):
+        word = f"{item}," if index < len(items) - 1 else item
+        if lines and len(f"{lines[-1]} {word}") <= width:
+            lines[-1] = f"{lines[-1]} {word}"
+        else:
+            lines.append(f"{hang}{word}" if lines else word)
+    return lines
+
+
 # A color code, which takes no room at the console (see output.color).
 COLOR_CODE = re.compile(r"\x1b\[[0-9;]*m")
 
