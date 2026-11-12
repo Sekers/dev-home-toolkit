@@ -1493,11 +1493,19 @@ def test_the_menu_changes_the_setting_picked_and_keeps_a_backup(
     box: Sandbox, backups_removed: Path, person: Person, capsys: pytest.CaptureFixture[str]
 ) -> None:
     person.answers.update({MENU: ["12", "2", ""], UPDATES: "y"})
+    person.echo = True
     returned = setup_here(box, "--configure")
     out = capsys.readouterr().out
     assert returned == 0, out
     assert "dev-home-toolkit settings" in out and "Shared by every copy of dev-home" in out, out
-    assert "Type a number from 1 to 11, or 'a', or press Enter to go on." in out, out
+    # A number out of range gets its reply right under the answer, and the question again right
+    # under the reply, without the menu shown again; a question shows the menu again after it.
+    prompt = "Number to change, 'a' to go through them all, or Enter to go on: "
+    exchange = (
+        f"{prompt}12\nType a number from 1 to 11, or 'a', or press Enter to go on.\n{prompt}2\n"
+    )
+    assert exchange in out, out
+    assert out.splitlines().count("dev-home-toolkit settings") == 2, out
     saved = json.loads(backups_removed.read_text(encoding="utf-8"))
     assert saved["updates"]["installAutomatically"] is True, saved
     assert re.search(r"^SET\s+This PC's settings: .* Backup of the old file: ", out, re.M), out
@@ -1739,6 +1747,7 @@ def test_the_menu_says_when_setup_finds_no_codex_home(
     other["testHomeDir"] = profile.as_posix()
     write_text(settings, json.dumps(other, indent=2) + "\n")
     person.answers[MENU] = ["8", ""]
+    person.echo = True
     try:
         returned = setup_here(box, "--configure")
         out = capsys.readouterr().out
@@ -1746,8 +1755,40 @@ def test_the_menu_says_when_setup_finds_no_codex_home(
         shutil.rmtree(profile)
     assert returned == 0, out
     assert re.search(r"^\s+8\s+Codex homes to set up\s+none found$", out, re.M), out
-    assert re.search(r"^Setup found no Codex homes\.$", out, re.M), out
+    # The reply comes right under the answer, and the question again right under it, without
+    # the menu shown again.
+    prompt = "Number to change, 'a' to go through them all, or Enter to go on: "
+    assert f"{prompt}8\nSetup found no Codex homes.\n{prompt}\n" in out, out
+    assert out.splitlines().count("dev-home-toolkit settings") == 1, out
     assert not any(re.search(CODEX, asked) for asked in person.asked), person.asked
+
+
+def test_a_menu_pick_with_nothing_to_ask_says_why_and_returns_none(
+    box: Sandbox, person: Person, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # None tells the menu that only the line saying why was shown, so it asks again right under
+    # that line, without showing itself again.
+    run = shared_module(box, "setup").Setup(quiet=False, what_if=False)
+    run.can_ask = True
+    settings, _ = run.read_settings()
+    configure = shared_module(box, "configure")
+    capsys.readouterr()
+    # With no Claude Code folder set up, there are no recommended settings to ask about.
+    settings.folders[shared_module(box, "settings").CLAUDE_CODE.setting] = {}
+    assert configure.change_recommended(run, settings) is None
+    # With dev-home.json unreadable, there's no answer to ask about.
+    folder = box.root / "unreadable-dev-home"
+    write_text(folder / "dev-home.json", "{")
+    settings.content_dir = folder.as_posix()
+    try:
+        assert configure.change_copies(run, settings) is None
+    finally:
+        shutil.rmtree(folder)
+    assert capsys.readouterr().out.splitlines() == [
+        "No Claude Code folder is set up, so there are no recommended settings to answer.",
+        "dev-home.json in dev-home can't be read, so setup leaves it alone.",
+    ]
+    assert person.asked == []
 
 
 def test_a_no_in_the_menu_replaces_the_answer_a_new_codex_home_got_from_the_main_one(
@@ -1873,11 +1914,25 @@ def test_the_skills_row_opens_each_skill_and_preference_and_changes_the_one_pick
             rf"^{WITH_DEFAULT}": "n",
         }
     )
+    person.echo = True
     returned = setup_here(box, "--configure")
     out = capsys.readouterr().out
     saved = json.loads(backups_removed.read_text(encoding="utf-8"))
     assert returned == 0, out
+    # A pick that asks nothing gets its reply right under the answer, and the question again
+    # right under the reply, so the section, shown again, doesn't push the reply out of sight.
+    prompt = "Number to change, 'a' to go through them all, or Enter to go back: "
+    exchange = (
+        f"{prompt}1\n"
+        "dev-home is always added to your agents, so there's nothing to change.\n"
+        f"{prompt}9\n"
+        "Type a number from 1 to 5, or 'a', or press Enter to go back.\n"
+        f"{prompt}2\n"
+    )
+    assert exchange in out, out
     lines = out.splitlines()
+    # Shown when it opens, then after each of the two questions.
+    assert lines.count("dev-home-toolkit settings: Skills") == 3, out
     for pattern in (
         r"^\s+10\s+Skills >\s+4 added, 1 preference$",
         r"^\s+11\s+Copies of dev-home in active use\s",

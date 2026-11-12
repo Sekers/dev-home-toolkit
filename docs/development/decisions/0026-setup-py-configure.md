@@ -11,8 +11,9 @@ and the recommended settings waiting for an answer, which its "Waiting for your 
 lists too ([0038: Recommended settings from chat](0038-recommended-settings-from-chat.md)).
 Changed on 2026-10-17, 2026-10-20, 2026-10-23 (setup's questions), 2026-10-28 (recommended
 settings), 2026-11-09 (the Skills section, skills' summaries, and the state of one this PC's
-operating system can't run, in the list for agents), and 2026-11-10 (that skill's preferences,
-and the Skills section's questions, row, and words for an answer).
+operating system can't run, in the list for agents), 2026-11-10 (that skill's preferences,
+and the Skills section's questions, row, and words for an answer), and 2026-11-11 (a pick that
+asks nothing).
 
 - At a console, it shows a menu: every setting with its current value, under "This PC" and
   "Shared by every copy of dev-home", in aligned columns, with headings and setup's colors, in
@@ -22,6 +23,11 @@ and the Skills section's questions, row, and words for an answer).
   one answered no included, so a no can be taken back. Every run of setup at a console shows the
   same menu after its questions, `--configure` or not, where Enter goes on with setup's work
   ([0034: Runs of setup by hand](0034-runs-of-setup-by-hand.md)).
+- After a pick, the menu shows itself again, with any change. A pick that asks nothing, such as
+  a number out of range, dev-home's row in the Skills section, or a row with nothing to ask
+  about, like Codex's homes on a PC without Codex, gets one line saying why, right under the
+  answer, and then the menu's question again, right under that line, without the menu shown
+  again. This holds in the main menu and in the Skills section.
 - **The Skills section** opens from the menu's last row under "This PC", row 10, `Skills >`. The
   planned `Built-in rules >` row goes under "Shared by every copy of dev-home", after the copies
   row ([0067: Built-in rules](0067-built-in-rules.md)). The `Skills >` row counts the skills by
@@ -162,6 +168,12 @@ and the Skills section's questions, row, and words for an answer).
   row's counts show at a glance what's off. The menu's words for an answer, so "yes (the
   default)" means a choice there, as on every other row. The developer's choices, 2026-11-09 and
   2026-11-10.
+- No menu shown again after a pick that asks nothing: shown again, the menu put the line saying
+  why about 15 lines above the question, where the developer found it hard to see (2026-11-11).
+  With the question right under it, the line is where the person is looking, as with a yes-or-no
+  question asked again after an answer it doesn't take
+  ([0025: Setup's questions](0025-setups-questions.md)). The menu is still just above, since
+  only that line came after it.
 
 **Options set aside:**
 
@@ -209,6 +221,14 @@ and the Skills section's questions, row, and words for an answer).
   alone (two agents' folders can give the same name); the fingerprint as an option of its own,
   such as `--seen` (one more option, and easy to leave off); and the agent's steps in the skill
   (read on every `/dev-home` command).
+- For a pick that asks nothing (2026-11-11): the line in a color of its own (each of setup's
+  colors already means something, such as yellow for a problem, and color alone is lost with
+  `NO_COLOR` and in copied text, as
+  [0055: Keys and answers in prompts](0055-keys-and-answers-in-prompts.md) says); a blank line
+  before it (still about 15 lines above the question, under the menu shown again); and no number
+  on dev-home's row, as a skill this PC's operating system can't run has none (it renumbers the
+  rows, makes a skill that's always added look unavailable, and leaves a number out of range as
+  it was).
 
 **Look again if:** the settings outgrow a menu, or people often ask for a reminder on a date
 rather than in a number of days.

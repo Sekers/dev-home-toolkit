@@ -934,12 +934,18 @@ def browse_skills(run: "Setup", settings: LocalSettings) -> tuple[bool, bool]:
     """The Skills section, as skills_menu shows it. Returns whether an answer changed, and
     whether input ended, rather than Enter going back."""
     changed = False
+    show = True
     while True:
-        lines, picked = skills_lines(skills_section(run, settings))
-        run.line()
-        for line in lines:
-            run.line(line)
-        run.line()
+        # After a pick that asked nothing, its reply is the one line under the answer, and the
+        # section is still just above, so the question comes again right under the reply, as a
+        # question asked again does (decision 0025). Shown again, the section would push the
+        # reply out of sight.
+        if show:
+            lines, picked = skills_lines(skills_section(run, settings))
+            run.line()
+            for line in lines:
+                run.line(line)
+            run.line()
         choice = run.ask(
             f"Number to change, {console.key('a')} to go through them all, or Enter to go back"
         )
@@ -948,13 +954,17 @@ def browse_skills(run: "Setup", settings: LocalSettings) -> tuple[bool, bool]:
         text = choice.strip().lower()
         if text == "a":
             changed = go_through_skills(run, settings, picked) or changed
+            show = True
         elif text.isdigit() and 1 <= int(text) <= len(picked):
-            changed = change_skills_row(run, settings, picked[int(text) - 1]) or changed
+            answer = change_skills_row(run, settings, picked[int(text) - 1])
+            changed = bool(answer) or changed
+            show = answer is not None
         else:
             run.line(
                 f"Type a number from 1 to {len(picked)}, or {console.key('a')}, or press Enter to "
                 "go back."
             )
+            show = False
 
 
 def go_through_skills(
@@ -968,16 +978,17 @@ def go_through_skills(
     changed = False
     for row in picked:
         if row.setting is not None:
-            changed = change_skills_row(run, settings, row) or changed
+            changed = bool(change_skills_row(run, settings, row)) or changed
     return changed
 
 
-def change_skills_row(run: "Setup", settings: LocalSettings, row: SkillsRow) -> bool:
+def change_skills_row(run: "Setup", settings: LocalSettings, row: SkillsRow) -> bool | None:
     """Asks about one row of the Skills section: its help, if any, after a blank line, then its
-    question, which takes yes, no, or default. Returns whether the answer changed."""
+    question, which takes yes, no, or default. Returns whether the answer changed, or None for a
+    row with nothing to ask, such as dev-home's, after a line saying so (see browse_skills)."""
     if row.setting is None:
         run.line(f"{row.name} is always added to your agents, so there's nothing to change.")
-        return False
+        return None
     if row.help:
         run.line()
         for text in console.wrap(row.help):
@@ -996,8 +1007,9 @@ def change_skills_row(run: "Setup", settings: LocalSettings, row: SkillsRow) -> 
 
 def menu(run: "Setup", settings: LocalSettings) -> bool:
     """Shows every setting, and changes the ones the person picks, until Enter, after which setup
-    goes on. Returns whether this PC's settings changed."""
-    changers: dict[str, Callable[[Setup, LocalSettings], bool]] = {
+    goes on. Returns whether this PC's settings changed. Each pick's step returns whether it
+    changed an answer, or None when it asked nothing, after a line saying why."""
+    changers: dict[str, Callable[[Setup, LocalSettings], bool | None]] = {
         "devHome.folder": change_content_dir,
         AUTO_UPDATE: change_auto_update,
         "updates.checkEveryHours": change_update_hours,
@@ -1018,11 +1030,15 @@ def menu(run: "Setup", settings: LocalSettings) -> bool:
     ]
     steps = {str(number): step for number, step in enumerate(order, 1)}
     changed = False
+    show = True
     while True:
-        run.line()
-        for line in overview(run, settings, menu=True):
-            run.line(line)
-        run.line()
+        # After a pick that asked nothing, the question comes again right under its reply, as in
+        # the Skills section (see browse_skills).
+        if show:
+            run.line()
+            for line in overview(run, settings, menu=True):
+                run.line(line)
+            run.line()
         choice = run.ask(
             f"Number to change, {console.key('a')} to go through them all, or Enter to go on"
         )
@@ -1032,15 +1048,19 @@ def menu(run: "Setup", settings: LocalSettings) -> bool:
             # Through the Skills section's settings too, rather than opening it.
             for step in order:
                 every = go_through_skills if step is skills_menu else step
-                changed = every(run, settings) or changed
+                changed = bool(every(run, settings)) or changed
+            show = True
             continue
         if choice.strip() not in steps:
             run.line(
                 f"Type a number from 1 to {len(steps)}, or {console.key('a')}, or press Enter to "
                 "go on."
             )
+            show = False
             continue
-        changed = steps[choice.strip()](run, settings) or changed
+        answer = steps[choice.strip()](run, settings)
+        changed = bool(answer) or changed
+        show = answer is not None
 
 
 def change_content_dir(run: "Setup", settings: LocalSettings) -> bool:
@@ -1239,15 +1259,16 @@ def remind_folder(
     run.answer_offer(agent, settings, full, later)
 
 
-def change_folders(run: "Setup", settings: LocalSettings, agent: Agent) -> bool:
+def change_folders(run: "Setup", settings: LocalSettings, agent: Agent) -> bool | None:
     """Asks about each of an agent's folders, after offering to remove each one that's gone; for a
     shared agent, one question, whose answer goes to every folder. A folder answered yes or no is
     asked yes or no; one with no answer, or a reminder, is asked as an offer, as on a first run,
-    where Enter keeps a reminder."""
+    where Enter keeps a reminder. Returns whether an answer changed, or None when there's no
+    folder to ask about, after a line saying so (see menu)."""
     answers = folder_answers(run, settings, agent)
     if not answers:
         run.line(f"Setup found no {agent.name} {agent.folder}s.")
-        return False
+        return None
     changed = False
     explained = False
     for entry, current in answers:
@@ -1289,17 +1310,18 @@ def change_folders(run: "Setup", settings: LocalSettings, agent: Agent) -> bool:
     return True
 
 
-def change_claude_folders(run: "Setup", settings: LocalSettings) -> bool:
+def change_claude_folders(run: "Setup", settings: LocalSettings) -> bool | None:
     return change_folders(run, settings, CLAUDE_CODE)
 
 
-def change_codex_homes(run: "Setup", settings: LocalSettings) -> bool:
+def change_codex_homes(run: "Setup", settings: LocalSettings) -> bool | None:
     return change_folders(run, settings, CODEX)
 
 
-def change_recommended(run: "Setup", settings: LocalSettings) -> bool:
+def change_recommended(run: "Setup", settings: LocalSettings) -> bool | None:
     """Goes through each recommended setting in each Claude Code folder set up, shown as setup's
-    offer shows it, with its answer (see ask_recommended). Returns whether an answer changed."""
+    offer shows it, with its answer (see ask_recommended). Returns whether an answer changed, or
+    None when no folder is set up, after a line saying so (see menu)."""
     # Loaded here, since setup loads this module.
     from .setup import RECOMMENDED_MARKS
 
@@ -1309,7 +1331,7 @@ def change_recommended(run: "Setup", settings: LocalSettings) -> bool:
             f"No {CLAUDE_CODE.name} {CLAUDE_CODE.folder} is set up, so there are no recommended "
             "settings to answer."
         )
-        return False
+        return None
     changed = False
     for entry, full in folders:
         folder = Path(full)
@@ -1387,15 +1409,16 @@ def record_recommended(
     return True
 
 
-def change_copies(run: "Setup", settings: LocalSettings) -> bool:
+def change_copies(run: "Setup", settings: LocalSettings) -> bool | None:
     """Chooses dev-home.json's answer, which setup writes, commits, and pushes later in its run.
-    Changes nothing in this PC's settings."""
+    Changes nothing in this PC's settings, so returns False, or None when it can't ask, after a
+    line saying why (see menu)."""
     answer, found = copies_answer(settings)
     if found in ("unreadable", "unknown"):
         run.line(
             f"{DEV_HOME_SETTINGS} in dev-home {LAYOUT_NOTES[found]}, so setup leaves it alone."
         )
-        return False
+        return None
     current = answer if run.wanted_copies is None else run.wanted_copies
     several = run.ask_copies(current)
     if several is None or (several == current and found != "older"):
