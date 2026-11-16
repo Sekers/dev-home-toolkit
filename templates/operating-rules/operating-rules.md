@@ -7,8 +7,10 @@
   didn't change.
 - Never put project status or lasting decisions in auto memory. Lasting decisions go in the
   project's own files.
-- Create new personal skills in `{{CONTENT_DIR}}/skills/`, never in an agent's own skills folder,
-  so every PC gets them. If a skill seems to be missing, run
+- Add personal skills to `{{CONTENT_DIR}}/skills/`, never to an agent's own skills folder, so every
+  PC gets them. Each may be a copy of a skill kept elsewhere, such as in a project, a fork, or
+  someone else's repository, so before changing one, ask me where to make the change, unless I've
+  said where or the skill says. If a skill seems to be missing, run
   `{{PYTHON}} -I {{TOOLKIT_DIR}}/setup.py --quiet`, then try again.
 - Treat my project repos as public. In their files, commits, PRs, and issues, never quote
   dev-home, paraphrase its notes, or mention that it exists. The only exceptions are a skill's
