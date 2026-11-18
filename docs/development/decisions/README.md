@@ -116,3 +116,4 @@ file and link to the new one.
 - [0091: Further files](0091-further-files.md)
 - [0092: Decision drafts](0092-decision-drafts.md)
 - [0093: What an update removes from Next up](0093-what-an-update-removes-from-next-up.md)
+- [0094: Pre-approved commands](0094-pre-approved-commands.md)

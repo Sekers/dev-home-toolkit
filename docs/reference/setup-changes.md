@@ -101,14 +101,23 @@ and your rules joined, which setup writes again at each sync.
     global `AGENTS.md` with a project's own `AGENTS.md` files and stops reading at 32 KiB by
     default. The global file comes first, so the cut would fall on the project's own
     instructions, without a warning.
+  - `rules\dev-home-toolkit.rules` in each home: Codex's command rules for dev-home-toolkit's
+    own commands, such as its syncs, so Codex runs them outside its sandbox, where your GitHub
+    sign-in works, without asking. Codex's sandbox on Windows runs commands as a separate
+    account, which can't use your sign-in, so without these rules Codex couldn't sync, commit, or
+    push. Your yes to Codex approves this file. Setup rewrites it whenever it runs, so put rules
+    of your own in another file in that folder: a hand edit goes to the Recycle Bin, and setup
+    writes its own again. Codex reads its rules only when it starts, so when setup writes or
+    changes the file, it says to restart Codex.
 - **If you say no later,** to a Claude Code folder or to Codex, setup removes what it set up
   there, naming each as it goes:
   - In a Claude Code folder: its links in `skills\`, its `rules\dev-home-rules.md`, your
     dev-home and dev-home-toolkit folders in `settings.json`'s
     `permissions.additionalDirectories`, and its two patterns in `claudeMdExcludes`, with a
     backup. Recommended settings you said yes to stay, since they're yours.
-  - For Codex: the `AGENTS.md` it wrote in each home, its links in `~\.agents\skills\`, and your
-    dev-home in each `config.toml`'s `writable_roots`, with a backup.
+  - For Codex: the `AGENTS.md` and `rules\dev-home-toolkit.rules` it wrote in each home, the
+    rules file once the Recycle Bin has any hand edit to it, its links in `~\.agents\skills\`, and
+    your dev-home in each `config.toml`'s `writable_roots`, with a backup.
     `project_doc_max_bytes` stays, since it gives Codex no access.
 
   Lines setup didn't write in a rules file it removes go into your dev-home first, as on any run

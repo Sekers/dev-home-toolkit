@@ -4,6 +4,7 @@ The tests run in order and share the sandbox, so each one starts from where the 
 left off, and puts back what it changed. test_setup_questions.py covers what needs a person.
 """
 
+import contextlib
 import hashlib
 import json
 import os
@@ -471,6 +472,282 @@ def test_leaves_alone_a_link_in_place_of_dev_homes_agents_md(
     )
     assert result.code == 1 and result.has_line(pattern), str(result)
     assert read(target) == "# Mine\n"
+
+
+# The files setup writes into only one agent's folders, from templates/per-agent/: so far Codex's
+# command rules (decision 0094, "Pre-approved commands").
+
+CODEX_RULES = Path("rules") / "dev-home-toolkit.rules"
+RESTART = r" Restart Codex to load the change\.$"
+
+
+def codex_rules(box: Sandbox) -> Path:
+    """Codex's command rules in the sandbox's Codex home."""
+    return box.profile / ".codex" / CODEX_RULES
+
+
+@pytest.fixture
+def codex_rules_kept(box: Sandbox) -> Iterator[None]:
+    """Codex's command rules in the sandbox's Codex home, and setup's copy of them, put back as
+    they were after the test, and the test profile's Recycle Bin emptied."""
+    paths = [codex_rules(box), copy_of(box, codex_rules(box))]
+    before = {path: path.read_bytes() for path in paths}
+    yield
+    for path, data in before.items():
+        if path.is_symlink():
+            path.unlink()
+        path.write_bytes(data)
+    in_bin = bin_of(box)
+    if in_bin.is_dir():
+        shutil.rmtree(in_bin)
+    elif in_bin.exists():
+        in_bin.unlink()
+
+
+def test_writes_codex_command_rules_for_this_pcs_commands_and_says_to_restart_codex(
+    first: First,
+) -> None:
+    box = first.box
+    text = read(codex_rules(box))
+    python, toolkit = f"{forward(box.toolkit)}/internal/.python/python.exe", forward(box.toolkit)
+    sync = f'prefix_rule(pattern = ["{python}", "-I", "{toolkit}/sync.py"], decision = "allow")'
+    assert sync in text.splitlines(), text
+    assert "{{" not in text
+    assert copy_of(box, codex_rules(box)).read_text(encoding="utf-8") == text
+    pattern = (
+        r"^WROTE\s+Codex's rules/dev-home-toolkit\.rules in \.codex: .*[\\/]\.codex[\\/]rules"
+        r"[\\/]dev-home-toolkit\.rules\." + RESTART
+    )
+    assert first.run.has_line(pattern), str(first.run)
+    # Only Codex has any so far, so a Claude Code folder gets none.
+    assert not (box.profile / ".claude" / CODEX_RULES).exists()
+
+
+def test_every_per_agent_template_folder_is_named_for_an_agent(box: Sandbox) -> None:
+    agents = shared_module(box, "requirements").AGENT_NAMES
+    folders = [path.name for path in (box.toolkit / "templates" / "per-agent").iterdir()]
+    assert folders and set(folders) <= set(agents), folders
+
+
+@pytest.mark.parametrize("read_only", [False, True])
+def test_rewrites_codex_command_rules_while_they_match_what_setup_last_wrote(
+    box: Sandbox, codex_rules_kept: None, read_only: bool
+) -> None:
+    # Such as setup's own older version, after an update changes the template, even one an
+    # editor left read-only.
+    path, copy = codex_rules(box), copy_of(box, codex_rules(box))
+    now = path.read_bytes()
+    path.write_bytes(b"# An older version\n")
+    copy.write_bytes(b"# An older version\n")
+    if read_only:
+        path.chmod(stat.S_IREAD)
+    try:
+        result = setup(box)
+    finally:
+        path.chmod(stat.S_IREAD | stat.S_IWRITE)
+    assert result.code == 0, str(result)
+    pattern = r"^WROTE\s+Codex's rules/dev-home-toolkit\.rules in \.codex: .*\.rules\." + RESTART
+    assert result.has_line(pattern), str(result)
+    assert path.read_bytes() == now and copy.read_bytes() == now
+    assert not bin_of(box).exists()
+    again = setup(box)
+    assert again.code == 0 and not again.has_line("dev-home-toolkit.rules"), str(again)
+
+
+def test_writes_back_deleted_codex_command_rules_and_quietly_a_missing_copy(
+    box: Sandbox, codex_rules_kept: None
+) -> None:
+    # A copy that's missing, such as after internal/.generated/ was deleted, while the file is
+    # setup's, changes nothing Codex reads, so nothing is said.
+    path, copy = codex_rules(box), copy_of(box, codex_rules(box))
+    now = path.read_bytes()
+    path.unlink()
+    result = setup(box)
+    assert result.code == 0, str(result)
+    pattern = r"^WROTE\s+Codex's rules/dev-home-toolkit\.rules in \.codex: .*\.rules\." + RESTART
+    assert result.has_line(pattern), str(result)
+    assert path.read_bytes() == now
+    copy.unlink()
+    result = setup(box)
+    assert result.code == 0 and not result.has_line("dev-home-toolkit.rules"), str(result)
+    assert copy.read_bytes() == now
+
+
+def test_a_file_in_place_of_a_codex_homes_rules_folder_is_one_problem_and_setup_goes_on(
+    box: Sandbox, codex_rules_kept: None
+) -> None:
+    path = codex_rules(box)
+    now = path.read_bytes()
+    shutil.rmtree(path.parent)
+    write_text(path.parent, "Not a folder.\n")
+    try:
+        result = setup(box)
+    finally:
+        path.parent.unlink()
+        path.parent.mkdir()
+        path.write_bytes(now)
+    pattern = (
+        r"^PROBLEM\s+Codex's rules/dev-home-toolkit\.rules in \.codex: could not write "
+        r".*[\\/]rules[\\/]dev-home-toolkit\.rules\."
+    )
+    assert result.code == 1 and result.has_line(pattern), str(result)
+    problems = [line for line in result.lines if line.startswith("PROBLEM")]
+    assert len(problems) == 1, str(result)
+
+
+@pytest.mark.parametrize("kept_copy", [True, False])
+def test_a_hand_edit_to_codex_command_rules_goes_to_the_bin_then_setup_puts_them_back(
+    box: Sandbox, codex_rules_kept: None, kept_copy: bool
+) -> None:
+    # With no copy, such as on the first run after it was lost, any other text counts as an edit,
+    # so nothing is lost.
+    path = codex_rules(box)
+    now = path.read_bytes()
+    append(path, 'prefix_rule(pattern = ["mine"], decision = "allow")')
+    edited = path.read_bytes()
+    if not kept_copy:
+        copy_of(box, path).unlink()
+    previewed = setup(box, "--what-if")
+    pattern = (
+        r"^What if: Send its edits to the Recycle Bin, then put back setup's file: .*[\\/]rules"
+        r"[\\/]dev-home-toolkit\.rules$"
+    )
+    assert previewed.has_line(pattern), str(previewed)
+    assert path.read_bytes() == edited and not bin_of(box).exists()
+    result = setup(box)
+    assert result.code == 0, str(result)
+    pattern = (
+        r"^WROTE\s+Codex's rules/dev-home-toolkit\.rules in \.codex: .*\.rules, put back: it had "
+        r'edits setup didn\'t make, which are in the Recycle Bin as "dev-home-toolkit from '
+        r'\.codex, as edited\.rules"\. Setup rewrites this file on every run, so keep changes of '
+        r"your own in another file in that folder\." + RESTART
+    )
+    assert result.has_line(pattern), str(result)
+    assert path.read_bytes() == now
+    in_bin = bin_of(box) / "dev-home-toolkit from .codex, as edited.rules"
+    assert in_bin.read_bytes() == edited
+    assert copy_of(box, path).read_bytes() == now
+    # The real bin takes only a plain file name.
+    named = shared_module(box, "setup").agent_bin_name(path.parent.parent, CODEX_RULES)
+    assert shared_module(box, "recycle_bin").plain_name(named), named
+
+
+def test_leaves_a_hand_edit_to_codex_command_rules_the_bin_cant_take_until_it_can(
+    box: Sandbox, codex_rules_kept: None
+) -> None:
+    path = codex_rules(box)
+    now = path.read_bytes()
+    append(path, "# A hand edit.")
+    edited = path.read_bytes()
+    # A file in the bin's place: the bin can't take anything.
+    write_text(bin_of(box), "")
+    for _ in range(2):
+        result = setup(box)
+        assert result.code == 1, str(result)
+        pattern = (
+            r"^PROBLEM\s+Codex's rules/dev-home-toolkit\.rules in \.codex: .*\.rules has edits "
+            r"setup didn't make, and the Recycle Bin couldn't take a copy of them, so setup left "
+            r"the file as edited\. The test profile's bin couldn't take it: .* Setup rewrites "
+            r"this file on every run, and puts it back once the bin takes the edits: move anything "
+            r"you want to keep into another file in .*[\\/]\.codex[\\/]rules first\.$"
+        )
+        assert result.has_line(pattern), str(result)
+        assert path.read_bytes() == edited
+    bin_of(box).unlink()
+    result = setup(box)
+    assert result.code == 0, str(result)
+    assert result.has_line(r"^WROTE\s+Codex's rules/dev-home-toolkit\.rules in \.codex: "), str(
+        result
+    )
+    assert path.read_bytes() == now
+
+
+def test_a_no_to_codex_removes_its_command_rules_with_any_hand_edit_in_the_bin_first(
+    box: Sandbox,
+) -> None:
+    # A test profile of its own, with three homes said no to: one holding what setup writes, with
+    # no copy, read-only, which goes; one with a hand edit to setup's file, which goes to the bin
+    # first; and one with a file of that name setup has no copy of, which isn't setup's, so it
+    # stays, as does a rules file of the person's own beside setup's. --what-if names the
+    # removals and changes nothing.
+    settings_path = box.toolkit / "local-settings.json"
+    settings_text = read(settings_path)
+    data = codex_rules(box).read_bytes()
+    profile = box.root / "codex-rules-declined-profile"
+    main, second, third = (profile / name for name in (".codex", ".codex-second", ".codex-third"))
+    for home in (main, second, third):
+        write_text(home / "config.toml", "")
+        (home / "rules").mkdir()
+    (main / CODEX_RULES).write_bytes(data)
+    (main / CODEX_RULES).chmod(stat.S_IREAD)
+    write_text(main / "rules" / "mine.rules", "# Mine\n")
+    (second / CODEX_RULES).write_bytes(data + b"# A hand edit.\n")
+    copy_of(box, second / CODEX_RULES).write_bytes(data)
+    write_text(third / CODEX_RULES, "# My own file of that name\n")
+    declined = json.loads(settings_text)
+    del declined["claudeCode"]
+    declined["codex"] = {
+        "homes": {
+            "~/.codex": {"setUp": False},
+            "~/.codex-second": {"setUp": False},
+            "~/.codex-third": {"setUp": False},
+        }
+    }
+    declined["testHomeDir"] = profile.as_posix()
+    write_text(settings_path, json.dumps(declined, indent=2) + "\n")
+
+    def rules_left() -> dict[str, list[str]]:
+        return {
+            home.name: sorted(path.name for path in (home / "rules").iterdir())
+            for home in (main, second, third)
+        }
+
+    try:
+        previewed = setup(box, "--what-if")
+        previewed_left = rules_left()
+        result = setup(box)
+        left = rules_left()
+        in_bin = profile / "Recycle Bin" / "dev-home-toolkit from .codex-second, as edited.rules"
+        binned = in_bin.read_bytes()
+        copy_left = copy_of(box, second / CODEX_RULES).exists()
+        again = setup(box)
+    finally:
+        write_text(settings_path, settings_text)
+        if (main / CODEX_RULES).exists():
+            (main / CODEX_RULES).chmod(stat.S_IREAD | stat.S_IWRITE)
+        shutil.rmtree(profile)
+        with contextlib.suppress(FileNotFoundError):
+            copy_of(box, second / CODEX_RULES).unlink()
+    for pattern in (
+        r"^What if: Remove setup's file from a folder you said no to: .*[\\/]\.codex[\\/]rules",
+        r"^What if: Send its edits to the Recycle Bin, then remove setup's file: .*[\\/]"
+        r"\.codex-second[\\/]rules",
+    ):
+        assert previewed.has_line(pattern), str(previewed)
+    assert previewed_left == {
+        ".codex": ["dev-home-toolkit.rules", "mine.rules"],
+        ".codex-second": ["dev-home-toolkit.rules"],
+        ".codex-third": ["dev-home-toolkit.rules"],
+    }, str(previewed)
+    assert result.code == 0, str(result)
+    removed = (
+        r"^REMOVED\s+Codex's rules/dev-home-toolkit\.rules in {}, in a folder you said no to: "
+    )
+    assert result.has_line(removed.format(r"\.codex") + r".*\.rules\." + RESTART), str(result)
+    pattern = (
+        removed.format(r"\.codex-second") + r".*\.rules, with its edits in the Recycle Bin as "
+        r'"dev-home-toolkit from \.codex-second, as edited\.rules"\.' + RESTART
+    )
+    assert result.has_line(pattern), str(result)
+    assert not result.has_line(r"dev-home-toolkit\.rules in \.codex-third"), str(result)
+    assert left == {
+        ".codex": ["mine.rules"],
+        ".codex-second": [],
+        ".codex-third": ["dev-home-toolkit.rules"],
+    }, str(result)
+    assert binned == data + b"# A hand edit.\n"
+    assert not copy_left
+    assert again.code == 0 and not again.has_line(r"^(REMOVED|PROBLEM)\s"), str(again)
 
 
 def test_turns_on_long_paths_in_dev_homes_git_config(box: Sandbox) -> None:
@@ -1203,6 +1480,12 @@ def test_a_codex_home_found_later_gets_the_main_homes_answer(
         assert read(second / "AGENTS.md") == read(box.profile / ".codex" / "AGENTS.md")
         assert read(other / "AGENTS.md") == read(box.profile / ".codex" / "AGENTS.md")
         assert not (plain / "AGENTS.md").exists(), str(result)
+        # And its command rules, with a line of its own.
+        for home in (second, other):
+            assert read(home / CODEX_RULES) == read(codex_rules(box)), str(result)
+            pattern = rf"^WROTE\s+Codex's rules/dev-home-toolkit\.rules in {re.escape(home.name)}: "
+            assert result.has_line(pattern), str(result)
+        assert not (plain / CODEX_RULES).exists(), str(result)
         pattern = r"^SET\s+Codex config in \.codex-second: added dev-home to writable_roots, and "
         assert result.code == 0 and result.has_line(pattern), str(result)
         assert not result.has_line("has no answer yet"), str(result)
@@ -1227,6 +1510,8 @@ def test_a_codex_home_found_later_gets_the_main_homes_answer(
     finally:
         for folder in (second, plain, other, outside):
             shutil.rmtree(folder)
+            with contextlib.suppress(FileNotFoundError):
+                copy_of(box, folder / CODEX_RULES).unlink()
 
 
 def test_codex_with_no_answer_keeps_its_rules_and_links_and_gets_nothing_new(

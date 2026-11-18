@@ -698,7 +698,10 @@ def test_a_first_run_asks_about_updates_each_claude_folder_and_codex(
         "A 'yes' sets up dev-home's skills and rules in each home. In each home's config.toml, "
         "it also adds your dev-home folder to writable_roots, so Codex can write there from any "
         "project, and raises project_doc_max_bytes to 131072 where it's lower, so Codex reads all "
-        "of your rules. A 'no' removes all of that but project_doc_max_bytes, if it's there. "
+        "of your rules. It also writes rules/dev-home-toolkit.rules in each Codex home, so Codex "
+        "runs dev-home-toolkit's own commands, such as its syncs, outside its sandbox, where your "
+        "GitHub sign-in works. A 'no' removes all of that but project_doc_max_bytes, if it's "
+        "there. "
         "Setup backs up "
         "each file first."
     )

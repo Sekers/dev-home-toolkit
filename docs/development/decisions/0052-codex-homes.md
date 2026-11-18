@@ -13,9 +13,10 @@ skills. Codex homes are saved exactly as Claude Code folders are, an entry for e
 
 - One question covers every home, recommended, and its answer goes into every home's entry. A
   yes sets up each home: the always-on rules in its `AGENTS.md`, dev-home in its `config.toml`,
-  and dev-home's skills, linked into `~/.agents/skills`. A no sets up none, and removes what setup
-  set up: the rules file it wrote in each home, its links in `~/.agents/skills`, and dev-home in
-  each home's `writable_roots`
+  its command rules ([0094: Pre-approved commands](0094-pre-approved-commands.md)), and
+  dev-home's skills, linked into `~/.agents/skills`. A no sets up none, and removes what setup
+  set up: the rules file and command rules it wrote in each home, its links in
+  `~/.agents/skills`, and dev-home in each home's `writable_roots`
   ([0054: Removing what setup set up](0054-removing-what-setup-set-up.md)). Until it's answered,
   setup adds no links and removes none, and a quiet run names the homes in a `NEW` line, as it
   does a folder. One reminder covers every home, as one answer does: it goes in every home's
@@ -51,8 +52,8 @@ skills. Codex homes are saved exactly as Claude Code folders are, an entry for e
 - Answers saved for each home before this decision are read as they are: nothing is deleted or
   converted, and mixed answers follow the main home.
 
-Changed on 2026-10-16, 2026-10-20, and by the developer on 2026-10-28 (every agent's folders in
-order).
+Changed on 2026-10-16, 2026-10-20, by the developer on 2026-10-28 (every agent's folders in
+order), and by the developer on 2026-11-18 (Codex's command rules).
 
 **Why:**
 

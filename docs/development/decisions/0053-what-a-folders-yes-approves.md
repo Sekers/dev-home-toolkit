@@ -15,6 +15,10 @@ safely edit, such as one with comments, still gets a `PROBLEM` line, and a run b
 what to add. Optional settings, such as recommended ones, keep a question of their own. Since
 syncs write these files too, setup makes the changes while it holds the sync's lock.
 
+The yes to Codex also approves the command rules setup writes in each Codex home, which let Codex
+run dev-home-toolkit's commands outside its sandbox, and the explanation before the question says
+so ([0094: Pre-approved commands](0094-pre-approved-commands.md)).
+
 In a Claude Code folder other than `~/.claude`, the yes also approves two patterns in
 `claudeMdExcludes`, which keep `~/.claude`'s instructions out of that folder's sessions
 ([0074: Instructions in other Claude Code folders](0074-instructions-in-other-claude-code-folders.md)),
@@ -24,7 +28,8 @@ doesn't cover them; the question for the folder says what they do and why.
 In a Claude Code folder set up, every run also keeps only the last copy of a recommended setting
 written more than once, which changes nothing Claude Code does
 ([0032: Recommended settings](0032-recommended-settings.md)). Changed on 2026-10-16, 2026-10-19,
-and 2026-10-24 (the last copy of a recommended setting).
+2026-10-24 (the last copy of a recommended setting), and by the developer on 2026-11-18 (Codex's
+command rules).
 
 **Why:** every way a folder got answered, except a yes at a terminal, left it half set up, with a
 `PROBLEM` line on every sync. That covered a yes in chat through `/dev-home configure`, a new

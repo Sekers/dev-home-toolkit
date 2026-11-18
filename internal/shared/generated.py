@@ -11,7 +11,8 @@ from pathlib import Path
 from .links import is_link
 
 # Files whose placeholders setup fills in. Any other file is copied as it is.
-TEXT_EXTENSIONS = {".md", ".txt", ".json", ".toml", ".yml", ".yaml", ".ps1", ".py", ".sh"}
+# .rules is Codex's command rules (see templates/per-agent/).
+TEXT_EXTENSIONS = {".md", ".txt", ".json", ".toml", ".yml", ".yaml", ".ps1", ".py", ".sh", ".rules"}
 
 PLACEHOLDER = re.compile(r"\{\{[A-Z_]+\}\}")
 

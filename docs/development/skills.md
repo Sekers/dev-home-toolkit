@@ -23,6 +23,13 @@ AGENTS.md points here; its rules apply too.
   ([0032: Recommended settings](decisions/0032-recommended-settings.md)). The fields are
   described in `internal/shared/recommended_settings.py`, which reads it, and a test checks every
   rule the reader knows.
+- `templates/per-agent/<agent>/` holds the files setup writes into only that agent's folders, the
+  agent named as `supportedOn` names it, each at the path it lands at in each of those folders,
+  such as `templates/per-agent/codex/rules/dev-home-toolkit.rules`, Codex's command rules
+  ([0094: Pre-approved commands](decisions/0094-pre-approved-commands.md)). What every agent
+  gets, such as the skills and the operating rules, never goes there. A command a skill
+  pre-approves for Claude Code needs its rule in Codex's command rules too: a test checks that the
+  two cover the same commands.
 
 ## Templates, generated files, and names
 
@@ -45,8 +52,9 @@ AGENTS.md points here; its rules apply too.
   "Operating rules", below). `templates/dev-home/` has no copy there either: setup fills it in
   for a new dev-home, apart from `AGENTS.md` and `CLAUDE.md`, which hold each PC's commands, so
   setup fills them in on every run and writes them straight into dev-home, never committed.
-  Python adds `__pycache__` folders there when the scripts run, and setup leaves those, and any
-  link, alone.
+  `templates/per-agent/` is filled in on every run too, and written straight into each of the
+  agent's folders answered yes. Python adds `__pycache__` folders under
+  `internal/.generated/` when the scripts run, and setup leaves those, and any link, alone.
 - A file and its folder keep the same name at every stage: template, generated copy, and link,
   such as `skills/handoff/SKILL.md`.
 - Pre-approvals in `allowed-tools` match the literal command text, so write every command with a

@@ -349,6 +349,33 @@ def test_each_skill_pre_approves_its_sync_commands_for_both_tools(skill: Path) -
         assert f"{tool}({prefix} *)" in approvals, f"{tool} sync that commits"
 
 
+CODEX_RULES = REPO_ROOT / "templates" / "per-agent" / "codex" / "rules" / "dev-home-toolkit.rules"
+
+
+def test_codex_command_rules_allow_just_the_commands_the_skills_pre_approve() -> None:
+    # Codex can't take pre-approvals from a skill, so its command rules hold one rule for each
+    # script the skills pre-approve, by the script's path, and for each other command, by the
+    # words before its wildcard, each allowing any arguments (decision 0094).
+    approved: set[tuple[str, ...]] = set()
+    for skill in skills():
+        text = (skill / "SKILL.md").read_text(encoding="utf-8")
+        allowed = re.search(r'^allowed-tools:\s*"(.*)"\s*$', text, re.MULTILINE)
+        for rule in re.findall(r"Bash\(([^)]*)\)", allowed.group(1) if allowed else ""):
+            words = rule.removesuffix(" *").split(" ")
+            if words[0] == "{{PYTHON}}":
+                words = words[:3]
+            skill_dir = "{{TOOLKIT_DIR}}/internal/.generated/skills/" + skill.name
+            approved.add(tuple(word.replace("{{SKILL_DIR}}", skill_dir) for word in words))
+    text = CODEX_RULES.read_text(encoding="utf-8")
+    lines = [line for line in text.splitlines() if line and not line.startswith("#")]
+    rule = re.compile(r'prefix_rule\(pattern = \[(.*)\], decision = "allow"\)')
+    matches = [rule.fullmatch(line) for line in lines]
+    assert all(matches), lines
+    rules = {tuple(re.findall(r'"([^"]*)"', match.group(1))) for match in matches if match}
+    assert len(rules) == len(lines), lines
+    assert rules == approved
+
+
 def skills_that_sync() -> list[Path]:
     return [s for s in skills() if "prepare.py" in (s / "SKILL.md").read_text(encoding="utf-8")]
 

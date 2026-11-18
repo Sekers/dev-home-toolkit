@@ -49,6 +49,9 @@ points here; its rules apply too.
     dev-home's `rules/` and committed, in the `mine/` the person picked, or set aside in
     `unanswered/`, or dropped to the Recycle Bin, or deleted for good, as the person chose
     ([0064: Each agent's rules file](decisions/0064-each-agents-rules-file.md))
+  - the files from `templates/per-agent/` in each agent's folders, such as Codex's command rules,
+    which it writes once the Recycle Bin has any hand edit to them
+    ([0094: Pre-approved commands](decisions/0094-pre-approved-commands.md))
   - a file in `unanswered/`, once the person answers where it goes
   - links whose target is gone
   - links it made to skills that no longer exist
@@ -58,7 +61,8 @@ points here; its rules apply too.
     because it's an end user's skill named `synced`, which Claude Code keeps for the skills it
     downloads from claude.ai
   - in a Claude Code folder or Codex home the person said no to setting up: the links it made
-    there, and the rules file it wrote there, each listed in its output as it goes
+    there, the rules file it wrote there, and the files from `templates/per-agent/`, each listed
+    in its output as it goes
   - the links it made in `~/.agents/skills`, once the person has said no to Codex
   - the `internal/.python/` junction, once the `python.exe` it leads to is gone, or once a
     Python that setup ranks ahead of it passes setup's check

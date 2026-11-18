@@ -1,0 +1,10 @@
+# dev-home-toolkit's setup writes this file on every run, so put rules of your own in another file
+# in this folder. Each rule lets Codex run one of dev-home-toolkit's commands, with any arguments,
+# outside its sandbox, where your GitHub sign-in works.
+prefix_rule(pattern = ["{{PYTHON}}", "-I", "{{TOOLKIT_DIR}}/setup.py"], decision = "allow")
+prefix_rule(pattern = ["{{PYTHON}}", "-I", "{{TOOLKIT_DIR}}/sync.py"], decision = "allow")
+prefix_rule(pattern = ["{{PYTHON}}", "-I", "{{SHARED_SKILL_SCRIPTS_DIR}}/facts.py"], decision = "allow")
+prefix_rule(pattern = ["{{PYTHON}}", "-I", "{{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py"], decision = "allow")
+prefix_rule(pattern = ["{{PYTHON}}", "-I", "{{TOOLKIT_DIR}}/internal/.generated/skills/handoff/issue_status.py"], decision = "allow")
+prefix_rule(pattern = ["gh", "label", "list"], decision = "allow")
+prefix_rule(pattern = ["gh", "issue", "list"], decision = "allow")

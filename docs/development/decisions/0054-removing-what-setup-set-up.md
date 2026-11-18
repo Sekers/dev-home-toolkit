@@ -14,8 +14,10 @@ included, removes what setup set up there, and lists each removal as it goes:
   it's empty. Every other pattern stays, though one written exactly like setup's goes too
   ([0074: Instructions in other Claude Code folders](0074-instructions-in-other-claude-code-folders.md)).
 - For Codex, in every Codex home: the `AGENTS.md` setup wrote, which it tells by its last-written
-  copy, with that copy, and dev-home in `writable_roots` in its `config.toml`. And the links
-  setup made in `~/.agents/skills`, the one skills folder every home reads.
+  copy, with that copy; its command rules, `rules/dev-home-toolkit.rules`, once the Recycle Bin
+  has any hand edit to them ([0094: Pre-approved commands](0094-pre-approved-commands.md)); and
+  dev-home in `writable_roots` in its `config.toml`. And the links setup made in
+  `~/.agents/skills`, the one skills folder every home reads.
 
 ```text
 REMOVED   Link in a folder you said no to: C:\Users\you\.claude-second\skills\handoff
@@ -57,7 +59,7 @@ SET       Codex config in .codex: removed dev-home from writable_roots in C:\Use
   to take out by hand: one with comments, a form of `writable_roots` setup doesn't edit, such as
   a dotted key, and a `settings.json` that isn't JSON at all but names either folder.
 
-Changed on 2026-10-18 and 2026-10-19.
+Changed on 2026-10-18, 2026-10-19, and by the developer on 2026-11-18 (Codex's command rules).
 
 **Why:**
 

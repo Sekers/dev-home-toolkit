@@ -2,9 +2,11 @@
 this PC's paths and links them into Claude Code and Codex, writes each agent's always-on rules,
 and checks the settings they need.
 
-Safe to run any number of times. It rewrites only its own generated files and rules files, and
-dev-home's AGENTS.md and CLAUDE.md, sending a hand edit to either to the Recycle Bin first, and
-moving the lines it didn't write in a rules file into dev-home first. It creates missing links,
+Safe to run any number of times. It rewrites only its own generated files and rules files,
+dev-home's AGENTS.md and CLAUDE.md, and the files from templates/per-agent/ in the agents'
+folders, such as Codex's command rules, sending a hand edit to any of those but the rules files
+to the Recycle Bin first, and moving the lines it didn't write in a rules file into dev-home
+first. It creates missing links,
 replaces links whose target is gone, removes links it made to skills that no longer exist, removes
 what it set up in a folder answered no, deletes what a clone of dev-home that didn't finish left
 beside dev-home's folder, and reports anything else without changing it.
@@ -126,11 +128,13 @@ entry. The main home is ~/.codex when it's there, otherwise the first ~/.codex-<
 name, otherwise the first other home there by full path; codex.homes keeps its entries in that
 order too. A home whose answer differs from the main home's, or that has none, such as a new one,
 gets the main home's answer, with a line saying so; when the main home has none, the next home
-there in that order that has one gives it. A yes gets each home its rules and settings, and the
-skills linked into ~/.agents/skills. A no removes the rules file setup wrote in each home, as for
-a Claude Code folder, and the links it made in ~/.agents/skills, and takes dev-home back out of
-each home's writable_roots. Until Codex is answered yes or no, setup adds no links and removes none,
-and a sync names its homes in a NEW line, as for a folder. One reminder covers every home.
+there in that order that has one gives it. A yes gets each home its rules and settings, its
+command rules, rules/dev-home-toolkit.rules, which let Codex run dev-home-toolkit's commands
+outside its sandbox (decision 0094, "Pre-approved commands"), and the skills linked into
+~/.agents/skills. A no removes the rules file setup wrote in each home, as for a Claude Code
+folder, its command rules, and the links it made in ~/.agents/skills, and takes dev-home back out
+of each home's writable_roots. Until Codex is answered yes or no, setup adds no links and removes
+none, and a sync names its homes in a NEW line, as for a folder. One reminder covers every home.
 
 Each skill is added to the agents on this PC, or not, by its answer in
 skills.<name>.addToAgents, and dev-home always. A skill this PC has no answer for follows its
@@ -347,6 +351,14 @@ CODEX_RULES_FILE = "AGENTS.md"
 # The file Codex reads in a home in place of AGENTS.md while it has text, which its docs call a
 # temporary override. Setup never changes it, and reports it (decision 0064).
 CODEX_OVERRIDE = "AGENTS.override.md"
+# The templates of the files setup writes into only one agent's folders: one folder per agent,
+# named as a skill's supportedOn names it, such as codex, holding each file at the path it lands
+# at in each of that agent's folders, such as rules/dev-home-toolkit.rules in each Codex home
+# (decision 0094, "Pre-approved commands").
+PER_AGENT_TEMPLATES = TOOLKIT_ROOT / "templates" / "per-agent"
+# What the line saying setup wrote or removed such a file adds, for an agent that reads it only
+# when it starts.
+LOAD_ADVICE = {"codex": "Restart Codex to load the change."}
 # What the note of each file setup moves into rules/ from an agent's rules file says it holds
 # (decision 0066).
 MOVED_WHOLE = "The whole file, as it was before setup wrote its own there."
@@ -4037,7 +4049,8 @@ class Setup:
         order: dev-home's git config, its dev-home.json, the end user's files setup keeps there,
         and its AGENTS.md and CLAUDE.md, Python for the skills' scripts, the
         generated files and each skill's state, the skills' links in each skills folder in
-        folders, as plans says, and the always-on rules."""
+        folders, as plans says, the always-on rules, and the files from templates/per-agent/;
+        then, from each folder answered no, what setup set up there."""
         values = template_values(content_root)
 
         # 1. dev-home: no signing prompts for agent commits; pulls that merge rather than rebase,
@@ -4114,6 +4127,14 @@ class Setup:
         # the others, below; step 5 writes them into each agent's rules file.
         operating_rendered = generated.render(OPERATING_TEMPLATE, values)
         self.unknown_placeholders.extend(operating_rendered.unknown)
+        # The files setup writes into only one agent's folders, filled in here for the same
+        # reason; step 6 writes them, and step 7 removes them from each folder answered no.
+        per_agent: dict[str, list[tuple[Path, bytes]]] = {}
+        for agent in REQUIRES_NAMES.values():
+            for relative in per_agent_files(agent):
+                rendered = generated.render(PER_AGENT_TEMPLATES / agent / relative, values)
+                self.unknown_placeholders.extend(rendered.unknown)
+                per_agent.setdefault(agent, []).append((relative, rendered.data))
         # A folder here with no templates, such as one left from an older layout, is removed.
         # A link here isn't setup's, so it stays.
         if GENERATED_ROOT.exists():
@@ -4234,10 +4255,23 @@ class Setup:
         self.report_waiting(content_root, pc)
         self.report_overrides(agent_folders.codex_homes)
 
-        # 6. What setup set up in each folder answered no, each removal listed as it goes: the
+        # 6. The files setup writes into only one agent's folders, from templates/per-agent/, in
+        # each of that agent's folders answered yes, such as Codex's command rules (decision
+        # 0094, "Pre-approved commands").
+        folders_of = {
+            claude_code: (agent_folders.claude_dirs, agent_folders.declined_claude_dirs),
+            codex: (agent_folders.codex_homes, agent_folders.declined_codex_homes),
+        }
+        for agent, files in per_agent.items():
+            for agent_dir in folders_of[agent][0]:
+                for relative, data in files:
+                    self.sync_agent_file(Path(agent_dir), relative, data, agent)
+
+        # 7. What setup set up in each folder answered no, each removal listed as it goes: the
         # links it made in a Claude Code folder, and for Codex, the links it made in
-        # ~/.agents/skills; and the rules file it wrote in each, once the lines it didn't write
-        # there are saved in rules/ (step 5). A link counts as setup's when it points where
+        # ~/.agents/skills; the rules file it wrote in each, once the lines it didn't write
+        # there are saved in rules/ (step 5); and the files of step 6, once the Recycle Bin has
+        # any hand edit to them. A link counts as setup's when it points where
         # setup's links point, so one of the person's own stays, as does anything that isn't a
         # link. A folder that is really one setup sets up, through a junction, such as
         # ~/.claude/skills made a junction to ~/.agents/skills to share skills, keeps its links
@@ -4259,6 +4293,10 @@ class Setup:
             self.remove_rules_file(Path(claude_dir), path, set_up, checked)
         for home in agent_folders.declined_codex_homes:
             self.remove_rules_file(Path(home), Path(home) / CODEX_RULES_FILE, set_up, checked)
+        for agent, files in per_agent.items():
+            for agent_dir in folders_of[agent][1]:
+                for relative, data in files:
+                    self.remove_agent_file(Path(agent_dir), relative, data, agent, set_up)
         # Adding an agent: see AGENTS_SKILLS. Only Codex reads that folder today, of the
         # agents setup sets up, so a no to Codex is enough to remove the links there.
         if agent_folders.declined_codex_homes:
@@ -4336,6 +4374,142 @@ class Setup:
                 return
             self.status("REMOVED", f"Rules file in a folder you said no to: {path}")
         if self.should(copy, "Remove setup's copy of that rules file"):
+            with contextlib.suppress(OSError):
+                copy.unlink()
+
+    def sync_agent_file(self, folder: Path, relative: Path, data: bytes, agent: str) -> None:
+        """Writes one of the files from templates/per-agent/ at relative in one of the agent's
+        folders answered yes, with data, its template filled in (decision 0094): when there's
+        none; when it still matches the copy setup keeps of what it last wrote there, such as
+        setup's own older version; or once the Recycle Bin has a copy of a hand edit, which is any
+        other text when there's no copy, so nothing is lost. While the bin can't take a hand edit,
+        the file stays as edited, named in a PROBLEM line, and the next run tries again. A link
+        whose target is gone is replaced; any other link stays, as setup never writes through
+        one."""
+        path = folder / relative
+        label = agent_file_label(folder, relative, agent)
+        copy = LAST_WRITTEN / rules.copy_name(path)
+        existing = link_info(path)
+        if existing is not None and existing.is_link:
+            if existing.target is not None and Path(existing.target).exists():
+                self.status(
+                    "PROBLEM",
+                    f"{label}: {path} links to {existing.target}, so setup left it alone. Delete "
+                    "the link, then run setup.py again.",
+                )
+                return
+            if not self.should(path, "Replace this link, whose target is gone, with setup's file"):
+                return
+            try:
+                path.unlink()
+            except OSError as error:
+                self.status("PROBLEM", f"{label}: could not remove the link {path}. {error}")
+                return
+            existing = None
+        try:
+            current = path.read_bytes() if existing is not None else None
+            kept = copy.read_bytes() if copy.is_file() else None
+        except OSError as error:
+            self.status("PROBLEM", f"{label}: {path} couldn't be read, so setup left it. {error}")
+            return
+        if current == data:
+            self.status("OK", label)
+        else:
+            said = ""
+            if current is not None and current != kept:
+                if not self.should(
+                    path, "Send its edits to the Recycle Bin, then put back setup's file"
+                ):
+                    return
+                name = agent_bin_name(folder, relative)
+                sent = self.to_the_bin(current, name)
+                if not sent.in_bin:
+                    self.status(
+                        "PROBLEM",
+                        f"{label}: {path} has edits setup didn't make, and the Recycle Bin "
+                        "couldn't take a copy of them, so setup left the file as edited. "
+                        f"{sentence(sent.why_not)} Setup rewrites this file on every run, and "
+                        "puts it back once the bin takes the edits: move anything you want to "
+                        f"keep into another file in {path.parent} first.",
+                    )
+                    return
+                said = (
+                    ", put back: it had edits setup didn't make, which are in the Recycle Bin as "
+                    f'"{name}". Setup rewrites this file on every run, so keep changes of your own '
+                    "in another file in that folder"
+                )
+            elif not self.should(path, "Write setup's file"):
+                return
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                if path.is_file():
+                    make_writable(path)
+                path.write_bytes(data)
+            except OSError as error:
+                self.status("PROBLEM", f"{label}: could not write {path}. {error}")
+                return
+            self.status("WROTE", f"{label}: {path}{said}. {LOAD_ADVICE.get(agent, '')}".rstrip())
+        if kept != data and self.should(copy, "Keep a copy of the file setup wrote"):
+            try:
+                copy.parent.mkdir(parents=True, exist_ok=True)
+                copy.write_bytes(data)
+            except OSError as error:
+                self.status("PROBLEM", f"Could not write {copy}. {error}")
+
+    def remove_agent_file(
+        self, folder: Path, relative: Path, data: bytes, agent: str, set_up: set[str]
+    ) -> None:
+        """Removes one of the files from templates/per-agent/ from a folder answered no, with its
+        copy (decision 0094): one that holds what setup last wrote there, or writes now, at once,
+        and one with a hand edit once the Recycle Bin has a copy of it, since the yes it came with
+        is gone. While the bin can't take a hand edit, the file stays, named in a PROBLEM line,
+        and the next run tries again. Any other text, with no copy, isn't setup's, and stays, as
+        does a link. In a folder that's really one setup sets up, through a junction, the file
+        is that folder's, so only this folder's copy goes."""
+        path = folder / relative
+        label = agent_file_label(folder, relative, agent)
+        copy = LAST_WRITTEN / rules.copy_name(path)
+        try:
+            shared = real_path(folder) in set_up
+            current = None if shared or is_link(path) or not path.is_file() else path.read_bytes()
+            kept = copy.read_bytes() if copy.is_file() else None
+        except OSError as error:
+            self.status("PROBLEM", f"{label}: {path} couldn't be read, so setup left it. {error}")
+            return
+        if current is not None:
+            if kept is None and current != data:
+                return
+            said = ""
+            if current not in (data, kept):
+                if not self.should(
+                    path, "Send its edits to the Recycle Bin, then remove setup's file"
+                ):
+                    return
+                name = agent_bin_name(folder, relative)
+                sent = self.to_the_bin(current, name)
+                if not sent.in_bin:
+                    self.status(
+                        "PROBLEM",
+                        f"{label}: {path} has edits setup didn't make, and the Recycle Bin "
+                        "couldn't take a copy of them, so setup left it, though you said no to "
+                        f"this folder. {sentence(sent.why_not)} Setup removes it once the bin "
+                        "takes the edits: move anything you want to keep into another file in "
+                        f"{path.parent} first.",
+                    )
+                    return
+                said = f', with its edits in the Recycle Bin as "{name}"'
+            elif not self.should(path, "Remove setup's file from a folder you said no to"):
+                return
+            try:
+                remove_generated_file(path)
+            except OSError as error:
+                self.status("PROBLEM", f"{label}: could not remove {path}. {error}")
+                return
+            advice = LOAD_ADVICE.get(agent, "")
+            self.status(
+                "REMOVED", f"{label}, in a folder you said no to: {path}{said}. {advice}".rstrip()
+            )
+        if kept is not None and self.should(copy, "Remove setup's copy of that file"):
             with contextlib.suppress(OSError):
                 copy.unlink()
 
@@ -4791,8 +4965,11 @@ def yes_does(agent: Agent, *, several: bool, doc_bytes: int, guarded: bool = Fal
             f"Every {agent.name} {agent.folder} reads the same skills, so they share one answer. A "
             f"{yes} sets up dev-home's skills and rules in each {agent.folder}. In each "
             f"{agent.folder}'s config.toml, it also adds your dev-home folder to writable_roots, "
-            f"so {agent.name} can write there from any project{raises}. A {no} removes all of "
-            "that but project_doc_max_bytes, if it's there. Setup backs up each file first."
+            f"so {agent.name} can write there from any project{raises}. It also writes "
+            f"rules/dev-home-toolkit.rules in each {agent.name} {agent.folder}, so {agent.name} "
+            "runs dev-home-toolkit's own commands, such as its syncs, outside its sandbox, where "
+            f"your GitHub sign-in works. A {no} removes all of that but project_doc_max_bytes, if "
+            "it's there. Setup backs up each file first."
         )
     where, settings_file, backup, adds, whose = (
         (
@@ -4894,6 +5071,28 @@ def bin_name(name: str) -> str:
     """What the copy of one of dev-home's AGENTS.md and CLAUDE.md with a hand edit is called in
     the Recycle Bin, so an end user can tell what it holds."""
     return f"{Path(name).stem} from dev-home, as edited.md"
+
+
+def per_agent_files(agent: str) -> list[Path]:
+    """Each file setup writes into only this agent's folders, by its path in each folder: the
+    templates in PER_AGENT_TEMPLATES under the agent's name, such as codex."""
+    folder = PER_AGENT_TEMPLATES / agent
+    if not folder.is_dir():
+        return []
+    return sorted(path.relative_to(folder) for path in folder.rglob("*") if path.is_file())
+
+
+def agent_file_label(folder: Path, relative: Path, agent: str) -> str:
+    """What a status line calls one of the files from templates/per-agent/ in one of the agent's
+    folders, such as "Codex's rules/dev-home-toolkit.rules in .codex"."""
+    return f"{requirements.AGENT_NAMES[agent]}'s {relative.as_posix()} in {folder.name}"
+
+
+def agent_bin_name(folder: Path, relative: Path) -> str:
+    """What the copy of one of the files from templates/per-agent/ with a hand edit is called in
+    the Recycle Bin, so an end user can tell what it holds, such as "dev-home-toolkit from
+    .codex, as edited.rules"."""
+    return f"{relative.stem} from {folder.name}, as edited{relative.suffix}"
 
 
 def left_text(found: Guidance, rules_root: Path, why_not: str) -> str:
