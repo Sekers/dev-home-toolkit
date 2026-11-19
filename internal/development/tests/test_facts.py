@@ -1088,7 +1088,7 @@ def test_a_stamp_that_differs_from_the_skill_on_disk_stops_with_why(
 ) -> None:
     command = skill_command(box, "handoff", "facts.py")
     words = command.split(" ")
-    words[words.index("--stamp") + 1] = "000000000000"
+    words[words.index("--stamp") + 1] = "s000000000000"
     result = run_command(box, " ".join(words), cwd=sample)
     assert result.code == 1, str(result)
     assert result.keys == [], str(result)

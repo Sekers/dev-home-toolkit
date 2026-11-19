@@ -33,7 +33,8 @@ The commands work like a folder's (`claudeCode.folders+=`, `-=`, and `?=`), unde
   each one recommended there, and no to each with a value someone chose, as Enter at a console.
 
 The fingerprint goes at the end of the value, as `'<name>=<value>@<fingerprint>'`, as a reminder
-takes `@<days>`. Like a skill's stamp, it's the first 12 hex digits of a SHA-256: here, of the
+takes `@<days>`. It's the first 12 hex digits of a SHA-256, with no letter first as a skill's
+stamp has, since it's always inside quotes: here, of the
 setting's value that the offer described, with the file it's from, `settings.json`, or
 `.claude.json` where the offer counted that file's value, or of nothing when the setting is
 missing. For all of them at once, it's of each waiting one's id with that, so a setting answered

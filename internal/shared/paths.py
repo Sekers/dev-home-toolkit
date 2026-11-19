@@ -86,13 +86,17 @@ def resolve_home(path: str, home: Path) -> str:
 def unsafe_reason(path: str) -> str | None:
     """Why a folder can't be written into the skills' commands, or None when it can. Setup writes
     the paths into commands and pre-approvals as they are, unquoted, so they may hold only
-    characters that need no quoting in Git Bash or PowerShell."""
+    characters that need no quoting in Git Bash or PowerShell, and that Codex's command rules
+    take as plain. That leaves out @, which Codex refuses on Windows (decision 0094)."""
     # A root turns into "C:" once its trailing slash is trimmed, and "C:" means the current
     # folder on that drive.
     if re.fullmatch(r"[A-Za-z]:[\\/]*", path):
         return "is the root of a drive"
     if not re.match(r"[A-Za-z]:[\\/]", path):
         return "is not a full path on a drive, such as C:/Users/you/dev-home"
-    if re.search(r"[^A-Za-z0-9_.@\\/-]", path[2:]):
-        return "has a space or another character that commands would need quoted"
+    if re.search(r"[^A-Za-z0-9_.\\/-]", path[2:]):
+        return (
+            "has a space or another character that isn't a letter, a digit, a slash, a dot, an "
+            "underscore, or a hyphen"
+        )
     return None

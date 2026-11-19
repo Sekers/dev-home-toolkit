@@ -43,8 +43,8 @@ AGENTS.md points here; its rules apply too.
   - `{{PYTHON}}`: `internal/.python/python.exe` in this repo's folder, the Python the scripts
     run with. `internal/.python/` is a junction setup makes to a Python 3.12 or later, so the
     path is short, has no spaces, and is the same on every PC.
-  - `{{SKILL_STAMP}}`: the skill's stamp, a fingerprint of its `SKILL.md` (skills only). See
-    "Skills" below.
+  - `{{SKILL_STAMP}}`: the skill's stamp, `s` and a fingerprint of its `SKILL.md` (skills only).
+    See "Skills" below.
 - `templates/skills/` and `templates/shared-skill-scripts/` are filled in on every setup run and
   written to `internal/.generated/`, at the same paths. The skills there are what gets linked into
   the agents, and the skills run the shared scripts from there. `templates/operating-rules/` is
@@ -99,6 +99,15 @@ AGENTS.md points here; its rules apply too.
   only, and ASCII only (tests check both).
 - Write steps in plain language, and write commands exactly as they will be run, with
   forward-slash paths, so they work in Git Bash, PowerShell, and Codex.
+- Write each command, in a skill or in what a script prints for agents, so Codex can match its
+  rules in every shell: Codex takes a command apart into words first, and runs it inside its
+  sandbox when it can't. An unquoted word may hold only letters, digits, and `/ . _ : = -`, and
+  may start with neither `=` nor, unless it's a whole number, a digit. Anything else goes in
+  single quotes, or in double quotes with no `$`, backtick, or backslash
+  ([0094: Pre-approved commands](decisions/0094-pre-approved-commands.md)). What setup fills in
+  keeps to this too: each stamp starts with `s`, and setup's folder check allows no other
+  characters in paths. A test checks every command the skills, the operating rules, and the files
+  in `templates/dev-home/` give.
 - Leave commands that publish outside dev-home, such as `gh issue create`, out of
   `allowed-tools`. Whether they ask first is each person's choice, in their own settings.
 - Pre-approve each script a skill runs by its path, alone and with any arguments, such as

@@ -85,6 +85,22 @@ Decided by the developer on 2026-11-18.
   caps the list at 100 rules and 5,000 characters, shortest first. The developer accepted the cost
   on 2026-11-19: without a rule, a command runs in the sandbox first and fails, then the agent
   asks the end user to run it outside, and that extra turn reads the whole conversation again.
+- Codex matches a rule only when it can take the command apart into plain words, and otherwise
+  runs the command in the sandbox. On Windows, its PowerShell splitter refuses an unquoted word
+  that holds `@`, or that starts with a digit but isn't a whole number; on macOS and Linux, its
+  bash and zsh splitter refuses `$` and backticks, even in double quotes; and both refuse `$` in
+  double quotes (`shell-command/src/command_safety/powershell_tree_sitter.rs` and
+  `shell-command/src/bash.rs` at `rust-v0.170.0`, read 2026-11-19). So each skill's stamp starts
+  with `s`
+  ([0013: Telling a session its skill changed](0013-telling-a-session-its-skill-changed.md)),
+  setup's folder check refuses `@`, a test checks every command the skills give against the
+  stricter of the two ([skills.md](../skills.md)), and a commit message can't hold `$` or a
+  backtick. Measured on 2026-11-19 in the Codex CLI 0.170.0 on Windows, through `codex exec`:
+  `prepare.py`, `setup.py --quiet`, `setup.py --configure` with a single-quoted value, two
+  `sync.py --message` commits that pushed, `issue_status.py`, `gh label list`, and
+  `gh issue list` ran outside the sandbox, and `gh issue create` inside it. `facts.py` ran inside
+  it with a stamp that started with a digit, or with `"a $b"`, and outside with that stamp in
+  single quotes, or with a backtick in double quotes.
 
 **Options set aside:**
 

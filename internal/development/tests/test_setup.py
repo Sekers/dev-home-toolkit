@@ -97,7 +97,7 @@ def append(path: Path, text: str) -> None:
 def stamps(box: Sandbox, skill: str) -> list[str]:
     """Each different stamp in a generated skill's commands."""
     text = read(box.generated / "skills" / skill / "SKILL.md")
-    return sorted(set(re.findall(rf"--skill {skill} --stamp ([0-9a-f]+)", text)))
+    return sorted(set(re.findall(rf"--skill {skill} --stamp ([0-9a-z]+)", text)))
 
 
 def test_first_run_exits_0_and_says_it_uses_the_test_profile(first: First) -> None:
@@ -129,7 +129,7 @@ def test_writes_this_copys_paths_into_the_commands_and_pre_approvals(box: Sandbo
     assert f"Bash({prepare} *)" in skill
     assert re.search(
         re.escape(f"`{prepare} --skill handoff --stamp ")
-        + r"[0-9a-f]{12} --fetch auto handoff environment newer-commits preferences`",
+        + r"s[0-9a-f]{12} --fetch auto handoff environment newer-commits preferences`",
         skill,
     )
 
@@ -159,7 +159,9 @@ def test_adds_nothing_to_the_root(first: First) -> None:
 def test_stamps_each_skills_commands_with_one_stamp_of_its_own(box: Sandbox) -> None:
     handoff, knowledge = stamps(box, "handoff"), stamps(box, "knowledge")
     assert len(handoff) == 1 and len(knowledge) == 1, (handoff, knowledge)
-    assert re.fullmatch(r"[0-9a-f]{12}", handoff[0])
+    # s first, since Codex's command rules don't match a command with an unquoted word that
+    # starts with a digit (decision 0013).
+    assert re.fullmatch(r"s[0-9a-f]{12}", handoff[0])
     assert handoff != knowledge
 
 
@@ -2575,11 +2577,17 @@ def test_a_personal_skill_with_a_tooling_skills_name(box: Sandbox) -> None:
     assert ".generated" in str(link_target(box.profile / ".claude" / "skills" / "handoff"))
 
 
-def test_refuses_a_dev_home_path_with_a_space_and_keeps_the_settings(box: Sandbox) -> None:
+@pytest.mark.parametrize("name", ["has space", "has@sign"])
+def test_refuses_a_dev_home_path_with_a_space_or_an_at_sign_and_keeps_the_settings(
+    box: Sandbox, name: str
+) -> None:
+    # A space needs quoting, and Codex's command rules don't match a command with an @ on
+    # Windows (decision 0094).
     settings = box.toolkit / "local-settings.json"
     before = read(settings)
-    result = setup(box, "--content-dir", str(box.root / "has space"))
-    assert result.code == 1 and result.has_line("space"), str(result)
+    result = setup(box, "--content-dir", str(box.root / name))
+    assert result.code == 1 and result.has_line(re.escape(name)), str(result)
+    assert result.has_line("isn't a letter, a digit, a slash"), str(result)
     assert read(settings) == before
 
 

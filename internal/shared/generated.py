@@ -47,11 +47,14 @@ def render(path: Path, values: Mapping[str, str]) -> Rendered:
 
 
 def skill_stamp(path: Path, values: Mapping[str, str]) -> str:
-    """A skill's stamp: the start of a SHA-256 of its SKILL.md with this PC's paths filled in, so
-    it changes whenever the text an agent loads does. The skill's commands carry it, and the
-    skill scripts compare it with the stamp in the SKILL.md on disk (see facts.py). The stamp is
-    hashed as its placeholder, so it can't change its own value."""
-    return hashlib.sha256(fill(read_text(path), values).encode("utf-8")).hexdigest()[:12]
+    """A skill's stamp: s, then the start of a SHA-256 of its SKILL.md with this PC's paths filled
+    in, so it changes whenever the text an agent loads does. The skill's commands carry it, and
+    the skill scripts compare it with the stamp in the SKILL.md on disk (see facts.py). The stamp
+    is hashed as its placeholder, so it can't change its own value. The s keeps a stamp from
+    starting with a digit, which would stop Codex's command rules from matching the command on
+    Windows (decision 0013)."""
+    digest = hashlib.sha256(fill(read_text(path), values).encode("utf-8")).hexdigest()
+    return "s" + digest[:12]
 
 
 def generated_items(

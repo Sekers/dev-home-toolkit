@@ -254,7 +254,8 @@ WAITING_INTRO = (
 def fingerprint(data: bytes) -> str:
     """What --configure shows with something that waits for an answer, and takes back with the
     answer, so setup acts on the answer only while that's still what the person saw: the first 12
-    hex digits of its SHA-256, as a skill's stamp is."""
+    hex digits of its SHA-256. It's always inside quotes, so unlike a skill's stamp, it needs no
+    letter first."""
     return hashlib.sha256(data).hexdigest()[:12]
 
 
@@ -1676,7 +1677,7 @@ def checked_dev_home(value: str) -> str:
     folder = forward(value)
     reason = unsafe_reason(folder)
     if reason:
-        raise SettingError(f"The folder {folder} {reason}, so commands would need it quoted.")
+        raise SettingError(f"The folder {folder} {reason}, so it can't be dev-home's folder.")
     if is_inside(folder, TOOLKIT_ROOT):
         raise SettingError(f"The folder {folder} is dev-home-toolkit's own folder, or inside it.")
     full = Path(comparable(folder))

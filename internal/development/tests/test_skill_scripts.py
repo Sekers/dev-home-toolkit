@@ -363,6 +363,94 @@ def test_codex_command_rules_allow_just_the_commands_the_skills_pre_approve() ->
     assert rules == approved
 
 
+# Codex takes a command apart into words before it matches a rule, and runs the command inside
+# its sandbox when it can't. On Windows, its PowerShell splitter refuses an unquoted word that
+# holds @, or that starts with a digit but isn't a whole number. On macOS and Linux, its bash and
+# zsh splitter refuses $ and backticks, even in double quotes (shell-command/src/command_safety/
+# powershell_tree_sitter.rs and shell-command/src/bash.rs, at rust-v0.170.0; decision 0094).
+# This takes the stricter of the two: an unquoted word of letters, digits, and / . _ : = - that
+# starts with neither = nor, unless it's a whole number, a digit, and isn't a PowerShell
+# parameter with a value after a colon; text in single quotes; or text in double quotes with no
+# $, backtick, or backslash.
+CODEX_WORD = r"""(?:'[^']*'|"[^"$`\\]*"|0|[1-9][0-9]*|(?!-[^-\s]\S*:)[A-Za-z/._:-][\w/.:=-]*)"""
+CODEX_COMMAND = re.compile(rf"{CODEX_WORD}(?:\s+{CODEX_WORD})*", re.ASCII)
+# Characters PowerShell reads as quotes or dashes, which make Codex refuse the whole command.
+LOOKALIKES = "\u2018\u2019\u201c\u201d\u2013\u2014\u2015"
+# What setup fills in, in the forms it writes: forward-slash paths of the characters its folder
+# check allows, and a stamp, s and 12 hex digits (test_setup.py checks both).
+FILLED_TOOLKIT = "C:/Users/you/dev-home-toolkit"
+FILLED = {
+    "{{PYTHON}}": f"{FILLED_TOOLKIT}/internal/.python/python.exe",
+    "{{TOOLKIT_DIR}}": FILLED_TOOLKIT,
+    "{{SHARED_SKILL_SCRIPTS_DIR}}": f"{FILLED_TOOLKIT}/internal/.generated/shared-skill-scripts",
+    "{{SKILL_DIR}}": f"{FILLED_TOOLKIT}/internal/.generated/skills/handoff",
+    "{{CONTENT_DIR}}": "C:/Users/you/dev-home",
+    "{{SKILL_STAMP}}": "s0a1b2c3d4e5f",
+}
+
+
+def codex_can_split(command: str) -> bool:
+    """Whether Codex can take command apart into plain words, so that a rule can match it, with
+    setup's placeholders filled in and each <placeholder> an agent fills in taken as a word."""
+    for placeholder, value in FILLED.items():
+        command = command.replace(placeholder, value)
+    command = re.sub(r"<[^<>]*>", "x", command)
+    return not any(c in command for c in LOOKALIKES) and bool(CODEX_COMMAND.fullmatch(command))
+
+
+@pytest.mark.parametrize(
+    ("command", "splits"),
+    [
+        ("{{PYTHON}} -I {{TOOLKIT_DIR}}/x.py --stamp {{SKILL_STAMP}} skills", True),
+        ("x.exe --stamp 0a1b2c3d4e5f", False),
+        ("gh label list --limit 100", True),
+        ("x.exe 0123", False),
+        ('x.exe --message "sync: <what changed>" "<path>"', True),
+        ('x.exe --message "a $b"', False),
+        ('x.exe --message "a `x` b"', False),
+        ('x.exe --message "a\\b"', False),
+        ("x.exe --configure '<name>=<value>' 'a $b'", True),
+        ("C:/a@b/x.exe", False),
+        ("x.exe -Path:C:/x", False),
+        ("x.exe =x", False),
+        ("x.exe a,b", False),
+        ("x.exe ~/x", False),
+        ("x.exe a\u2013b", False),
+        ('x.exe a"b"', False),
+    ],
+)
+def test_the_check_for_what_codex_can_split_refuses_what_codex_refuses(
+    command: str, splits: bool
+) -> None:
+    assert codex_can_split(command) is splits
+
+
+def given_commands() -> list[str]:
+    """Each command the skills, the operating rules, and the files setup writes in dev-home give
+    agents to run, with the file it's in: every one in backticks that starts with {{PYTHON}} -I,
+    or with gh."""
+    templates = REPO_ROOT / "templates"
+    files = [
+        *sorted(SKILLS.rglob("*.md")),
+        *sorted((templates / "operating-rules").glob("*.md")),
+        *sorted((templates / "dev-home").rglob("*.md")),
+    ]
+    pattern = r"`((?:\{\{PYTHON\}\}\s+-I|gh)\s[^`]*)`"
+    return [
+        f"{repo_path(file)}: {command}"
+        for file in files
+        for command in re.findall(pattern, file.read_text(encoding="utf-8"))
+    ]
+
+
+def test_codex_can_split_each_command_agents_are_given() -> None:
+    # So that its command rules can match each one, in every shell (decision 0094).
+    commands = given_commands()
+    assert len(commands) > 10, commands
+    refused = [entry for entry in commands if not codex_can_split(entry.split(": ", 1)[1])]
+    assert refused == []
+
+
 def skills_that_sync() -> list[Path]:
     return [s for s in skills() if "prepare.py" in (s / "SKILL.md").read_text(encoding="utf-8")]
 

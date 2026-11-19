@@ -30,12 +30,12 @@ Committing is never done here: a skill commits through sync.py --message.
 Examples, shortened: the skills give the full path of python.exe, which is
 internal/.python/python.exe in dev-home-toolkit's folder, and of this script.
 
-    python.exe -I prepare.py --skill handoff --stamp 3f9c2ab1d0e4 handoff environment newer-commits
+    python.exe -I prepare.py --skill handoff --stamp s3f9c2ab1d0e4 handoff environment newer-commits
 
 Syncs dev-home, checks that the handoff skill hasn't changed, then prints where this project's
 handoff is, the computer's name, and the project's commits since the handoff's last check.
 
-    python.exe -I prepare.py --skill knowledge --stamp 3f9c2ab1d0e4 --fetch auto
+    python.exe -I prepare.py --skill knowledge --stamp s3f9c2ab1d0e4 --fetch auto
 
 Syncs dev-home, fetching every time with several active copies, and with one only when its check
 of GitHub is due, then checks that the knowledge skill hasn't changed.

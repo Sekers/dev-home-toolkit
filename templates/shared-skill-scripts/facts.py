@@ -23,7 +23,7 @@ and exits 1.
 
 THE SKILL'S STAMP
 
-A skill names itself and its stamp before the topics, as in --skill handoff --stamp 3f9c2ab1d0e4.
+A skill names itself and its stamp before the topics, as in --skill handoff --stamp s3f9c2ab1d0e4.
 Setup stamps each skill when it writes the skill's SKILL.md: the stamp is a fingerprint of the
 skill's text, written into the skill's own commands. An agent keeps the text of a skill it has
 loaded until the user runs the skill's command again, so when the stamp given differs from the
@@ -345,7 +345,7 @@ def skill_changed(request: Request) -> str | None:
         text = path.read_text(encoding="utf-8")
     except OSError:
         text = ""
-    match = re.search(rf"--skill {re.escape(name)} --stamp ([0-9a-f]+)", text)
+    match = re.search(rf"--skill {re.escape(name)} --stamp ([0-9a-z]+)", text)
     if match:
         current = match.group(1)
     if current == request.stamp:

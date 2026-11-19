@@ -84,10 +84,10 @@ later ones. Use a normal terminal window, not an administrator one.
 
 Clone it into a folder near the root of a drive, where you keep your programming work, such as
 `C:\Programming`. Avoid your Documents folder, which is often synced by OneDrive, and OneDrive
-can corrupt a git repo. The full path can't have spaces or other characters that need quoting
-(letters, digits, `.`, `_`, `-`, and `@` are fine), because setup writes it into commands as it
-is. If you use a [Dev Drive](https://learn.microsoft.com/windows/dev-drive/), it's an even
-better place, such as `D:\Programming`.
+can corrupt a git repo. Besides its drive and slashes, the full path can hold only letters,
+digits, `.`, `_`, and `-`, because setup writes it into commands as it is. If you use a
+[Dev Drive](https://learn.microsoft.com/windows/dev-drive/), it's an even better place, such as
+`D:\Programming`.
 
 ```powershell
 gh repo clone Sekers/dev-home-toolkit C:\Programming\dev-home-toolkit
