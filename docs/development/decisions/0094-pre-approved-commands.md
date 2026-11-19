@@ -76,6 +76,16 @@ Decided by the developer on 2026-11-18.
   rule, and asks to run that command outside the sandbox until Codex restarts.
 - Pre-approvals arrive with updates, with no question, so they're only as trustworthy as the
   update that brings them.
+- Codex lists every `allow` rule in the model's instructions in each session whose
+  `approval_policy` lets it ask the end user (`on-request`, its default, or `granular`), in every
+  project, so the file's seven rules add about 200 to 250 tokens to each such session. The list
+  is 756 characters when dev-home-toolkit's folder path is 31 characters long, and each character
+  more or less in that path changes it by 10, since each of the five Python rules names the
+  folder twice. Worked out from Codex's source at `rust-v0.170.0`
+  (`prompts/src/permissions_instructions.rs` and `protocol/src/models.rs`, read 2026-11-19), which
+  caps the list at 100 rules and 5,000 characters, shortest first. The developer accepted the cost
+  on 2026-11-19: without a rule, a command runs in the sandbox first and fails, then the agent
+  asks the end user to run it outside, and that extra turn reads the whole conversation again.
 
 **Options set aside:**
 
