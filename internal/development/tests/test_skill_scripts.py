@@ -78,14 +78,10 @@ def test_each_script_lists_exactly_the_skills_that_run_it(script: Path) -> None:
 
 
 @pytest.mark.parametrize("skill", skills(), ids=lambda p: p.name)
-def test_each_shared_script_command_is_stamped_and_pre_approved_word_for_word(
-    skill: Path,
-) -> None:
-    # A command that differs from its pre-approval by one word would ask the user first. Each
-    # carries the skill's own name and stamp, which the scripts check against the skill on disk.
+def test_each_shared_script_command_is_stamped(skill: Path) -> None:
+    # Each carries the skill's own name and stamp, which the scripts check against the skill on
+    # disk.
     text = (skill / "SKILL.md").read_text(encoding="utf-8")
-    allowed = re.search(r'^allowed-tools:\s*"(.*)"\s*$', text, re.MULTILINE)
-    approvals = allowed.group(1) if allowed else ""
     prefix = "{{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/"
     commands = set(re.findall(rf"`({re.escape(prefix)}[^`]*)`", text))
     assert commands, f"{skill.name} runs no shared script"
@@ -93,8 +89,6 @@ def test_each_shared_script_command_is_stamped_and_pre_approved_word_for_word(
         script = command[len(prefix) :].split(" ")[0]
         assert (SCRIPTS / script).is_file(), f"{skill.name} runs {script}, which doesn't exist"
         assert f" --skill {skill.name} --stamp {{{{SKILL_STAMP}}}}" in command, command
-        assert f"Bash({command})" in approvals, f"not pre-approved for Bash: {command}"
-        assert f"PowerShell({command})" in approvals, f"not pre-approved for PowerShell: {command}"
 
 
 # Samples for the searches below: each line in a "found" list must be found, and nothing in a
@@ -311,29 +305,24 @@ def test_each_entry_point_runs_the_module_of_its_own_name(entry: Path) -> None:
 
 
 @pytest.mark.parametrize("skill", skills(), ids=lambda p: p.name)
-def test_each_python_command_a_skill_gives_is_pre_approved_for_both_tools(skill: Path) -> None:
-    # Word for word, or by an approval ending in a wildcard, for a command whose last words
-    # change each time, such as a commit message or a setting.
+def test_each_skill_pre_approves_each_script_it_runs_by_name_for_both_tools(skill: Path) -> None:
+    # By the script's path, alone and with any arguments, so a change to a script's options
+    # changes no pre-approval (decision 0094). And nothing else: no command's whole text, and no
+    # script the skill doesn't run.
     text = (skill / "SKILL.md").read_text(encoding="utf-8")
     allowed = re.search(r'^allowed-tools:\s*"(.*)"\s*$', text, re.MULTILINE)
     approvals = re.findall(r"(Bash|PowerShell)\(([^)]*)\)", allowed.group(1) if allowed else "")
-    commands = set(re.findall(r"`(\{\{PYTHON\}\} -I [^`]*)`", text))
-    assert commands, f"{skill.name} gives no Python command"
-
-    def approved(tool: str, command: str) -> bool:
-        return any(
-            kind == tool
-            and (rule == command or (rule.endswith(" *") and command.startswith(rule[:-1])))
-            for kind, rule in approvals
-        )
-
-    missing = [
-        f"{tool}: {command}"
-        for command in sorted(commands)
+    commands = re.findall(r"`(\{\{PYTHON\}\}\s+-I\s[^`]*)`", text)
+    scripts = {" ".join(command.split()[:3]) for command in commands}
+    assert scripts, f"{skill.name} gives no Python command"
+    expected = {
+        (tool, script + ending)
+        for script in scripts
         for tool in ("Bash", "PowerShell")
-        if not approved(tool, command)
-    ]
-    assert missing == []
+        for ending in ("", " *")
+    }
+    python = {(tool, rule) for tool, rule in approvals if rule.startswith("{{PYTHON}} ")}
+    assert sorted(python) == sorted(expected)
 
 
 @pytest.mark.parametrize("skill", skills(), ids=lambda p: p.name)
@@ -362,8 +351,6 @@ def test_codex_command_rules_allow_just_the_commands_the_skills_pre_approve() ->
         allowed = re.search(r'^allowed-tools:\s*"(.*)"\s*$', text, re.MULTILINE)
         for rule in re.findall(r"Bash\(([^)]*)\)", allowed.group(1) if allowed else ""):
             words = rule.removesuffix(" *").split(" ")
-            if words[0] == "{{PYTHON}}":
-                words = words[:3]
             skill_dir = "{{TOOLKIT_DIR}}/internal/.generated/skills/" + skill.name
             approved.add(tuple(word.replace("{{SKILL_DIR}}", skill_dir) for word in words))
     text = CODEX_RULES.read_text(encoding="utf-8")

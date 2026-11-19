@@ -12,8 +12,9 @@ lists too ([0038: Recommended settings from chat](0038-recommended-settings-from
 Changed on 2026-10-17, 2026-10-20, 2026-10-23 (setup's questions), 2026-10-28 (recommended
 settings), 2026-11-09 (the Skills section, skills' summaries, and the state of one this PC's
 operating system can't run, in the list for agents), 2026-11-10 (that skill's preferences,
-and the Skills section's questions, row, and words for an answer), and 2026-11-11 (a pick that
-asks nothing, and yellow for each value that differs from its answer).
+and the Skills section's questions, row, and words for an answer), 2026-11-11 (a pick that asks
+nothing, and yellow for each value that differs from its answer), and by the developer on
+2026-11-18 (`setup.py` pre-approved by name).
 
 - At a console, it shows a menu: every setting with its current value, under "This PC" and
   "Shared by every copy of dev-home", in aligned columns, with headings and setup's colors, in
@@ -117,8 +118,9 @@ asks nothing, and yellow for each value that differs from its answer).
   [0049: Answers in the settings](0049-answers-in-the-settings.md) says.) A new `devHome.folder`
   never moves a folder. The backup goes beside the file, in dev-home-toolkit's root, and git
   ignores it, as it does the file.
-- The `dev-home` skill pre-approves `setup.py --configure *`, as the skills pre-approve
-  `sync.py *` for commits: the person's yes in chat to the exact preview is the approval.
+- The `dev-home` skill pre-approves `setup.py` with any arguments, as it does every script it runs
+  ([0094: Pre-approved commands](0094-pre-approved-commands.md)): the person's yes in chat to the
+  exact preview is the approval.
 - Before it sets dev-home's git config, setup checks that the folder looks like a dev-home: it
   has `dev-home.json`
   ([0070: Who owns each file in dev-home](0070-who-owns-each-file-in-dev-home.md)).

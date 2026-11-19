@@ -14,10 +14,10 @@ recommended, all, which is each yes command in turn. The agent shows them, the
 person answers in chat, and the agent runs the command the answer names, with no `--what-if`
 round, since the listing was the preview. Setup writes a yes only if the setting still has that
 value, with a backup as usual. Only values from the recommended-settings list can be applied this
-way, never an arbitrary key, and the `dev-home` skill keeps pre-approving
-`setup.py --configure *`, as the skills pre-approve their commits. The list of settings after
-that section shows each one answered, with the value now where it differs from a yes, and the
-commands that change it.
+way, never an arbitrary key, and the `dev-home` skill pre-approves `setup.py` with any arguments,
+as it does every script it runs ([0094: Pre-approved commands](0094-pre-approved-commands.md)).
+The list of settings after that section shows each one answered, with the value now where it
+differs from a yes, and the commands that change it.
 
 The commands work like a folder's (`claudeCode.folders+=`, `-=`, and `?=`), under
 `claudeCode.recommendedSettings`, followed by a setting's id:
@@ -39,8 +39,9 @@ setting's value that the offer described, with the file it's from, `settings.jso
 missing. For all of them at once, it's of each waiting one's id with that, so a setting answered
 or changed meanwhile changes it. Answers to setup's questions through `--configure` already carry
 one this way ([0026: setup.py --configure](0026-setup-py-configure.md)). Changed on 2026-10-23
-(its form), by the developer on 2026-10-24 (plain words in place of a diff), and by the developer
-on 2026-10-28 (the commands, and the listing in place of a `--what-if` round).
+(its form), by the developer on 2026-10-24 (plain words in place of a diff), by the developer on
+2026-10-28 (the commands, and the listing in place of a `--what-if` round), and by the developer
+on 2026-11-18 (`setup.py` pre-approved by name).
 
 **Why:** chat is where most later questions reach people, between runs of setup by hand. The
 fingerprint makes a yes in chat as exact as a typed yes, as `update.py` pulls exactly the commit

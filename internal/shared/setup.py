@@ -54,8 +54,8 @@ copy agrees.
 
 The templates in this repo hold placeholders where paths go. Setup writes copies of the skills
 and the scripts they share, with this PC's paths filled in, to internal/.generated/, at the same
-paths they have under templates/, and links the skills into the agents. Pre-approved commands must
-match the command text exactly, so the paths can't be variables.
+paths they have under templates/, and links the skills into the agents. A pre-approval must match
+the start of a command's text exactly, so the paths can't be variables.
 
 Each agent gets its always-on rules as one file setup writes in its folder: dev-home-rules.md in
 each Claude Code folder's rules/, which Claude Code loads with every other .md file there, and

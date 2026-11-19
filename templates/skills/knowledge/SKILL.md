@@ -1,7 +1,7 @@
 ---
 name: knowledge
 description: Private general knowledge base for coding and AI work (languages, programs, extensions, libraries, platforms, and AI agents such as Claude Code and Codex), kept in the private dev-home repo. Check it before researching or testing a general question about these, or asking the user to test one, even partway through other work. Also use when the user runs /knowledge, asks to look something up in or add something to the knowledge base, or when a hard-won general finding comes up during work.
-allowed-tools: "Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch auto) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py --skill knowledge --stamp {{SKILL_STAMP}} --fetch auto) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *)"
+allowed-tools: "Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py) Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py *) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py *) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *)"
 ---
 
 # Knowledge base

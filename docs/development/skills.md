@@ -57,9 +57,9 @@ AGENTS.md points here; its rules apply too.
   `internal/.generated/` when the scripts run, and setup leaves those, and any link, alone.
 - A file and its folder keep the same name at every stage: template, generated copy, and link,
   such as `skills/handoff/SKILL.md`.
-- Pre-approvals in `allowed-tools` match the literal command text, so write every command with a
-  placeholder where the path goes, never a variable or `~`. After setup fills it in, the command
-  in the steps and the pre-approval match exactly.
+- Pre-approvals in `allowed-tools` match the start of a command's text literally, so write every
+  command with a placeholder where the path goes, never a variable or `~`. After setup fills it
+  in, each command in the steps starts with its pre-approval's text exactly.
 
 ## Skills (templates/skills/)
 
@@ -101,6 +101,10 @@ AGENTS.md points here; its rules apply too.
   forward-slash paths, so they work in Git Bash, PowerShell, and Codex.
 - Leave commands that publish outside dev-home, such as `gh issue create`, out of
   `allowed-tools`. Whether they ask first is each person's choice, in their own settings.
+- Pre-approve each script a skill runs by its path, alone and with any arguments, such as
+  `Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py)` and `Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *)`,
+  never a command's whole text, so a change to a script's options changes no pre-approval
+  ([0094: Pre-approved commands](decisions/0094-pre-approved-commands.md)).
 - Give each command both a `Bash(...)` and a `PowerShell(...)` pre-approval, as the Python
   commands and `gh issue list` have (a test checks the Python ones). Add no command that starts
   PowerShell (`pwsh`): dev-home-toolkit doesn't need it, and Claude Code's PowerShell tool asks
@@ -161,8 +165,6 @@ AGENTS.md points here; its rules apply too.
 - Each script's description has a "Called by:" line naming the skills that run it. Read those
   skills before changing what the script takes or prints, and update the line when a skill starts
   or stops running it. A test compares the line with the skills.
-- A skill writes each command in full, with fixed arguments, and pre-approves that exact text,
-  never a wildcard. A test checks that the two match.
 
 ## Operating rules (templates/operating-rules/operating-rules.md)
 

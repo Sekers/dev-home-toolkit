@@ -1,8 +1,7 @@
 # 0094: Pre-approved commands
 
-**Built:** yes, except: Claude Code's pre-approvals by each script's name, since the skills still
-pre-approve each command word for word; and the skills' steps for Codex, which still skip every
-sync, commit, and `gh` command.
+**Built:** yes, except: the skills' steps for Codex, which still skip every sync, commit, and
+`gh` command.
 
 **Decision:** an agent runs each of dev-home-toolkit's scripts without asking, by the script's
 name, with any arguments, in Claude Code and in Codex, with no exceptions.

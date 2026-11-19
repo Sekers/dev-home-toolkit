@@ -15,9 +15,9 @@ and your rules joined, which setup writes again at each sync.
     path goes, because everyone keeps their folders in different places. Setup writes a copy with
     this PC's real paths filled in, and that copy is what the agents use. The paths have to be
     written out in full, because the commands a skill may run without asking you are matched by
-    their exact text. Setup rewrites this folder whenever it runs, so don't edit it; put skills of
-    your own in your dev-home. Python adds `__pycache__` folders beside the scripts when they
-    run, so they start faster next time; setup leaves those alone. Setup also writes
+    their text, paths included. Setup rewrites this folder whenever it runs, so don't edit it;
+    put skills of your own in your dev-home. Python adds `__pycache__` folders beside the scripts
+    when they run, so they start faster next time; setup leaves those alone. Setup also writes
     `skill-states.json` there: whether it added each skill to your agents on this PC, and if not,
     why, with each skill's summary, which `/dev-home skills` shows. In `last-written\`, it keeps a
     copy of the rules file it last wrote in each agent's folder, and of your dev-home's

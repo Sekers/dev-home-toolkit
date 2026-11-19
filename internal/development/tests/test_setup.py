@@ -122,12 +122,14 @@ def test_writes_this_copys_paths_into_the_commands_and_pre_approvals(box: Sandbo
     assert f"{toolkit}/internal/.generated/skills/handoff/template.md" in skill
     scripts = box.generated / "shared-skill-scripts"
     assert (scripts / "facts.py").is_file() and (scripts / "prepare.py").is_file()
-    prepare = re.escape(
-        f"Bash({toolkit}/internal/.python/python.exe -I {toolkit}/internal/.generated/"
-        "shared-skill-scripts/prepare.py --skill handoff --stamp "
+    prepare = (
+        f"{toolkit}/internal/.python/python.exe -I {toolkit}/internal/.generated/"
+        "shared-skill-scripts/prepare.py"
     )
+    assert f"Bash({prepare} *)" in skill
     assert re.search(
-        prepare + r"[0-9a-f]{12} --fetch auto handoff environment newer-commits preferences\)",
+        re.escape(f"`{prepare} --skill handoff --stamp ")
+        + r"[0-9a-f]{12} --fetch auto handoff environment newer-commits preferences`",
         skill,
     )
 
