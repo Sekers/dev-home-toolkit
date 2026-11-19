@@ -10,7 +10,10 @@ dev-home is the user's private repo, at `{{CONTENT_DIR}}`, which keeps their han
 base, own rules, and own skills on GitHub. dev-home-toolkit, at `{{TOOLKIT_DIR}}`, is the tooling
 that syncs it and sets it up on each PC. This skill syncs dev-home when the user asks, lists each
 skill and whether it's added to the user's agents, and shows and changes dev-home-toolkit's
-settings. Run the commands below exactly as written; in Claude Code they are pre-approved.
+settings. Run the commands below exactly as written. Claude Code and Codex both run them without
+asking. In Claude Code they're pre-approved, and Codex runs them outside its sandbox, where git
+can use the user's sign-in. Keep double quotes, `$`, and backticks out of any text you fill in,
+such as a commit message, because shells and Codex read them as syntax.
 
 Sessions in other projects, and Codex, use dev-home at the same time, so a file there that you
 didn't change may be someone's work in progress. Run git in dev-home only through
@@ -138,11 +141,3 @@ backup of this PC's settings, and commits and pushes the shared one.
    out, the user changes `skills.<name>.addToAgents` (see "Configure"). If the user has none of
    their own, say where one goes: `{{CONTENT_DIR}}/skills/<name>/SKILL.md`. The list is this PC's
    copy, so a skill added on another PC shows up after the next sync.
-
-## In Codex
-
-`skills` works as written, since `facts.py` only reads files. `sync` and `configure` change
-nothing in Codex: on Windows, Codex runs even approved commands inside its sandbox, where git and
-`gh` can't use the user's sign-ins. Give the user the command to run in a terminal instead: for
-`sync`, `py {{TOOLKIT_DIR}}/sync.py`, or `/dev-home sync` in Claude Code; for `configure`,
-`py {{TOOLKIT_DIR}}/setup.py --configure`, which shows a menu of every setting.

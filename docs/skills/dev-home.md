@@ -10,7 +10,7 @@ skill itself: [`SKILL.md`](../../templates/skills/dev-home/SKILL.md).
 | `/dev-home sync` | Syncs your dev-home with GitHub now, however many copies are in use: brings in commits from your other copies, pushes this PC's, and lists the files left uncommitted. Like every sync, it also checks for dev-home-toolkit updates and runs setup quietly. |
 | `/dev-home configure` | First asks about anything setup is waiting on your answer for. Then shows every setting with its value, and changes one you choose. The agent shows you the exact change first, and makes it only after your yes. |
 | `/dev-home configure <change>` | The same, starting from your change, such as `/dev-home configure check GitHub every 6 hours`. |
-| `/dev-home skills` | Lists every skill, dev-home-toolkit's own and then yours, with what each is for, whether it's added to your agents on this PC, and if not, why, and any program or Python version it needs that's missing. It changes nothing, and works in Codex too. |
+| `/dev-home skills` | Lists every skill, dev-home-toolkit's own and then yours, with what each is for, whether it's added to your agents on this PC, and if not, why, and any program or Python version it needs that's missing. It changes nothing. |
 
 - **A sync commits nothing by itself.** For a file in your dev-home that nobody has touched for
   15 minutes, the agent asks whether to commit and push it. A file changed more recently may be
@@ -56,6 +56,6 @@ skill itself: [`SKILL.md`](../../templates/skills/dev-home/SKILL.md).
   [A skill's dev-home-skill.json](../reference/dev-home-skill-json.md)). One of yours named
   `synced` is never added, since Claude Code keeps that name for the skills it downloads from
   claude.ai.
-- **In Codex, `sync` and `configure` change nothing,** for the same reason as
-  [handoff commands](handoff.md): on Windows, git and `gh` can't use your GitHub credentials
-  there. The agent gives you the command to run in a terminal instead.
+- **Every command works in Codex as in Claude Code,** since Codex runs dev-home-toolkit's own
+  commands outside its sandbox, where your GitHub sign-in works (see
+  [Commands that run without asking](../reference/approvals.md)).

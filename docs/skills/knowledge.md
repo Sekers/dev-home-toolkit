@@ -27,7 +27,6 @@ the skill itself: [`SKILL.md`](../../templates/skills/knowledge/SKILL.md).
   file instead, it shows you the text first and never commits that file: the rules that cover
   that file decide that, meaning the skill that looks after it, if there is one, that repo's own
   rules, and your own rules.
-- In Codex, knowledge commands edit but don't commit, for the same reason as
-  [handoff commands](handoff.md). The next sync in Claude Code, such as
-  [`/dev-home sync`](dev-home.md), lists the files, and offers to commit and push them once
-  nobody has touched them for 15 minutes.
+- Knowledge commands work the same in Claude Code and in Codex, committing and pushing as above.
+  [Commands that run without asking](../reference/approvals.md) says how each agent allows
+  dev-home-toolkit's commands without a permission prompt.

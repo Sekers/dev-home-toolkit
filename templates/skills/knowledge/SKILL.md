@@ -8,8 +8,11 @@ allowed-tools: "Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py) Bash
 
 The knowledge base is `{{CONTENT_DIR}}/knowledge`, in the user's private repo, dev-home. Its
 `README.md` is the index. The rules for filing notes are in `{{SKILL_DIR}}/filing-rules.md`;
-read them before adding or changing anything. Run the commands below exactly as written; in
-Claude Code they are pre-approved.
+read them before adding or changing anything. Run the commands below exactly as written.
+Claude Code and Codex both run them without asking. In Claude Code they're pre-approved, and
+Codex runs them outside its sandbox, where git can use the user's sign-in. Keep double quotes,
+`$`, and backticks out of any text you fill in, such as a commit message, because shells and
+Codex read them as syntax.
 
 Sessions in other projects, and Codex, use dev-home at the same time, so a file there that you
 didn't change may be someone's work in progress. Run git in dev-home only through
@@ -157,13 +160,6 @@ commit, and push" says, or after a yes to a candidate you offered.
 
 Commits in dev-home are unsigned on purpose: setup turns signing off in that repo's own git
 config. That is not bypassing signing, and the project repos keep signing as usual.
-
-In Codex: edit only, so leave "commit, and push" out of your questions: a draft ends with "Save
-this?", and a candidate with "Add it?", or "Docs, or add it to the knowledge base?". Skip the
-sync and every git step, and tell the user that Claude will commit and push the change: the next
-sync in Claude, such as `/dev-home sync`, lists the files, and offers to commit and push them
-once they have been untouched for 15 minutes. Mention that the local copy may be behind another
-PC.
 
 Never store secrets, credentials, tenant or account IDs, or personal information about anyone
 other than the user, such as customer or colleague data. Never copy knowledge-base text or

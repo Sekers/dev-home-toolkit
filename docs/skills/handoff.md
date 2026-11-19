@@ -14,7 +14,7 @@ steps agents follow are in the skill itself:
 | `/handoff next <text>` | Replaces Next up. Nothing else changes. |
 | `/handoff next clear` | Empties Next up. |
 | `/handoff issue` | Lists the items that could become GitHub issues. |
-| `/handoff issue <item>` | Files an item as an issue in the project's GitHub repo, and replaces the item with a link to it, keeping any notes the issue couldn't hold. For now, only in Claude Code, for projects on GitHub, with `gh` signed in. |
+| `/handoff issue <item>` | Files an item as an issue in the project's GitHub repo, and replaces the item with a link to it, keeping any notes the issue couldn't hold. For projects on GitHub, with `gh` signed in. |
 | `/handoff audit` | Updates the handoff first, as `/handoff update` does, then has a fresh agent read it as a new session would, then fixes what it can and asks you about the rest. See [Audits](#audits). |
 | `/handoff audit <model> <effort>` | The same, on that model or at that effort, or both, such as `/handoff audit sonnet xhigh`. |
 
@@ -73,7 +73,9 @@ is your go-ahead. Some examples:
   to the issue. Skip leaves no trace, so the item comes up again only if a later session changes
   it. A reminder or a no marks the item, and the mark is committed and pushed; the question says
   so. No item is suggested twice in one session. Filing always shows you the draft and waits for
-  your yes. Issues work in Claude Code only, for projects on GitHub, with `gh` signed in.
+  your yes, and then Claude Code or Codex itself asks too, unless you've allowed it
+  ([why](../reference/approvals.md#why-filing-an-issue-asks-first)). Issues work for projects on
+  GitHub, with `gh` signed in.
 - **Security bugs come with a warning,** when they're suggested and when you file one: a public
   issue tells everyone about the hole before it's fixed, and GitHub's draft security advisories
   keep it private instead. A security bug is one that could let someone else read, change, or do
@@ -96,10 +98,11 @@ is your go-ahead. Some examples:
   hours have passed since the last check, since nothing else changes it. `/dev-home configure`
   switches between the two. See
   [How often a sync checks GitHub](../reference/scripts.md#how-often-a-sync-checks-github).
-- **In Codex, handoff commands edit but don't commit.** On Windows, Codex runs even the commands
-  you approve inside its sandbox, where git and `gh` can't use your GitHub credentials. So the
-  next `/handoff` in Claude Code lists the file, and offers to commit and push it once nobody has
-  touched it for 15 minutes. The same goes for anything you edit by hand in dev-home.
+- **Handoff commands work the same in Claude Code and in Codex,** committing and pushing as
+  above. [Commands that run without asking](../reference/approvals.md) says how each agent
+  allows dev-home-toolkit's commands without a permission prompt. A file you edit by hand in
+  dev-home is committed only with your yes: the next `/handoff` lists it, and offers to commit
+  and push it once nobody has touched it for 15 minutes.
 
 ## Audits
 

@@ -15,6 +15,7 @@ from helpers import (
     REPO_ROOT,
     LayoutCheck,
     Sandbox,
+    handoff_facts_options,
     layout_snapshot,
     layouts_checked,
     new_repo,
@@ -22,7 +23,6 @@ from helpers import (
     run_python,
     sandbox_for,
     shared_module,
-    skill_command,
 )
 
 
@@ -139,8 +139,7 @@ def test_each_list_holds_exactly_what_the_code_writes(
 def test_handoffs_list_holds_exactly_the_paths_facts_names_and_the_templates_sections(
     box: Sandbox,
 ) -> None:
-    words = skill_command(box, "handoff", "facts.py").split(" ")
-    command = " ".join([*words[: words.index("--stamp") + 2], "handoff"])
+    command = " ".join([*handoff_facts_options(box), "handoff"])
     found: set[str] = set()
 
     def named(folder: Path) -> None:

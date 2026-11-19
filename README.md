@@ -292,6 +292,7 @@ Everything beyond getting started is in the `docs/` folder:
 | Guide | [Your rules](docs/guide/your-rules.md) | Where each of your rules goes, for every agent or one, on every PC or one, and how your agents get them. |
 | Reference | [The scripts](docs/reference/scripts.md) | `setup.py`, `sync.py`, and `update.py`: when each one runs, what their status words mean, how updates are installed, and where they come from. |
 | Reference | [What setup changes on your PC](docs/reference/setup-changes.md) | Every link, file, and setting that setup adds, why, and how to remove it all. |
+| Reference | [Commands that run without asking](docs/reference/approvals.md) | Which commands Claude Code and Codex run without asking, how each agent allows them, how the two differ, and why filing a GitHub issue always asks first. |
 | Reference | [A skill's dev-home-skill.json](docs/reference/dev-home-skill-json.md) | The file that says whether a skill is added to your agents unless you say no, what it needs to run, its preferences, and its old names. |
 | Reference | [Rule files](docs/reference/rule-files.md) | The files in your dev-home's `rules/`: which join for each agent, in what order, how each is read, and their notes. |
 | Development | [Design decisions](docs/development/decisions/README.md) | For people changing dev-home-toolkit: decisions made and options set aside, with the reasons. |
@@ -320,6 +321,10 @@ Everything beyond getting started is in the `docs/` folder:
   it made to skills that no longer exist. Anything else in its way is reported, not changed. It
   changes an agent's settings file only in a folder you said yes to, after saying what that yes
   changes, and keeps a backup.
+- **Your agents run dev-home-toolkit's own commands without a permission prompt,** such as its
+  syncs and commits, in Claude Code while a skill is in use, and in Codex in every session,
+  outside its sandbox. Filing a GitHub issue is the exception: it asks first unless you've
+  allowed it. See [Commands that run without asking](docs/reference/approvals.md).
 - **Tooling updates install themselves,** as most apps' do, unless you turn off
   `updates.installAutomatically`. Whoever controls this repo on GitHub controls code that runs on
   your PC, so turn it off if you'd rather look at each update first and install it with

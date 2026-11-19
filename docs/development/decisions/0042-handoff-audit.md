@@ -40,8 +40,7 @@ further files).
   whose text changed after it read it is dropped, so an answer given meanwhile can't clash with
   the audit. Codex's chat waits for the second agent, so there the questions come after it.
 - The example of a held question is one an update asks before committing, which an audit's update
-  holds back, and one Codex asks too; an issue candidate, which Codex skips, comes after the
-  commit anyway.
+  holds back; an issue candidate comes after the commit anyway.
 - One thing to answer per message: with a held question waiting, the invitation to answer the
   listed items would make a short reply such as "yes" ambiguous.
 - It fixes rather than only proposing, because a handoff is a status note kept in git, and

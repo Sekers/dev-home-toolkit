@@ -1,4 +1,6 @@
-"""facts.py, run as the handoff skill runs it in Codex, from a sandbox's generated copy."""
+"""facts.py, run from a sandbox's generated copy with the skills' own names and stamps: the
+dev-home skill's facts.py command, and the handoff skill's name and stamp, which its prepare.py
+command passes on to facts.py."""
 
 import binascii
 import importlib.util
@@ -21,6 +23,7 @@ from helpers import (
     Run,
     Sandbox,
     git,
+    handoff_facts_options,
     make_junction,
     new_repo,
     remove_link,
@@ -47,10 +50,9 @@ def facts(
     *topics: str,
     env: dict[str, str | None] | None = None,
 ) -> Run:
-    """Runs facts.py in a folder with the handoff skill's own command, for the topics given in
-    place of the skill's, or the handoff topic when none are given."""
-    words = skill_command(box, "handoff", "facts.py").split(" ")
-    options = words[: words.index("--stamp") + 2]
+    """Runs facts.py in a folder with the handoff skill's own name and stamp, for the topics
+    given, or the handoff topic when none are given."""
+    options = handoff_facts_options(box)
     return run_command(box, " ".join([*options, *(topics or ("handoff",))]), cwd=folder, env=env)
 
 
@@ -443,7 +445,7 @@ def test_the_preferences_topic_with_settings_it_cant_read_prints_the_defaults(
 
 
 def test_the_preferences_topic_needs_a_skill(box: Sandbox) -> None:
-    words = skill_command(box, "handoff", "facts.py").split(" ")
+    words = handoff_facts_options(box)
     command = " ".join([*words[: words.index("--skill")], "preferences"])
     result = run_command(box, command, cwd=box.root)
     assert result.code == 1, str(result)
@@ -490,8 +492,7 @@ def test_two_topics_print_in_the_order_asked(box: Sandbox, sample: Path) -> None
 
 
 def test_with_no_topic_stops_and_names_the_topics(box: Sandbox, sample: Path) -> None:
-    words = skill_command(box, "handoff", "facts.py").split(" ")
-    result = run_command(box, " ".join(words[: words.index("--stamp") + 2]), cwd=sample)
+    result = run_command(box, " ".join(handoff_facts_options(box)), cwd=sample)
     assert result.code == 1, str(result)
     assert result.keys == [], str(result)
     assert result.has_line("at least one topic: handoff, environment, newer-commits"), str(result)
@@ -1086,8 +1087,10 @@ def test_finds_a_full_sha256_hash_in_the_state_line(box: Sandbox) -> None:
 def test_a_stamp_that_differs_from_the_skill_on_disk_stops_with_why(
     box: Sandbox, sample: Path
 ) -> None:
-    command = skill_command(box, "handoff", "facts.py")
-    words = command.split(" ")
+    # The topics the handoff skill's prepare.py command asks for, after --fetch and its value.
+    prepare = skill_command(box, "handoff", "prepare.py").split(" ")
+    words = [*handoff_facts_options(box), *prepare[prepare.index("--fetch") + 2 :]]
+    command = " ".join(words)
     words[words.index("--stamp") + 1] = "s000000000000"
     result = run_command(box, " ".join(words), cwd=sample)
     assert result.code == 1, str(result)
@@ -1100,7 +1103,7 @@ def test_a_stamp_that_differs_from_the_skill_on_disk_stops_with_why(
 
 
 def test_options_need_their_values_and_each_other(box: Sandbox, sample: Path) -> None:
-    words = skill_command(box, "handoff", "facts.py").split(" ")
+    words = handoff_facts_options(box)
     start = words[: words.index("--skill")]
     cases = {
         "--skill handoff handoff": "together",

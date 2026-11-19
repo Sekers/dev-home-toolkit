@@ -1,7 +1,6 @@
 # 0094: Pre-approved commands
 
-**Built:** yes, except: the skills' steps for Codex, which still skip every sync, commit, and
-`gh` command.
+**Built:** yes.
 
 **Decision:** an agent runs each of dev-home-toolkit's scripts without asking, by the script's
 name, with any arguments, in Claude Code and in Codex, with no exceptions.
@@ -35,8 +34,14 @@ name, with any arguments, in Claude Code and in Codex, with no exceptions.
 - `templates/per-agent/<agent>/` holds the files setup writes into only that agent's folders, the
   agent named as `supportedOn` names it, each at the path it lands at in each of those folders.
   What every agent gets, such as the skills and the operating rules, stays where it is.
+- The skills give Codex the same steps as Claude Code, so it syncs, commits, and pushes too. For
+  `gh issue create`, the handoff skill tells a Codex agent to request escalation, so Codex asks
+  the end user before running it outside the sandbox, rather than failing inside it first.
+- [Commands that run without asking](../../reference/approvals.md) explains all this to end
+  users, with how the two agents differ.
 
-Decided by the developer on 2026-11-18.
+Decided by the developer on 2026-11-18. `gh issue create`'s exception confirmed by the developer
+on 2026-11-19.
 
 **Why:**
 
@@ -59,6 +64,13 @@ Decided by the developer on 2026-11-18.
   them, while Codex reads rules only when it starts. The scripts refuse options they don't have
   ([0017: Command-line options](0017-command-line-options.md)), so a rule reaches only what a
   script already does.
+- `gh issue create` asks first in both agents because it's the only command the skills run that
+  publishes: an issue is public at once, notifies the repo's watchers, can't really be taken
+  back, and may be drafted from a private handoff. The handoff skill's yes to the exact draft is
+  enforced only by the agent; the agent product's own prompt holds even when the agent misreads a
+  reply, or is steered by text it has read, such as the issue comments an update quotes. It
+  costs one approval per issue, and an end user who doesn't want it can allow the command in
+  their own settings or rules.
 - One file in each Codex home, rewritten by setup like the rules file there: updates reach it the
   way they reach Claude Code's pre-approvals.
 - `templates/per-agent/<agent>/`: [0073: Agents added later](0073-agents-added-later.md) expects
@@ -104,6 +116,8 @@ Decided by the developer on 2026-11-18.
 
 **Options set aside:**
 
+- Pre-approving `gh issue create` too, since the handoff skill already waits for a yes to the
+  exact draft: only the agent would then stand between a private handoff and a public issue.
 - The skills telling Codex to ask before running each command outside the sandbox: an approval
   on nearly every skill command; Codex's "Always allow" then saves a rule of its own choosing in
   `default.rules`; and approving a `prompt` rule still runs the command in the sandbox, as Codex's

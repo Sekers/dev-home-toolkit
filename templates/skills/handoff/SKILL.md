@@ -1,7 +1,7 @@
 ---
 name: handoff
 description: Read, update, or audit this project's private session handoff (where the work stands, what's next up, what's waiting on the user or on others, to-dos, and bugs), kept in the private dev-home repo, and file handoff items as GitHub issues when asked. Use when the user runs /handoff or $handoff, asks where things stand or where we left off, asks to update or audit the handoff or change what's next up, or asks to file a handoff item as a GitHub issue.
-allowed-tools: "Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py) Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py *) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py *) Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py) Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py *) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py *) Bash({{PYTHON}} -I {{SKILL_DIR}}/issue_status.py) Bash({{PYTHON}} -I {{SKILL_DIR}}/issue_status.py *) PowerShell({{PYTHON}} -I {{SKILL_DIR}}/issue_status.py) PowerShell({{PYTHON}} -I {{SKILL_DIR}}/issue_status.py *) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *) Bash(gh label list *) PowerShell(gh label list *) Bash(gh issue list *) PowerShell(gh issue list *)"
+allowed-tools: "Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py) Bash({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py *) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py) PowerShell({{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/prepare.py *) Bash({{PYTHON}} -I {{SKILL_DIR}}/issue_status.py) Bash({{PYTHON}} -I {{SKILL_DIR}}/issue_status.py *) PowerShell({{PYTHON}} -I {{SKILL_DIR}}/issue_status.py) PowerShell({{PYTHON}} -I {{SKILL_DIR}}/issue_status.py *) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py) PowerShell({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *) Bash(gh label list *) PowerShell(gh label list *) Bash(gh issue list *) PowerShell(gh issue list *)"
 ---
 
 # Handoff
@@ -10,8 +10,12 @@ A handoff is a private note, one per project, of where the work stands: what's n
 progress, what's waiting on the user or on others, to-dos, and bugs, plus private notes the
 project's own files can't hold. Handoffs live in the user's private repo, dev-home, at
 `{{CONTENT_DIR}}`, never in the project itself. Run the commands below exactly as
-written. In Claude Code they are pre-approved, except `gh issue create`: whether that one asks
-first depends on the user's own permission settings.
+written. Claude Code and Codex both run them without asking. In Claude Code they're
+pre-approved, and Codex runs them outside its sandbox, where git and `gh` can use the user's
+sign-in. In both agents, `gh issue create` is the exception. It publishes outside dev-home, so
+Claude Code and Codex ask the user before running it. In Codex, request escalation for it. Keep
+double quotes, `$`, and backticks out of any text you fill in, such as a commit message or
+search words, because shells and Codex read them as syntax.
 
 Sessions in other projects, and Codex, use dev-home at the same time, so a file there that you
 didn't change may be someone's work in progress. Run git in dev-home only through
@@ -144,9 +148,9 @@ about this project doesn't belong here either.
 
 ## Find this project's handoff
 
-1. Read step 2's command ends by printing the facts (in Codex, the command in "In Codex" prints
-   only them): the lines of four `facts.py` topics, worked out from the project's git repo,
-   dev-home's copy of its handoff, and this skill's preferences on this PC, without the network.
+1. Read step 2's command ends by printing the facts: the lines of four `facts.py` topics, worked
+   out from the project's git repo, dev-home's copy of its handoff, and this skill's preferences
+   on this PC, without the network.
    The steps below use them by name:
    - `service`: where the project is hosted: `github`, `gitlab`, `bitbucket`, `azure-devops`,
      `other` for any other computer, or `pcs` for anything else, such as a folder outside git,
@@ -536,19 +540,6 @@ list, say that decisions still to make aren't listed, and when `includeSecurityB
 left a security bug out, say that too: `/handoff issue <item>` still files any item the user
 names. When the list has a security bug, add the line about stopping these offers once. Then ask
 which to file, as the last line.
-
-## In Codex
-
-Read, `update`, `next`, and `audit` work, but edit only, so leave "commit, and push" out of your
-questions and offers: a draft ends with "Save this?". Skip every sync, git, and `gh` step, including the
-issue link checks. In place of Read step 2's command, run
-`{{PYTHON}} -I {{SHARED_SKILL_SCRIPTS_DIR}}/facts.py --skill handoff --stamp {{SKILL_STAMP}} handoff environment newer-commits preferences`,
-which prints the same facts and only reads files. If it prints an error instead, show it and
-stop, as for a `PROBLEM` line about `facts.py`. Tell the user that Claude will commit and push
-the change: the next /handoff in Claude lists the file, and offers to commit and push it once it
-has been untouched for 15 minutes. `issue` needs Claude, so say that and stop; skip issue
-candidates too. On Windows, Codex runs even approved commands inside its sandbox, so git and
-`gh` can't use the user's credentials there. Mention that the handoff may be behind another PC.
 
 ## Rules for every handoff
 

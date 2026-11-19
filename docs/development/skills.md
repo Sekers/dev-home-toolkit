@@ -109,7 +109,11 @@ AGENTS.md points here; its rules apply too.
   characters in paths. A test checks every command the skills, the operating rules, and the files
   in `templates/dev-home/` give.
 - Leave commands that publish outside dev-home, such as `gh issue create`, out of
-  `allowed-tools`. Whether they ask first is each person's choice, in their own settings.
+  `allowed-tools` and out of Codex's command rules, so both agents ask first, and have the skill
+  tell a Codex agent to request escalation for them
+  ([0094: Pre-approved commands](decisions/0094-pre-approved-commands.md)). Anyone can allow one
+  in their own settings or rules. [Commands that run without asking](../reference/approvals.md)
+  explains this to end users; keep it in step.
 - Pre-approve each script a skill runs by its path, alone and with any arguments, such as
   `Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py)` and `Bash({{PYTHON}} -I {{TOOLKIT_DIR}}/sync.py *)`,
   never a command's whole text, so a change to a script's options changes no pre-approval
@@ -197,4 +201,6 @@ AGENTS.md points here; its rules apply too.
   folder's `rules/`, and `AGENTS.md` in each Codex home
   ([0064: Each agent's rules file](decisions/0064-each-agents-rules-file.md)). Keep the operating
   rules short: they load in every session.
-- Codex's own `~/.codex/rules/` holds command policies, not these, and setup never touches it.
+- A Codex home's own `rules/` folder holds Codex's command rules, not these operating rules. Setup
+  writes only its own file there, `dev-home-toolkit.rules`
+  ([0094: Pre-approved commands](decisions/0094-pre-approved-commands.md)).

@@ -7,8 +7,9 @@ fetches, merges, and pushes in either mode, lists the files left uncommitted, an
 `updates.checkEveryHours`. `/dev-home configure` runs `setup.py --configure`: it shows the current
 values, previews the exact change, and makes it after the person's yes. Typing `/dev-home sync`
 allows a sync, never a commit: it offers to commit a `STALE` file, and leaves a `LEFT` one alone
-unless the person says it's theirs. In Codex, both say which command to run in a terminal, and
-change nothing, while Codex can't use git's and gh's sign-ins.
+unless the person says it's theirs. Both work the same in Codex, which runs dev-home-toolkit's
+commands outside its sandbox ([0094: Pre-approved commands](0094-pre-approved-commands.md)).
+Changed by the developer on 2026-11-18 (Codex).
 
 Plain `/knowledge` stops being the sync someone asks for. It syncs as adding a note does, with
 `--fetch auto`: with several active copies it checks GitHub every time, and with one only once

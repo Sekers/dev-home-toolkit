@@ -108,7 +108,9 @@ and your rules joined, which setup writes again at each sync.
     push. Your yes to Codex approves this file. Setup rewrites it whenever it runs, so put rules
     of your own in another file in that folder: a hand edit goes to the Recycle Bin, and setup
     writes its own again. Codex reads its rules only when it starts, so when setup writes or
-    changes the file, it says to restart Codex.
+    changes the file, it says to restart Codex. Which commands the rules cover, and how they
+    differ from Claude Code's approvals, is in
+    [Commands that run without asking](approvals.md).
 - **If you say no later,** to a Claude Code folder or to Codex, setup removes what it set up
   there, naming each as it goes:
   - In a Claude Code folder: its links in `skills\`, its `rules\dev-home-rules.md`, your

@@ -13,8 +13,8 @@ All three are Python. Run them with the Python install manager's `py`, such as
 The skills also run two Python scripts of their own, which only agents run, from
 `templates/shared-skill-scripts/`: `prepare.py` starts each skill command that syncs, by running
 the sync inside its own process and then reporting what the skill needs, such as where the
-project's handoff is; and `facts.py` reports that alone, without syncing, which is how the
-handoff skill starts in Codex, and how `/dev-home skills` lists the skills.
+project's handoff is; and `facts.py` reports that alone, without syncing, which is how
+`/dev-home skills` lists the skills.
 
 ## When they run
 
@@ -22,7 +22,7 @@ Nothing runs on a schedule. Each script runs only when you or an agent starts it
 
 | Script | When it runs |
 | --- | --- |
-| `sync.py` | In Claude Code, agents run it at the start of every `/handoff` command, for a plain `/knowledge`, before adding to the knowledge base, and for `/dev-home sync`, through the skills' `prepare.py`; that sync also checks for updates and runs setup, and checks GitHub for dev-home's changes as often as the command needs (see [How often a sync checks GitHub](#how-often-a-sync-checks-github)). Then they run it again to commit and push each change they make. That second sync pushes without fetching first, and fetches and merges only if GitHub rejects the push because it has commits this PC lacks. It skips the update check, and runs setup only if it brought in commits from GitHub, because the sync just before it did both. A lookup, `/knowledge <question>`, never syncs, and Codex never runs it. You can run it any time. |
+| `sync.py` | Agents run it at the start of every `/handoff` command, for a plain `/knowledge`, before adding to the knowledge base, and for `/dev-home sync`, through the skills' `prepare.py`; that sync also checks for updates and runs setup, and checks GitHub for dev-home's changes as often as the command needs (see [How often a sync checks GitHub](#how-often-a-sync-checks-github)). Then they run it again to commit and push each change they make. That second sync pushes without fetching first, and fetches and merges only if GitHub rejects the push because it has commits this PC lacks. It skips the update check, and runs setup only if it brought in commits from GitHub, because the sync just before it did both. A lookup, `/knowledge <question>`, never syncs. Claude Code and Codex run it the same way (see [Commands that run without asking](approvals.md)). You can run it any time. |
 | `update.py` | Each sync that isn't committing runs its check, quietly, and that check asks GitHub only once `updates.checkEveryHours` have passed (see [Updates](#updates)). You run it yourself to look at an update and install it, when `updates.installAutomatically` is off. |
 | `setup.py` | You run it once per PC, and again to change a setting, or to answer a question it hasn't asked yet. After that, syncs run it quietly, as above. That quiet run never asks anything. It changes Claude Code's or Codex's settings only to put back the change a folder you said yes to needs, with a backup. When you install an update with `update.py`, it runs setup as you would by hand, so in a terminal setup asks about anything new. |
 

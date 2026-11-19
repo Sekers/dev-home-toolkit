@@ -680,6 +680,15 @@ def skill_command(box: Sandbox, skill: str, script: str) -> str:
     return commands.pop()
 
 
+def handoff_facts_options(box: Sandbox) -> list[str]:
+    """The start of a facts.py command with the handoff skill's own name and stamp, up to the
+    stamp: the words of the skill's prepare.py command, which loads facts.py and passes them on,
+    with facts.py in its place. The skill gives no facts.py command of its own."""
+    words = skill_command(box, "handoff", "prepare.py").split(" ")
+    words[2] = words[2].removesuffix("prepare.py") + "facts.py"
+    return words[: words.index("--stamp") + 2]
+
+
 def run_command(
     box: Sandbox,
     command: str,
